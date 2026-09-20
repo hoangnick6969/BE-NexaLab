@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+enum Role {
+  STUDENT
+  TEACHER
+  PARENT
+  ADMIN
+}
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  passwordHash String
+  fullName String
+  role Role
+  grade Int @default(8)
+  studentLevel String @default("beginner")
+  consentAt DateTime?
+  linkCode String? @unique
+  createdAt DateTime @default(now())
+  sessions Session[]
+  attempts Attempt[]
+  enrollments Enrollment[]
+  classes Classroom[]
+  lessons Lesson[]
+  progress Progress[]
+  saved SavedExperiment[]
+  parents ParentLink[] @relation("student")
+  children ParentLink[] @relation("parent")
+}
+model Session {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String @unique
+  kind String @default("refresh")
+  expiresAt DateTime
+}
+model ParentLink {
+  parentId String
+  studentId String
+  parent User @relation("parent", fields: [parentId], references: [id], onDelete: Cascade)
+  student User @relation("student", fields: [studentId], references: [id], onDelete: Cascade)
+  verifiedAt DateTime @default(now())
+  @@id([parentId, studentId])
+}
+model Classroom {
+  id String @id @default(cuid())
+  teacherId String
+  teacher User @relation(fields: [teacherId], references: [id])
+  name String
+  grade Int @default(8)
+  joinCode String @unique
+  enrollments Enrollment[]
+  assignments Assignment[]
+}
+model Enrollment {
+  classId String
+  studentId String
+  classroom Classroom @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  approved Boolean @default(false)
+  joinedAt DateTime @default(now())
+  @@id([classId, studentId])
+}
+model Subject {
+  id String @id
+  name String
+  lessons Lesson[]
+  labs Lab[]
+}
+model Lesson {
+  id String @id @default(cuid())
+  subjectId String
+  subject Subject @relation(fields: [subjectId], references: [id])
+  authorId String
+  author User @relation(fields: [authorId], references: [id])
+  title String
+  chapter String
+  grade Int
+  topic String
+  learningObjective String
+  prerequisites String
+  curriculum String
+  content String
+  labId String?
+  status String @default("draft")
+  materials Json @default("[]")
+  questions Json @default("[]")
+  createdAt DateTime @default(now())
+}
+model Lab {
+  id String @id
+  subjectId String
+  subject Subject @relation(fields: [subjectId], references: [id])
+  title String
+  grade Int @default(8)
+  topic String
+  learningObjective String
+  status String @default("published")
+  simulationModelRef String
+  config Json @default("{}")
+  assets Json @default("[]")
+  challenges Challenge[]
+}
+model Challenge {
+  id String @id
+  labId String
+  lab Lab @relation(fields: [labId], references: [id])
+  objective String
+  constraints Json
+  difficulty String @default("intermediate")
+  attempts Attempt[]
+}
+model Assignment {
+  id String @id @default(cuid())
+  classId String
+  classroom Classroom @relation(fields: [classId], references: [id], onDelete: Cascade)
+  contentId String
+  contentType String
+  title String
+  dueDate DateTime
+  studentIds Json @default("[]")
+}
+model Attempt {
+  id String @id @default(cuid())
+  studentId String
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  challengeId String
+  challenge Challenge @relation(fields: [challengeId], references: [id])
+  labState Json
+  simulationResult Json
+  verdict String
+  durationMs Int
+  createdAt DateTime @default(now())
+  hints HintLog[]
+  @@index([studentId, challengeId, createdAt])
+}
+model HintLog {
+  id String @id @default(cuid())
+  attemptId String
+  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  level Int
+  content String
+  contextSnapshot Json
+  triggeredBy String @default("student")
+  createdAt DateTime @default(now())
+  @@unique([attemptId, level])
+}
+model Progress {
+  studentId String
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  contentId String
+  status String
+  attemptsCount Int @default(0)
+  lastHintLevel Int @default(0)
+  score Float @default(0)
+  updatedAt DateTime @updatedAt
+  @@id([studentId, contentId])
+}
+model SavedExperiment {
+  id String @id @default(cuid())
+  studentId String
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  labId String
+  labState Json
+  simulationResult Json
+  note String
+  createdAt DateTime @default(now())
+}
+model AssetFile {
+  id String @id
+  ownerId String
+  name String
+  mime String
+  size Int
+  createdAt DateTime @default(now())
+}

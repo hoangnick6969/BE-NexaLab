@@ -1,0 +1,81 @@
+import {
+  Inject,
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+  SetMetadata,
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { Db } from "./db";
+import { verify, sign } from "jsonwebtoken";
+import { createHash, randomBytes } from "node:crypto";
+export const Public = () => SetMetadata("public", true);
+export const Roles = (...roles: string[]) => SetMetadata("roles", roles);
+export const hashToken = (s: string) =>
+  createHash("sha256").update(s).digest("hex");
+export const token = () => randomBytes(32).toString("hex");
+export const publicUser = (u: any) => ({
+  id: u.id,
+  email: u.email,
+  fullName: u.fullName,
+  role: u.role,
+  grade: u.grade,
+  studentLevel: u.studentLevel,
+});
+export const access = (u: any, sessionId: string) =>
+  sign({ sub: u.id, role: u.role, sid: sessionId }, process.env.JWT_SECRET!, {
+    expiresIn: "15m",
+    issuer: "nexalab",
+  });
+@Injectable()
+export class AuthGuard implements CanActivate {
+  constructor(
+    @Inject(Reflector) private reflector: Reflector,
+    @Inject(Db) private db: Db,
+  ) {}
+  async canActivate(ctx: ExecutionContext) {
+    if (
+      this.reflector.getAllAndOverride("public", [
+        ctx.getHandler(),
+        ctx.getClass(),
+      ])
+    )
+      return true;
+    const req = ctx.switchToHttp().getRequest();
+    try {
+      req.user = verify(
+        (req.headers.authorization ?? "").replace(/^Bearer /, ""),
+        process.env.JWT_SECRET!,
+        { issuer: "nexalab" },
+      );
+    } catch {
+      throw new UnauthorizedException("Vui lòng đăng nhập lại");
+    }
+    if (typeof req.user.sid !== "string") throw new UnauthorizedException();
+    const session = await this.db.session.findFirst({
+      where: {
+        id: req.user.sid,
+        userId: req.user.sub,
+        kind: "refresh",
+        expiresAt: { gt: new Date() },
+      },
+    });
+    if (!session)
+      throw new UnauthorizedException("Phiên đã hết hạn hoặc bị thu hồi");
+    const user = await this.db.user.findUnique({
+      where: { id: req.user.sub },
+      select: { role: true },
+    });
+    if (!user) throw new UnauthorizedException("Tài khoản không còn tồn tại");
+    req.user.role = user.role;
+    const roles = this.reflector.getAllAndOverride<string[]>("roles", [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
+    if (roles && !roles.includes(req.user.role))
+      throw new ForbiddenException("Không có quyền thực hiện");
+    return true;
+  }
+}

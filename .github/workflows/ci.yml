@@ -1,0 +1,35 @@
+name: API checks
+on: [push, pull_request]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nexalab
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: nexalab
+        ports: ["5432:5432"]
+        options: --health-cmd="pg_isready -U nexalab" --health-interval=5s --health-retries=10
+    env:
+      DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/nexalab?schema=public
+      JWT_SECRET: ci-only-secret-not-for-production-0123456789
+      SEED_PASSWORD: IntegrationPassword2026!
+      WEB_ORIGIN: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm run db:migrate && npm run db:seed
+      - run: |
+          npm start > /tmp/nexalab-api.log 2>&1 &
+          for i in $(seq 1 30); do curl --fail http://127.0.0.1:4000/api/health && break || sleep 1; done
+          npm run test:integration
