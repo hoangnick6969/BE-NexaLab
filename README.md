@@ -27,7 +27,7 @@ Engine mô phỏng là nơi tính toán và chấm kết quả khoa học. Tutor
 
 ## Tính năng hiện có
 
-- **Tài khoản & phân quyền:** Argon2, JWT access, refresh token xoay một lần, cookie HttpOnly, kiểm tra phiên ở API, đổi/quên mật khẩu qua SMTP.
+- **Tài khoản & phân quyền:** học sinh dùng username do giáo viên/trường cấp; người lớn dùng email; Argon2, JWT access, refresh token xoay một lần, cookie HttpOnly và kiểm tra quyền tại API.
 - **Nội dung học:** môn, chương, bài học, metadata, rich text, quiz, học liệu đính kèm và vòng đời nháp/xuất bản/lưu trữ.
 - **Lớp học:** mã tham gia, duyệt thành viên, cấp tài khoản học sinh, giao bài cả lớp hoặc nhóm, hạn nộp và theo dõi tiến độ.
 - **Thực hành:** lưu lượt thử, kết quả chấm ba trạng thái, lịch sử gợi ý và cấu hình thí nghiệm để mở lại.
@@ -105,7 +105,13 @@ npm run dev
 | `http://127.0.0.1:4000/api/docs` | Swagger |
 | `http://localhost:8025` | Mailpit khi chạy bằng Compose |
 
-Seed tạo các tài khoản `student@nexalab.local`, `teacher@nexalab.local`, `parent@nexalab.local`, `admin@nexalab.local`, dùng mật khẩu từ `SEED_PASSWORD`. Mã lớp mẫu: `NEXA8A`. Chạy lại seed không ghi đè mật khẩu của tài khoản đã tồn tại.
+Seed tạo học sinh `nguyenan.8a` và các tài khoản người lớn `teacher@nexalab.local`, `parent@nexalab.local`, `admin@nexalab.local`, dùng mật khẩu từ `SEED_PASSWORD`. Mã lớp mẫu: `NEXA8A`. Chạy lại seed không ghi đè mật khẩu của tài khoản đã tồn tại.
+
+## Mô hình xác thực
+
+Học sinh không tự đăng ký và không cần email. Giáo viên cấp tài khoản trong một lớp bằng `POST /api/classes/:classId/students`; API tạo mật khẩu tạm có hiệu lực 24 giờ và chỉ trả về một lần. Học sinh đăng nhập bằng `POST /api/auth/student/login` rồi bắt buộc đổi mật khẩu trước khi truy cập nội dung khác. Giáo viên có thể cấp lại mật khẩu qua `POST /api/classes/:classId/students/:studentId/reset-password`; thao tác này thu hồi mọi phiên hiện có của học sinh.
+
+Giáo viên, phụ huynh và quản trị viên đăng nhập bằng email qua `POST /api/auth/login`. Chỉ phụ huynh được tự đăng ký ở MVP. Quên mật khẩu qua email chỉ áp dụng cho tài khoản người lớn. Mã tham gia lớp, mã liên kết phụ huynh và mật khẩu tạm là ba loại thông tin độc lập, không dùng thay cho nhau.
 
 Nếu không dùng Mailpit, `node scripts/mailbox.mjs` mở SMTP nội bộ trên cổng 1025 và hộp thư xem email trên cổng 8025. Không chạy đồng thời cả hai trên cùng cổng.
 

@@ -18,11 +18,13 @@ export const hashToken = (s: string) =>
 export const token = () => randomBytes(32).toString("hex");
 export const publicUser = (u: any) => ({
   id: u.id,
+  username: u.username,
   email: u.email,
   fullName: u.fullName,
   role: u.role,
   grade: u.grade,
   studentLevel: u.studentLevel,
+  mustChangePassword: u.mustChangePassword,
 });
 export const access = (u: any, sessionId: string) =>
   sign({ sub: u.id, role: u.role, sid: sessionId }, process.env.JWT_SECRET!, {
@@ -66,10 +68,19 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException("Phiên đã hết hạn hoặc bị thu hồi");
     const user = await this.db.user.findUnique({
       where: { id: req.user.sub },
-      select: { role: true },
+      select: { role: true, status: true, mustChangePassword: true },
     });
     if (!user) throw new UnauthorizedException("Tài khoản không còn tồn tại");
+    if (user.status !== "active")
+      throw new UnauthorizedException("Tài khoản đã bị khóa");
     req.user.role = user.role;
+    if (
+      user.mustChangePassword &&
+      !["/auth/me", "/auth/password", "/auth/logout"].some((path) =>
+        req.path.endsWith(path),
+      )
+    )
+      throw new ForbiddenException("Bạn cần đổi mật khẩu tạm trước khi tiếp tục");
     const roles = this.reflector.getAllAndOverride<string[]>("roles", [
       ctx.getHandler(),
       ctx.getClass(),

@@ -31,6 +31,13 @@ const email = z
   .string()
   .email()
   .transform((v) => v.toLowerCase());
+const username = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3)
+  .max(32)
+  .regex(/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/, "Username chỉ gồm chữ thường, số, dấu chấm, gạch ngang hoặc gạch dưới");
 const lessonSchema = z.object({
   title: text,
   subjectId: text,
@@ -149,8 +156,38 @@ export class ApiController {
     this.rate("login:" + req.ip);
     const b = z.object({ email, password: z.string().max(128) }).parse(body);
     const user = await this.db.user.findUnique({ where: { email: b.email } });
-    if (!user || !(await argon.verify(user.passwordHash, b.password)))
+    if (
+      !user ||
+      user.role === "STUDENT" ||
+      user.status !== "active" ||
+      !(await argon.verify(user.passwordHash, b.password))
+    )
       throw new UnauthorizedException("Email hoặc mật khẩu không đúng");
+    return this.session(user, res);
+  }
+  @Public() @Post("auth/student/login") async studentLogin(
+    @Body() body: unknown,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    this.rate("student-login:" + req.ip);
+    const b = z.object({ username, password: z.string().max(128) }).parse(body);
+    const user = await this.db.user.findUnique({ where: { username: b.username } });
+    if (
+      !user ||
+      user.role !== "STUDENT" ||
+      user.status !== "active" ||
+      !(await argon.verify(user.passwordHash, b.password))
+    )
+      throw new UnauthorizedException("Tên đăng nhập hoặc mật khẩu không đúng");
+    if (
+      user.mustChangePassword &&
+      user.temporaryPasswordExpiresAt &&
+      user.temporaryPasswordExpiresAt < new Date()
+    )
+      throw new UnauthorizedException(
+        "Mật khẩu tạm đã hết hạn. Hãy nhờ giáo viên cấp lại.",
+      );
     return this.session(user, res);
   }
   @Public() @Post("auth/register") async register(
@@ -189,7 +226,12 @@ export class ApiController {
       where: { tokenHash: hash },
       include: { user: true },
     });
-    if (!s || s.kind !== "refresh" || s.expiresAt < new Date())
+    if (
+      !s ||
+      s.kind !== "refresh" ||
+      s.expiresAt < new Date() ||
+      s.user.status !== "active"
+    )
       throw new UnauthorizedException();
     const deleted = await this.db.session.deleteMany({ where: { id: s.id } });
     if (!deleted.count) throw new UnauthorizedException();
@@ -223,7 +265,11 @@ export class ApiController {
     await this.db.$transaction([
       this.db.user.update({
         where: { id: u.id },
-        data: { passwordHash: await argon.hash(b.password) },
+        data: {
+          passwordHash: await argon.hash(b.password),
+          mustChangePassword: false,
+          temporaryPasswordExpiresAt: null,
+        },
       }),
       this.db.session.deleteMany({ where: { userId: u.id } }),
     ]);
@@ -236,7 +282,7 @@ export class ApiController {
     this.rate("forgot:" + req.ip, 3);
     const b = z.object({ email }).parse(body);
     const u = await this.db.user.findUnique({ where: { email: b.email } });
-    if (u) {
+    if (u && u.role !== "STUDENT" && u.status === "active") {
       const t = token();
       await this.db.session.create({
         data: {
@@ -260,7 +306,7 @@ export class ApiController {
           : {}),
       }).sendMail({
         from: process.env.SMTP_FROM,
-        to: u.email,
+        to: u.email!,
         subject: "Đặt lại mật khẩu NexaLab",
         text: `Mở ${process.env.WEB_ORIGIN}/?reset=${t} trong 30 phút để đặt lại mật khẩu.`,
       });
@@ -283,7 +329,11 @@ export class ApiController {
       if (!used.count) throw new BadRequestException("Mã đã sử dụng");
       await tx.user.update({
         where: { id: s.userId },
-        data: { passwordHash: await argon.hash(b.password) },
+        data: {
+          passwordHash: await argon.hash(b.password),
+          mustChangePassword: false,
+          temporaryPasswordExpiresAt: null,
+        },
       });
       await tx.session.deleteMany({ where: { userId: s.userId } });
     });
@@ -556,10 +606,91 @@ export class ApiController {
       where: { classId: id },
       include: {
         student: {
-          select: { id: true, fullName: true, email: true, progress: true },
+          select: {
+            id: true,
+            fullName: true,
+            username: true,
+            mustChangePassword: true,
+            progress: true,
+          },
         },
       },
     });
+  }
+  @Roles("TEACHER") @Post("classes/:id/students") async provisionStudent(
+    @Param("id") id: string,
+    @Req() req: any,
+    @Body() body: unknown,
+  ) {
+    await this.classOwner(id, req);
+    const b = z
+      .object({
+        username,
+        fullName: text,
+        grade: z.number().int().min(6).max(9),
+        consent: z.literal(true),
+      })
+      .parse(body);
+    const temporaryPassword = this.temporaryPassword();
+    const user = await this.db.$transaction(async (tx) => {
+      const student = await tx.user.create({
+        data: {
+          username: b.username,
+          passwordHash: await argon.hash(temporaryPassword),
+          fullName: b.fullName,
+          role: "STUDENT",
+          grade: b.grade,
+          consentAt: new Date(),
+          mustChangePassword: true,
+          temporaryPasswordExpiresAt: new Date(Date.now() + 86400000),
+        },
+      });
+      await tx.enrollment.create({
+        data: { classId: id, studentId: student.id, approved: true },
+      });
+      return student;
+    });
+    return {
+      user: publicUser(user),
+      credentials: {
+        username: user.username,
+        temporaryPassword,
+        expiresAt: user.temporaryPasswordExpiresAt,
+      },
+    };
+  }
+  @Roles("TEACHER") @Post("classes/:id/students/:studentId/reset-password") async resetStudentPassword(
+    @Param("id") id: string,
+    @Param("studentId") studentId: string,
+    @Req() req: any,
+  ) {
+    await this.classOwner(id, req);
+    const enrollment = await this.db.enrollment.findUnique({
+      where: { classId_studentId: { classId: id, studentId } },
+      include: { student: true },
+    });
+    if (!enrollment || enrollment.student.role !== "STUDENT")
+      throw new NotFoundException("Không tìm thấy học sinh trong lớp");
+    const temporaryPassword = this.temporaryPassword();
+    const expiresAt = new Date(Date.now() + 86400000);
+    await this.db.$transaction([
+      this.db.user.update({
+        where: { id: studentId },
+        data: {
+          passwordHash: await argon.hash(temporaryPassword),
+          mustChangePassword: true,
+          temporaryPasswordExpiresAt: expiresAt,
+        },
+      }),
+      this.db.session.deleteMany({ where: { userId: studentId } }),
+    ]);
+    return {
+      credentials: {
+        username: enrollment.student.username,
+        temporaryPassword,
+        expiresAt,
+      },
+    };
   }
   @Roles("TEACHER") @Put("classes/:id/students/:studentId") async approve(
     @Param("id") id: string,
@@ -910,15 +1041,25 @@ export class ApiController {
     @Body() body: unknown,
   ) {
     const b = z
-      .object({
-        email,
-        password,
-        fullName: text,
-        role: z.enum(["STUDENT", "TEACHER", "PARENT", "ADMIN"]),
-        grade: z.number().int().min(6).max(9).default(8),
-        consent: z.literal(true),
-        classId: z.string().optional(),
-      })
+      .discriminatedUnion("role", [
+        z.object({
+          username,
+          password,
+          fullName: text,
+          role: z.literal("STUDENT"),
+          grade: z.number().int().min(6).max(9).default(8),
+          consent: z.literal(true),
+          classId: z.string().optional(),
+        }),
+        z.object({
+          email,
+          password,
+          fullName: text,
+          role: z.enum(["TEACHER", "PARENT", "ADMIN"]),
+          grade: z.number().int().min(6).max(9).default(8),
+          consent: z.literal(true),
+        }),
+      ])
       .parse(body);
     if (req.user.role === "TEACHER") {
       if (b.role !== "STUDENT" || !b.classId)
@@ -930,20 +1071,27 @@ export class ApiController {
     return this.db.$transaction(async (tx) => {
       const u = await tx.user.create({
         data: {
-          email: b.email,
+          email: "email" in b ? b.email : null,
+          username: "username" in b ? b.username : null,
           passwordHash: await argon.hash(b.password),
           fullName: b.fullName,
           role: b.role,
           grade: b.grade,
           consentAt: new Date(),
+          mustChangePassword: b.role === "STUDENT",
+          temporaryPasswordExpiresAt:
+            b.role === "STUDENT" ? new Date(Date.now() + 86400000) : null,
         },
       });
-      if (b.classId)
+      if ("classId" in b && b.classId)
         await tx.enrollment.create({
           data: { classId: b.classId, studentId: u.id, approved: true },
         });
       return publicUser(u);
     });
+  }
+  private temporaryPassword() {
+    return `Nexa-${randomBytes(9).toString("base64url")}`;
   }
   @Roles("ADMIN") @Get("users") async users() {
     return (

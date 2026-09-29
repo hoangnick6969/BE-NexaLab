@@ -11,6 +11,7 @@ const uploaded = [];
 let classroom;
 let lesson;
 let passed = 0;
+const changedStudentPassword = "StudentChangedPassword2026!";
 async function req(path, method = "GET", body, auth) {
   const r = await fetch(origin + path, {
     method,
@@ -54,23 +55,51 @@ try {
   const users = {};
   for (const role of ["TEACHER", "STUDENT", "PARENT"]) {
     const account = {
-      email: `${prefix}-${role.toLowerCase()}@example.test`,
       password: "IntegrationTest2026!",
       fullName: "Integration " + role,
       role,
       grade: 8,
       consent: true,
+      ...(role === "STUDENT"
+        ? { username: `${prefix}-${role.toLowerCase()}` }
+        : { email: `${prefix}-${role.toLowerCase()}@example.test` }),
     };
     const createdUser = await req("/users", "POST", account, adminToken);
     check("create " + role, createdUser.status === 201);
     created.push(createdUser.data.id);
     users[role] = createdUser.data;
-    const login = await req("/auth/login", "POST", {
-      email: account.email,
+    const login = await req(role === "STUDENT" ? "/auth/student/login" : "/auth/login", "POST", {
+      ...(role === "STUDENT"
+        ? { username: account.username }
+        : { email: account.email }),
       password: account.password,
     });
-    tokens[role] = login.data.accessToken;
-    check("login " + role, login.status === 201 && !!tokens[role]);
+    check("login " + role, login.status === 201 && !!login.data.accessToken);
+    if (role === "STUDENT") {
+      check(
+        "temporary student session is restricted",
+        (await req("/classes", "GET", undefined, login.data.accessToken)).status === 403,
+      );
+      check(
+        "student changes temporary password",
+        (
+          await req(
+            "/auth/password",
+            "POST",
+            { currentPassword: account.password, password: changedStudentPassword },
+            login.data.accessToken,
+          )
+        ).status === 201,
+      );
+      const changedLogin = await req("/auth/student/login", "POST", {
+        username: account.username,
+        password: changedStudentPassword,
+      });
+      tokens[role] = changedLogin.data.accessToken;
+      check("student signs in with private password", changedLogin.status === 201 && !!tokens[role]);
+    } else {
+      tokens[role] = login.data.accessToken;
+    }
   }
   check(
     "student cannot create users",
@@ -96,6 +125,36 @@ try {
   );
   check("teacher creates class", made.status === 201);
   classroom = made.data;
+  const provisioned = await req(
+    `/classes/${classroom.id}/students`,
+    "POST",
+    {
+      username: `${prefix}-provisioned`,
+      fullName: "Provisioned Student",
+      grade: 8,
+      consent: true,
+    },
+    tokens.TEACHER,
+  );
+  check(
+    "teacher provisions a student without email",
+    provisioned.status === 201 &&
+      provisioned.data.user.email === null &&
+      provisioned.data.credentials.temporaryPassword.length >= 12,
+  );
+  created.push(provisioned.data.user.id);
+  const resetCredential = await req(
+    `/classes/${classroom.id}/students/${provisioned.data.user.id}/reset-password`,
+    "POST",
+    {},
+    tokens.TEACHER,
+  );
+  check(
+    "teacher resets only an enrolled student and receives a new temporary credential",
+    resetCredential.status === 201 &&
+      resetCredential.data.credentials.temporaryPassword !==
+        provisioned.data.credentials.temporaryPassword,
+  );
   check(
     "parent cannot create class",
     (await req("/classes", "POST", { name: "bad", grade: 8 }, tokens.PARENT))
@@ -453,9 +512,9 @@ try {
       )
     ).data.verdict === "partial",
   );
-  const login = await req("/auth/login", "POST", {
-    email: users.STUDENT.email,
-    password: "IntegrationTest2026!",
+  const login = await req("/auth/student/login", "POST", {
+    username: users.STUDENT.username,
+    password: changedStudentPassword,
   });
   const cookie = login.cookie.split(";")[0];
   const refresh = await fetch(origin + "/auth/refresh", {
