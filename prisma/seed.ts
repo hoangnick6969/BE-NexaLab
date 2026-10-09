@@ -7,17 +7,21 @@ async function main() {
   if (!password || password.length < 12)
     throw new Error("Đặt SEED_PASSWORD ít nhất 12 ký tự");
   const passwordHash = await hash(password);
-  for (const [role, name] of [
-    ["ADMIN", "Quản trị NexaLab"],
-    ["TEACHER", "Cô Nguyễn Minh Anh"],
-    ["STUDENT", "Nguyễn An"],
-    ["PARENT", "Phụ huynh Nguyễn An"],
+  for (const [role, name, identifier] of [
+    ["ADMIN", "Quản trị NexaLab", "admin@nexalab.local"],
+    ["TEACHER", "Cô Nguyễn Minh Anh", "teacher@nexalab.local"],
+    ["STUDENT", "Nguyễn An", "nguyenan.8a"],
+    ["PARENT", "Phụ huynh Nguyễn An", "parent@nexalab.local"],
   ] as const)
     await db.user.upsert({
-      where: { email: role.toLowerCase() + "@nexalab.local" },
+      where:
+        role === "STUDENT"
+          ? { username: identifier }
+          : { email: identifier },
       create: {
         id: role.toLowerCase(),
-        email: role.toLowerCase() + "@nexalab.local",
+        email: role === "STUDENT" ? null : identifier,
+        username: role === "STUDENT" ? identifier : null,
         role,
         fullName: name,
         passwordHash,
@@ -155,7 +159,7 @@ async function main() {
     update: {},
   });
   console.log(
-    "Seed hoàn tất. Tài khoản: student/teacher/parent/admin@nexalab.local. Mật khẩu lấy từ SEED_PASSWORD.",
+    "Seed hoàn tất. Học sinh: nguyenan.8a; người lớn: teacher/parent/admin@nexalab.local. Mật khẩu lấy từ SEED_PASSWORD.",
   );
 }
 main().finally(() => db.$disconnect());

@@ -7,7 +7,7 @@ const db=new PrismaClient();const base='http://127.0.0.1:4000/api';const email='
 const call=async(path,body,token)=>{const r=await fetch(base+path,{method:'POST',headers:{'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})},body:JSON.stringify(body)});return {status:r.status,data:await r.json()};};
 try{
  const admin=await call('/auth/login',{email:'admin@nexalab.local',password:process.env.SEED_PASSWORD});assert.equal(admin.status,201);
- const made=await call('/users',{email,password:'OriginalPassword2026!',fullName:'Password Test',role:'STUDENT',grade:8,consent:true},admin.data.accessToken);id=made.data.id;assert.ok(id);
+ const made=await call('/users',{email,password:'OriginalPassword2026!',fullName:'Password Test',role:'PARENT',grade:8,consent:true},admin.data.accessToken);id=made.data.id;assert.ok(id);
  const login=await call('/auth/login',{email,password:'OriginalPassword2026!'});assert.equal(login.status,201);
  const forgot=await call('/auth/forgot',{email});assert.equal(forgot.status,201);console.log('PASS forgot password accepted by local SMTP');
  files=(await readdir('.local/mailbox')).filter(f=>!before.has(f));const raw=(await readFile(resolve('.local/mailbox',files[0]),'utf8')).replace(/=\r?\n/g,'').replace(/=3D/g,'=');const token=raw.match(/reset=([a-f0-9]{64})/)?.[1];assert.ok(token);console.log('PASS reset link delivered to local mailbox');
