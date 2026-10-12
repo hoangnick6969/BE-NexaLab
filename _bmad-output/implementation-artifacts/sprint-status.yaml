@@ -5,7 +5,7 @@ project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-provisioned-student-starts-assigned-learning
 scope: Release 1 / Epic A1
-last_updated: '2026-10-12'
+last_updated: '2026-10-13'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'D:\FPT\Ky8\WDP301\project\BE-NexaLab'
@@ -24,12 +24,12 @@ development_status:
   a1-t3-open-assigned-learning: done
   a1-t4-cohort-to-lesson-evidence: done
   a2-t1-authoritative-ordered-lesson-pathway: done
-  a2-t2-reading-evidence: pending
+  a2-t2-reading-evidence: done
 
 execution:
   current_story: a2-t2-reading-evidence
   next_story: a2-t3-video-completion
-  selection_reason: A2-T1 runtime gate passed (61/61 integration assertions live on Supabase); A2-T2 unlocked.
+  selection_reason: A2-T2 accepted as done with local source, automated, and runtime evidence; A2-T3 remains the next story and was not started here.
   one_story_per_task: true
   next_epic_unlocked: false
   implementation_readiness: complete-local
@@ -54,6 +54,23 @@ verification:
     - Production deployment acceptance remains unverified.
 
 story_notes:
+  a2-t2-reading-evidence:
+    status: done
+    changed_files:
+      - 'BE: src/routes.ts'
+      - 'BE: scripts/integration.mjs'
+      - 'BE: _bmad-output/implementation-artifacts/spec-a2-t2-reading-evidence.md'
+      - 'BE: _bmad-output/implementation-artifacts/sprint-status.yaml'
+      - 'FE: src/pages.tsx'
+      - 'FE: tests/reading-completion.spec.ts'
+    verification:
+      source: verified
+      automated: 'BE 34 unit tests, lint/build, integration script syntax; FE lint/build; all passed'
+      runtime: 'Local development API/database: 67/67 integration assertions; focused Playwright passed for retry flow and repeat run against completed fixture'
+      production: unverified
+    remaining:
+      - 'A2-T3 video resource rendering/completion remains the next story and was not started'
+      - 'No production deployment or production-user checks were performed'
   a2-t1-authoritative-ordered-lesson-pathway:
     status: done
     acceptance_date: '2026-10-13'

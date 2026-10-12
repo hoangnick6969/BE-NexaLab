@@ -94,6 +94,22 @@ function publishedSteps(lesson: z.infer<typeof lessonSchema>) {
 @Controller()
 export class ApiController {
   constructor(@Inject(Db) private db: Db) {}
+
+  private async applicableLessonAssignment(lessonId: string, studentId: string, db: any = this.db) {
+    const candidates = await db.assignment.findMany({
+      where: {
+        contentId: lessonId,
+        contentType: "lesson",
+        status: "ACTIVE",
+        classroom: { enrollments: { some: { studentId, approved: true } } },
+      },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    });
+    return candidates.find((item: any) => {
+      const targets = item.studentIds as string[];
+      return !targets.length || targets.includes(studentId);
+    });
+  }
   private buckets = new Map<string, { n: number; until: number }>();
   private rate(key: string, max = 10) {
     const now = Date.now();
@@ -625,27 +641,18 @@ export class ApiController {
     @Param("id") id: string,
     @Req() req: any,
   ) {
-    const candidates = await this.db.assignment.findMany({
-      where: {
-        contentId: id,
-        contentType: "lesson",
-        status: "ACTIVE",
-        classroom: { enrollments: { some: { studentId: req.user.sub, approved: true } } },
-      },
-      orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-    });
-    const assignment = candidates.find((item) => {
-      const targets = item.studentIds as string[];
-      return !targets.length || targets.includes(req.user.sub);
-    });
+    return this.studentPathway(id, req.user.sub);
+  }
+  private async studentPathway(id: string, studentId: string, db: any = this.db) {
+    const assignment = await this.applicableLessonAssignment(id, studentId, db);
     if (!assignment) throw new NotFoundException("Không tìm thấy bài được giao");
-    const lesson = await this.db.lesson.findFirst({
+    const lesson = await db.lesson.findFirst({
       where: { id, status: "published" },
       include: {
         subject: true,
         steps: {
           orderBy: { position: "asc" },
-          include: { progress: { where: { studentId: req.user.sub } } },
+          include: { progress: { where: { studentId } } },
         },
       },
     });
@@ -677,6 +684,67 @@ export class ApiController {
       ...pathway,
       updatedAt: new Date().toISOString(),
     };
+  }
+  @Roles("STUDENT") @Put("lessons/:lessonId/steps/:stepId/progress") async completeReading(
+    @Param("lessonId") lessonId: string,
+    @Param("stepId") stepId: string,
+    @Body() body: unknown,
+    @Req() req: any,
+  ) {
+    z.object({ action: z.literal("complete") }).strict().parse(body);
+    const studentId = req.user.sub;
+    const now = new Date();
+    return this.db.$transaction(async (tx) => {
+      if (!(await this.applicableLessonAssignment(lessonId, studentId, tx)))
+        throw new NotFoundException("Không tìm thấy bài được giao");
+      const lesson = await tx.lesson.findFirst({
+        where: { id: lessonId, status: "published" },
+        include: {
+          steps: {
+            orderBy: { position: "asc" },
+            include: { progress: { where: { studentId } } },
+          },
+        },
+      });
+      if (!lesson) throw new NotFoundException("Nội dung không còn khả dụng");
+      let currentPathway;
+      try {
+        currentPathway = buildPathwaySteps(lesson.steps as any);
+      } catch {
+        throw new NotFoundException("Nội dung không còn khả dụng");
+      }
+      const step = lesson.steps.find((item) => item.id === stepId);
+      const authorizedStep = currentPathway.steps.find((item) => item.id === stepId);
+      if (
+        !step ||
+        step.type !== "READING" ||
+        !["IN_PROGRESS", "COMPLETED"].includes(authorizedStep?.state ?? "")
+      )
+        throw new NotFoundException("Bước đọc không còn khả dụng");
+
+      await tx.stepProgress.createMany({
+        data: [{ studentId, stepId, status: "COMPLETED", progressValue: 100, startedAt: now, completedAt: now }],
+        skipDuplicates: true,
+      });
+      await tx.stepProgress.updateMany({
+        where: { studentId, stepId, status: { not: "COMPLETED" } },
+        data: { status: "COMPLETED", progressValue: 100, completedAt: now },
+      });
+      await tx.stepProgress.updateMany({
+        where: { studentId, stepId, startedAt: null },
+        data: { startedAt: now },
+      });
+      await tx.progress.createMany({
+        data: [{ studentId, contentId: lessonId, status: "in_progress", score: 0 }],
+        skipDuplicates: true,
+      });
+      await tx.progress.updateMany({
+        where: { studentId, contentId: lessonId, status: { not: "completed" } },
+        data: { status: "in_progress" },
+      });
+      const pathway = await this.studentPathway(lessonId, studentId, tx);
+      return { step: pathway.steps.find((item) => item.id === stepId), pathway };
+    }, { isolationLevel: "Serializable" });
   }
   @Roles("STUDENT") @Post("lessons/:id/complete") async complete(
     @Param("id") id: string,

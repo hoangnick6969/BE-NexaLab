@@ -367,6 +367,85 @@ try {
     pathway.data.steps[1].resource === null &&
       !JSON.stringify(pathway.data).includes('"answer"'),
   );
+  const readingStepId = pathway.data.steps[0].id;
+  const invalidReadingBody = await req(
+    `/lessons/${lesson.id}/steps/${readingStepId}/progress`,
+    "PUT",
+    { action: "complete", progressValue: 100 },
+    tokens.STUDENT,
+  );
+  check("reading completion rejects client progress fields", invalidReadingBody.status === 400);
+  const wrongStep = await req(
+    `/lessons/${lesson.id}/steps/foreign-step/progress`,
+    "PUT",
+    { action: "complete" },
+    tokens.STUDENT,
+  );
+  check("reading completion rejects a step outside the lesson", wrongStep.status === 404);
+  const lockedVideo = await req(
+    `/lessons/${lesson.id}/steps/${pathway.data.steps[1].id}/progress`,
+    "PUT",
+    { action: "complete" },
+    tokens.STUDENT,
+  );
+  check("reading endpoint rejects locked non-reading steps", lockedVideo.status === 404);
+  const readingCompletion = await req(
+    `/lessons/${lesson.id}/steps/${readingStepId}/progress`,
+    "PUT",
+    { action: "complete" },
+    tokens.STUDENT,
+  );
+  const readingEvidence = await db.stepProgress.findUnique({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: readingStepId } },
+  });
+  const lessonProjection = await db.progress.findUnique({
+    where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } },
+  });
+  check(
+    "assigned student completes current reading and receives reconciled pathway",
+    readingCompletion.status === 200 &&
+      readingCompletion.data.step.state === "COMPLETED" &&
+      readingCompletion.data.pathway.steps[0].state === "COMPLETED" &&
+      readingCompletion.data.pathway.nextStepId === pathway.data.steps[1].id &&
+      readingEvidence?.status === "COMPLETED" && readingEvidence.progressValue === 100 &&
+      lessonProjection?.status === "in_progress",
+  );
+  const firstCompletedAt = readingEvidence?.completedAt?.toISOString();
+  await db.progress.update({
+    where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } },
+    data: { status: "completed" },
+  });
+  const repeatedCompletion = await req(
+    `/lessons/${lesson.id}/steps/${readingStepId}/progress`,
+    "PUT",
+    { action: "complete" },
+    tokens.STUDENT,
+  );
+  const repeatedEvidence = await db.stepProgress.findUnique({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: readingStepId } },
+  });
+  const evidenceCount = await db.stepProgress.count({
+    where: { studentId: users.STUDENT.id, stepId: readingStepId },
+  });
+  const preservedProjection = await db.progress.findUnique({
+    where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } },
+  });
+  const reloadedPathway = await req(`/lessons/${lesson.id}/pathway`, "GET", undefined, tokens.STUDENT);
+  check(
+    "reading completion is idempotent and survives a pathway reload",
+    repeatedCompletion.status === 200 &&
+      repeatedEvidence?.completedAt?.toISOString() === firstCompletedAt &&
+      evidenceCount === 1 && preservedProjection?.status === "completed" &&
+      reloadedPathway.data.steps[0].state === "COMPLETED" &&
+      reloadedPathway.data.nextStepId === pathway.data.steps[1].id,
+  );
+  const outsiderCompletion = await req(
+    `/lessons/${lesson.id}/steps/${readingStepId}/progress`,
+    "PUT",
+    { action: "complete" },
+    outsider.data.accessToken,
+  );
+  check("unassigned student cannot complete reading", outsiderCompletion.status === 404);
   const deniedPathway = await req(
     "/lessons/" + lesson.id + "/pathway",
     "GET",
