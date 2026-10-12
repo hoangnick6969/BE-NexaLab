@@ -3,10 +3,17 @@ import { PrismaClient } from "@prisma/client";
 import { hash } from "argon2";
 const db = new PrismaClient();
 async function main() {
+  if (process.env.NODE_ENV === "production")
+    throw new Error("Development fixtures must never be seeded in production");
   const password = process.env.SEED_PASSWORD;
   if (!password || password.length < 12)
     throw new Error("Đặt SEED_PASSWORD ít nhất 12 ký tự");
   const passwordHash = await hash(password);
+  const fixturePassword = process.env.SEED_FIXTURE_PASSWORD ?? password;
+  if (fixturePassword.length < 12)
+    throw new Error("Đặt SEED_FIXTURE_PASSWORD ít nhất 12 ký tự");
+  const fixturePasswordHash = await hash(fixturePassword);
+  const resetFixtures = process.env.SEED_RESET_FIXTURES === "true";
   for (const [role, name, identifier] of [
     ["ADMIN", "Quản trị NexaLab", "admin@nexalab.local"],
     ["TEACHER", "Cô Nguyễn Minh Anh", "teacher@nexalab.local"],
@@ -15,9 +22,7 @@ async function main() {
   ] as const)
     await db.user.upsert({
       where:
-        role === "STUDENT"
-          ? { username: identifier }
-          : { email: identifier },
+        role === "STUDENT" ? { username: identifier } : { email: identifier },
       create: {
         id: role.toLowerCase(),
         email: role === "STUDENT" ? null : identifier,
@@ -29,6 +34,82 @@ async function main() {
       },
       update: {},
     });
+  const fixtureUsers = [
+    {
+      id: "teacher-owner",
+      email:
+        process.env.SEED_TEACHER_OWNER_EMAIL ?? "teacher.owner@nexalab.local",
+      fullName: "Teacher Owner",
+      role: "TEACHER" as const,
+    },
+    {
+      id: "teacher-outsider",
+      email:
+        process.env.SEED_TEACHER_OUTSIDER_EMAIL ??
+        "teacher.outsider@nexalab.local",
+      fullName: "Teacher Outsider",
+      role: "TEACHER" as const,
+    },
+    {
+      id: "student-temp",
+      username: process.env.SEED_STUDENT_TEMP_USERNAME ?? "student.temp",
+      fullName: "Student Temporary",
+      role: "STUDENT" as const,
+      mustChangePassword: true,
+    },
+    {
+      id: "student-active",
+      username: process.env.SEED_STUDENT_ACTIVE_USERNAME ?? "student.active",
+      fullName: "Student Active",
+      role: "STUDENT" as const,
+      mustChangePassword: false,
+    },
+    {
+      id: "student-outsider",
+      username:
+        process.env.SEED_STUDENT_OUTSIDER_USERNAME ?? "student.outsider",
+      fullName: "Student Outsider",
+      role: "STUDENT" as const,
+      mustChangePassword: false,
+    },
+  ];
+  for (const fixture of fixtureUsers) {
+    for (const identity of [fixture.email, fixture.username].filter(Boolean)) {
+      const identityOwner = await db.user.findFirst({
+        where: { OR: [{ email: identity }, { username: identity }] },
+        select: { id: true },
+      });
+      if (identityOwner && identityOwner.id !== fixture.id)
+        throw new Error(`Fixture identity is already used: ${identity}`);
+    }
+    const data = {
+      id: fixture.id,
+      email: fixture.email ?? null,
+      username: fixture.username ?? null,
+      role: fixture.role,
+      fullName: fixture.fullName,
+      passwordHash: fixturePasswordHash,
+      consentAt: new Date(),
+      mustChangePassword: fixture.mustChangePassword ?? false,
+      temporaryPasswordExpiresAt: fixture.mustChangePassword
+        ? new Date(Date.now() + 86400000)
+        : null,
+    };
+    await db.user.upsert({
+      where: { id: fixture.id },
+      create: data,
+      update: resetFixtures
+        ? {
+            email: data.email,
+            username: data.username,
+            fullName: data.fullName,
+            passwordHash: data.passwordHash,
+            mustChangePassword: data.mustChangePassword,
+            temporaryPasswordExpiresAt: data.temporaryPasswordExpiresAt,
+          }
+        : {},
+    });
+  }
   for (const [id, name] of [
     ["physics", "Vật lý"],
     ["chemistry", "Hóa học"],
@@ -134,6 +215,34 @@ async function main() {
     },
     update: {},
   });
+  for (const classroom of [
+    {
+      id: "class-pilot-a",
+      teacherId: "teacher-owner",
+      name: "Pilot Science 8A",
+      grade: 8,
+      joinCode: "PILOT8A",
+    },
+    {
+      id: "class-pilot-b",
+      teacherId: "teacher-outsider",
+      name: "Pilot Science 8B",
+      grade: 8,
+      joinCode: "PILOT8B",
+    },
+  ])
+    await db.classroom.upsert({
+      where: { id: classroom.id },
+      create: classroom,
+      update: resetFixtures
+        ? {
+            teacherId: classroom.teacherId,
+            name: classroom.name,
+            grade: classroom.grade,
+            joinCode: classroom.joinCode,
+          }
+        : {},
+    });
   await db.enrollment.upsert({
     where: {
       classId_studentId: { classId: "demo-class", studentId: "student" },
@@ -141,6 +250,16 @@ async function main() {
     create: { classId: "demo-class", studentId: "student", approved: true },
     update: {},
   });
+  for (const [classId, studentId] of [
+    ["class-pilot-a", "student-temp"],
+    ["class-pilot-a", "student-active"],
+    ["class-pilot-b", "student-outsider"],
+  ])
+    await db.enrollment.upsert({
+      where: { classId_studentId: { classId, studentId } },
+      create: { classId, studentId, approved: true },
+      update: resetFixtures ? { approved: true } : {},
+    });
   await db.parentLink.upsert({
     where: { parentId_studentId: { parentId: "parent", studentId: "student" } },
     create: { parentId: "parent", studentId: "student" },
@@ -158,8 +277,20 @@ async function main() {
     },
     update: {},
   });
+  await db.assignment.upsert({
+    where: { id: "pilot-a-circuit-assignment" },
+    create: {
+      id: "pilot-a-circuit-assignment",
+      classId: "class-pilot-a",
+      contentId: "circuit",
+      contentType: "lab",
+      title: "Pilot: Safe LED circuit",
+      dueDate: new Date(Date.now() + 7 * 86400000),
+    },
+    update: {},
+  });
   console.log(
-    "Seed hoàn tất. Học sinh: nguyenan.8a; người lớn: teacher/parent/admin@nexalab.local. Mật khẩu lấy từ SEED_PASSWORD.",
+    "Seed hoàn tất. Fixture users are environment-configured; set SEED_RESET_FIXTURES=true only in non-production to reset fixture passwords.",
   );
 }
 main().finally(() => db.$disconnect());
