@@ -5,7 +5,7 @@ const url = z.string().refine((value) =>
 );
 const reading = z.object({ html: z.string().trim().min(1) });
 const video = z.object({
-  url: url.optional(),
+  url: z.preprocess((value) => value === null ? undefined : value, url.optional()),
   title: z.string().trim().min(1),
   transcript: z.string().trim().min(1).optional(),
   equivalentText: z.string().trim().min(1).optional(),
@@ -44,8 +44,74 @@ export type StoredStep = {
   position: number;
   required: boolean;
   config: unknown;
-  progress?: Array<{ status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED"; progressValue: number }>;
+  progress?: Array<{
+    status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+    progressValue: number;
+    lastPosition?: number | null;
+  }>;
 };
+
+const videoTiming = {
+  positionSeconds: z.number().int().min(0).max(86400),
+  durationSeconds: z.number().int().min(0).max(86400),
+};
+
+export const stepProgressActionSchema = z.union([
+  z.object({ action: z.literal("complete") }).strict(),
+  z.object({ action: z.literal("heartbeat"), ...videoTiming })
+    .strict()
+    .refine((value) => value.positionSeconds <= value.durationSeconds, {
+      message: "Playback position cannot exceed duration",
+    }),
+  z.object({ action: z.literal("ended"), ...videoTiming })
+    .strict()
+    .refine((value) => value.positionSeconds <= value.durationSeconds, {
+      message: "Playback position cannot exceed duration",
+    }),
+  z.object({ action: z.literal("complete-fallback") }).strict(),
+]);
+
+export type StepProgressAction = z.infer<typeof stepProgressActionSchema>;
+
+export function reconcileVideoProgress(
+  config: unknown,
+  saved: {
+    status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+    progressValue: number;
+    lastPosition: number | null;
+    startedAt: Date | null;
+    completedAt: Date | null;
+  } | undefined,
+  action: Exclude<StepProgressAction, { action: "complete" }>,
+  now: Date,
+) {
+  const parsedConfig = video.parse(config);
+  if (action.action === "complete-fallback" && !parsedConfig.equivalentText)
+    throw new Error("VIDEO_EQUIVALENT_UNAVAILABLE");
+
+  const previousProgress = saved?.progressValue ?? 0;
+  const previousPosition = saved?.lastPosition ?? 0;
+  const observedProgress = action.action === "complete-fallback"
+    ? 100
+    : action.durationSeconds === 0
+      ? 0
+      : Math.floor((action.positionSeconds / action.durationSeconds) * 100);
+  const completed =
+    saved?.status === "COMPLETED" ||
+    action.action === "complete-fallback" ||
+    action.action === "ended" ||
+    (action.durationSeconds > 0 && action.positionSeconds / action.durationSeconds >= 0.9);
+
+  return {
+    status: completed ? "COMPLETED" as const : "IN_PROGRESS" as const,
+    progressValue: completed ? 100 : Math.max(previousProgress, observedProgress),
+    lastPosition: action.action === "complete-fallback"
+      ? saved?.lastPosition ?? null
+      : Math.max(previousPosition, action.positionSeconds),
+    startedAt: saved?.startedAt ?? now,
+    completedAt: saved?.completedAt ?? (completed ? now : null),
+  };
+}
 
 export function materializeLegacySteps(lesson: {
   content: string;
@@ -100,6 +166,11 @@ export function buildPathwaySteps(steps: StoredStep[]) {
       (!Number.isInteger(saved.progressValue) || saved.progressValue < 0 || saved.progressValue > 100)
     )
       throw new Error("Step progress must be between 0 and 100");
+    if (
+      saved?.lastPosition != null &&
+      (!Number.isInteger(saved.lastPosition) || saved.lastPosition < 0 || saved.lastPosition > 86400)
+    )
+      throw new Error("Step resume position must be a valid integer second");
     const completed = saved?.status === "COMPLETED";
     const future = ["QUIZ", "LAB", "CHALLENGE"].includes(step.type);
     const state = completed ? "COMPLETED" : !blocked && !future ? "IN_PROGRESS" : "LOCKED";
@@ -120,6 +191,7 @@ export function buildPathwaySteps(steps: StoredStep[]) {
       required: step.required,
       state,
       progressValue: saved?.progressValue ?? 0,
+      lastPosition: saved?.lastPosition ?? null,
       lockReasonCode,
       resource: state === "LOCKED" ? null : resource(step),
     };

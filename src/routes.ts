@@ -25,7 +25,13 @@ import { Public, Roles, publicUser, access, token, hashToken } from "./auth";
 import { simulate } from "../packages/sim";
 import { buildContext, misconceptions } from "./tutor";
 import { explain } from "./llm";
-import { buildPathwaySteps, materializeLegacySteps, validateLessonSteps } from "./pathway";
+import {
+  buildPathwaySteps,
+  materializeLegacySteps,
+  reconcileVideoProgress,
+  stepProgressActionSchema,
+  validateLessonSteps,
+} from "./pathway";
 const text = z.string().trim().min(1).max(200);
 const password = z.string().min(12).max(128);
 const email = z
@@ -685,13 +691,13 @@ export class ApiController {
       updatedAt: new Date().toISOString(),
     };
   }
-  @Roles("STUDENT") @Put("lessons/:lessonId/steps/:stepId/progress") async completeReading(
+  @Roles("STUDENT") @Put("lessons/:lessonId/steps/:stepId/progress") async updateStepProgress(
     @Param("lessonId") lessonId: string,
     @Param("stepId") stepId: string,
     @Body() body: unknown,
     @Req() req: any,
   ) {
-    z.object({ action: z.literal("complete") }).strict().parse(body);
+    const action = stepProgressActionSchema.parse(body);
     const studentId = req.user.sub;
     const now = new Date();
     return this.db.$transaction(async (tx) => {
@@ -715,25 +721,49 @@ export class ApiController {
       }
       const step = lesson.steps.find((item) => item.id === stepId);
       const authorizedStep = currentPathway.steps.find((item) => item.id === stepId);
-      if (
-        !step ||
-        step.type !== "READING" ||
-        !["IN_PROGRESS", "COMPLETED"].includes(authorizedStep?.state ?? "")
-      )
-        throw new NotFoundException("Bước đọc không còn khả dụng");
+      if (!step || !["IN_PROGRESS", "COMPLETED"].includes(authorizedStep?.state ?? ""))
+        throw new NotFoundException("Bước học không còn khả dụng");
 
-      await tx.stepProgress.createMany({
-        data: [{ studentId, stepId, status: "COMPLETED", progressValue: 100, startedAt: now, completedAt: now }],
-        skipDuplicates: true,
-      });
-      await tx.stepProgress.updateMany({
-        where: { studentId, stepId, status: { not: "COMPLETED" } },
-        data: { status: "COMPLETED", progressValue: 100, completedAt: now },
-      });
-      await tx.stepProgress.updateMany({
-        where: { studentId, stepId, startedAt: null },
-        data: { startedAt: now },
-      });
+      const saved = step.progress[0];
+      if (step.type === "READING") {
+        if (action.action !== "complete")
+          throw new NotFoundException("Bước học không còn khả dụng");
+        await tx.stepProgress.upsert({
+          where: { studentId_stepId: { studentId, stepId } },
+          create: {
+            studentId,
+            stepId,
+            status: "COMPLETED",
+            progressValue: 100,
+            startedAt: now,
+            completedAt: now,
+          },
+          update: saved?.status === "COMPLETED"
+            ? { startedAt: saved.startedAt ?? now }
+            : {
+                status: "COMPLETED",
+                progressValue: 100,
+                startedAt: saved?.startedAt ?? now,
+                completedAt: now,
+              },
+        });
+      } else if (step.type === "VIDEO") {
+        if (action.action === "complete")
+          throw new NotFoundException("Bước học không còn khả dụng");
+        let evidence;
+        try {
+          evidence = reconcileVideoProgress(step.config, saved, action, now);
+        } catch {
+          throw new NotFoundException("Bước học không còn khả dụng");
+        }
+        await tx.stepProgress.upsert({
+          where: { studentId_stepId: { studentId, stepId } },
+          create: { studentId, stepId, ...evidence },
+          update: evidence,
+        });
+      } else {
+        throw new NotFoundException("Bước học không còn khả dụng");
+      }
       await tx.progress.createMany({
         data: [{ studentId, contentId: lessonId, status: "in_progress", score: 0 }],
         skipDuplicates: true,

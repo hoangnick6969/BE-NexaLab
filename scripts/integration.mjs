@@ -318,6 +318,20 @@ try {
       )
     ).status === 200,
   );
+  const disposableVideoStep = await db.lessonStep.findFirstOrThrow({
+    where: { lessonId: lesson.id, type: "VIDEO" },
+  });
+  await db.lessonStep.update({
+    where: { id: disposableVideoStep.id },
+    data: {
+      config: {
+        title: "Disposable integration video",
+        url: "https://example.test/video.mp4",
+        transcript: "Published integration transcript",
+        equivalentText: "Published integration equivalent",
+      },
+    },
+  });
   const lessonTask = await req(
     `/classes/${classroom.id}/assignments`,
     "POST",
@@ -438,6 +452,106 @@ try {
       evidenceCount === 1 && preservedProjection?.status === "completed" &&
       reloadedPathway.data.steps[0].state === "COMPLETED" &&
       reloadedPathway.data.nextStepId === pathway.data.steps[1].id,
+  );
+  const videoStepId = pathway.data.steps[1].id;
+  const invalidVideoTimings = [
+    { action: "heartbeat", positionSeconds: -1, durationSeconds: 100 },
+    { action: "heartbeat", positionSeconds: 101, durationSeconds: 100 },
+    { action: "heartbeat", positionSeconds: 1.5, durationSeconds: 100 },
+    { action: "ended", positionSeconds: 1, durationSeconds: 86401 },
+    { action: "heartbeat", positionSeconds: 1, durationSeconds: 100, progressValue: 99 },
+  ];
+  for (const invalidBody of invalidVideoTimings) {
+    check(
+      "video progress rejects invalid timing " + JSON.stringify(invalidBody),
+      (await req(
+        `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+        "PUT",
+        invalidBody,
+        tokens.STUDENT,
+      )).status === 400,
+    );
+  }
+  const firstHeartbeat = await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "heartbeat", positionSeconds: 41, durationSeconds: 100 },
+    tokens.STUDENT,
+  );
+  const backwardHeartbeat = await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "heartbeat", positionSeconds: 20, durationSeconds: 100 },
+    tokens.STUDENT,
+  );
+  const resumedVideo = await req(`/lessons/${lesson.id}/pathway`, "GET", undefined, tokens.STUDENT);
+  check(
+    "video heartbeat and backward seek preserve reload-safe high-water evidence",
+    firstHeartbeat.status === 200 &&
+      backwardHeartbeat.status === 200 &&
+      backwardHeartbeat.data.step.state === "IN_PROGRESS" &&
+      backwardHeartbeat.data.step.progressValue === 41 &&
+      backwardHeartbeat.data.step.lastPosition === 41 &&
+      resumedVideo.data.steps[1].lastPosition === 41 &&
+      resumedVideo.data.steps[1].resource.transcript === "Published integration transcript",
+  );
+  const mediaCompletion = await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "heartbeat", positionSeconds: 90, durationSeconds: 100 },
+    tokens.STUDENT,
+  );
+  const mediaEvidence = await db.stepProgress.findUnique({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: videoStepId } },
+  });
+  const mediaCompletedAt = mediaEvidence?.completedAt?.toISOString();
+  await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "ended", positionSeconds: 80, durationSeconds: 100 },
+    tokens.STUDENT,
+  );
+  const repeatedMediaEvidence = await db.stepProgress.findUnique({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: videoStepId } },
+  });
+  check(
+    "video completes at 90 percent and ended is idempotent without downgrade",
+    mediaCompletion.data.step.state === "COMPLETED" &&
+      repeatedMediaEvidence?.status === "COMPLETED" &&
+      repeatedMediaEvidence.progressValue === 100 &&
+      repeatedMediaEvidence.lastPosition === 90 &&
+      repeatedMediaEvidence.completedAt?.toISOString() === mediaCompletedAt,
+  );
+
+  await db.stepProgress.delete({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: videoStepId } },
+  });
+  const fallbackCompletion = await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "complete-fallback" },
+    tokens.STUDENT,
+  );
+  check(
+    "published equivalent explicitly completes video without client timing",
+    fallbackCompletion.status === 200 &&
+      fallbackCompletion.data.step.state === "COMPLETED" &&
+      fallbackCompletion.data.step.progressValue === 100 &&
+      fallbackCompletion.data.step.lastPosition === null,
+  );
+  await db.lessonStep.update({
+    where: { id: videoStepId },
+    data: { config: { title: "URL only", url: "https://example.test/video.mp4" } },
+  });
+  const deniedFallback = await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "complete-fallback" },
+    tokens.STUDENT,
+  );
+  check(
+    "fallback is undiscoverably denied when no published equivalent exists",
+    deniedFallback.status === 404 && !JSON.stringify(deniedFallback.data).includes("equivalent"),
   );
   const outsiderCompletion = await req(
     `/lessons/${lesson.id}/steps/${readingStepId}/progress`,
