@@ -51,6 +51,28 @@ try {
   });
   check("admin login", !!admin.data.accessToken);
   const adminToken = admin.data.accessToken;
+  const fixturePassword =
+    process.env.SEED_FIXTURE_PASSWORD ?? process.env.SEED_PASSWORD;
+  const fixtureTeacher = await req("/auth/login", "POST", {
+    email:
+      process.env.SEED_TEACHER_OWNER_EMAIL ?? "teacher.owner@nexalab.local",
+    password: fixturePassword,
+  });
+  check(
+    "seeded teacher owner login",
+    fixtureTeacher.status === 201 &&
+      fixtureTeacher.data.user.id === "teacher-owner",
+  );
+  const fixtureStudent = await req("/auth/student/login", "POST", {
+    username: process.env.SEED_STUDENT_TEMP_USERNAME ?? "student.temp",
+    password: fixturePassword,
+  });
+  check(
+    "seeded temporary student requires password change",
+    fixtureStudent.status === 201 &&
+      fixtureStudent.data.user.id === "student-temp" &&
+      fixtureStudent.data.user.mustChangePassword === true,
+  );
   const tokens = {};
   const users = {};
   for (const role of ["TEACHER", "STUDENT", "PARENT"]) {
@@ -68,17 +90,22 @@ try {
     check("create " + role, createdUser.status === 201);
     created.push(createdUser.data.id);
     users[role] = createdUser.data;
-    const login = await req(role === "STUDENT" ? "/auth/student/login" : "/auth/login", "POST", {
-      ...(role === "STUDENT"
-        ? { username: account.username }
-        : { email: account.email }),
-      password: account.password,
-    });
+    const login = await req(
+      role === "STUDENT" ? "/auth/student/login" : "/auth/login",
+      "POST",
+      {
+        ...(role === "STUDENT"
+          ? { username: account.username }
+          : { email: account.email }),
+        password: account.password,
+      },
+    );
     check("login " + role, login.status === 201 && !!login.data.accessToken);
     if (role === "STUDENT") {
       check(
         "temporary student session is restricted",
-        (await req("/classes", "GET", undefined, login.data.accessToken)).status === 403,
+        (await req("/classes", "GET", undefined, login.data.accessToken))
+          .status === 403,
       );
       check(
         "student changes temporary password",
@@ -86,7 +113,10 @@ try {
           await req(
             "/auth/password",
             "POST",
-            { currentPassword: account.password, password: changedStudentPassword },
+            {
+              currentPassword: account.password,
+              password: changedStudentPassword,
+            },
             login.data.accessToken,
           )
         ).status === 201,
@@ -96,7 +126,10 @@ try {
         password: changedStudentPassword,
       });
       tokens[role] = changedLogin.data.accessToken;
-      check("student signs in with private password", changedLogin.status === 201 && !!tokens[role]);
+      check(
+        "student signs in with private password",
+        changedLogin.status === 201 && !!tokens[role],
+      );
     } else {
       tokens[role] = login.data.accessToken;
     }
@@ -171,16 +204,22 @@ try {
       )
     ).status === 201,
   );
+  const analyticsBeforeApproval = (
+    await req(
+      "/classes/" + classroom.id + "/analytics",
+      "GET",
+      undefined,
+      tokens.TEACHER,
+    )
+  ).data;
   check(
     "pending student absent from teacher analytics",
-    (
-      await req(
-        "/classes/" + classroom.id + "/analytics",
-        "GET",
-        undefined,
-        tokens.TEACHER,
-      )
-    ).data.length === 0,
+    analyticsBeforeApproval.some(
+      (student) => student.id === provisioned.data.user.id,
+    ) &&
+      !analyticsBeforeApproval.some(
+        (student) => student.id === users.STUDENT.id,
+      ),
   );
   check(
     "teacher approves enrollment",
@@ -489,9 +528,12 @@ try {
       tokens.TEACHER,
     )
   ).data;
+  const integrationStudent = analytics.find(
+    (student) => student.id === users.STUDENT.id,
+  );
   check(
     "teacher sees traceable hints",
-    analytics[0].attempts.some((a) =>
+    integrationStudent?.attempts.some((a) =>
       a.hints.some((h) => h.contextSnapshot.simulation),
     ),
   );

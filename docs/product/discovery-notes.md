@@ -29,4 +29,4 @@ These are hypotheses from the supplied direction and existing implementation, no
 
 ## Discovery decisions still needed
 
-The owner’s answers are consolidated in `product-brief.md`. Validate the learning problem with students and teachers, confirm the approved Grade 8–9 content set, decide first-release cut lines within the stated MVP, and set measurable learning and adoption outcomes before a PRD.
+The owner’s answers were consolidated in `product-brief.md`. The later PRD planning pass fixed the first pilot to NexaLab-authored Grade 8 content mapped to GDPT 2018, defined Increment A cut lines, and recorded measurable pilot gates. Student/teacher research and subject review are still required to validate those decisions; this discovery note is not the current decision source.
