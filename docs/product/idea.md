@@ -7,7 +7,7 @@ The product idea is still under discovery. This records the current direction an
 Owner-defined MVP direction:
 
 - A Vietnamese THCS Natural Science LMS: lessons, reading/video content, flashcards/study cards, quizzes, assignments and progress tracking.
-- Interactive 3D/virtual labs, practical challenges and a deterministic simulation engine for Grade 8–9 Physics, Chemistry and Biology.
+- Interactive 3D/virtual labs, practical challenges and a deterministic simulation engine for Vietnamese THCS Natural Science, with the first Release 1 pilot bounded to Grade 8.
 - Teacher class and student management, lesson management, assignment, outcome review/grading, progress monitoring and learning-evidence inspection.
 - Read-only parent progress tracking and admin management of users, content, labs and assets.
 
@@ -56,4 +56,4 @@ Keep these outside the MVP discussion until validated; no decision is made about
 
 ## Curriculum and content
 
-Initial content focus is Vietnamese THCS Grade 8–9 Physics, Chemistry and Biology under GDPT 2018, mapped by grade, topic and chapter, with an approved textbook/content set. The exact approved set and references still need confirmation. The schema has curriculum, grade, chapter and topic fields; existing model documentation says textbook references have not been independently verified.
+The first pilot content focus is NexaLab-authored Vietnamese THCS Grade 8 Natural Science mapped to GDPT 2018 by subject, topic and chapter. Every published item requires an explicit curriculum reference and subject review; no textbook is copied without a separate rights decision. Grade 9 remains a later product direction, not Increment A scope. The schema has curriculum, grade, chapter and topic fields; existing model documentation is not independent subject approval.

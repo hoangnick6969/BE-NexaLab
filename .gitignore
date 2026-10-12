@@ -9,3 +9,6 @@ uploads/
 .env.*
 !.env.example
 docs/BLUEPRINT.md
+
+# BMAD personal installer answers; team configuration lives in _bmad/custom/config.toml.
+_bmad/config.user.toml
