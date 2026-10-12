@@ -121,6 +121,23 @@ export class ApiController {
       throw new ForbiddenException("Không phải lớp của bạn");
     return c;
   }
+  private async applicableAssignment(id: string, studentId: string) {
+    const assignment = await this.db.assignment.findFirst({
+      where: {
+        id,
+        status: "ACTIVE",
+        classroom: {
+          enrollments: { some: { studentId, approved: true } },
+        },
+      },
+      include: { classroom: { select: { id: true, name: true, grade: true } } },
+    });
+    if (!assignment) throw new NotFoundException("Không tìm thấy bài được giao");
+    const targets = assignment.studentIds as string[];
+    if (targets.length && !targets.includes(studentId))
+      throw new NotFoundException("Không tìm thấy bài được giao");
+    return assignment;
+  }
   private async readableStudent(id: string, req: any) {
     if (req.user.sub === id || req.user.role === "ADMIN") return;
     if (
@@ -163,6 +180,23 @@ export class ApiController {
       !(await argon.verify(user.passwordHash, b.password))
     )
       throw new UnauthorizedException("Email hoặc mật khẩu không đúng");
+    return this.session(user, res);
+  }
+  @Public() @Post("auth/admin/login") async adminLogin(
+    @Body() body: unknown,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    this.rate("admin-login:" + req.ip);
+    const b = z.object({ email, password: z.string().max(128) }).parse(body);
+    const user = await this.db.user.findUnique({ where: { email: b.email } });
+    if (
+      !user ||
+      user.role !== "ADMIN" ||
+      user.status !== "active" ||
+      !(await argon.verify(user.passwordHash, b.password))
+    )
+      throw new UnauthorizedException("Email hoặc mật khẩu quản trị không đúng");
     return this.session(user, res);
   }
   @Public() @Post("auth/student/login") async studentLogin(
@@ -255,6 +289,7 @@ export class ApiController {
   @Post("auth/password") async changePassword(
     @Req() req: any,
     @Body() body: unknown,
+    @Res({ passthrough: true }) res: any,
   ) {
     const b = z.object({ currentPassword: z.string(), password }).parse(body);
     const u = await this.db.user.findUniqueOrThrow({
@@ -273,7 +308,10 @@ export class ApiController {
       }),
       this.db.session.deleteMany({ where: { userId: u.id } }),
     ]);
-    return { ok: true };
+    const refreshedUser = await this.db.user.findUniqueOrThrow({
+      where: { id: u.id },
+    });
+    return this.session(refreshedUser, res);
   }
   @Public() @Post("auth/forgot") async forgot(
     @Req() req: any,
@@ -283,15 +321,8 @@ export class ApiController {
     const b = z.object({ email }).parse(body);
     const u = await this.db.user.findUnique({ where: { email: b.email } });
     if (u && u.role !== "STUDENT" && u.status === "active") {
-      const t = token();
-      await this.db.session.create({
-        data: {
-          userId: u.id,
-          tokenHash: hashToken(t),
-          kind: "reset",
-          expiresAt: new Date(Date.now() + 1800000),
-        },
-      });
+      const temporaryPassword = this.temporaryPassword();
+      const expiresAt = new Date(Date.now() + 86400000);
       await createTransport({
         host: process.env.SMTP_HOST,
         port: Number(process.env.SMTP_PORT ?? 1025),
@@ -307,9 +338,20 @@ export class ApiController {
       }).sendMail({
         from: process.env.SMTP_FROM,
         to: u.email!,
-        subject: "Đặt lại mật khẩu NexaLab",
-        text: `Mở ${process.env.WEB_ORIGIN}/?reset=${t} trong 30 phút để đặt lại mật khẩu.`,
+        subject: "Mật khẩu tạm thời NexaLab",
+        text: `Mật khẩu tạm thời của bạn là: ${temporaryPassword}\nMật khẩu có hiệu lực đến ${expiresAt.toLocaleString("vi-VN")} và sẽ buộc đổi sau khi đăng nhập.`,
       });
+      await this.db.$transaction([
+        this.db.user.update({
+          where: { id: u.id },
+          data: {
+            passwordHash: await argon.hash(temporaryPassword),
+            mustChangePassword: true,
+            temporaryPasswordExpiresAt: expiresAt,
+          },
+        }),
+        this.db.session.deleteMany({ where: { userId: u.id } }),
+      ]);
     }
     return { message: "Nếu email tồn tại, hướng dẫn đã được gửi." };
   }
@@ -737,6 +779,8 @@ export class ApiController {
             where: { id: b.contentId, status: "published" },
           });
     if (!content) throw new BadRequestException("Nội dung chưa xuất bản");
+    if (new Set(b.studentIds).size !== b.studentIds.length)
+      throw new BadRequestException("Danh sách học sinh bị trùng");
     if (b.studentIds.length) {
       const n = await this.db.enrollment.count({
         where: { classId: id, approved: true, studentId: { in: b.studentIds } },
@@ -745,25 +789,76 @@ export class ApiController {
         throw new BadRequestException("Nhóm có học sinh ngoài lớp");
     }
     return this.db.assignment.create({
-      data: { ...b, classId: id, dueDate: new Date(b.dueDate) },
+      data: {
+        ...b,
+        classId: id,
+        dueDate: new Date(b.dueDate),
+        status: "ACTIVE",
+      },
     });
   }
   @Roles("STUDENT") @Get("assignments") async assignments(@Req() req: any) {
-    return (
-      await this.db.assignment.findMany({
-        where: {
-          classroom: {
-            enrollments: { some: { studentId: req.user.sub, approved: true } },
-          },
+    const rows = await this.db.assignment.findMany({
+      where: {
+        status: "ACTIVE",
+        classroom: {
+          enrollments: { some: { studentId: req.user.sub, approved: true } },
         },
-        include: { classroom: { select: { name: true } } },
-        orderBy: { dueDate: "asc" },
-      })
-    ).filter(
-      (a) =>
-        !(a.studentIds as string[]).length ||
-        (a.studentIds as string[]).includes(req.user.sub),
-    );
+      },
+      include: { classroom: { select: { name: true } } },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    });
+    return rows
+      .filter(
+        (a) =>
+          !(a.studentIds as string[]).length ||
+          (a.studentIds as string[]).includes(req.user.sub),
+      )
+      .map((a) => ({
+        id: a.id,
+        title: a.title,
+        contentId: a.contentId,
+        contentType: a.contentType,
+        dueDate: a.dueDate,
+        createdAt: a.createdAt,
+        overdue: a.dueDate < new Date(),
+        classroom: a.classroom,
+      }));
+  }
+  @Roles("STUDENT") @Get("assignments/:id") async assignment(
+    @Param("id") id: string,
+    @Req() req: any,
+  ) {
+    const a = await this.applicableAssignment(id, req.user.sub);
+    const content =
+      a.contentType === "lesson"
+        ? await this.db.lesson.findFirst({
+            where: { id: a.contentId, status: "published" },
+            include: { subject: true },
+          })
+        : await this.db.lab.findFirst({
+            where: { id: a.contentId, status: "published" },
+            include: { subject: true },
+          });
+    if (!content) throw new NotFoundException("Nội dung không còn khả dụng");
+    return {
+      id: a.id,
+      title: a.title,
+      contentType: a.contentType,
+      dueDate: a.dueDate,
+      overdue: a.dueDate < new Date(),
+      classroom: a.classroom,
+      content: {
+        id: content.id,
+        title: content.title,
+        subject: { id: content.subject.id, name: content.subject.name },
+        grade: content.grade,
+        topic: content.topic,
+        learningObjective: content.learningObjective,
+        prerequisites: "prerequisites" in content ? content.prerequisites : "",
+        ...("content" in content ? { content: content.content } : {}),
+      },
+    };
   }
   @Roles("STUDENT", "TEACHER") @Post("simulate/:labId") preview(
     @Param("labId") labId: string,
@@ -1106,5 +1201,26 @@ export class ApiController {
       .object({ fullName: text, grade: z.number().int().min(6).max(9) })
       .parse(body);
     return publicUser(await this.db.user.update({ where: { id }, data: b }));
+  }
+  @Roles("ADMIN") @Post("users/:id/reset-password") async resetUserPassword(
+    @Param("id") id: string,
+  ) {
+    const user = await this.db.user.findUnique({ where: { id } });
+    if (!user || user.role === "STUDENT")
+      throw new NotFoundException("Không tìm thấy tài khoản người lớn");
+    const temporaryPassword = this.temporaryPassword();
+    const expiresAt = new Date(Date.now() + 86400000);
+    await this.db.$transaction([
+      this.db.user.update({
+        where: { id },
+        data: {
+          passwordHash: await argon.hash(temporaryPassword),
+          mustChangePassword: true,
+          temporaryPasswordExpiresAt: expiresAt,
+        },
+      }),
+      this.db.session.deleteMany({ where: { userId: id } }),
+    ]);
+    return { credentials: { email: user.email, temporaryPassword, expiresAt } };
   }
 }
