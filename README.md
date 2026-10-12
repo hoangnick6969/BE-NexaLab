@@ -105,7 +105,37 @@ npm run dev
 | `http://127.0.0.1:4000/api/docs` | Swagger |
 | `http://localhost:8025` | Mailpit khi chạy bằng Compose |
 
-Seed tạo học sinh `nguyenan.8a` và các tài khoản người lớn `teacher@nexalab.local`, `parent@nexalab.local`, `admin@nexalab.local`, dùng mật khẩu từ `SEED_PASSWORD`. Mã lớp mẫu: `NEXA8A`. Chạy lại seed không ghi đè mật khẩu của tài khoản đã tồn tại.
+Seed tạo bộ fixture dùng chung cho dev và integration test. Tất cả password được lấy từ `SEED_PASSWORD` hoặc `SEED_FIXTURE_PASSWORD`; seed không ghi password plaintext vào database.
+
+| Role | Username/email | Mục đích |
+| --- | --- | --- |
+| ADMIN | `admin@nexalab.local` | Cổng quản trị |
+| TEACHER | `teacher@nexalab.local` | Teacher demo |
+| TEACHER | `teacher.owner@nexalab.local` | Sở hữu `class-pilot-a` |
+| TEACHER | `teacher.outsider@nexalab.local` | Kiểm thử truy cập trái quyền |
+| PARENT | `parent@nexalab.local` | Parent demo |
+| STUDENT | `nguyenan.8a` | Student demo, lớp `NEXA8A` |
+| STUDENT | `student.temp` | Student A1 bắt buộc đổi password |
+| STUDENT | `student.active` | Student A1 đã active |
+| STUDENT | `student.outsider` | Student ngoài lớp mục tiêu |
+
+Mật khẩu của các fixture là giá trị bạn đặt trong `.env`. Ví dụ dùng chung cho môi trường development:
+
+```env
+SEED_PASSWORD=Fall2026&Spring2027
+SEED_FIXTURE_PASSWORD=Fall2026&Spring2027
+```
+
+Để dựng lại fixture sau khi đã đổi password trong database, chỉ dùng ở local development/test:
+
+```powershell
+$env:APP_ENV='development'
+$env:SEED_TARGET='localhost/nexalab'
+$env:SEED_RESET_FIXTURES='true'
+npm run db:seed
+```
+
+Không đặt `SEED_RESET_FIXTURES=true` trên staging, pilot hoặc production. Chạy lại seed bình thường là idempotent và không ghi đè password đã tồn tại.
 
 ## Mô hình xác thực
 
