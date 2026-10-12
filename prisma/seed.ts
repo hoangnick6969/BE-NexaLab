@@ -1,7 +1,8 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { hash } from "argon2";
-const db = new PrismaClient();
+import { seedUrl } from "../src/database-config";
+const db = new PrismaClient({ datasourceUrl: seedUrl(process.env) });
 async function main() {
   if (process.env.NODE_ENV === "production")
     throw new Error("Development fixtures must never be seeded in production");
@@ -32,7 +33,14 @@ async function main() {
         passwordHash,
         consentAt: new Date(),
       },
-      update: {},
+      update: resetFixtures
+        ? {
+            passwordHash,
+            status: "active",
+            mustChangePassword: false,
+            temporaryPasswordExpiresAt: null,
+          }
+        : {},
     });
   const fixtureUsers = [
     {
@@ -293,4 +301,7 @@ async function main() {
     "Seed hoàn tất. Fixture users are environment-configured; set SEED_RESET_FIXTURES=true only in non-production to reset fixture passwords.",
   );
 }
-main().finally(() => db.$disconnect());
+main().catch(() => {
+  console.error("Seed failed; inspect target connectivity, schema and fixture constraints. Credentials redacted.");
+  process.exitCode = 1;
+}).finally(() => db.$disconnect());

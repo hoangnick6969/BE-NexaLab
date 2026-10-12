@@ -1,0 +1,120 @@
+# A1 execution tracking across backend and frontend.
+# Initial reconciliation of existing work; prior chat summaries are not acceptance proof.
+project: NexaLab
+project_key: nexalab-release-1
+tracking_system: file-system
+story_location: _bmad-output/specs/spec-provisioned-student-starts-assigned-learning
+scope: Release 1 / Epic A1
+last_updated: '2026-10-12'
+tracking_timezone: Asia/Saigon
+repositories:
+  backend: 'D:\FPT\Ky8\WDP301\project\BE-NexaLab'
+  frontend: 'D:\FPT\Ky8\WDP301\project\FE-NexaLab'
+sources:
+  acceptance_criteria: ../specs/spec-provisioned-student-starts-assigned-learning/tickets.md
+  spec: ../specs/spec-provisioned-student-starts-assigned-learning/SPEC.md
+  contract: ../specs/spec-provisioned-student-starts-assigned-learning/implementation-contract.md
+
+# in-progress records existing implementation, not permission to work in parallel.
+development_status:
+  epic-a1: done
+  a1-t0-supabase-data-path: done
+  a1-t1-provision-student-password-gate: done
+  a1-t2-assign-published-lesson: done
+  a1-t3-open-assigned-learning: done
+  a1-t4-cohort-to-lesson-evidence: done
+
+execution:
+  next_story: null
+  selection_reason: Epic A1 local acceptance complete; no next story selected.
+  one_story_per_task: true
+  next_epic_unlocked: false
+  implementation_readiness: complete-local
+  blockers: []
+  constraints:
+    - Preserve existing staged and unstaged changes in both repositories.
+    - No commit requested.
+
+verification:
+  source: verified
+  automated: verified
+  runtime: verified-local
+  production: unverified
+  historical_results:
+    - Isolated local PostgreSQL acceptance completed; see a1-local-acceptance.md.
+    - BE and FE lint/build passed in earlier tool output; not rerun for this tracking update.
+    - BE unit suite passed 19 simulation tests; these do not establish auth or A1 acceptance.
+    - Integration output includes auth, provisioning, assignment and publication assertions, but no complete final suite result was captured in the latest run.
+    - Latest student browser attempt did not demonstrate a successful assigned-lesson opening; one run remained at login and another showed an empty assignment state.
+    - Logout browser probe reported loginVisible=false; a later fresh browser context showing login does not prove the original logout passed.
+  excluded_claims:
+    - Production and Supabase deployment acceptance remain unverified.
+
+story_notes:
+  a1-t0-supabase-data-path:
+    acceptance_review:
+      date: '2026-10-12'
+      verdict: accepted-local
+      latest_evidence: a1-local-acceptance.md
+      latest_fixes:
+        - Added Supabase SSL connection placeholders and explicit seed target/environment controls.
+        - Seed now selects validated DIRECT_URL and refuses transaction pooling and unsafe environments.
+      latest_checks:
+        - Backend lint and build passed; 29 unit tests passed including 10 new database guard cases.
+        - Read-only Supabase Session-pooler SSL SELECT 1 passed; no database mutation executed.
+      prior_findings_below: Historical pre-fix observations; consult latest_evidence for current gaps.
+      source_findings:
+        - .env.example still documents only a local PostgreSQL DATABASE_URL and omits DIRECT_URL and Supabase SSL connection modes.
+        - Prisma schema declares directUrl, but seed constructs PrismaClient without selecting DIRECT_URL explicitly.
+        - Seed rejects NODE_ENV=production only; explicit pilot and staging target safeguards are not established.
+      automated: 29 unit tests, backend lint/build passed.
+      runtime: Local isolated migration, seed rerun, health/API and browser acceptance passed.
+      production: unverified
+    changed_files:
+      - 'BE: prisma/schema.prisma'
+      - 'BE: prisma/seed.ts'
+      - 'BE: prisma/migrations/20261012160000_assignment_lifecycle/'
+    remaining: []
+  a1-t1-provision-student-password-gate:
+    depends_on: a1-t0-supabase-data-path
+    changed_files:
+      - 'BE: src/routes.ts'
+      - 'FE: src/App.tsx'
+      - 'FE: src/api.ts'
+      - 'FE: src/pages.tsx'
+    remaining: []
+  a1-t2-assign-published-lesson:
+    depends_on: a1-t1-provision-student-password-gate
+    changed_files:
+      - 'BE: src/routes.ts'
+      - 'BE: prisma/schema.prisma'
+      - 'BE: prisma/seed.ts'
+      - 'FE: src/pages.tsx'
+    remaining: []
+  a1-t3-open-assigned-learning:
+    depends_on: a1-t2-assign-published-lesson
+    changed_files:
+      - 'BE: src/routes.ts'
+      - 'FE: src/App.tsx'
+      - 'FE: src/pages.tsx'
+      - 'FE: src/styles.css'
+    remaining: []
+  a1-t4-cohort-to-lesson-evidence:
+    depends_on: a1-t3-open-assigned-learning
+    changed_files: []
+    remaining: []
+
+tracking_update:
+  verdict: Epic A1 accepted for isolated local environment.
+  evidence: _bmad-output/implementation-artifacts/a1-local-acceptance.md
+  reason: User-requested A1 Sprint Execution Tracking reconciliation.
+  checks_performed:
+    - Read existing sprint tracking and A1 SPEC and decision log.
+    - Inspected Git status in both repositories; existing changes remain uncommitted.
+    - Confirmed frontend AGENTS.md is still absent.
+  status_decision: Retain current statuses; no new acceptance evidence justifies promotion to done.
+  changed_files:
+    - _bmad-output/implementation-artifacts/sprint-status.yaml
+  application_code_changed: true
+  tests: Backend 53 integration assertions, 29 unit tests, FE lint/build and browser acceptance passed.
+  next_step: Deploy and verify separately for Supabase/pilot/production; no next epic unlocked automatically.
