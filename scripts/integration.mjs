@@ -53,6 +53,12 @@ try {
   const adminToken = admin.data.accessToken;
   const fixturePassword =
     process.env.SEED_FIXTURE_PASSWORD ?? process.env.SEED_PASSWORD;
+  const outsider = await req("/auth/student/login", "POST", {
+    username:
+      process.env.SEED_STUDENT_OUTSIDER_USERNAME ?? "student.outsider",
+    password: fixturePassword,
+  });
+  check("seeded outsider login", outsider.status === 201 && !!outsider.data.accessToken);
   const fixtureTeacher = await req("/auth/login", "POST", {
     email:
       process.env.SEED_TEACHER_OWNER_EMAIL ?? "teacher.owner@nexalab.local",
@@ -291,6 +297,17 @@ try {
     ),
   );
   check(
+    "invalid published lesson is rejected",
+    (
+      await req(
+        "/lessons/" + lesson.id,
+        "PUT",
+        { ...lessonData, content: "", status: "published" },
+        tokens.TEACHER,
+      )
+    ).status === 400,
+  );
+  check(
     "publish lesson",
     (
       await req(
@@ -301,12 +318,70 @@ try {
       )
     ).status === 200,
   );
+  const lessonTask = await req(
+    `/classes/${classroom.id}/assignments`,
+    "POST",
+    {
+      contentId: lesson.id,
+      contentType: "lesson",
+      title: "Pathway task",
+      dueDate: new Date(Date.now() + 86400000).toISOString(),
+      studentIds: [users.STUDENT.id],
+    },
+    tokens.TEACHER,
+  );
+  check("teacher assigns published lesson", lessonTask.status === 201);
+  // Now student can see the assigned lesson — verify quiz answer key is stripped
   const visible = (
     await req("/lessons", "GET", undefined, tokens.STUDENT)
   ).data.find((l) => l.id === lesson.id);
   check(
     "quiz key hidden from student",
     visible && !("answer" in visible.questions[0]),
+  );
+  const assignmentDetail = await req(
+    "/assignments/" + lessonTask.data.id,
+    "GET",
+    undefined,
+    tokens.STUDENT,
+  );
+  check(
+    "assignment summary omits raw lesson content",
+    assignmentDetail.status === 200 && !("content" in assignmentDetail.data.content),
+  );
+  const pathway = await req(
+    "/lessons/" + lesson.id + "/pathway",
+    "GET",
+    undefined,
+    tokens.STUDENT,
+  );
+  check(
+    "assigned student receives authoritative ordered pathway",
+    pathway.status === 200 &&
+      pathway.data.steps.map((step) => step.type).join(",") === "READING,VIDEO,QUIZ,LAB" &&
+      pathway.data.steps.map((step) => step.state).join(",") === "IN_PROGRESS,LOCKED,LOCKED,LOCKED" &&
+      pathway.data.nextStepId === pathway.data.steps[0].id,
+  );
+  check(
+    "pathway hides locked quiz answers",
+    pathway.data.steps[1].resource === null &&
+      !JSON.stringify(pathway.data).includes('"answer"'),
+  );
+  const deniedPathway = await req(
+    "/lessons/" + lesson.id + "/pathway",
+    "GET",
+    undefined,
+    outsider.data.accessToken,
+  );
+  check(
+    "unrelated student receives no pathway metadata",
+    deniedPathway.status === 404 && !JSON.stringify(deniedPathway.data).includes(prefix),
+  );
+  check(
+    "unassigned student cannot enumerate lesson metadata",
+    !(await req("/lessons", "GET", undefined, outsider.data.accessToken)).data.some(
+      (item) => item.id === lesson.id,
+    ),
   );
   const uploadForm = new FormData();
   uploadForm.append(
