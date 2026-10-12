@@ -29,6 +29,10 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run db:migrate && npm run db:seed
+        env:
+          DIRECT_URL: ${{ env.DATABASE_URL }}
+          APP_ENV: test
+          SEED_TARGET: localhost/nexalab
       - run: |
           npm start > /tmp/nexalab-api.log 2>&1 &
           for i in $(seq 1 30); do curl --fail http://127.0.0.1:4000/api/health && break || sleep 1; done
