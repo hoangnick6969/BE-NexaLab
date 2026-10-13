@@ -16,7 +16,13 @@ import {
   NotFoundException,
   HttpException,
 } from "@nestjs/common";
-import { ApiTags, ApiBearerAuth, ApiOperation } from "@nestjs/swagger";
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiBody,
+  ApiResponse,
+} from "@nestjs/swagger";
 import { z } from "zod";
 import * as argon from "argon2";
 import { createTransport } from "nodemailer";
@@ -734,7 +740,14 @@ export class ApiController {
     if (!hasApplicableAssignment) return;
     throw new NotFoundException("Hoàn thành và vượt qua bài kiểm tra được giao để mở phòng thực hành");
   }
-  @Roles("STUDENT") @Get("lessons/:lessonId/quiz") async studentQuiz(
+  @Roles("STUDENT")
+  @Get("lessons/:lessonId/quiz")
+  @ApiOperation({ summary: "Get the sanitized quiz for an eligible student" })
+  @ApiResponse({ status: 200, schema: { $ref: "#/components/schemas/StudentQuiz" } })
+  @ApiResponse({ status: 401, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 403, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 404, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  async studentQuiz(
     @Param("lessonId") lessonId: string,
     @Req() req: any,
   ) {
@@ -744,7 +757,14 @@ export class ApiController {
       throw new NotFoundException("Bài kiểm tra chưa khả dụng");
     return { lessonId, stepId: step.id, questions: (step.resource as any).questions };
   }
-  @Roles("STUDENT") @Get("lessons/:lessonId/quiz-attempts") async studentQuizAttempts(
+  @Roles("STUDENT")
+  @Get("lessons/:lessonId/quiz-attempts")
+  @ApiOperation({ summary: "Get the authenticated student's quiz attempt history" })
+  @ApiResponse({ status: 200, schema: { $ref: "#/components/schemas/QuizAttemptHistory" } })
+  @ApiResponse({ status: 401, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 403, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 404, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  async studentQuizAttempts(
     @Param("lessonId") lessonId: string,
     @Req() req: any,
   ) {
@@ -787,7 +807,17 @@ export class ApiController {
       }),
     };
   }
-  @Roles("STUDENT") @Post("lessons/:lessonId/quiz-attempts") async submitQuizAttempt(
+  @Roles("STUDENT")
+  @Post("lessons/:lessonId/quiz-attempts")
+  @ApiOperation({ summary: "Submit one immutable quiz attempt" })
+  @ApiBody({ schema: { $ref: "#/components/schemas/QuizAttemptRequest" } })
+  @ApiResponse({ status: 201, schema: { $ref: "#/components/schemas/QuizAttemptResponse" } })
+  @ApiResponse({ status: 400, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 401, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 403, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 404, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 409, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  async submitQuizAttempt(
     @Param("lessonId") lessonId: string,
     @Body() body: unknown,
     @Req() req: any,

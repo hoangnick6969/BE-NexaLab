@@ -1,6 +1,8 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { unlink } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -30,6 +32,78 @@ function check(name, condition) {
   passed++;
   console.log("PASS " + name);
 }
+function schemaHasProperty(schema, name) {
+  if (!schema || typeof schema !== "object") return false;
+  if (schema.properties && Object.hasOwn(schema.properties, name)) return true;
+  return Object.values(schema).some((value) =>
+    Array.isArray(value)
+      ? value.some((item) => schemaHasProperty(item, name))
+      : schemaHasProperty(value, name),
+  );
+}
+async function verifyQuizContract() {
+  const contract = JSON.parse(await readFile(resolve("docs/contracts/student-quiz-v1.json"), "utf8"));
+  const response = await fetch(origin + "/docs-json");
+  assert.equal(response.status, 200, "OpenAPI JSON is available");
+  const document = await response.json();
+  for (const [name, fields] of Object.entries(contract.schemas)) {
+    const schema = document.components?.schemas?.[name];
+    assert.ok(schema, `OpenAPI schema ${name} exists`);
+    assert.ok(fields.every((field) => schema.required?.includes(field)), `OpenAPI schema ${name} has the fixture required fields`);
+    for (const forbidden of contract.forbiddenResponseProperties)
+      assert.equal(schemaHasProperty(schema, forbidden), false, `OpenAPI schema ${name} omits ${forbidden}`);
+  }
+  for (const [path, methods] of Object.entries(contract.paths)) {
+    for (const [method, expectations] of Object.entries(methods)) {
+      const operation = document.paths?.[path]?.[method];
+      assert.ok(operation, `OpenAPI ${method.toUpperCase()} ${path} exists`);
+      for (const [status, schemaName] of Object.entries(expectations)) {
+        if (status === "request") continue;
+        const ref = operation.responses?.[status]?.content?.["application/json"]?.schema?.$ref;
+        assert.equal(ref, `#/components/schemas/${schemaName}`, `OpenAPI ${method.toUpperCase()} ${path} ${status} matches the fixture`);
+      }
+      if (method === "post")
+        assert.equal(operation.requestBody?.content?.["application/json"]?.schema?.$ref, `#/components/schemas/${expectations.request}`);
+    }
+  }
+  return document;
+}
+async function measureQuizEndpoint(name, targetMs, count, run) {
+  const durations = [];
+  for (let index = 0; index < count; index++) {
+    const started = performance.now();
+    const response = await run(index);
+    durations.push(performance.now() - started);
+    assert.ok(response.status === 200 || response.status === 201, `${name} sample ${index + 1} returned ${response.status}: ${response.data?.message ?? "unknown API error"}`);
+  }
+  durations.sort((a, b) => a - b);
+  const percentile = (value) => Number(durations[Math.ceil(value * count) - 1].toFixed(1));
+  const result = { endpoint: name, samples: count, p50Ms: percentile(0.5), p95Ms: percentile(0.95), targetMs, targetMet: percentile(0.95) <= targetMs };
+  console.log("QUIZ_LATENCY " + JSON.stringify(result));
+  return result;
+}
+function runLiveQuizBrowser(assignmentId, username, password) {
+  if (process.env.RUN_A3_BROWSER_E2E !== "true") return;
+  const frontendRoot = resolve("..", "nexalab-fe");
+  const npmCli = process.env.npm_execpath;
+  assert.ok(npmCli, "npm_execpath is available to launch the frontend Playwright command");
+  const run = spawnSync(process.execPath, [npmCli, "run", "test:e2e", "--", "tests/quiz-learning-live.spec.ts"], {
+    cwd: frontendRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      TEST_ASSIGNMENT_ID: assignmentId,
+      TEST_LESSON_ID: lesson.id,
+      TEST_STUDENT_USERNAME: username,
+      TEST_STUDENT_PASSWORD: password,
+      TEST_API: origin,
+      TEST_WEB: process.env.TEST_WEB ?? "http://127.0.0.1:5173",
+    },
+  });
+  if (run.stdout) process.stdout.write(run.stdout);
+  if (run.stderr) process.stderr.write(run.stderr);
+  assert.equal(run.status, 0, run.error?.message ?? "Real-dependency quiz browser E2E passed");
+}
 const circuit = (resistance = 350) => ({
   nodes: [
     { id: "b", type: "battery", value: 9 },
@@ -45,6 +119,8 @@ const circuit = (resistance = 350) => ({
   ],
 });
 try {
+  await verifyQuizContract();
+  check("OpenAPI quiz paths, success/error envelopes, and schemas match the contract fixture", true);
   check("unauthenticated API denied", (await req("/users")).status === 401);
   const admin = await req("/auth/login", "POST", {
     email: "admin@nexalab.local",
@@ -643,6 +719,9 @@ try {
   const partialQuiz = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { ...quizBody, answers: quizBody.answers.slice(0, 1) }, tokens.STUDENT);
   const duplicateQuestion = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { ...quizBody, answers: [quizBody.answers[0], quizBody.answers[0]] }, tokens.STUDENT);
   const extraQuestion = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { ...quizBody, answers: [...quizBody.answers, { questionId: "extra", optionId: "extra" }] }, tokens.STUDENT);
+  const secretSentinel = "password=fixture token=fixture postgres://fixture answerOptionId=fixture";
+  const invalidKey = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { ...quizBody, idempotencyKey: secretSentinel }, tokens.STUDENT);
+  check("quiz validation errors return the documented safe message envelope", invalidKey.status === 400 && typeof invalidKey.data.message === "string" && !JSON.stringify(invalidKey.data).includes(secretSentinel) && !/password|token|postgres:|answerOptionId/i.test(JSON.stringify(invalidKey.data)));
   const countAfterInvalid = await db.quizAttempt.count({ where: { lessonId: lesson.id } });
   const invalidAnswersRejected = partialQuiz.status === 400 && duplicateQuestion.status === 400 && extraQuestion.status === 400 && countAfterInvalid === countBeforeInvalid;
   check(`partial, duplicate, and extra quiz answers are rejected atomically ${invalidAnswersRejected ? "" : JSON.stringify({ partialStatus: partialQuiz.status, duplicateStatus: duplicateQuestion.status, extraStatus: extraQuestion.status, countBeforeInvalid, countAfterInvalid })}`, invalidAnswersRejected);
@@ -656,11 +735,13 @@ try {
   const belowAttempt = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { idempotencyKey: randomUUID(), answers: belowAnswers }, tokens.STUDENT);
   check("below 50 percent is recorded as failed", belowAttempt.status === 201 && belowAttempt.data.attempt.score === 25 && belowAttempt.data.attempt.passed === false && belowAttempt.data.pathway.steps[3].state === "IN_PROGRESS");
   const wrongBody = { idempotencyKey: randomUUID(), answers: wrongAnswers };
+  const countBeforeDuplicateDelivery = await db.quizAttempt.count({ where: { lessonId: lesson.id } });
   const [failedAttempt, duplicateAttempt] = await Promise.all([
     req(`/lessons/${lesson.id}/quiz-attempts`, "POST", wrongBody, tokens.STUDENT),
     req(`/lessons/${lesson.id}/quiz-attempts`, "POST", wrongBody, tokens.STUDENT),
   ]);
-  const duplicateDeliveryValid = failedAttempt.status === 201 && duplicateAttempt.status === 201 && failedAttempt.data.attempt?.id === duplicateAttempt.data.attempt?.id && failedAttempt.data.attempt?.score === 0 && failedAttempt.data.attempt?.passed === false && failedAttempt.data.pathway?.steps[3]?.state === "IN_PROGRESS" && failedAttempt.data.pathway?.steps[4]?.state === "LOCKED";
+  const countAfterDuplicateDelivery = await db.quizAttempt.count({ where: { lessonId: lesson.id } });
+  const duplicateDeliveryValid = failedAttempt.status === 201 && duplicateAttempt.status === 201 && failedAttempt.data.attempt?.id === duplicateAttempt.data.attempt?.id && failedAttempt.data.attempt?.score === 0 && failedAttempt.data.attempt?.passed === false && failedAttempt.data.pathway?.steps[3]?.state === "IN_PROGRESS" && failedAttempt.data.pathway?.steps[4]?.state === "LOCKED" && countAfterDuplicateDelivery === countBeforeDuplicateDelivery + 1;
   check(`concurrent duplicate delivery creates one immutable failing attempt ${duplicateDeliveryValid ? "" : JSON.stringify({ firstStatus: failedAttempt.status, firstData: failedAttempt.data, duplicateStatus: duplicateAttempt.status, duplicateData: duplicateAttempt.data })}`, duplicateDeliveryValid);
   const failedHistory = await req(`/lessons/${lesson.id}/quiz-attempts`, "GET", undefined, tokens.STUDENT);
   const failedProjection = await db.progress.findUnique({ where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } } });
@@ -681,6 +762,27 @@ try {
   await req(`/lessons/${lesson.id}`, "PUT", { ...lessonData, status: "published", questions: lessonData.questions.map((question, index) => index === 0 ? { ...question, prompt: "Edited question after saved attempt" } : question) }, tokens.TEACHER);
   const historicalQuiz = await req(`/lessons/${lesson.id}/quiz-attempts`, "GET", undefined, tokens.STUDENT);
   check("attempt snapshots preserve question evidence after published content edits", historicalQuiz.status === 200 && historicalQuiz.data.attempts[0].results.some((result) => result.prompt === "Increasing resistance?"));
+  const latencyQuestions = (await db.lessonStep.findFirstOrThrow({ where: { lessonId: lesson.id, type: "QUIZ" } })).config.questions;
+  const latencyAnswers = latencyQuestions.map((question) => ({
+    questionId: question.id,
+    optionId: question.options.find((option) => option.id !== question.answerOptionId).id,
+  }));
+  if (process.env.RUN_A3_TIMING_SAMPLES !== "false") {
+    await measureQuizEndpoint("GET /lessons/:lessonId/quiz", 500, 20, () => req(`/lessons/${lesson.id}/quiz`, "GET", undefined, tokens.STUDENT));
+    await measureQuizEndpoint("GET /lessons/:lessonId/quiz-attempts", 500, 20, () => req(`/lessons/${lesson.id}/quiz-attempts`, "GET", undefined, tokens.STUDENT));
+    await measureQuizEndpoint("POST /lessons/:lessonId/quiz-attempts", 1000, 5, () => req(
+      `/lessons/${lesson.id}/quiz-attempts`,
+      "POST",
+      { idempotencyKey: randomUUID(), answers: latencyAnswers },
+      tokens.STUDENT,
+    ));
+  }
+  if (process.env.RUN_A3_BROWSER_E2E === "true") {
+    await db.quizAttempt.deleteMany({ where: { lessonId: lesson.id, studentId: users.STUDENT.id } });
+    await db.stepProgress.deleteMany({ where: { studentId: users.STUDENT.id, stepId: `step-${lesson.id}-quiz` } });
+    await db.progress.deleteMany({ where: { studentId: users.STUDENT.id, contentId: lesson.id } });
+    runLiveQuizBrowser(lessonTask.data.id, users.STUDENT.username, changedStudentPassword);
+  }
   const allowedPractical = await req("/attempts", "POST", { challengeId: "circuit_001", labState: circuit(), durationMs: 100 }, tokens.STUDENT);
   check("direct practical submission succeeds after the quiz pass", allowedPractical.status === 201);
   await db.lessonStep.update({

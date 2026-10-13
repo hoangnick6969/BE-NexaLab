@@ -28,28 +28,28 @@ development_status:
   a2-t3-video-completion: done
   a2-t4-study-cards-quiz-boundary: done
   a2-t5-resilience-interaction-budgets: done
-  epic-a3: in-progress
-  a3-t1-gate-protected-sanitized-quiz: in-progress
+  epic-a3: done
+  a3-t1-gate-protected-sanitized-quiz: done
   a3-t2-immutable-quiz-attempt: done
   a3-t3-retry-and-practical-unlock: done
-  a3-t4-quiz-contract-privacy-performance: backlog
+  a3-t4-quiz-contract-privacy-performance: done
 
 execution:
-  current_story: a3-t3-retry-and-practical-unlock
-  next_story: a3-t4-quiz-contract-privacy-performance
-  selection_reason: A3-T3 passed source, automated, Supabase development integration, and focused browser verification; proceed to A3-T4 one ticket at a time.
+  current_story: null
+  next_story: null
+  selection_reason: Epic A3 is complete for source, automated, and Supabase development runtime evidence; production remains unverified.
   one_story_per_task: true
-  next_epic_unlocked: false
-  implementation_readiness: in-progress
+  next_epic_unlocked: true
+  implementation_readiness: complete-local
   blockers: []
   constraints:
     - Preserve existing staged and unstaged changes in both repositories.
-    - No commit requested.
+    - Commit and push requested for both repositories.
 
 verification:
   source: verified
-  automated: partial
-  runtime: partial-supabase-development
+  automated: verified
+  runtime: verified-supabase-development
   production: unverified
   historical_results:
     - 'A2-T1: 61/61 integration assertions passed live on Supabase (2026-10-13)'
@@ -66,7 +66,7 @@ verification:
 
 story_notes:
   a3-t1-gate-protected-sanitized-quiz:
-    status: in-progress
+    status: done
     acceptance_date: '2026-10-13'
     artifact: spec-a3-student-quiz-learning-gates.md
     changed_files:
@@ -80,12 +80,10 @@ story_notes:
       - 'FE: tests/quiz-learning.spec.ts'
     verification:
       source: verified
-      automated: 'BE pathway tests 11/11; BE lint/build and FE lint/build passed; focused Playwright did not reach the app'
-      runtime: 'Supabase development migration/seed passed; integration quiz-delivery and authorization assertions passed before a later T2 failure stopped the run'
+      automated: 'BE pathway and privacy tests included in 41/41 Vitest; BE/FE lint and builds passed; live focused Playwright 1/1 passed'
+      runtime: 'Final Supabase development integration passed 98/98 including sanitized quiz delivery, authorization, prerequisites, scoring, direct gate, and reload; live browser used local Vite, Nest API, Supabase development, and Edge Chromium'
       production: unverified
-    remaining:
-      - 'Focused browser verification is incomplete because Chromium timed out connecting to the local Vite server'
-      - 'A3-T2 is done; A3-T3 and A3-T4 remain backlog'
+    remaining: []
   a3-t2-immutable-quiz-attempt:
     status: done
     acceptance_date: '2026-10-13'
@@ -108,6 +106,24 @@ story_notes:
       runtime: 'Supabase development API/database integration 93/93 including exact 0/25/50/100 scoring, malformed submissions, persistence/reload, same-key concurrency and changed-payload conflict; Prisma reports schema up to date; focused Chromium quiz UI test 1/1 against local Vite/API'
       production: unverified
     remaining: []
+  a3-t4-quiz-contract-privacy-performance:
+    status: done
+    acceptance_date: '2026-10-13'
+    artifact: spec-a3-t4-quiz-contract-privacy-performance.md
+    changed_files:
+      - 'BE: docs/contracts/student-quiz-v1.json'
+      - 'BE: src/errors.ts, src/errors.test.ts, src/quiz-contract.ts, src/main.ts, src/routes.ts'
+      - 'BE: scripts/integration.mjs'
+      - 'FE: src/api.ts, src/main.tsx, src/pages.tsx, src/quiz-contract.typecheck.ts'
+      - 'FE: tests/quiz-learning-live.spec.ts'
+    verification:
+      source: verified
+      automated: 'BE lint/build and 41/41 Vitest passed; FE lint/build passed; OpenAPI fixture matched generated contract'
+      runtime: 'Supabase development integration 98/98; live Playwright 1/1 with local Vite, Nest API, seeded development database, and Edge Chromium'
+      performance: 'GET quiz 20 samples p95 2461.9 ms vs 500 ms; GET history 20 samples p95 2103.1 ms vs 500 ms; POST attempt 5 samples p95 2908.0 ms vs 1000 ms — all development targets missed'
+      production: unverified
+    remaining:
+      - 'Investigate development Supabase request latency before making a pilot performance-readiness claim'
   a2-t2-reading-evidence:
     status: done
     changed_files:
@@ -255,9 +271,9 @@ story_notes:
     remaining: []
 
 tracking_update:
-  verdict: A3-T3 accepted for local/Supabase development; production remains unverified.
+  verdict: Epic A3 accepted for source, automated, and Supabase development runtime evidence; production remains unverified and development latency targets were missed.
   date: '2026-10-13'
-  evidence: 'A3-T3 backend/frontend lint and builds passed; Supabase development integration 96 assertions passed; focused quiz-learning Playwright 1/1 passed. The browser test mocks assignment/pathway/attempt resources; API persistence and direct gate behavior were verified separately by integration.'
+  evidence: 'A3-T4 backend/frontend lint and builds passed; backend Vitest 41/41; Supabase development integration 98/98; real-dependency quiz Playwright 1/1. OpenAPI fixture, privacy, persistence, direct gate and reload were verified.'
   browser_test_note: >
     Earlier A3-T1 browser attempts timed out on unavailable Vite ports. A3-T2 focused Playwright passed 1/1
     after starting temporary Vite on 5175 with its API proxy pointed to the running local API on 4000.
@@ -276,7 +292,7 @@ tracking_update:
     - Ran db:seed with SEED_RESET_FIXTURES=true — class-pilot-a, lesson-circuit, pathway steps seeded
     - Ran integration tests — 76/76 assertions passed
     - Attempted Playwright browser tests — failures traced to test script issues, not A2-T1 code
-  status_decision: A3-T3 is done for local/Supabase development; A3-T4 is next; production remains unverified. No forced mid-transaction rollback test was run.
+  status_decision: Epic A3 and A3-T1 through A3-T4 are done for local/Supabase development. Production remains unverified; measured development latency missed every recorded pilot target.
   changed_files:
     - _bmad-output/implementation-artifacts/sprint-status.yaml
     - _bmad-output/implementation-artifacts/spec-a3-student-quiz-learning-gates.md

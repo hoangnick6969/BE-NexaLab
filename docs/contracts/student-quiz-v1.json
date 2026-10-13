@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "forbiddenResponseProperties": ["answer", "answerOptionId", "correctOptionId"],
+  "schemas": {
+    "ApiErrorEnvelope": ["message"],
+    "StudentQuiz": ["lessonId", "stepId", "questions"],
+    "QuizAttemptRequest": ["answers", "idempotencyKey"],
+    "QuizAttemptSummary": ["id", "score", "passed", "correctCount", "questionCount", "createdAt", "results"],
+    "QuizAttemptHistory": ["attempts"],
+    "StudentPathway": ["lesson", "assignment", "steps", "nextStepId", "updatedAt"],
+    "QuizAttemptResponse": ["attempt", "pathway"]
+  },
+  "paths": {
+    "/api/lessons/{lessonId}/quiz": {
+      "get": { "200": "StudentQuiz", "401": "ApiErrorEnvelope", "403": "ApiErrorEnvelope", "404": "ApiErrorEnvelope" }
+    },
+    "/api/lessons/{lessonId}/quiz-attempts": {
+      "get": { "200": "QuizAttemptHistory", "401": "ApiErrorEnvelope", "403": "ApiErrorEnvelope", "404": "ApiErrorEnvelope" },
+      "post": { "request": "QuizAttemptRequest", "201": "QuizAttemptResponse", "400": "ApiErrorEnvelope", "401": "ApiErrorEnvelope", "403": "ApiErrorEnvelope", "404": "ApiErrorEnvelope", "409": "ApiErrorEnvelope" }
+    }
+  }
+}
