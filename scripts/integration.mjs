@@ -555,10 +555,12 @@ try {
   });
   const reloadedPathway = await req(`/lessons/${lesson.id}/pathway`, "GET", undefined, tokens.STUDENT);
   check(
-    "reading completion is idempotent and survives a pathway reload",
+    // A5: Progress is a projection, so a hand-forced "completed" row without
+    // evidence is re-derived on the next evidence write.
+    "reading completion is idempotent, re-derives the projection and survives a pathway reload",
     repeatedCompletion.status === 200 &&
       repeatedEvidence?.completedAt?.toISOString() === firstCompletedAt &&
-      evidenceCount === 1 && preservedProjection?.status === "completed" &&
+      evidenceCount === 1 && preservedProjection?.status === "in_progress" &&
       reloadedPathway.data.steps[0].state === "COMPLETED" &&
       reloadedPathway.data.nextStepId === pathway.data.steps[1].id,
   );
@@ -754,7 +756,8 @@ try {
   const passingAttempt = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { idempotencyKey: randomUUID(), answers: passingAnswers }, tokens.STUDENT);
   check("exact 50 percent passes and server unlocks LAB", passingAttempt.status === 201 && passingAttempt.data.attempt.score === 50 && passingAttempt.data.attempt.passed === true && passingAttempt.data.attempt.correctCount === 2 && passingAttempt.data.pathway.steps[3].state === "COMPLETED" && passingAttempt.data.pathway.steps[4].state === "IN_PROGRESS");
   const passedProjection = await db.progress.findUnique({ where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } } });
-  check("passing attempt atomically completes rebuildable progress projection", passedProjection?.status === "completed" && passedProjection.attemptsCount === 3 && passedProjection.score === 50);
+  // A5: the lesson completes only when every required step does; LAB is still open.
+  check("passing attempt atomically updates the rebuildable progress projection", passedProjection?.status === "in_progress" && passedProjection.attemptsCount === 3 && passedProjection.score === 50);
   const perfectAttempt = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { idempotencyKey: randomUUID(), answers: storedQuiz.map((question) => ({ questionId: question.id, optionId: question.answerOptionId })) }, tokens.STUDENT);
   check("100 percent is recorded correctly", perfectAttempt.status === 201 && perfectAttempt.data.attempt.score === 100 && perfectAttempt.data.attempt.passed === true);
   const history = await req(`/lessons/${lesson.id}/quiz-attempts`, "GET", undefined, tokens.STUDENT);
