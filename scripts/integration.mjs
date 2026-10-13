@@ -53,6 +53,12 @@ try {
   const adminToken = admin.data.accessToken;
   const fixturePassword =
     process.env.SEED_FIXTURE_PASSWORD ?? process.env.SEED_PASSWORD;
+  const outsider = await req("/auth/student/login", "POST", {
+    username:
+      process.env.SEED_STUDENT_OUTSIDER_USERNAME ?? "student.outsider",
+    password: fixturePassword,
+  });
+  check("seeded outsider login", outsider.status === 201 && !!outsider.data.accessToken);
   const fixtureTeacher = await req("/auth/login", "POST", {
     email:
       process.env.SEED_TEACHER_OWNER_EMAIL ?? "teacher.owner@nexalab.local",
@@ -291,6 +297,17 @@ try {
     ),
   );
   check(
+    "invalid published lesson is rejected",
+    (
+      await req(
+        "/lessons/" + lesson.id,
+        "PUT",
+        { ...lessonData, content: "", status: "published" },
+        tokens.TEACHER,
+      )
+    ).status === 400,
+  );
+  check(
     "publish lesson",
     (
       await req(
@@ -301,12 +318,327 @@ try {
       )
     ).status === 200,
   );
+  const disposableVideoStep = await db.lessonStep.findFirstOrThrow({
+    where: { lessonId: lesson.id, type: "VIDEO" },
+  });
+  await db.lessonStep.update({
+    where: { id: disposableVideoStep.id },
+    data: {
+      config: {
+        title: "Disposable integration video",
+        url: "https://example.test/video.mp4",
+        transcript: "Published integration transcript",
+        equivalentText: "Published integration equivalent",
+      },
+    },
+  });
+  await db.lessonStep.create({
+    data: {
+      id: `step-${lesson.id}-cards`,
+      lessonId: lesson.id,
+      type: "STUDY_CARDS",
+      position: 30,
+      required: true,
+      config: {
+        cards: [
+          { id: "card-objective", front: "Objective", back: "Understand the circuit" },
+          { id: "card-safety", front: "Safety", back: "Disconnect power first" },
+        ],
+      },
+    },
+  });
+  const lessonTask = await req(
+    `/classes/${classroom.id}/assignments`,
+    "POST",
+    {
+      contentId: lesson.id,
+      contentType: "lesson",
+      title: "Pathway task",
+      dueDate: new Date(Date.now() + 86400000).toISOString(),
+      studentIds: [users.STUDENT.id],
+    },
+    tokens.TEACHER,
+  );
+  check("teacher assigns published lesson", lessonTask.status === 201);
+  // Now student can see the assigned lesson — verify quiz answer key is stripped
   const visible = (
     await req("/lessons", "GET", undefined, tokens.STUDENT)
   ).data.find((l) => l.id === lesson.id);
   check(
     "quiz key hidden from student",
     visible && !("answer" in visible.questions[0]),
+  );
+  const assignmentDetail = await req(
+    "/assignments/" + lessonTask.data.id,
+    "GET",
+    undefined,
+    tokens.STUDENT,
+  );
+  check(
+    "assignment summary omits raw lesson content",
+    assignmentDetail.status === 200 && !("content" in assignmentDetail.data.content),
+  );
+  const pathway = await req(
+    "/lessons/" + lesson.id + "/pathway",
+    "GET",
+    undefined,
+    tokens.STUDENT,
+  );
+  check(
+    "assigned student receives authoritative ordered pathway",
+    pathway.status === 200 &&
+      pathway.data.steps.map((step) => step.type).join(",") === "READING,VIDEO,STUDY_CARDS,QUIZ,LAB" &&
+      pathway.data.steps.map((step) => step.state).join(",") === "IN_PROGRESS,LOCKED,LOCKED,LOCKED,LOCKED" &&
+      pathway.data.nextStepId === pathway.data.steps[0].id,
+  );
+  check(
+    "pathway hides locked quiz answers",
+    pathway.data.steps[1].resource === null &&
+      !JSON.stringify(pathway.data).includes('"answer"'),
+  );
+  const readingStepId = pathway.data.steps[0].id;
+  const invalidReadingBody = await req(
+    `/lessons/${lesson.id}/steps/${readingStepId}/progress`,
+    "PUT",
+    { action: "complete", progressValue: 100 },
+    tokens.STUDENT,
+  );
+  check("reading completion rejects client progress fields", invalidReadingBody.status === 400);
+  const wrongStep = await req(
+    `/lessons/${lesson.id}/steps/foreign-step/progress`,
+    "PUT",
+    { action: "complete" },
+    tokens.STUDENT,
+  );
+  check("reading completion rejects a step outside the lesson", wrongStep.status === 404);
+  const lockedVideo = await req(
+    `/lessons/${lesson.id}/steps/${pathway.data.steps[1].id}/progress`,
+    "PUT",
+    { action: "complete" },
+    tokens.STUDENT,
+  );
+  check("reading endpoint rejects locked non-reading steps", lockedVideo.status === 404);
+  const readingCompletion = await req(
+    `/lessons/${lesson.id}/steps/${readingStepId}/progress`,
+    "PUT",
+    { action: "complete" },
+    tokens.STUDENT,
+  );
+  const readingEvidence = await db.stepProgress.findUnique({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: readingStepId } },
+  });
+  const lessonProjection = await db.progress.findUnique({
+    where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } },
+  });
+  check(
+    "assigned student completes current reading and receives reconciled pathway",
+    readingCompletion.status === 200 &&
+      readingCompletion.data.step.state === "COMPLETED" &&
+      readingCompletion.data.pathway.steps[0].state === "COMPLETED" &&
+      readingCompletion.data.pathway.nextStepId === pathway.data.steps[1].id &&
+      readingEvidence?.status === "COMPLETED" && readingEvidence.progressValue === 100 &&
+      lessonProjection?.status === "in_progress",
+  );
+  const firstCompletedAt = readingEvidence?.completedAt?.toISOString();
+  await db.progress.update({
+    where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } },
+    data: { status: "completed" },
+  });
+  const repeatedCompletion = await req(
+    `/lessons/${lesson.id}/steps/${readingStepId}/progress`,
+    "PUT",
+    { action: "complete" },
+    tokens.STUDENT,
+  );
+  const repeatedEvidence = await db.stepProgress.findUnique({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: readingStepId } },
+  });
+  const evidenceCount = await db.stepProgress.count({
+    where: { studentId: users.STUDENT.id, stepId: readingStepId },
+  });
+  const preservedProjection = await db.progress.findUnique({
+    where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } },
+  });
+  const reloadedPathway = await req(`/lessons/${lesson.id}/pathway`, "GET", undefined, tokens.STUDENT);
+  check(
+    "reading completion is idempotent and survives a pathway reload",
+    repeatedCompletion.status === 200 &&
+      repeatedEvidence?.completedAt?.toISOString() === firstCompletedAt &&
+      evidenceCount === 1 && preservedProjection?.status === "completed" &&
+      reloadedPathway.data.steps[0].state === "COMPLETED" &&
+      reloadedPathway.data.nextStepId === pathway.data.steps[1].id,
+  );
+  const videoStepId = pathway.data.steps[1].id;
+  const invalidVideoTimings = [
+    { action: "heartbeat", positionSeconds: -1, durationSeconds: 100 },
+    { action: "heartbeat", positionSeconds: 101, durationSeconds: 100 },
+    { action: "heartbeat", positionSeconds: 1.5, durationSeconds: 100 },
+    { action: "ended", positionSeconds: 1, durationSeconds: 86401 },
+    { action: "heartbeat", positionSeconds: 1, durationSeconds: 100, progressValue: 99 },
+  ];
+  for (const invalidBody of invalidVideoTimings) {
+    check(
+      "video progress rejects invalid timing " + JSON.stringify(invalidBody),
+      (await req(
+        `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+        "PUT",
+        invalidBody,
+        tokens.STUDENT,
+      )).status === 400,
+    );
+  }
+  const firstHeartbeat = await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "heartbeat", positionSeconds: 41, durationSeconds: 100 },
+    tokens.STUDENT,
+  );
+  const backwardHeartbeat = await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "heartbeat", positionSeconds: 20, durationSeconds: 100 },
+    tokens.STUDENT,
+  );
+  const resumedVideo = await req(`/lessons/${lesson.id}/pathway`, "GET", undefined, tokens.STUDENT);
+  check(
+    "video heartbeat and backward seek preserve reload-safe high-water evidence",
+    firstHeartbeat.status === 200 &&
+      backwardHeartbeat.status === 200 &&
+      backwardHeartbeat.data.step.state === "IN_PROGRESS" &&
+      backwardHeartbeat.data.step.progressValue === 41 &&
+      backwardHeartbeat.data.step.lastPosition === 41 &&
+      resumedVideo.data.steps[1].lastPosition === 41 &&
+      resumedVideo.data.steps[1].resource.transcript === "Published integration transcript",
+  );
+  const mediaCompletion = await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "heartbeat", positionSeconds: 90, durationSeconds: 100 },
+    tokens.STUDENT,
+  );
+  const mediaEvidence = await db.stepProgress.findUnique({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: videoStepId } },
+  });
+  const mediaCompletedAt = mediaEvidence?.completedAt?.toISOString();
+  await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "ended", positionSeconds: 80, durationSeconds: 100 },
+    tokens.STUDENT,
+  );
+  const repeatedMediaEvidence = await db.stepProgress.findUnique({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: videoStepId } },
+  });
+  check(
+    "video completes at 90 percent and ended is idempotent without downgrade",
+    mediaCompletion.data.step.state === "COMPLETED" &&
+      repeatedMediaEvidence?.status === "COMPLETED" &&
+      repeatedMediaEvidence.progressValue === 100 &&
+      repeatedMediaEvidence.lastPosition === 90 &&
+      repeatedMediaEvidence.completedAt?.toISOString() === mediaCompletedAt,
+  );
+
+  await db.stepProgress.delete({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: videoStepId } },
+  });
+  const fallbackCompletion = await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "complete-fallback" },
+    tokens.STUDENT,
+  );
+  check(
+    "published equivalent explicitly completes video without client timing",
+    fallbackCompletion.status === 200 &&
+      fallbackCompletion.data.step.state === "COMPLETED" &&
+      fallbackCompletion.data.step.progressValue === 100 &&
+      fallbackCompletion.data.step.lastPosition === null,
+  );
+  const cardsStep = (await req(`/lessons/${lesson.id}/pathway`, "GET", undefined, tokens.STUDENT)).data.steps[2];
+  const cardsStepId = cardsStep.id;
+  const forgedCard = await req(
+    `/lessons/${lesson.id}/steps/${cardsStepId}/progress`,
+    "PUT",
+    { action: "visit", cardIndex: 99 },
+    tokens.STUDENT,
+  );
+  const firstCard = await req(
+    `/lessons/${lesson.id}/steps/${cardsStepId}/progress`,
+    "PUT",
+    { action: "visit", cardIndex: 0 },
+    tokens.STUDENT,
+  );
+  const incompleteCards = await req(
+    `/lessons/${lesson.id}/steps/${cardsStepId}/progress`,
+    "PUT",
+    { action: "complete", cardIndex: 0 },
+    tokens.STUDENT,
+  );
+  const secondCard = await req(
+    `/lessons/${lesson.id}/steps/${cardsStepId}/progress`,
+    "PUT",
+    { action: "visit", cardIndex: 1 },
+    tokens.STUDENT,
+  );
+  const completedCards = await req(
+    `/lessons/${lesson.id}/steps/${cardsStepId}/progress`,
+    "PUT",
+    { action: "complete", cardIndex: 1 },
+    tokens.STUDENT,
+  );
+  const cardEvidence = await db.stepProgress.findUnique({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: cardsStepId } },
+  });
+  check(
+    "study cards reject forged index and premature completion",
+    forgedCard.status === 400 && firstCard.status === 200 &&
+      incompleteCards.status === 400 && firstCard.data.step.progressValue === 50,
+  );
+  check(
+    "study cards require every published card and unlock Quiz",
+    secondCard.status === 200 && completedCards.status === 200 &&
+      completedCards.data.step.state === "COMPLETED" &&
+      cardEvidence?.visitedCardIds?.length === 2 &&
+      completedCards.data.pathway.steps[3].type === "QUIZ" &&
+      completedCards.data.pathway.steps[3].state === "IN_PROGRESS" &&
+      completedCards.data.pathway.steps[4].state === "LOCKED",
+  );
+  await db.lessonStep.update({
+    where: { id: videoStepId },
+    data: { config: { title: "URL only", url: "https://example.test/video.mp4" } },
+  });
+  const deniedFallback = await req(
+    `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
+    "PUT",
+    { action: "complete-fallback" },
+    tokens.STUDENT,
+  );
+  check(
+    "fallback is undiscoverably denied when no published equivalent exists",
+    deniedFallback.status === 404 && !JSON.stringify(deniedFallback.data).includes("equivalent"),
+  );
+  const outsiderCompletion = await req(
+    `/lessons/${lesson.id}/steps/${readingStepId}/progress`,
+    "PUT",
+    { action: "complete" },
+    outsider.data.accessToken,
+  );
+  check("unassigned student cannot complete reading", outsiderCompletion.status === 404);
+  const deniedPathway = await req(
+    "/lessons/" + lesson.id + "/pathway",
+    "GET",
+    undefined,
+    outsider.data.accessToken,
+  );
+  check(
+    "unrelated student receives no pathway metadata",
+    deniedPathway.status === 404 && !JSON.stringify(deniedPathway.data).includes(prefix),
+  );
+  check(
+    "unassigned student cannot enumerate lesson metadata",
+    !(await req("/lessons", "GET", undefined, outsider.data.accessToken)).data.some(
+      (item) => item.id === lesson.id,
+    ),
   );
   const uploadForm = new FormData();
   uploadForm.append(

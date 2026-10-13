@@ -25,6 +25,14 @@ import { Public, Roles, publicUser, access, token, hashToken } from "./auth";
 import { simulate } from "../packages/sim";
 import { buildContext, misconceptions } from "./tutor";
 import { explain } from "./llm";
+import {
+  buildPathwaySteps,
+  materializeLegacySteps,
+  reconcileVideoProgress,
+  reconcileCardProgress,
+  stepProgressActionSchema,
+  validateLessonSteps,
+} from "./pathway";
 const text = z.string().trim().min(1).max(200);
 const password = z.string().min(12).max(128);
 const email = z
@@ -77,11 +85,38 @@ const lessonSchema = z.object({
     .max(30)
     .default([]),
 });
+function publishedSteps(lesson: z.infer<typeof lessonSchema>) {
+  if (lesson.status !== "published") return [];
+  try {
+    return materializeLegacySteps(lesson);
+  } catch {
+    throw new BadRequestException({
+      code: "INVALID_LESSON_PATHWAY",
+      message: "Bài học xuất bản cần tài nguyên hợp lệ cho từng bước",
+    });
+  }
+}
 @ApiTags("NexaLab")
 @ApiBearerAuth()
 @Controller()
 export class ApiController {
   constructor(@Inject(Db) private db: Db) {}
+
+  private async applicableLessonAssignment(lessonId: string, studentId: string, db: any = this.db) {
+    const candidates = await db.assignment.findMany({
+      where: {
+        contentId: lessonId,
+        contentType: "lesson",
+        status: "ACTIVE",
+        classroom: { enrollments: { some: { studentId, approved: true } } },
+      },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    });
+    return candidates.find((item: any) => {
+      const targets = item.studentIds as string[];
+      return !targets.length || targets.includes(studentId);
+    });
+  }
   private buckets = new Map<string, { n: number; until: number }>();
   private rate(key: string, max = 10) {
     const now = Date.now();
@@ -137,6 +172,40 @@ export class ApiController {
     if (targets.length && !targets.includes(studentId))
       throw new NotFoundException("Không tìm thấy bài được giao");
     return assignment;
+  }
+  private async validatePublishedResources(
+    lesson: z.infer<typeof lessonSchema>,
+    actor: { sub: string; role: string },
+  ) {
+    if (lesson.status !== "published") return;
+    if (lesson.labId) {
+      const lab = await this.db.lab.findFirst({
+        where: { id: lesson.labId, status: "published" },
+        select: { id: true },
+      });
+      if (!lab)
+        throw new BadRequestException({
+          code: "INVALID_LESSON_PATHWAY",
+          message: "Phòng lab tham chiếu chưa được xuất bản",
+        });
+    }
+    const assetIds = lesson.materials
+      .map((item) => item.url.match(/^asset:([0-9a-f-]{36})$/)?.[1])
+      .filter((value): value is string => Boolean(value));
+    if (assetIds.length) {
+      const assets = await this.db.assetFile.findMany({
+        where: { id: { in: assetIds } },
+        select: { id: true, ownerId: true },
+      });
+      if (
+        assets.length !== new Set(assetIds).size ||
+        (actor.role !== "ADMIN" && assets.some((asset) => asset.ownerId !== actor.sub))
+      )
+        throw new BadRequestException({
+          code: "INVALID_LESSON_PATHWAY",
+          message: "Tài nguyên bài học không tồn tại hoặc không thuộc quyền sử dụng",
+        });
+    }
   }
   private async readableStudent(id: string, req: any) {
     if (req.user.sub === id || req.user.role === "ADMIN") return;
@@ -476,13 +545,33 @@ export class ApiController {
     });
   }
   @Get("lessons") async lessons(@Req() req: any) {
+    let assignedLessonIds: string[] | undefined;
+    if (req.user.role === "STUDENT") {
+      const assignments = await this.db.assignment.findMany({
+        where: {
+          contentType: "lesson",
+          status: "ACTIVE",
+          classroom: { enrollments: { some: { studentId: req.user.sub, approved: true } } },
+        },
+        select: { contentId: true, studentIds: true },
+      });
+      assignedLessonIds = assignments
+        .filter((assignment) => {
+          const targets = assignment.studentIds as string[];
+          return !targets.length || targets.includes(req.user.sub);
+        })
+        .map((assignment) => assignment.contentId);
+    }
     const list = await this.db.lesson.findMany({
       where:
         req.user.role === "ADMIN"
           ? {}
           : req.user.role === "TEACHER"
             ? { OR: [{ status: "published" }, { authorId: req.user.sub }] }
-            : { status: "published" },
+            : {
+                status: "published",
+                ...(assignedLessonIds ? { id: { in: assignedLessonIds } } : {}),
+              },
       include: { subject: true },
       orderBy: { createdAt: "desc" },
     });
@@ -494,12 +583,27 @@ export class ApiController {
           : l.questions,
     }));
   }
-  @Roles("TEACHER", "ADMIN") @Post("lessons") createLesson(
+  @Roles("TEACHER", "ADMIN") @Post("lessons") async createLesson(
     @Body() b: unknown,
     @Req() req: any,
   ) {
-    return this.db.lesson.create({
-      data: { ...lessonSchema.parse(b), authorId: req.user.sub },
+    const data = lessonSchema.parse(b);
+    const steps = publishedSteps(data);
+    await this.validatePublishedResources(data, req.user);
+    return this.db.$transaction(async (tx) => {
+      const lesson = await tx.lesson.create({
+        data: { ...data, authorId: req.user.sub },
+      });
+      if (steps.length)
+        await tx.lessonStep.createMany({
+          data: steps.map((step) => ({
+            ...step,
+            id: `step-${lesson.id}-${step.type.toLowerCase().replace("_", "-")}`,
+            lessonId: lesson.id,
+            config: step.config as any,
+          })),
+        });
+      return lesson;
     });
   }
   @Roles("TEACHER", "ADMIN") @Put("lessons/:id") async updateLesson(
@@ -510,10 +614,188 @@ export class ApiController {
     const l = await this.db.lesson.findUniqueOrThrow({ where: { id } });
     if (l.authorId !== req.user.sub && req.user.role !== "ADMIN")
       throw new ForbiddenException();
-    return this.db.lesson.update({
-      where: { id },
-      data: lessonSchema.parse(b),
+    const data = lessonSchema.parse(b);
+    const steps = publishedSteps(data);
+    await this.validatePublishedResources(data, req.user);
+    return this.db.$transaction(async (tx) => {
+      const lesson = await tx.lesson.update({ where: { id }, data });
+      const stepRows = steps.map((step) => ({
+        ...step,
+        id: `step-${id}-${step.type.toLowerCase().replace("_", "-")}`,
+        lessonId: id,
+        config: step.config as any,
+      }));
+      if (stepRows.length) {
+        await tx.lessonStep.deleteMany({
+          where: { lessonId: id, id: { notIn: stepRows.map((step) => step.id) } },
+        });
+        for (const step of stepRows)
+          await tx.lessonStep.upsert({
+            where: { id: step.id },
+            create: step,
+            update: {
+              type: step.type,
+              position: step.position,
+              required: step.required,
+              config: step.config,
+            },
+          });
+      }
+      return lesson;
     });
+  }
+  @Roles("STUDENT") @Get("lessons/:id/pathway") async pathway(
+    @Param("id") id: string,
+    @Req() req: any,
+  ) {
+    return this.studentPathway(id, req.user.sub);
+  }
+  private async studentPathway(id: string, studentId: string, db: any = this.db) {
+    const assignment = await this.applicableLessonAssignment(id, studentId, db);
+    if (!assignment) throw new NotFoundException("Không tìm thấy bài được giao");
+    const lesson = await db.lesson.findFirst({
+      where: { id, status: "published" },
+      include: {
+        subject: true,
+        steps: {
+          orderBy: { position: "asc" },
+          include: { progress: { where: { studentId } } },
+        },
+      },
+    });
+    if (!lesson) throw new NotFoundException("Nội dung không còn khả dụng");
+    let pathway;
+    try {
+      validateLessonSteps(lesson.steps as any);
+      pathway = buildPathwaySteps(lesson.steps as any);
+    } catch {
+      throw new NotFoundException("Nội dung không còn khả dụng");
+    }
+    return {
+      lesson: {
+        id: lesson.id,
+        title: lesson.title,
+        subject: { id: lesson.subject.id, name: lesson.subject.name },
+        grade: lesson.grade,
+        chapter: lesson.chapter,
+        topic: lesson.topic,
+        learningObjective: lesson.learningObjective,
+        prerequisites: lesson.prerequisites,
+        curriculum: lesson.curriculum,
+      },
+      assignment: {
+        id: assignment.id,
+        dueDate: assignment.dueDate,
+        overdue: assignment.dueDate < new Date(),
+      },
+      ...pathway,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  @Roles("STUDENT") @Put("lessons/:lessonId/steps/:stepId/progress") async updateStepProgress(
+    @Param("lessonId") lessonId: string,
+    @Param("stepId") stepId: string,
+    @Body() body: unknown,
+    @Req() req: any,
+  ) {
+    const action = stepProgressActionSchema.parse(body);
+    const studentId = req.user.sub;
+    const now = new Date();
+    return this.db.$transaction(async (tx) => {
+      if (!(await this.applicableLessonAssignment(lessonId, studentId, tx)))
+        throw new NotFoundException("Không tìm thấy bài được giao");
+      const lesson = await tx.lesson.findFirst({
+        where: { id: lessonId, status: "published" },
+        include: {
+          steps: {
+            orderBy: { position: "asc" },
+            include: { progress: { where: { studentId } } },
+          },
+        },
+      });
+      if (!lesson) throw new NotFoundException("Nội dung không còn khả dụng");
+      let currentPathway;
+      try {
+        currentPathway = buildPathwaySteps(lesson.steps as any);
+      } catch {
+        throw new NotFoundException("Nội dung không còn khả dụng");
+      }
+      const step = lesson.steps.find((item) => item.id === stepId);
+      const authorizedStep = currentPathway.steps.find((item) => item.id === stepId);
+      if (!step || !["IN_PROGRESS", "COMPLETED"].includes(authorizedStep?.state ?? ""))
+        throw new NotFoundException("Bước học không còn khả dụng");
+
+      const saved = step.progress[0];
+      if (step.type === "READING") {
+        if (action.action !== "complete")
+          throw new NotFoundException("Bước học không còn khả dụng");
+        await tx.stepProgress.upsert({
+          where: { studentId_stepId: { studentId, stepId } },
+          create: {
+            studentId,
+            stepId,
+            status: "COMPLETED",
+            progressValue: 100,
+            startedAt: now,
+            completedAt: now,
+          },
+          update: saved?.status === "COMPLETED"
+            ? { startedAt: saved.startedAt ?? now }
+            : {
+                status: "COMPLETED",
+                progressValue: 100,
+                startedAt: saved?.startedAt ?? now,
+                completedAt: now,
+              },
+        });
+      } else if (step.type === "VIDEO") {
+        if (action.action === "complete")
+          throw new NotFoundException("Bước học không còn khả dụng");
+        let evidence;
+        try {
+          evidence = reconcileVideoProgress(step.config, saved, action as any, now);
+        } catch {
+          throw new NotFoundException("Bước học không còn khả dụng");
+        }
+        await tx.stepProgress.upsert({
+          where: { studentId_stepId: { studentId, stepId } },
+          create: { studentId, stepId, ...evidence },
+          update: evidence,
+        });
+      } else if (step.type === "STUDY_CARDS") {
+        if (action.action !== "visit" && !(action.action === "complete" && "cardIndex" in action))
+          throw new NotFoundException("Bước học không còn khả dụng");
+        let evidence;
+        try {
+          evidence = reconcileCardProgress(step.config, saved as any, action as any, now);
+        } catch (error) {
+          throw new BadRequestException(error instanceof Error ? error.message : "Thẻ học không hợp lệ");
+        }
+        await tx.stepProgress.upsert({
+          where: { studentId_stepId: { studentId, stepId } },
+          create: { studentId, stepId, ...evidence },
+          update: {
+            status: evidence.status,
+            progressValue: Math.max(saved?.progressValue ?? 0, evidence.progressValue),
+            visitedCardIds: evidence.visitedCardIds,
+            startedAt: saved?.startedAt ?? now,
+            completedAt: evidence.completedAt ?? saved?.completedAt ?? null,
+          },
+        });
+      } else {
+        throw new NotFoundException("Bước học không còn khả dụng");
+      }
+      await tx.progress.createMany({
+        data: [{ studentId, contentId: lessonId, status: "in_progress", score: 0 }],
+        skipDuplicates: true,
+      });
+      await tx.progress.updateMany({
+        where: { studentId, contentId: lessonId, status: { not: "completed" } },
+        data: { status: "in_progress" },
+      });
+      const pathway = await this.studentPathway(lessonId, studentId, tx);
+      return { step: pathway.steps.find((item) => item.id === stepId), pathway };
+    }, { isolationLevel: "Serializable" });
   }
   @Roles("STUDENT") @Post("lessons/:id/complete") async complete(
     @Param("id") id: string,
@@ -856,7 +1138,9 @@ export class ApiController {
         topic: content.topic,
         learningObjective: content.learningObjective,
         prerequisites: "prerequisites" in content ? content.prerequisites : "",
-        ...("content" in content ? { content: content.content } : {}),
+        ...(a.contentType !== "lesson" && "content" in content
+          ? { content: content.content }
+          : {}),
       },
     };
   }

@@ -65,8 +65,18 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(helmet());
   app.use(cookieParser());
+  const configuredOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:5173")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const allowLocalDevOrigin = process.env.NODE_ENV !== "production" && process.env.APP_ENV !== "production";
   app.enableCors({
-    origin: process.env.WEB_ORIGIN ?? "http://localhost:5173",
+    origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+      if (!origin || configuredOrigins.includes(origin)) return callback(null, true);
+      if (allowLocalDevOrigin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
+        return callback(null, true);
+      return callback(new Error("Origin not allowed by CORS"), false);
+    },
     credentials: true,
   });
   app.setGlobalPrefix("api");

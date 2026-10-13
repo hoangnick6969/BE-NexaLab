@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { hash } from "argon2";
 import { seedUrl } from "../src/database-config";
 const db = new PrismaClient({ datasourceUrl: seedUrl(process.env) });
@@ -211,6 +211,79 @@ async function main() {
       },
       update: {},
     });
+    const seededLesson = await db.lesson.findUniqueOrThrow({
+      where: { id: "lesson-" + l.id },
+    });
+    const seededQuestions = seededLesson.questions as Array<Record<string, unknown>>;
+    const seededSteps = [
+      {
+        id: `step-lesson-${l.id}-reading`,
+        type: "READING" as const,
+        position: 10,
+        config: { html: seededLesson.content },
+      },
+      {
+        id: `step-lesson-${l.id}-video`,
+        type: "VIDEO" as const,
+        position: 20,
+        config: {
+          title: `Giải thích: ${l.topic}`,
+          equivalentText: seededLesson.content,
+        },
+      },
+      {
+        id: `step-lesson-${l.id}-cards`,
+        type: "STUDY_CARDS" as const,
+        position: 30,
+        config: {
+          cards: [
+            {
+              id: `${l.id}-objective`,
+              front: "Mục tiêu của bài học là gì?",
+              back: l.learningObjective,
+            },
+            {
+              id: `${l.id}-idea`,
+              front: "Ý chính cần nhớ",
+              back: seededLesson.content,
+            },
+          ],
+        },
+      },
+      {
+        id: `step-lesson-${l.id}-quiz`,
+        type: "QUIZ" as const,
+        position: 40,
+        config: { questions: seededQuestions },
+      },
+      {
+        id: `step-lesson-${l.id}-lab`,
+        type: "LAB" as const,
+        position: 50,
+        config: { labId: l.id },
+      },
+      {
+        id: `step-lesson-${l.id}-challenge`,
+        type: "CHALLENGE" as const,
+        position: 60,
+        config: { challengeId: `${l.id}_001` },
+      },
+    ];
+    for (const step of seededSteps)
+      await db.lessonStep.upsert({
+        where: { id: step.id },
+        create: {
+          ...step,
+          lessonId: seededLesson.id,
+          config: step.config as Prisma.InputJsonValue,
+        },
+        update: {
+          type: step.type,
+          position: step.position,
+          required: true,
+          config: step.config as Prisma.InputJsonValue,
+        },
+      });
   }
   await db.classroom.upsert({
     where: { id: "demo-class" },
@@ -282,6 +355,18 @@ async function main() {
       contentType: "lab",
       title: "Thử thách: LED sáng an toàn",
       dueDate: new Date(Date.now() + 7 * 86400000),
+    },
+    update: {},
+  });
+  await db.assignment.upsert({
+    where: { id: "pilot-a-lesson-assignment" },
+    create: {
+      id: "pilot-a-lesson-assignment",
+      classId: "class-pilot-a",
+      contentId: "lesson-circuit",
+      contentType: "lesson",
+      title: "Pilot: Lộ trình mạch điện",
+      dueDate: new Date("2027-06-30T00:00:00.000Z"),
     },
     update: {},
   });

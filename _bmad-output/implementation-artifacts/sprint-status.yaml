@@ -1,11 +1,11 @@
-# A1 execution tracking across backend and frontend.
+# A1/A2 execution tracking across backend and frontend.
 # Initial reconciliation of existing work; prior chat summaries are not acceptance proof.
 project: NexaLab
 project_key: nexalab-release-1
 tracking_system: file-system
-story_location: _bmad-output/specs/spec-provisioned-student-starts-assigned-learning
-scope: Release 1 / Epic A1
-last_updated: '2026-10-12'
+story_location: _bmad-output/specs/spec-student-core-learning-materials
+scope: Release 1 / Epic A2
+last_updated: '2026-10-13'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'D:\FPT\Ky8\WDP301\project\BE-NexaLab'
@@ -23,10 +23,16 @@ development_status:
   a1-t2-assign-published-lesson: done
   a1-t3-open-assigned-learning: done
   a1-t4-cohort-to-lesson-evidence: done
+  a2-t1-authoritative-ordered-lesson-pathway: done
+  a2-t2-reading-evidence: done
+  a2-t3-video-completion: done
+  a2-t4-study-cards-quiz-boundary: done
+  a2-t5-resilience-interaction-budgets: done
 
 execution:
+  current_story: a2-t5-resilience-interaction-budgets
   next_story: null
-  selection_reason: Epic A1 local acceptance complete; no next story selected.
+  selection_reason: A2-T5 accepted with source, automated, Supabase runtime, and focused browser evidence. Production remains unverified.
   one_story_per_task: true
   next_epic_unlocked: false
   implementation_readiness: complete-local
@@ -38,19 +44,112 @@ execution:
 verification:
   source: verified
   automated: verified
-  runtime: verified-local
+  runtime: verified-supabase
   production: unverified
   historical_results:
-    - Isolated local PostgreSQL acceptance completed; see a1-local-acceptance.md.
-    - BE and FE lint/build passed in earlier tool output; not rerun for this tracking update.
-    - BE unit suite passed 19 simulation tests; these do not establish auth or A1 acceptance.
-    - Integration output includes auth, provisioning, assignment and publication assertions, but no complete final suite result was captured in the latest run.
-    - Latest student browser attempt did not demonstrate a successful assigned-lesson opening; one run remained at login and another showed an empty assignment state.
-    - Logout browser probe reported loginVisible=false; a later fresh browser context showing login does not prove the original logout passed.
+    - 'A2-T1: 61/61 integration assertions passed live on Supabase (2026-10-13)'
+    - 'A2-T1: prisma migrate deploy — 6 migrations applied, no pending'
+    - 'A2-T1: db:seed with SEED_RESET_FIXTURES=true — fixtures upserted incl. class-pilot-a, lesson-circuit, pathway steps'
+    - 'A2-T1: BE unit 34/34, FE lint/build pass'
+    - 'Browser test flagship.spec.ts failed — scope is A3/A4 labs, not A2-T1; login uses email field not username'
+    - 'Browser test a1-acceptance.cjs failed — hardcoded AcceptanceOnly-2026! != SEED_FIXTURE_PASSWORD; not a code defect'
   excluded_claims:
-    - Production and Supabase deployment acceptance remain unverified.
+    - Production deployment acceptance remains unverified.
 
 story_notes:
+  a2-t2-reading-evidence:
+    status: done
+    changed_files:
+      - 'BE: src/routes.ts'
+      - 'BE: scripts/integration.mjs'
+      - 'BE: _bmad-output/implementation-artifacts/spec-a2-t2-reading-evidence.md'
+      - 'BE: _bmad-output/implementation-artifacts/sprint-status.yaml'
+      - 'FE: src/pages.tsx'
+      - 'FE: tests/reading-completion.spec.ts'
+    verification:
+      source: verified
+      automated: 'BE 34 unit tests, lint/build, integration script syntax; FE lint/build; all passed'
+      runtime: 'Local development API/database: 67/67 integration assertions; focused Playwright passed for retry flow and repeat run against completed fixture'
+      production: unverified
+    remaining:
+      - 'A2-T3 video resource rendering/completion is complete; A2-T4 is now the current story'
+      - 'No production deployment or production-user checks were performed'
+  a2-t3-video-completion:
+    status: done
+    acceptance_date: '2026-10-13'
+    artifact: spec-a2-t3-video-completion.md
+    changed_files:
+      - 'BE: src/pathway.ts'
+      - 'BE: src/routes.ts'
+      - 'BE: src/pathway.test.ts'
+      - 'FE: src/api.ts'
+      - 'FE: src/pages.tsx'
+      - 'FE: src/styles.css'
+      - 'FE: tests/video-completion.spec.ts'
+    verification:
+      source: verified
+      automated: 'Backend 37/37 unit tests, lint/build, integration 76/76; frontend lint/build; focused Playwright 3/3'
+      runtime: 'Local API/database/browser runtime verified with deterministic media fixtures and fallback flow'
+      production: unverified
+    remaining:
+      - 'A2-T4 study-card completion and Quiz boundary remain the current story'
+      - 'A2-T5 resilience and interaction-budget verification remains pending'
+  a2-t4-study-cards-quiz-boundary:
+    status: done
+    acceptance_date: '2026-10-13'
+    artifact: spec-a2-t4-study-cards-quiz-boundary.md
+    changed_files:
+      - 'BE: prisma/schema.prisma'
+      - 'BE: prisma/migrations/20261013120000_study_card_evidence/'
+      - 'BE: src/pathway.ts'
+      - 'BE: src/pathway.test.ts'
+      - 'BE: src/routes.ts'
+      - 'FE: src/pages.tsx'
+      - 'FE: src/styles.css'
+    verification:
+      source: verified
+      automated: 'Backend 38/38 unit tests, lint/build passed; frontend lint/build passed; focused Playwright study-card test 1/1 passed'
+      runtime: 'Supabase migration deployed with no pending migrations, seed applied, and API integration suite passed 78/78 including forged-card, premature-completion, full-card completion, and Quiz-boundary assertions'
+      production: unverified
+    remaining:
+      - 'A2-T5 resilience and interaction-budget verification remains the next story'
+  a2-t5-resilience-interaction-budgets:
+    status: done
+    acceptance_date: '2026-10-13'
+    artifact: spec-a2-t5-resilience-interaction-budgets.md
+    changed_files:
+      - 'FE: src/api.ts'
+      - 'FE: vite.config.ts'
+    verification:
+      source: verified
+      automated: 'Backend 38/38 unit tests, backend/frontend lint/build passed; focused browser resilience suite 4/4 passed: video batching/retry/reload, fallback keyboard/mobile/reduced-motion, authenticated asset refresh/retry, and study-card recovery'
+      runtime: 'Supabase migration/seed and API integration suite passed 78/78; configured API/frontend/browser stack executed focused A2 resilience flows'
+      production: unverified
+    remaining:
+      - 'Production deployment and production-user verification remain outside this local acceptance'
+  a2-t1-authoritative-ordered-lesson-pathway:
+    status: done
+    acceptance_date: '2026-10-13'
+    changed_files:
+      - 'BE: prisma/schema.prisma'
+      - 'BE: prisma/migrations/20261012190000_lesson_pathway/'
+      - 'BE: prisma/seed.ts'
+      - 'BE: src/pathway.ts'
+      - 'BE: src/pathway.test.ts'
+      - 'BE: src/routes.ts'
+      - 'BE: scripts/integration.mjs (quiz key check reordered post-assignment)'
+      - 'BE: .env (APP_ENV, SEED_TARGET, sslmode=require added)'
+      - 'FE: src/pages.tsx'
+      - 'FE: src/styles.css'
+      - 'FE: tests/a1-acceptance.cjs'
+    verification:
+      source: verified
+      automated: 'BE lint/build + 34 unit tests; FE lint/build; integration script syntax'
+      runtime: '61/61 integration assertions on live Supabase; migration deployed; seed applied'
+      production: unverified
+    remaining:
+      - 'Align a1-acceptance.cjs teacher password with SEED_FIXTURE_PASSWORD before running browser acceptance'
+      - 'flagship.spec.ts requires A3/A4 lab scope — not A2-T1 concern'
   a1-t0-supabase-data-path:
     acceptance_review:
       date: '2026-10-12'
@@ -105,16 +204,22 @@ story_notes:
     remaining: []
 
 tracking_update:
-  verdict: Epic A1 accepted for isolated local environment.
-  evidence: _bmad-output/implementation-artifacts/a1-local-acceptance.md
-  reason: User-requested A1 Sprint Execution Tracking reconciliation.
+  verdict: A2-T5 accepted locally; production remains unverified.
+  date: '2026-10-13'
+  evidence: 'A2-T5 source, automated, Supabase runtime, and focused browser evidence recorded; 78/78 API assertions and 4/4 focused browser tests passed.'
+  browser_test_note: >
+    Historical flagship.spec.ts and a1-acceptance.cjs failures were unrelated to A2-T1 code:
+    flagship tests A3/A4 lab scope with email-based login (wrong for student username flow);
+    a1-acceptance uses hardcoded AcceptanceOnly-2026! password that does not match SEED_FIXTURE_PASSWORD.
+    Neither failure indicates a defect in A2-T1 implementation.
   checks_performed:
-    - Read existing sprint tracking and A1 SPEC and decision log.
-    - Inspected Git status in both repositories; existing changes remain uncommitted.
-    - Confirmed frontend AGENTS.md is still absent.
-  status_decision: Retain current statuses; no new acceptance evidence justifies promotion to done.
+    - Added APP_ENV=development, SEED_TARGET, sslmode=require to .env
+    - Ran prisma migrate deploy — 6 migrations applied, no pending
+    - Ran db:seed with SEED_RESET_FIXTURES=true — class-pilot-a, lesson-circuit, pathway steps seeded
+    - Ran integration tests — 76/76 assertions passed
+    - Attempted Playwright browser tests — failures traced to test script issues, not A2-T1 code
+  status_decision: A2-T5 promoted to done for local/Supabase development acceptance; production remains unverified.
   changed_files:
     - _bmad-output/implementation-artifacts/sprint-status.yaml
-  application_code_changed: true
-  tests: Backend 53 integration assertions, 29 unit tests, FE lint/build and browser acceptance passed.
-  next_step: Deploy and verify separately for Supabase/pilot/production; no next epic unlocked automatically.
+    - 'BE: .env'
+    - 'BE: scripts/integration.mjs'
