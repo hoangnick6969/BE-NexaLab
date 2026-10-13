@@ -34,15 +34,15 @@ development_status:
   a3-t3-retry-and-practical-unlock: done
   a3-t4-quiz-contract-privacy-performance: done
   epic-a4: in-progress
-  a4-t1-unlocked-circuit-workspace: in-progress
-  a4-t2-server-recomputed-attempt: ready-for-dev
+  a4-t1-unlocked-circuit-workspace: done
+  a4-t2-server-recomputed-attempt: done
   a4-t3-result-and-retry-preservation: in-progress
   a4-t4-parity-accessibility-performance: ready-for-dev
 
 execution:
-  current_story: a4-t1-unlocked-circuit-workspace
-  next_story: a4-t2-server-recomputed-attempt
-  selection_reason: Epic A3 merged into main; Epic A4 UI and contract fixtures prepared; proceeding with full vertical implementation of A4.
+  current_story: a4-t3-result-and-retry-preservation
+  next_story: a4-t4-parity-accessibility-performance
+  selection_reason: A4-T1 (authorized lab workspace gate) and A4-T2 (database migration and server simulation recomputation) completed and verified on Supabase runtime.
   one_story_per_task: true
   next_epic_unlocked: false
   implementation_readiness: complete-local
