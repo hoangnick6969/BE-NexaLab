@@ -3,17 +3,17 @@
 project: NexaLab
 project_key: nexalab-release-1
 tracking_system: file-system
-story_location: _bmad-output/specs/spec-student-quiz-learning-gates
-scope: Release 1 / Epic A3 (A1-A2 accepted history retained)
+story_location: _bmad-output/specs/spec-student-verified-lab-challenge-retry
+scope: Release 1 / Epic A4 (A1-A3 accepted history retained)
 last_updated: '2026-10-13'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'D:\FPT\Ky8\WDP301\project\BE-NexaLab'
   frontend: 'D:\FPT\Ky8\WDP301\project\FE-NexaLab'
 sources:
-  acceptance_criteria: ../specs/spec-student-quiz-learning-gates/tickets.md
-  spec: ../specs/spec-student-quiz-learning-gates/SPEC.md
-  contract: ../specs/spec-student-quiz-learning-gates/SPEC.md
+  acceptance_criteria: ../specs/spec-student-verified-lab-challenge-retry/tickets.md
+  spec: ../specs/spec-student-verified-lab-challenge-retry/SPEC.md
+  contract: ../specs/spec-student-verified-lab-challenge-retry/SPEC.md
 
 # in-progress records existing implementation, not permission to work in parallel.
 development_status:
@@ -33,13 +33,18 @@ development_status:
   a3-t2-immutable-quiz-attempt: done
   a3-t3-retry-and-practical-unlock: done
   a3-t4-quiz-contract-privacy-performance: done
+  epic-a4: in-progress
+  a4-t1-unlocked-circuit-workspace: in-progress
+  a4-t2-server-recomputed-attempt: ready-for-dev
+  a4-t3-result-and-retry-preservation: in-progress
+  a4-t4-parity-accessibility-performance: ready-for-dev
 
 execution:
-  current_story: null
-  next_story: null
-  selection_reason: Epic A3 is complete for source, automated, and Supabase development runtime evidence; production remains unverified.
+  current_story: a4-t1-unlocked-circuit-workspace
+  next_story: a4-t2-server-recomputed-attempt
+  selection_reason: Epic A3 merged into main; Epic A4 UI and contract fixtures prepared; proceeding with full vertical implementation of A4.
   one_story_per_task: true
-  next_epic_unlocked: true
+  next_epic_unlocked: false
   implementation_readiness: complete-local
   blockers: []
   constraints:
