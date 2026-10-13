@@ -924,6 +924,33 @@ export class ApiController {
       };
     }
   }
+  @Roles("STUDENT")
+  @Get("lessons/:lessonId/steps/:stepId/lab")
+  @ApiOperation({ summary: "Get the sanitized lab/challenge workspace for an eligible student" })
+  async studentLab(
+    @Param("lessonId") lessonId: string,
+    @Param("stepId") stepId: string,
+    @Req() req: any,
+  ) {
+    const pathway = await this.studentPathway(lessonId, req.user.sub);
+    const step = pathway.steps.find((item: any) => item.id === stepId && (item.type === "LAB" || item.type === "CHALLENGE"));
+    if (!step) throw new NotFoundException("Bước thực hành không tồn tại");
+    if (step.state === "LOCKED")
+      throw new ForbiddenException(step.lockReasonCode === "QUIZ_NOT_PASSED" ? "Hoàn thành và vượt qua bài kiểm tra để mở phòng thực hành" : "Bước thực hành chưa khả dụng");
+    const stepResource = step.resource as any;
+    const challengeId = stepResource?.challengeId ?? (stepResource?.labId ? `${stepResource.labId}_001` : "circuit_001");
+    const challenge = challengeId ? await this.db.challenge.findUnique({ where: { id: challengeId }, include: { lab: true } }) : null;
+    return {
+      lessonId,
+      stepId,
+      challengeId: challenge?.id ?? challengeId,
+      labId: challenge?.labId ?? stepResource?.labId ?? "circuit",
+      title: challenge?.lab?.title ?? "Thực hành mạch điện",
+      instruction: challenge?.objective ?? "Tạo mạch kín an toàn cho đèn LED",
+      targetObjective: "Giữ dòng qua mỗi LED từ 1 đến 20 mA.",
+      config: stepResource,
+    };
+  }
   private quizAttemptSummary(attempt: any) {
     const answers = attempt.answers as Array<{ questionId: string; optionId: string }>;
     const questions = attempt.questionSnapshot as Array<{ id: string; answerOptionId: string }>;
@@ -1384,6 +1411,9 @@ export class ApiController {
     const b = z
       .object({
         challengeId: text,
+        lessonStepId: text.optional(),
+        assignmentId: text.optional(),
+        idempotencyKey: z.string().uuid().optional(),
         labState: z.unknown(),
         durationMs: z.number().int().min(0).max(86400000),
       })
@@ -1393,6 +1423,22 @@ export class ApiController {
       include: { lab: true },
     });
     if (!c || c.lab.status !== "published") throw new NotFoundException();
+
+    // Idempotency fast-path
+    if (b.idempotencyKey) {
+      const existing = await this.db.attempt.findUnique({
+        where: {
+          studentId_idempotencyKey: {
+            studentId: req.user.sub,
+            idempotencyKey: b.idempotencyKey,
+          },
+        },
+      });
+      if (existing) {
+        return { attempt: existing };
+      }
+    }
+
     let result: any;
     try {
       result = simulate(c.labId, b.labState);
@@ -1405,12 +1451,43 @@ export class ApiController {
         data: {
           studentId: req.user.sub,
           challengeId: c.id,
+          assignmentId: b.assignmentId ?? null,
+          lessonStepId: b.lessonStepId ?? null,
+          simulationModelVersion: "1.0.0",
+          idempotencyKey: b.idempotencyKey ?? null,
           labState: b.labState as any,
           simulationResult: result,
           verdict: result.verdict,
           durationMs: b.durationMs,
         },
       });
+
+      let pathway: any = undefined;
+      if (b.lessonStepId) {
+        const isCompleted = result.verdict === "passed";
+        const step = await tx.lessonStep.findUnique({ where: { id: b.lessonStepId } });
+        await tx.stepProgress.upsert({
+          where: {
+            studentId_stepId: { studentId: req.user.sub, stepId: b.lessonStepId },
+          },
+          create: {
+            studentId: req.user.sub,
+            stepId: b.lessonStepId,
+            status: isCompleted ? "COMPLETED" : "IN_PROGRESS",
+            progressValue: isCompleted ? 100 : 50,
+            completedAt: isCompleted ? new Date() : null,
+          },
+          update: {
+            status: isCompleted ? "COMPLETED" : "IN_PROGRESS",
+            progressValue: isCompleted ? 100 : 50,
+            completedAt: isCompleted ? new Date() : null,
+          },
+        });
+        if (step) {
+          pathway = await this.studentPathway(step.lessonId, req.user.sub, tx);
+        }
+      }
+
       const old = await tx.progress.findUnique({
         where: {
           studentId_contentId: { studentId: req.user.sub, contentId: c.labId },
@@ -1442,7 +1519,7 @@ export class ApiController {
               : "in_progress",
         },
       });
-      return a;
+      return { attempt: a, pathway };
     });
   }
   @Roles("STUDENT") @Get("attempts") attempts(@Req() req: any) {

@@ -236,7 +236,7 @@ export function validateLessonSteps<T extends { type: StepType; position: number
 function resource(step: StoredStep) {
   const config = stepConfigSchemas[step.type].parse(step.config);
   if (step.type === "QUIZ") return sanitizeQuizConfig(config);
-  return step.type === "READING" || step.type === "VIDEO" || step.type === "STUDY_CARDS" ? config : null;
+  return step.type === "READING" || step.type === "VIDEO" || step.type === "STUDY_CARDS" || step.type === "LAB" || step.type === "CHALLENGE" ? config : null;
 }
 
 export function buildPathwaySteps(steps: StoredStep[]) {

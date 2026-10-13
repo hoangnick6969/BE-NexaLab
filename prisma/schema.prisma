@@ -205,13 +205,19 @@ model Attempt {
   student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
   challengeId String
   challenge Challenge @relation(fields: [challengeId], references: [id])
+  assignmentId String?
+  lessonStepId String?
   labState Json
   simulationResult Json
   verdict String
   durationMs Int
+  simulationModelVersion String @default("1.0.0")
+  idempotencyKey String?
   createdAt DateTime @default(now())
   hints HintLog[]
+  @@unique([studentId, idempotencyKey])
   @@index([studentId, challengeId, createdAt])
+  @@index([studentId, lessonStepId, createdAt])
 }
 model HintLog {
   id String @id @default(cuid())
