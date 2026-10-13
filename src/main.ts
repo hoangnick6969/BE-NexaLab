@@ -1,55 +1,16 @@
 import "reflect-metadata";
 import "dotenv/config";
-import {
-  Module,
-  ValidationPipe,
-  Catch,
-  ArgumentsHost,
-  ExceptionFilter,
-  HttpException,
-} from "@nestjs/common";
+import { Module } from "@nestjs/common";
 import { NestFactory, APP_GUARD } from "@nestjs/core";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
-import { ZodError } from "zod";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { Db } from "./db";
 import { AuthGuard } from "./auth";
 import { ApiController } from "./routes";
 import { FilesController } from "./files";
-@Catch()
-class Errors implements ExceptionFilter {
-  catch(error: any, host: ArgumentsHost) {
-    const res = host.switchToHttp().getResponse();
-    const status =
-      error instanceof HttpException
-        ? error.getStatus()
-        : error instanceof ZodError
-          ? 400
-          : error.code === "P2002"
-            ? 409
-            : error.code === "P2025"
-              ? 404
-              : 500;
-    if (status === 500) console.error(error);
-    res
-      .status(status)
-      .json({
-        message:
-          status === 500
-            ? "Lỗi hệ thống"
-            : error instanceof ZodError
-              ? error.issues
-                  .map((i) => i.path.join(".") + ": " + i.message)
-                  .join("; ")
-              : error.code === "P2002"
-                ? "Dữ liệu đã tồn tại"
-                : error.code === "P2025"
-                  ? "Không tìm thấy dữ liệu"
-                  : error.message,
-      });
-  }
-}
+import { Errors } from "./errors";
+import { quizOpenApiSchemas } from "./quiz-contract";
 @Module({
   controllers: [ApiController, FilesController],
   providers: [Db, { provide: APP_GUARD, useClass: AuthGuard }],
@@ -90,6 +51,11 @@ async function bootstrap() {
       .addBearerAuth()
       .build(),
   );
+  spec.components ??= {};
+  spec.components.schemas = {
+    ...spec.components.schemas,
+    ...quizOpenApiSchemas,
+  };
   SwaggerModule.setup("api/docs", app, spec);
   await app.listen(
     Number(process.env.PORT ?? 4000),

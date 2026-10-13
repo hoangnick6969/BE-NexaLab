@@ -2,6 +2,7 @@ import "dotenv/config";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { hash } from "argon2";
 import { seedUrl } from "../src/database-config";
+import { materializeQuizQuestions } from "../src/pathway";
 const db = new PrismaClient({ datasourceUrl: seedUrl(process.env) });
 async function main() {
   if (process.env.NODE_ENV === "production")
@@ -214,7 +215,7 @@ async function main() {
     const seededLesson = await db.lesson.findUniqueOrThrow({
       where: { id: "lesson-" + l.id },
     });
-    const seededQuestions = seededLesson.questions as Array<Record<string, unknown>>;
+    const seededQuestions = materializeQuizQuestions(seededLesson.questions as Array<Record<string, unknown>>);
     const seededSteps = [
       {
         id: `step-lesson-${l.id}-reading`,

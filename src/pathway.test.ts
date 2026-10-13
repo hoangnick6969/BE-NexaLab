@@ -6,6 +6,9 @@ import {
   reconcileCardProgress,
   stepProgressActionSchema,
   validateLessonSteps,
+  materializeQuizQuestions,
+  quizConfigSchema,
+  sanitizeQuizConfig,
 } from "./pathway";
 
 describe("lesson pathway", () => {
@@ -13,7 +16,7 @@ describe("lesson pathway", () => {
     const steps = materializeLegacySteps({
       content: "<p>Read</p>",
       materials: [{ type: "video", url: "https://example.test/video", title: "Watch" }],
-      questions: [{ prompt: "Safe server-only answer" }],
+      questions: [{ prompt: "Safe question", options: ["A", "B"], answer: 1 }],
       labId: "circuit",
     });
     expect(steps.map((step) => [step.type, step.position])).toEqual([
@@ -115,7 +118,7 @@ describe("lesson pathway", () => {
     const pathway = buildPathwaySteps([
       { id: "read", type: "READING", position: 10, required: true, config: { html: "Read" } },
       { id: "cards", type: "STUDY_CARDS", position: 30, required: true, config: { cards: [{ id: "1", front: "F", back: "B" }] } },
-      { id: "quiz", type: "QUIZ", position: 40, required: true, config: { questions: [{ answer: 1 }] } },
+      { id: "quiz", type: "QUIZ", position: 40, required: true, config: { questions: materializeQuizQuestions([{ prompt: "Q", options: ["A", "B"], answer: 1 }]) } },
     ]);
     expect(pathway.nextStepId).toBe("read");
     expect(pathway.steps.map((step) => step.state)).toEqual(["IN_PROGRESS", "LOCKED", "LOCKED"]);
@@ -178,6 +181,44 @@ describe("lesson pathway", () => {
         progress: [{ status: "IN_PROGRESS", progressValue: 10, lastPosition: -1 }],
       },
     ])).toThrow("valid integer second");
+  });
+
+  it("materializes stable question and option IDs and never delivers answer keys", () => {
+    const legacy = [{ prompt: "Which way?", options: ["Left", "Right"], answer: 1 }];
+    const [question] = materializeQuizQuestions(legacy);
+    const quizStep = materializeLegacySteps({ content: "Read", materials: [], questions: legacy })
+      .find((step) => step.type === "QUIZ");
+    expect(quizStep?.config).toMatchObject({ passThreshold: 50 });
+    expect(quizConfigSchema.parse({ questions: [question] }).passThreshold).toBe(50);
+    expect(() => quizConfigSchema.parse({ questions: [question], passThreshold: 70 })).toThrow();
+    expect(materializeQuizQuestions(legacy)[0]).toEqual(question);
+    expect(question.id).not.toMatch(/^(0|1)$/);
+    const delivered = sanitizeQuizConfig({ questions: [question] });
+    expect(delivered.questions[0]).toEqual({
+      id: question.id,
+      prompt: question.prompt,
+      options: question.options,
+    });
+    expect(JSON.stringify(delivered)).not.toMatch(/answerOptionId|"answer"/i);
+    expect(() => materializeQuizQuestions([{ prompt: "Invalid", options: ["Only one"], answer: 0 }])).toThrow();
+    expect(() => materializeQuizQuestions([])).toThrow();
+  });
+
+  it("exposes the Quiz only after prerequisites and unlocks LAB only from passed quiz evidence", () => {
+    const questions = materializeQuizQuestions([{ prompt: "Q", options: ["A", "B"], answer: 1 }]);
+    const steps = [
+      { id: "read", type: "READING" as const, position: 10, required: true, config: { html: "Read" }, progress: [{ status: "COMPLETED" as const, progressValue: 100 }] },
+      { id: "video", type: "VIDEO" as const, position: 20, required: true, config: { title: "Text", equivalentText: "Read" }, progress: [{ status: "COMPLETED" as const, progressValue: 100 }] },
+      { id: "quiz", type: "QUIZ" as const, position: 40, required: true, config: { questions } },
+      { id: "lab", type: "LAB" as const, position: 50, required: true, config: { labId: "circuit" } },
+    ];
+    const ready = buildPathwaySteps(steps);
+    expect(ready.steps.map((step) => step.state)).toEqual(["COMPLETED", "COMPLETED", "IN_PROGRESS", "LOCKED"]);
+    expect(JSON.stringify(ready.steps[2].resource)).not.toContain("answerOptionId");
+    const passed = buildPathwaySteps(steps.map((step) => step.id === "quiz"
+      ? { ...step, progress: [{ status: "COMPLETED" as const, progressValue: 100 }] }
+      : step));
+    expect(passed.steps.map((step) => step.state)).toEqual(["COMPLETED", "COMPLETED", "COMPLETED", "IN_PROGRESS"]);
   });
 });
 
