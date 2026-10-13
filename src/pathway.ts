@@ -48,6 +48,7 @@ export type StoredStep = {
     status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
     progressValue: number;
     lastPosition?: number | null;
+    visitedCardIds?: unknown;
   }>;
 };
 
@@ -58,6 +59,8 @@ const videoTiming = {
 
 export const stepProgressActionSchema = z.union([
   z.object({ action: z.literal("complete") }).strict(),
+  z.object({ action: z.literal("visit"), cardIndex: z.number().int().min(0).max(10000) }).strict(),
+  z.object({ action: z.literal("complete"), cardIndex: z.number().int().min(0).max(10000) }).strict(),
   z.object({ action: z.literal("heartbeat"), ...videoTiming })
     .strict()
     .refine((value) => value.positionSeconds <= value.durationSeconds, {
@@ -73,6 +76,27 @@ export const stepProgressActionSchema = z.union([
 
 export type StepProgressAction = z.infer<typeof stepProgressActionSchema>;
 
+export function reconcileCardProgress(
+  config: unknown,
+  saved: { status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED"; visitedCardIds?: unknown } | undefined,
+  action: Extract<StepProgressAction, { action: "visit" | "complete"; cardIndex: number }>,
+  now: Date,
+) {
+  const parsed = cards.parse(config).cards;
+  const prior = Array.isArray(saved?.visitedCardIds) ? saved.visitedCardIds.filter((id): id is string => typeof id === "string") : [];
+  if (action.cardIndex >= parsed.length) throw new Error("CARD_INDEX_INVALID");
+  const visited = [...new Set([...prior, parsed[action.cardIndex].id])];
+  const completed = visited.length === parsed.length;
+  if (action.action === "complete" && !completed) throw new Error("CARDS_INCOMPLETE");
+  return {
+    status: completed ? "COMPLETED" as const : "IN_PROGRESS" as const,
+    progressValue: Math.floor((visited.length / parsed.length) * 100),
+    visitedCardIds: visited,
+    startedAt: saved && "startedAt" in saved ? (saved as any).startedAt ?? now : now,
+    completedAt: completed ? now : null,
+  };
+}
+
 export function reconcileVideoProgress(
   config: unknown,
   saved: {
@@ -82,7 +106,7 @@ export function reconcileVideoProgress(
     startedAt: Date | null;
     completedAt: Date | null;
   } | undefined,
-  action: Exclude<StepProgressAction, { action: "complete" }>,
+  action: Extract<StepProgressAction, { action: "heartbeat" | "ended" | "complete-fallback" }>,
   now: Date,
 ) {
   const parsedConfig = video.parse(config);
@@ -172,7 +196,10 @@ export function buildPathwaySteps(steps: StoredStep[]) {
     )
       throw new Error("Step resume position must be a valid integer second");
     const completed = saved?.status === "COMPLETED";
-    const future = ["QUIZ", "LAB", "CHALLENGE"].includes(step.type);
+    // A2 ends at the server-confirmed Quiz boundary. Quiz becomes the next
+    // actionable step after required reading/video/cards; practical work and
+    // challenge remain locked for their later epics.
+    const future = ["LAB", "CHALLENGE"].includes(step.type);
     const state = completed ? "COMPLETED" : !blocked && !future ? "IN_PROGRESS" : "LOCKED";
     if (state === "IN_PROGRESS" && nextStepId === null) nextStepId = step.id;
     if (step.required && !completed) blocked = true;
@@ -192,6 +219,7 @@ export function buildPathwaySteps(steps: StoredStep[]) {
       state,
       progressValue: saved?.progressValue ?? 0,
       lastPosition: saved?.lastPosition ?? null,
+      ...(step.type === "STUDY_CARDS" ? { visitedCardIds: Array.isArray(saved?.visitedCardIds) ? saved.visitedCardIds : [] } : {}),
       lockReasonCode,
       resource: state === "LOCKED" ? null : resource(step),
     };

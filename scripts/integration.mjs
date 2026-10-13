@@ -332,6 +332,21 @@ try {
       },
     },
   });
+  await db.lessonStep.create({
+    data: {
+      id: `step-${lesson.id}-cards`,
+      lessonId: lesson.id,
+      type: "STUDY_CARDS",
+      position: 30,
+      required: true,
+      config: {
+        cards: [
+          { id: "card-objective", front: "Objective", back: "Understand the circuit" },
+          { id: "card-safety", front: "Safety", back: "Disconnect power first" },
+        ],
+      },
+    },
+  });
   const lessonTask = await req(
     `/classes/${classroom.id}/assignments`,
     "POST",
@@ -372,8 +387,8 @@ try {
   check(
     "assigned student receives authoritative ordered pathway",
     pathway.status === 200 &&
-      pathway.data.steps.map((step) => step.type).join(",") === "READING,VIDEO,QUIZ,LAB" &&
-      pathway.data.steps.map((step) => step.state).join(",") === "IN_PROGRESS,LOCKED,LOCKED,LOCKED" &&
+      pathway.data.steps.map((step) => step.type).join(",") === "READING,VIDEO,STUDY_CARDS,QUIZ,LAB" &&
+      pathway.data.steps.map((step) => step.state).join(",") === "IN_PROGRESS,LOCKED,LOCKED,LOCKED,LOCKED" &&
       pathway.data.nextStepId === pathway.data.steps[0].id,
   );
   check(
@@ -538,6 +553,55 @@ try {
       fallbackCompletion.data.step.state === "COMPLETED" &&
       fallbackCompletion.data.step.progressValue === 100 &&
       fallbackCompletion.data.step.lastPosition === null,
+  );
+  const cardsStep = (await req(`/lessons/${lesson.id}/pathway`, "GET", undefined, tokens.STUDENT)).data.steps[2];
+  const cardsStepId = cardsStep.id;
+  const forgedCard = await req(
+    `/lessons/${lesson.id}/steps/${cardsStepId}/progress`,
+    "PUT",
+    { action: "visit", cardIndex: 99 },
+    tokens.STUDENT,
+  );
+  const firstCard = await req(
+    `/lessons/${lesson.id}/steps/${cardsStepId}/progress`,
+    "PUT",
+    { action: "visit", cardIndex: 0 },
+    tokens.STUDENT,
+  );
+  const incompleteCards = await req(
+    `/lessons/${lesson.id}/steps/${cardsStepId}/progress`,
+    "PUT",
+    { action: "complete", cardIndex: 0 },
+    tokens.STUDENT,
+  );
+  const secondCard = await req(
+    `/lessons/${lesson.id}/steps/${cardsStepId}/progress`,
+    "PUT",
+    { action: "visit", cardIndex: 1 },
+    tokens.STUDENT,
+  );
+  const completedCards = await req(
+    `/lessons/${lesson.id}/steps/${cardsStepId}/progress`,
+    "PUT",
+    { action: "complete", cardIndex: 1 },
+    tokens.STUDENT,
+  );
+  const cardEvidence = await db.stepProgress.findUnique({
+    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: cardsStepId } },
+  });
+  check(
+    "study cards reject forged index and premature completion",
+    forgedCard.status === 400 && firstCard.status === 200 &&
+      incompleteCards.status === 400 && firstCard.data.step.progressValue === 50,
+  );
+  check(
+    "study cards require every published card and unlock Quiz",
+    secondCard.status === 200 && completedCards.status === 200 &&
+      completedCards.data.step.state === "COMPLETED" &&
+      cardEvidence?.visitedCardIds?.length === 2 &&
+      completedCards.data.pathway.steps[3].type === "QUIZ" &&
+      completedCards.data.pathway.steps[3].state === "IN_PROGRESS" &&
+      completedCards.data.pathway.steps[4].state === "LOCKED",
   );
   await db.lessonStep.update({
     where: { id: videoStepId },

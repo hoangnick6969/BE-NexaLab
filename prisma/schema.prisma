@@ -136,6 +136,7 @@ model StepProgress {
   status StepProgressStatus @default(NOT_STARTED)
   progressValue Int @default(0)
   lastPosition Int?
+  visitedCardIds Json @default("[]")
   startedAt DateTime?
   completedAt DateTime?
   updatedAt DateTime @updatedAt

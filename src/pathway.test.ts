@@ -3,6 +3,7 @@ import {
   buildPathwaySteps,
   materializeLegacySteps,
   reconcileVideoProgress,
+  reconcileCardProgress,
   stepProgressActionSchema,
   validateLessonSteps,
 } from "./pathway";
@@ -120,6 +121,21 @@ describe("lesson pathway", () => {
     expect(pathway.steps.map((step) => step.state)).toEqual(["IN_PROGRESS", "LOCKED", "LOCKED"]);
     expect(pathway.steps[1].resource).toBeNull();
     expect(JSON.stringify(pathway)).not.toContain("answer");
+  });
+
+  it("requires every published card and rejects forged indexes", () => {
+    const config = { cards: [
+      { id: "a", front: "A", back: "a" },
+      { id: "b", front: "B", back: "b" },
+    ] };
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    const first = reconcileCardProgress(config, undefined, { action: "visit", cardIndex: 0 }, now);
+    expect(first).toMatchObject({ status: "IN_PROGRESS", progressValue: 50, visitedCardIds: ["a"] });
+    expect(() => reconcileCardProgress(config, first, { action: "complete", cardIndex: 0 }, now)).toThrow("CARDS_INCOMPLETE");
+    expect(reconcileCardProgress(config, first, { action: "complete", cardIndex: 1 }, now)).toMatchObject({
+      status: "COMPLETED", progressValue: 100, visitedCardIds: ["a", "b"],
+    });
+    expect(() => reconcileCardProgress(config, undefined, { action: "visit", cardIndex: 4 }, now)).toThrow("CARD_INDEX_INVALID");
   });
 
   it("advances from completed evidence and rejects invalid high-water values", () => {

@@ -29,6 +29,7 @@ import {
   buildPathwaySteps,
   materializeLegacySteps,
   reconcileVideoProgress,
+  reconcileCardProgress,
   stepProgressActionSchema,
   validateLessonSteps,
 } from "./pathway";
@@ -752,7 +753,7 @@ export class ApiController {
           throw new NotFoundException("Bước học không còn khả dụng");
         let evidence;
         try {
-          evidence = reconcileVideoProgress(step.config, saved, action, now);
+          evidence = reconcileVideoProgress(step.config, saved, action as any, now);
         } catch {
           throw new NotFoundException("Bước học không còn khả dụng");
         }
@@ -760,6 +761,26 @@ export class ApiController {
           where: { studentId_stepId: { studentId, stepId } },
           create: { studentId, stepId, ...evidence },
           update: evidence,
+        });
+      } else if (step.type === "STUDY_CARDS") {
+        if (action.action !== "visit" && !(action.action === "complete" && "cardIndex" in action))
+          throw new NotFoundException("Bước học không còn khả dụng");
+        let evidence;
+        try {
+          evidence = reconcileCardProgress(step.config, saved as any, action as any, now);
+        } catch (error) {
+          throw new BadRequestException(error instanceof Error ? error.message : "Thẻ học không hợp lệ");
+        }
+        await tx.stepProgress.upsert({
+          where: { studentId_stepId: { studentId, stepId } },
+          create: { studentId, stepId, ...evidence },
+          update: {
+            status: evidence.status,
+            progressValue: Math.max(saved?.progressValue ?? 0, evidence.progressValue),
+            visitedCardIds: evidence.visitedCardIds,
+            startedAt: saved?.startedAt ?? now,
+            completedAt: evidence.completedAt ?? saved?.completedAt ?? null,
+          },
         });
       } else {
         throw new NotFoundException("Bước học không còn khả dụng");
