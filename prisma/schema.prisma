@@ -162,6 +162,7 @@ model QuizAttempt {
   @@unique([studentId, idempotencyKey])
   @@index([studentId, lessonId, createdAt])
   @@index([lessonId, stepId, passed])
+  @@index([studentId, createdAt, id])
 }
 model Lab {
   id String @id
@@ -218,6 +219,7 @@ model Attempt {
   @@unique([studentId, idempotencyKey])
   @@index([studentId, challengeId, createdAt])
   @@index([studentId, lessonStepId, createdAt])
+  @@index([studentId, createdAt, id])
 }
 model HintLog {
   id String @id @default(cuid())
