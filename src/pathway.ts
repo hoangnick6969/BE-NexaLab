@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createHash } from "node:crypto";
 
 const url = z.string().refine((value) =>
   /^https?:\/\//.test(value) || /^asset:[0-9a-f-]{36}$/.test(value),
@@ -24,7 +25,66 @@ const cards = z.object({
     .min(1)
     .refine((items) => new Set(items.map((item) => item.id)).size === items.length),
 });
-const quiz = z.object({ questions: z.array(z.unknown()).min(1) });
+const quizQuestion = z.object({
+  id: z.string().min(1).max(80),
+  prompt: z.string().trim().min(1),
+  options: z.array(z.object({ id: z.string().min(1).max(80), text: z.string().trim().min(1) }).strict()).min(2).max(6),
+  answerOptionId: z.string().min(1).max(80),
+}).strict().refine((question) =>
+  new Set([question.id, ...question.options.map((option) => option.id)]).size === question.options.length + 1 &&
+  question.options.some((option) => option.id === question.answerOptionId),
+);
+export const quizConfigSchema = z.object({
+  questions: z.array(quizQuestion).min(1).max(30)
+    .refine((questions) => new Set(questions.map((question) => question.id)).size === questions.length),
+  passThreshold: z.literal(50).default(50),
+}).strict();
+export const quizAttemptRequestSchema = z.object({
+  answers: z.array(z.object({ questionId: z.string().min(1).max(80), optionId: z.string().min(1).max(80) }).strict()).min(1).max(30),
+  idempotencyKey: z.string().uuid(),
+}).strict().refine((request) =>
+  new Set(request.answers.map((answer) => answer.questionId)).size === request.answers.length,
+  { message: "Duplicate question answers" },
+);
+export type QuizQuestion = z.infer<typeof quizQuestion>;
+export type QuizAttemptRequest = z.infer<typeof quizAttemptRequestSchema>;
+
+function stableId(prefix: string, value: string) {
+  return `${prefix}-${createHash("md5").update(value).digest("hex")}`;
+}
+
+export function materializeQuizQuestions(questions: unknown[]): QuizQuestion[] {
+  const occurrences = new Map<string, number>();
+  const promptCounts = new Map<string, number>();
+  for (const question of questions as any[]) {
+    if (typeof question?.prompt === "string") promptCounts.set(question.prompt.trim(), (promptCounts.get(question.prompt.trim()) ?? 0) + 1);
+  }
+  return quizConfigSchema.parse({
+    questions: questions.map((raw, questionIndex) => {
+      const parsed = z.object({ prompt: z.string().trim().min(1), options: z.array(z.string().trim().min(1)).min(2).max(6), answer: z.number().int().min(0).max(5) })
+        .refine((question) => question.answer < question.options.length).parse(raw);
+      const id = stableId("question", parsed.prompt);
+      const promptOccurrence = questions.slice(0, questionIndex).filter((prior: any) => prior?.prompt?.trim() === parsed.prompt).length;
+      const options = parsed.options.map((text) => {
+        const key = `${id}:${text}`;
+        const occurrence = occurrences.get(key) ?? 0;
+        occurrences.set(key, occurrence + 1);
+        return { id: stableId("option", key) + (occurrence ? `-${occurrence}` : ""), text };
+      });
+      return {
+        id: id + (promptCounts.get(parsed.prompt)! > 1 ? `-${promptOccurrence}` : ""),
+        prompt: parsed.prompt,
+        options,
+        answerOptionId: options[parsed.answer].id,
+      };
+    }),
+  }).questions;
+}
+
+export function sanitizeQuizConfig(config: unknown) {
+  const parsed = quizConfigSchema.parse(config);
+  return { questions: parsed.questions.map(({ id, prompt, options }) => ({ id, prompt, options })) };
+}
 const lab = z.object({ labId: z.string().trim().min(1) });
 const challenge = z.object({ challengeId: z.string().trim().min(1) });
 
@@ -32,7 +92,7 @@ export const stepConfigSchemas = {
   READING: reading,
   VIDEO: video,
   STUDY_CARDS: cards,
-  QUIZ: quiz,
+  QUIZ: quizConfigSchema,
   LAB: lab,
   CHALLENGE: challenge,
 } as const;
@@ -155,7 +215,7 @@ export function materializeLegacySteps(lesson: {
       : { title: "Nội dung thay thế", equivalentText: lesson.content },
   });
   if (lesson.questions.length)
-    result.push({ type: "QUIZ", position: 40, required: true, config: { questions: lesson.questions } });
+    result.push({ type: "QUIZ", position: 40, required: true, config: { questions: materializeQuizQuestions(lesson.questions) } });
   if (lesson.labId)
     result.push({ type: "LAB", position: 50, required: true, config: { labId: lesson.labId } });
   return validateLessonSteps(result);
@@ -175,9 +235,8 @@ export function validateLessonSteps<T extends { type: StepType; position: number
 
 function resource(step: StoredStep) {
   const config = stepConfigSchemas[step.type].parse(step.config);
-  return step.type === "READING" || step.type === "VIDEO" || step.type === "STUDY_CARDS"
-    ? config
-    : null;
+  if (step.type === "QUIZ") return sanitizeQuizConfig(config);
+  return step.type === "READING" || step.type === "VIDEO" || step.type === "STUDY_CARDS" ? config : null;
 }
 
 export function buildPathwaySteps(steps: StoredStep[]) {
@@ -196,10 +255,7 @@ export function buildPathwaySteps(steps: StoredStep[]) {
     )
       throw new Error("Step resume position must be a valid integer second");
     const completed = saved?.status === "COMPLETED";
-    // A2 ends at the server-confirmed Quiz boundary. Quiz becomes the next
-    // actionable step after required reading/video/cards; practical work and
-    // challenge remain locked for their later epics.
-    const future = ["LAB", "CHALLENGE"].includes(step.type);
+    const future = step.type === "CHALLENGE";
     const state = completed ? "COMPLETED" : !blocked && !future ? "IN_PROGRESS" : "LOCKED";
     if (state === "IN_PROGRESS" && nextStepId === null) nextStepId = step.id;
     if (step.required && !completed) blocked = true;

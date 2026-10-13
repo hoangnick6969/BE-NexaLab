@@ -48,6 +48,7 @@ model User {
   lessons Lesson[]
   progress Progress[]
   stepProgress StepProgress[]
+  quizAttempts QuizAttempt[]
   saved SavedExperiment[]
   parents ParentLink[] @relation("student")
   children ParentLink[] @relation("parent")
@@ -142,6 +143,25 @@ model StepProgress {
   updatedAt DateTime @updatedAt
   @@id([studentId, stepId])
   @@index([stepId])
+}
+model QuizAttempt {
+  id String @id @default(cuid())
+  studentId String
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId String
+  stepId String
+  assignmentId String?
+  answers Json
+  questionSnapshot Json
+  correctCount Int
+  questionCount Int
+  score Float
+  passed Boolean
+  idempotencyKey String
+  createdAt DateTime @default(now())
+  @@unique([studentId, idempotencyKey])
+  @@index([studentId, lessonId, createdAt])
+  @@index([lessonId, stepId, passed])
 }
 model Lab {
   id String @id

@@ -1,5 +1,6 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { unlink } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -287,6 +288,21 @@ try {
         options: ["Lower current", "Higher current"],
         answer: 0,
       },
+      {
+        prompt: "Ohm's law relates current to?",
+        options: ["Mass and volume", "Voltage and resistance"],
+        answer: 1,
+      },
+      {
+        prompt: "What is the unit of resistance?",
+        options: ["Ohm", "Watt"],
+        answer: 0,
+      },
+      {
+        prompt: "Which quantity is measured in volts?",
+        options: ["Current", "Voltage"],
+        answer: 1,
+      },
     ],
   };
   lesson = (await req("/lessons", "POST", lessonData, tokens.TEACHER)).data;
@@ -396,6 +412,8 @@ try {
     pathway.data.steps[1].resource === null &&
       !JSON.stringify(pathway.data).includes('"answer"'),
   );
+  const prematureQuiz = await req(`/lessons/${lesson.id}/quiz`, "GET", undefined, tokens.STUDENT);
+  check("quiz delivery remains unavailable before A2 prerequisites", prematureQuiz.status === 404 && !JSON.stringify(prematureQuiz.data).includes("Increasing resistance"));
   const readingStepId = pathway.data.steps[0].id;
   const invalidReadingBody = await req(
     `/lessons/${lesson.id}/steps/${readingStepId}/progress`,
@@ -468,6 +486,10 @@ try {
       reloadedPathway.data.steps[0].state === "COMPLETED" &&
       reloadedPathway.data.nextStepId === pathway.data.steps[1].id,
   );
+  await db.progress.update({
+    where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } },
+    data: { status: "in_progress", score: 0, attemptsCount: 0 },
+  });
   const videoStepId = pathway.data.steps[1].id;
   const invalidVideoTimings = [
     { action: "heartbeat", positionSeconds: -1, durationSeconds: 100 },
@@ -603,6 +625,64 @@ try {
       completedCards.data.pathway.steps[3].state === "IN_PROGRESS" &&
       completedCards.data.pathway.steps[4].state === "LOCKED",
   );
+  const quiz = await req(`/lessons/${lesson.id}/quiz`, "GET", undefined, tokens.STUDENT);
+  const storedQuiz = (await db.lessonStep.findFirstOrThrow({ where: { lessonId: lesson.id, type: "QUIZ" } })).config.questions;
+  const unrelatedQuiz = await req(`/lessons/${lesson.id}/quiz`, "GET", undefined, outsider.data.accessToken);
+  const parentQuiz = await req(`/lessons/${lesson.id}/quiz`, "GET", undefined, tokens.PARENT);
+  const forgedQuizCompletion = await req(`/lessons/${lesson.id}/steps/${quiz.data.stepId}/progress`, "PUT", { action: "complete" }, tokens.STUDENT);
+  check(
+    "eligible student receives stable question and option IDs without answer keys",
+    quiz.status === 200 && quiz.data.questions.length === 4 &&
+      quiz.data.questions.every((question) => question.id && question.options.every((option) => option.id && option.text)) &&
+      !/answerOptionId|correctOptionId|\"answer\"/.test(JSON.stringify(quiz.data)),
+  );
+  check("unassigned student and wrong-role parent receive no quiz content", unrelatedQuiz.status === 404 && parentQuiz.status === 403 && !JSON.stringify(unrelatedQuiz.data).includes("Increasing resistance"));
+  check("Quiz progress cannot be forged through the generic step endpoint", forgedQuizCompletion.status === 404);
+  const quizBody = { idempotencyKey: randomUUID(), answers: quiz.data.questions.map((question) => ({ questionId: question.id, optionId: question.options[0].id })) };
+  const countBeforeInvalid = await db.quizAttempt.count({ where: { lessonId: lesson.id } });
+  const partialQuiz = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { ...quizBody, answers: quizBody.answers.slice(0, 1) }, tokens.STUDENT);
+  const duplicateQuestion = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { ...quizBody, answers: [quizBody.answers[0], quizBody.answers[0]] }, tokens.STUDENT);
+  const extraQuestion = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { ...quizBody, answers: [...quizBody.answers, { questionId: "extra", optionId: "extra" }] }, tokens.STUDENT);
+  const countAfterInvalid = await db.quizAttempt.count({ where: { lessonId: lesson.id } });
+  const invalidAnswersRejected = partialQuiz.status === 400 && duplicateQuestion.status === 400 && extraQuestion.status === 400 && countAfterInvalid === countBeforeInvalid;
+  check(`partial, duplicate, and extra quiz answers are rejected atomically ${invalidAnswersRejected ? "" : JSON.stringify({ partialStatus: partialQuiz.status, duplicateStatus: duplicateQuestion.status, extraStatus: extraQuestion.status, countBeforeInvalid, countAfterInvalid })}`, invalidAnswersRejected);
+  const deniedPractical = await req("/attempts", "POST", { challengeId: "circuit_001", labState: circuit(), durationMs: 100 }, tokens.STUDENT);
+  check("direct practical submission is rejected before a quiz pass", deniedPractical.status === 404);
+  const wrongAnswers = storedQuiz.map((question) => ({
+    questionId: question.id,
+    optionId: question.options.find((option) => option.id !== question.answerOptionId).id,
+  }));
+  const belowAnswers = storedQuiz.map((question, index) => ({ questionId: question.id, optionId: index === 0 ? question.answerOptionId : question.options.find((option) => option.id !== question.answerOptionId).id }));
+  const belowAttempt = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { idempotencyKey: randomUUID(), answers: belowAnswers }, tokens.STUDENT);
+  check("below 50 percent is recorded as failed", belowAttempt.status === 201 && belowAttempt.data.attempt.score === 25 && belowAttempt.data.attempt.passed === false && belowAttempt.data.pathway.steps[3].state === "IN_PROGRESS");
+  const wrongBody = { idempotencyKey: randomUUID(), answers: wrongAnswers };
+  const [failedAttempt, duplicateAttempt] = await Promise.all([
+    req(`/lessons/${lesson.id}/quiz-attempts`, "POST", wrongBody, tokens.STUDENT),
+    req(`/lessons/${lesson.id}/quiz-attempts`, "POST", wrongBody, tokens.STUDENT),
+  ]);
+  const duplicateDeliveryValid = failedAttempt.status === 201 && duplicateAttempt.status === 201 && failedAttempt.data.attempt?.id === duplicateAttempt.data.attempt?.id && failedAttempt.data.attempt?.score === 0 && failedAttempt.data.attempt?.passed === false && failedAttempt.data.pathway?.steps[3]?.state === "IN_PROGRESS" && failedAttempt.data.pathway?.steps[4]?.state === "LOCKED";
+  check(`concurrent duplicate delivery creates one immutable failing attempt ${duplicateDeliveryValid ? "" : JSON.stringify({ firstStatus: failedAttempt.status, firstData: failedAttempt.data, duplicateStatus: duplicateAttempt.status, duplicateData: duplicateAttempt.data })}`, duplicateDeliveryValid);
+  const failedHistory = await req(`/lessons/${lesson.id}/quiz-attempts`, "GET", undefined, tokens.STUDENT);
+  const failedProjection = await db.progress.findUnique({ where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } } });
+  check("failed retries keep best distinct from latest and retain source evidence", failedHistory.status === 200 && failedHistory.data.attempts.length === 2 && failedHistory.data.attempts[0].score === 0 && failedHistory.data.attempts[0].latest && !failedHistory.data.attempts[0].best && failedHistory.data.attempts[1].score === 25 && failedHistory.data.attempts[1].best && failedHistory.data.attempts[1].results.every((result) => result.prompt && result.selectedOptionText));
+  const failedProjectionValid = failedProjection?.status === "in_progress" && failedProjection.attemptsCount === 2 && failedProjection.score === 25;
+  check(`failed attempts update progress projection without completing the lesson ${failedProjectionValid ? "" : JSON.stringify(failedProjection)}`, failedProjectionValid);
+  const changedPayload = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { ...wrongBody, answers: storedQuiz.map((question) => ({ questionId: question.id, optionId: question.answerOptionId })) }, tokens.STUDENT);
+  check("reused idempotency key with changed answers conflicts", changedPayload.status === 409 && await db.quizAttempt.count({ where: { lessonId: lesson.id } }) === countBeforeInvalid + 2);
+  const passingAnswers = storedQuiz.map((question, index) => ({ questionId: question.id, optionId: index < 2 ? question.answerOptionId : question.options.find((option) => option.id !== question.answerOptionId).id }));
+  const passingAttempt = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { idempotencyKey: randomUUID(), answers: passingAnswers }, tokens.STUDENT);
+  check("exact 50 percent passes and server unlocks LAB", passingAttempt.status === 201 && passingAttempt.data.attempt.score === 50 && passingAttempt.data.attempt.passed === true && passingAttempt.data.attempt.correctCount === 2 && passingAttempt.data.pathway.steps[3].state === "COMPLETED" && passingAttempt.data.pathway.steps[4].state === "IN_PROGRESS");
+  const passedProjection = await db.progress.findUnique({ where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } } });
+  check("passing attempt atomically completes rebuildable progress projection", passedProjection?.status === "completed" && passedProjection.attemptsCount === 3 && passedProjection.score === 50);
+  const perfectAttempt = await req(`/lessons/${lesson.id}/quiz-attempts`, "POST", { idempotencyKey: randomUUID(), answers: storedQuiz.map((question) => ({ questionId: question.id, optionId: question.answerOptionId })) }, tokens.STUDENT);
+  check("100 percent is recorded correctly", perfectAttempt.status === 201 && perfectAttempt.data.attempt.score === 100 && perfectAttempt.data.attempt.passed === true);
+  const history = await req(`/lessons/${lesson.id}/quiz-attempts`, "GET", undefined, tokens.STUDENT);
+  check("reload history retains all immutable attempts and question evidence", history.status === 200 && history.data.attempts.length === 4 && history.data.attempts[0].latest && history.data.attempts[0].best && history.data.attempts[0].score === 100 && history.data.attempts.some((attempt) => attempt.score === 0 && attempt.results.every((result) => result.prompt && result.selectedOptionText)));
+  await req(`/lessons/${lesson.id}`, "PUT", { ...lessonData, status: "published", questions: lessonData.questions.map((question, index) => index === 0 ? { ...question, prompt: "Edited question after saved attempt" } : question) }, tokens.TEACHER);
+  const historicalQuiz = await req(`/lessons/${lesson.id}/quiz-attempts`, "GET", undefined, tokens.STUDENT);
+  check("attempt snapshots preserve question evidence after published content edits", historicalQuiz.status === 200 && historicalQuiz.data.attempts[0].results.some((result) => result.prompt === "Increasing resistance?"));
+  const allowedPractical = await req("/attempts", "POST", { challengeId: "circuit_001", labState: circuit(), durationMs: 100 }, tokens.STUDENT);
+  check("direct practical submission succeeds after the quiz pass", allowedPractical.status === 201);
   await db.lessonStep.update({
     where: { id: videoStepId },
     data: { config: { title: "URL only", url: "https://example.test/video.mp4" } },
@@ -686,7 +766,7 @@ try {
     ).status === 200,
   );
   check(
-    "quiz graded server-side",
+    "legacy unassigned quiz submission cannot bypass assignment gates",
     (
       await req(
         "/lessons/" + lesson.id + "/quiz",
@@ -694,7 +774,7 @@ try {
         { answers: [0] },
         tokens.STUDENT,
       )
-    ).data.score === 100,
+    ).status === 409,
   );
   check(
     "parent cannot submit attempt",
@@ -707,6 +787,11 @@ try {
       )
     ).status === 403,
   );
+  const refreshedOutsider = await req("/auth/student/login", "POST", {
+    username: process.env.SEED_STUDENT_OUTSIDER_USERNAME ?? "student.outsider",
+    password: fixturePassword,
+  });
+  check("refresh unassigned student session for standalone lab checks", !!refreshedOutsider.data.accessToken);
   const first = (
     await req(
       "/attempts",
@@ -776,10 +861,10 @@ try {
         labState: { reactionId: "mg-hcl", molesA: 0.1, molesB: 0.2 },
         durationMs: 100,
       },
-      tokens.STUDENT,
+      refreshedOutsider.data.accessToken,
     )
   ).data;
-  check("chemistry full stack passes", chem.verdict === "passed");
+  check("unassigned student completes chemistry full stack", chem.verdict === "passed");
   const answers = {
     cornea: "Giác mạc",
     aqueous: "Thủy dịch",
@@ -795,10 +880,10 @@ try {
       "/attempts",
       "POST",
       { challengeId: "eye_001", labState: { answers }, durationMs: 100 },
-      tokens.STUDENT,
+      refreshedOutsider.data.accessToken,
     )
   ).data;
-  check("eye anatomy server grade", eye.simulationResult.score === 100);
+  check("unassigned student receives eye anatomy server grade", eye.simulationResult.score === 100);
   check(
     "parent blocked before linking",
     (

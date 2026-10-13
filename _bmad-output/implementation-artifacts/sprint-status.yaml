@@ -1,19 +1,19 @@
-# A1/A2 execution tracking across backend and frontend.
-# Initial reconciliation of existing work; prior chat summaries are not acceptance proof.
+# A1-A3 execution tracking across backend and frontend; earlier epic records remain historical.
+# Prior chat summaries are not acceptance proof.
 project: NexaLab
 project_key: nexalab-release-1
 tracking_system: file-system
-story_location: _bmad-output/specs/spec-student-core-learning-materials
-scope: Release 1 / Epic A2
+story_location: _bmad-output/specs/spec-student-quiz-learning-gates
+scope: Release 1 / Epic A3 (A1-A2 accepted history retained)
 last_updated: '2026-10-13'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'D:\FPT\Ky8\WDP301\project\BE-NexaLab'
   frontend: 'D:\FPT\Ky8\WDP301\project\FE-NexaLab'
 sources:
-  acceptance_criteria: ../specs/spec-provisioned-student-starts-assigned-learning/tickets.md
-  spec: ../specs/spec-provisioned-student-starts-assigned-learning/SPEC.md
-  contract: ../specs/spec-provisioned-student-starts-assigned-learning/implementation-contract.md
+  acceptance_criteria: ../specs/spec-student-quiz-learning-gates/tickets.md
+  spec: ../specs/spec-student-quiz-learning-gates/SPEC.md
+  contract: ../specs/spec-student-quiz-learning-gates/SPEC.md
 
 # in-progress records existing implementation, not permission to work in parallel.
 development_status:
@@ -28,14 +28,19 @@ development_status:
   a2-t3-video-completion: done
   a2-t4-study-cards-quiz-boundary: done
   a2-t5-resilience-interaction-budgets: done
+  epic-a3: in-progress
+  a3-t1-gate-protected-sanitized-quiz: in-progress
+  a3-t2-immutable-quiz-attempt: done
+  a3-t3-retry-and-practical-unlock: done
+  a3-t4-quiz-contract-privacy-performance: backlog
 
 execution:
-  current_story: a2-t5-resilience-interaction-budgets
-  next_story: null
-  selection_reason: A2-T5 accepted with source, automated, Supabase runtime, and focused browser evidence. Production remains unverified.
+  current_story: a3-t3-retry-and-practical-unlock
+  next_story: a3-t4-quiz-contract-privacy-performance
+  selection_reason: A3-T3 passed source, automated, Supabase development integration, and focused browser verification; proceed to A3-T4 one ticket at a time.
   one_story_per_task: true
   next_epic_unlocked: false
-  implementation_readiness: complete-local
+  implementation_readiness: in-progress
   blockers: []
   constraints:
     - Preserve existing staged and unstaged changes in both repositories.
@@ -43,8 +48,8 @@ execution:
 
 verification:
   source: verified
-  automated: verified
-  runtime: verified-supabase
+  automated: partial
+  runtime: partial-supabase-development
   production: unverified
   historical_results:
     - 'A2-T1: 61/61 integration assertions passed live on Supabase (2026-10-13)'
@@ -53,10 +58,56 @@ verification:
     - 'A2-T1: BE unit 34/34, FE lint/build pass'
     - 'Browser test flagship.spec.ts failed — scope is A3/A4 labs, not A2-T1; login uses email field not username'
     - 'Browser test a1-acceptance.cjs failed — hardcoded AcceptanceOnly-2026! != SEED_FIXTURE_PASSWORD; not a code defect'
+    - 'A3-T1: backend pathway tests 11/11; backend lint/build and frontend lint/build passed'
+    - 'A3-T1: Supabase development migration and seed passed; integration passed quiz delivery, redaction, prerequisite, and role/assignment checks before a later T2 assertion failed'
+    - 'A3-T1: focused Playwright was attempted but Chromium timed out connecting to local Vite on ports 5173 and 5174'
   excluded_claims:
     - Production deployment acceptance remains unverified.
 
 story_notes:
+  a3-t1-gate-protected-sanitized-quiz:
+    status: in-progress
+    acceptance_date: '2026-10-13'
+    artifact: spec-a3-student-quiz-learning-gates.md
+    changed_files:
+      - 'BE: src/pathway.ts'
+      - 'BE: src/routes.ts'
+      - 'BE: src/pathway.test.ts'
+      - 'BE: prisma/seed.ts'
+      - 'FE: src/api.ts'
+      - 'FE: src/pages.tsx'
+      - 'FE: src/styles.css'
+      - 'FE: tests/quiz-learning.spec.ts'
+    verification:
+      source: verified
+      automated: 'BE pathway tests 11/11; BE lint/build and FE lint/build passed; focused Playwright did not reach the app'
+      runtime: 'Supabase development migration/seed passed; integration quiz-delivery and authorization assertions passed before a later T2 failure stopped the run'
+      production: unverified
+    remaining:
+      - 'Focused browser verification is incomplete because Chromium timed out connecting to the local Vite server'
+      - 'A3-T2 is done; A3-T3 and A3-T4 remain backlog'
+  a3-t2-immutable-quiz-attempt:
+    status: done
+    acceptance_date: '2026-10-13'
+    artifact: spec-a3-student-quiz-learning-gates.md
+    changed_files:
+      - 'BE: prisma/schema.prisma'
+      - 'BE: prisma/migrations/20261013130000_quiz_attempts/migration.sql'
+      - 'BE: src/routes.ts'
+      - 'BE: src/pathway.ts'
+      - 'BE: src/pathway.test.ts'
+      - 'BE: scripts/integration.mjs'
+      - 'BE: prisma/seed.ts'
+      - 'FE: src/api.ts'
+      - 'FE: src/pages.tsx'
+      - 'FE: src/styles.css'
+      - 'FE: tests/quiz-learning.spec.ts'
+    verification:
+      source: verified
+      automated: 'BE pathway tests 11/11, BE/FE lint and builds passed, integration script syntax passed, full integration 93/93, focused Playwright 1/1, git diff --check passed in both repos'
+      runtime: 'Supabase development API/database integration 93/93 including exact 0/25/50/100 scoring, malformed submissions, persistence/reload, same-key concurrency and changed-payload conflict; Prisma reports schema up to date; focused Chromium quiz UI test 1/1 against local Vite/API'
+      production: unverified
+    remaining: []
   a2-t2-reading-evidence:
     status: done
     changed_files:
@@ -204,22 +255,32 @@ story_notes:
     remaining: []
 
 tracking_update:
-  verdict: A2-T5 accepted locally; production remains unverified.
+  verdict: A3-T3 accepted for local/Supabase development; production remains unverified.
   date: '2026-10-13'
-  evidence: 'A2-T5 source, automated, Supabase runtime, and focused browser evidence recorded; 78/78 API assertions and 4/4 focused browser tests passed.'
+  evidence: 'A3-T3 backend/frontend lint and builds passed; Supabase development integration 96 assertions passed; focused quiz-learning Playwright 1/1 passed. The browser test mocks assignment/pathway/attempt resources; API persistence and direct gate behavior were verified separately by integration.'
   browser_test_note: >
-    Historical flagship.spec.ts and a1-acceptance.cjs failures were unrelated to A2-T1 code:
-    flagship tests A3/A4 lab scope with email-based login (wrong for student username flow);
-    a1-acceptance uses hardcoded AcceptanceOnly-2026! password that does not match SEED_FIXTURE_PASSWORD.
-    Neither failure indicates a defect in A2-T1 implementation.
+    Earlier A3-T1 browser attempts timed out on unavailable Vite ports. A3-T2 focused Playwright passed 1/1
+    after starting temporary Vite on 5175 with its API proxy pointed to the running local API on 4000.
   checks_performed:
+    - Added deterministic question/option IDs and a schema-bound pass threshold of 50
+    - Verified sanitized quiz delivery requires an applicable assignment and completed A2 prerequisites
+    - Backend pathway unit tests 11/11; backend/frontend lint and build passed
+    - Supabase development migration and seed completed; partial API integration passed A3 quiz delivery and authorization checks before a later T2 failure
+    - Focused Playwright attempted at 5173 and 5174; both Chromium navigations timed out
+    - T2 integration suite passed 93/93 assertions, including 0%, 25%, 50%, 100%, malformed submissions, idempotency and concurrent duplicate delivery
+    - Prisma migrate status: 8 migrations found, database schema up to date
+    - Focused Chromium quiz test passed 1/1 against temporary Vite and local API; temporary Vite process stopped
+    - Backend build and pathway tests 11/11 passed after T2 idempotency fix
     - Added APP_ENV=development, SEED_TARGET, sslmode=require to .env
     - Ran prisma migrate deploy — 6 migrations applied, no pending
     - Ran db:seed with SEED_RESET_FIXTURES=true — class-pilot-a, lesson-circuit, pathway steps seeded
     - Ran integration tests — 76/76 assertions passed
     - Attempted Playwright browser tests — failures traced to test script issues, not A2-T1 code
-  status_decision: A2-T5 promoted to done for local/Supabase development acceptance; production remains unverified.
+  status_decision: A3-T3 is done for local/Supabase development; A3-T4 is next; production remains unverified. No forced mid-transaction rollback test was run.
   changed_files:
     - _bmad-output/implementation-artifacts/sprint-status.yaml
+    - _bmad-output/implementation-artifacts/spec-a3-student-quiz-learning-gates.md
+    - 'BE: src/pathway.ts, src/pathway.test.ts, src/routes.ts'
+    - 'FE: src/api.ts, src/pages.tsx, src/styles.css, tests/quiz-learning.spec.ts'
     - 'BE: .env'
     - 'BE: scripts/integration.mjs'
