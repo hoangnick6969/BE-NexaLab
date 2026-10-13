@@ -60,5 +60,7 @@ type MyProgressResponse = {
 type ActivityPage = { items: Array<{ id: string; kind: "QUIZ" | "PRACTICAL"; lessonId: string; stepId: string; title: string; occurredAt: string; score: number | null; passed: boolean | null; verdict: "passed" | "partial" | "needs_practice" | null; legacy: boolean }>; nextCursor: string | null };
 ```
 
+Implementation notes (2026-10-13): `lessonId` is `null` for legacy practical rows without a lesson step; step `state` is `COMPLETED | IN_PROGRESS | AVAILABLE | LOCKED`; responses also carry `stepType`, `assignmentId`, `sourceAvailable`, per-step `quiz`/`practical`/`stepProgress` evidence and `summary.remainingRequiredSteps`/`quizAttempts`. `/me/activity` accepts optional `stepId` and `kind` filters for drill-down; `limit` is 1–50 (default 20). The list UI shows verdict chips only; scores live in the detail view.
+
 `percent` is `null` when `totalRequired` is zero and the UI renders a dash/explanation. Cursor contents are opaque to the client.
 

@@ -1,19 +1,19 @@
-# A1-A3 execution tracking across backend and frontend; earlier epic records remain historical.
+# A1-A5 execution tracking across backend and frontend; earlier epic records remain historical.
 # Prior chat summaries are not acceptance proof.
 project: NexaLab
 project_key: nexalab-release-1
 tracking_system: file-system
-story_location: _bmad-output/specs/spec-student-verified-lab-challenge-retry
-scope: Release 1 / Epic A4 (A1-A3 accepted history retained)
-last_updated: '2026-10-13'
+story_location: _bmad-output/specs/spec-student-progress-attempt-history
+scope: Release 1 / Epic A5 (A1-A4 accepted history retained)
+last_updated: '2026-10-14'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'D:\FPT\Ky8\WDP301\project\BE-NexaLab'
   frontend: 'D:\FPT\Ky8\WDP301\project\FE-NexaLab'
 sources:
-  acceptance_criteria: ../specs/spec-student-verified-lab-challenge-retry/tickets.md
-  spec: ../specs/spec-student-verified-lab-challenge-retry/SPEC.md
-  contract: ../specs/spec-student-verified-lab-challenge-retry/SPEC.md
+  acceptance_criteria: ../specs/spec-student-progress-attempt-history/tickets.md
+  spec: ../specs/spec-student-progress-attempt-history/SPEC.md
+  contract: ../specs/spec-student-progress-attempt-history/SPEC.md
 
 # in-progress records existing implementation, not permission to work in parallel.
 development_status:
@@ -38,11 +38,18 @@ development_status:
   a4-t2-server-recomputed-attempt: done
   a4-t3-result-and-retry-preservation: done
   a4-t4-parity-accessibility-performance: done
+  epic-a5: in-progress
+  a5-t0-evidence-integrity-prerequisites: done
+  a5-t1-self-scoped-progress-overview: done
+  a5-t2-evidence-drill-down: done
+  a5-t3-paginated-history: done
+  a5-t4-projection-drift-repair: done
+  a5-t5-increment-a-journey: in-progress  # journey and negatives pass; latency target missed
 
 execution:
-  current_story: epic-a4
-  next_story: epic-a5
-  selection_reason: Epic A4 (A4-T1 through A4-T4) verified end-to-end on Supabase development database, Nest API, and Google Chrome Playwright browser test.
+  current_story: a5-t5-increment-a-journey
+  next_story: a5-t5-increment-a-journey
+  selection_reason: A5-T0 through A5-T4 done; A5-T5 journey and negative suite pass on Supabase development, but the measured read-latency target is missed, so T5 stays open per its acceptance criteria.
   one_story_per_task: true
   next_epic_unlocked: true
   implementation_readiness: complete-local
@@ -70,6 +77,104 @@ verification:
     - Production deployment acceptance remains unverified.
 
 story_notes:
+  epic-a5:
+    status: in-progress
+    decisions:
+      - 'Activity list shows verdict chips only; quiz score/latest/best appear in the detail sheet (UX 6.6 wins over SPEC ActivityPage display; API still returns score)'
+      - 'Progress page groups by active lesson assignment then steps (SPEC shape), not by subject/chapter columns'
+      - 'Denied cross-student detail reads log a structured stdout event (evidence_access_denied); no AuditLog table for the pilot'
+      - 'Quiz gate is 50% (PRD and pathway.ts); the 70% in the A5 memlog was stale'
+      - 'Practical attempts derive lessonStepId validity and assignmentId on the server; client assignmentId is ignored'
+      - 'POST /lessons/:id/complete now returns 409 ASSIGNMENT_PATHWAY_REQUIRED (it created completion without evidence)'
+      - 'Progress projection: lesson rows (contentId = lessonId) completed only when every required step is complete, score = best quiz, attemptsCount = quiz + linked practical; lab rows keep legacy verdict rank for Teacher/Parent views'
+    changed_files:
+      - 'BE: src/progress.ts, src/progress.test.ts, src/progress-projection.ts'
+      - 'BE: src/routes.ts'
+      - 'BE: prisma/schema.prisma, prisma/migrations/20261013160000_progress_activity_indexes/migration.sql'
+      - 'BE: scripts/progress-projection.ts, scripts/a5-integration.mjs, package.json'
+      - 'FE: src/progress.tsx, src/api.ts, src/pages.tsx, src/App.tsx, src/ui.tsx, src/styles.css'
+      - 'FE: tests/progress-history.spec.ts'
+    verification:
+      source: verified
+      automated: 'BE lint/build and 58/58 Vitest (12 new derivation/projection/pagination tests); FE lint/build; FE Playwright progress-history 2/2 in Chrome (1280 and 390 px, mocked API incl. failed-page retry)'
+      runtime: 'Supabase development (re-seeded 2026-10-14 without fixture reset): scripts/integration.mjs 98/98 (two A2/A3 assertions updated to A5 projection semantics); scripts/a5-integration.mjs 53/53 with RUN_A5_BROWSER_E2E=true, including real FE/API/DB Chrome journey at 1280 and 390 px; isolated fixtures cleaned up; projection dry-run 7 rows, 0 drift'
+      negative_suite: 'wrong role, unrelated student, unassigned student, reading-step and cross-lesson practical tampering, forged assignmentId, client-sent verdict, duplicate idempotent mutation, expired JWT, reload consistency, foreign/missing detail IDs indistinguishable'
+      performance: 'Development Supabase p95 over 20 samples: /me/progress ~1.1-1.3 s, /me/activity ~1.2-1.3 s vs 500 ms read target — MISSED. Baseline /auth/me median ~510 ms (auth guard alone spends two ~250 ms round trips); /me/progress reduced from ~1.6 s by batching queries'
+      production: unverified
+    remaining:
+      - 'A5-T5: read latency target missed in development; re-measure in the pilot environment (region/pooler) before claiming QR-09'
+      - 'A5-T5: real database interruption not exercised (only simulated 5xx/next-page failure in the browser test)'
+      - 'Development .env SEED_PASSWORD/SEED_FIXTURE_PASSWORD differ from the seeded DB passwords; run suites with the env overridden'
+  a4-t1-unlocked-circuit-workspace: done
+  a4-t2-server-recomputed-attempt: done
+  a4-t3-result-and-retry-preservation: done
+  a4-t4-parity-accessibility-performance: done
+  epic-a5: in-progress
+  a5-t0-evidence-integrity-prerequisites: done
+  a5-t1-self-scoped-progress-overview: done
+  a5-t2-evidence-drill-down: done
+  a5-t3-paginated-history: done
+  a5-t4-projection-drift-repair: done
+  a5-t5-increment-a-journey: in-progress  # journey and negatives pass; latency target missed
+
+execution:
+  current_story: a5-t5-increment-a-journey
+  next_story: a5-t5-increment-a-journey
+  selection_reason: A5-T0 through A5-T4 done; A5-T5 journey and negative suite pass on Supabase development, but the measured read-latency target is missed, so T5 stays open per its acceptance criteria.
+  one_story_per_task: true
+  next_epic_unlocked: true
+  implementation_readiness: complete-local
+  blockers: []
+  constraints:
+    - Preserve existing staged and unstaged changes in both repositories.
+    - Commit and push requested for both repositories.
+
+verification:
+  source: verified
+  automated: verified
+  runtime: verified-supabase-development
+  production: unverified
+  historical_results:
+    - 'A2-T1: 61/61 integration assertions passed live on Supabase (2026-10-13)'
+    - 'A2-T1: prisma migrate deploy — 6 migrations applied, no pending'
+    - 'A2-T1: db:seed with SEED_RESET_FIXTURES=true — fixtures upserted incl. class-pilot-a, lesson-circuit, pathway steps'
+    - 'A2-T1: BE unit 34/34, FE lint/build pass'
+    - 'Browser test flagship.spec.ts failed — scope is A3/A4 labs, not A2-T1; login uses email field not username'
+    - 'Browser test a1-acceptance.cjs failed — hardcoded AcceptanceOnly-2026! != SEED_FIXTURE_PASSWORD; not a code defect'
+    - 'A3-T1: backend pathway tests 11/11; backend lint/build and frontend lint/build passed'
+    - 'A3-T1: Supabase development migration and seed passed; integration passed quiz delivery, redaction, prerequisite, and role/assignment checks before a later T2 assertion failed'
+    - 'A3-T1: focused Playwright was attempted but Chromium timed out connecting to local Vite on ports 5173 and 5174'
+  excluded_claims:
+    - Production deployment acceptance remains unverified.
+
+story_notes:
+  epic-a5:
+    status: in-progress
+    decisions:
+      - 'Activity list shows verdict chips only; quiz score/latest/best appear in the detail sheet (UX 6.6 wins over SPEC ActivityPage display; API still returns score)'
+      - 'Progress page groups by active lesson assignment then steps (SPEC shape), not by subject/chapter columns'
+      - 'Denied cross-student detail reads log a structured stdout event (evidence_access_denied); no AuditLog table for the pilot'
+      - 'Quiz gate is 50% (PRD and pathway.ts); the 70% in the A5 memlog was stale'
+      - 'Practical attempts derive lessonStepId validity and assignmentId on the server; client assignmentId is ignored'
+      - 'POST /lessons/:id/complete now returns 409 ASSIGNMENT_PATHWAY_REQUIRED (it created completion without evidence)'
+      - 'Progress projection: lesson rows (contentId = lessonId) completed only when every required step is complete, score = best quiz, attemptsCount = quiz + linked practical; lab rows keep legacy verdict rank for Teacher/Parent views'
+    changed_files:
+      - 'BE: src/progress.ts, src/progress.test.ts, src/progress-projection.ts'
+      - 'BE: src/routes.ts'
+      - 'BE: prisma/schema.prisma, prisma/migrations/20261013160000_progress_activity_indexes/migration.sql'
+      - 'BE: scripts/progress-projection.ts, scripts/a5-integration.mjs, package.json'
+      - 'FE: src/progress.tsx, src/api.ts, src/pages.tsx, src/App.tsx, src/ui.tsx, src/styles.css'
+      - 'FE: tests/progress-history.spec.ts'
+    verification:
+      source: verified
+      automated: 'BE lint/build and 58/58 Vitest (12 new derivation/projection/pagination tests); FE lint/build; FE Playwright progress-history 2/2 in Chrome (desktop 1280 and 390 px, mocked API)'
+      runtime: 'Supabase development: index migration applied; scripts/a5-integration.mjs 48/48 with isolated teacher/students/lesson (cleaned up); projection dry-run on existing dev data checked 7 rows, 0 drift'
+      production: unverified
+    remaining:
+      - 'A5-T5: seeded real-browser A1→A5 journey (blocked by seed password mismatch above)'
+      - 'A5-T5: expired session, database interruption and reload-recovery negative cases'
+      - 'A5-T5: measure /me/progress and /me/activity latency against pilot targets (A3 development latency already missed targets)'
+      - 'Existing scripts/integration.mjs not re-run for regression because of the seed password blocker; A5 script covers standalone lab, hints and /progress/:id instead'
   epic-a4:
     status: done
     acceptance_date: '2026-10-13'
