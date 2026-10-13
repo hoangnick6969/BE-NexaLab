@@ -102,7 +102,7 @@
 
 - [x] **Bước 1 (Đã xong):** Xây dựng UI `CircuitPathwayStep.tsx` và Frozen Contract Fixtures.
 - [x] **Bước 2 (Đã xong):** Rebase code A3 vào nhánh `A4` ở cả 2 repository.
-- [ ] **Bước 3:** Cập nhật Prisma Schema (model `Attempt`) & chạy migration database.
-- [ ] **Bước 4:** Cập nhật endpoint `POST /attempts` và kiểm tra gate Quiz A3 trong Backend.
-- [ ] **Bước 5:** Kết nối API thật giữa Frontend và Backend.
-- [ ] **Bước 6:** Chạy toàn bộ kiểm thử nghiệm thu và cập nhật `sprint-status.yaml`.
+- [x] **Bước 3 (Đã xong):** Cập nhật Prisma Schema (model `Attempt`) & chạy migration database `20261013140000_circuit_attempt_evidence`.
+- [x] **Bước 4 (Đã xong):** Cập nhật endpoint `POST /attempts` (thẩm định server, kiểm tra gate Quiz A3, xử lý idempotency fast-path).
+- [x] **Bước 5 (Đã xong):** Kết nối API thật giữa Frontend và Backend (hiển thị phán quyết, gợi ý sư phạm, bảo toàn Zero State Loss).
+- [x] **Bước 6 (Đã xong):** Chạy toàn bộ kiểm thử nghiệm thu: 46/46 unit/sim tests, 98/98 integration assertions, E2E Playwright test 1/1 passed và cập nhật `sprint-status.yaml`.

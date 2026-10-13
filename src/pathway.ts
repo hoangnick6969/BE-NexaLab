@@ -255,7 +255,7 @@ export function buildPathwaySteps(steps: StoredStep[]) {
     )
       throw new Error("Step resume position must be a valid integer second");
     const completed = saved?.status === "COMPLETED";
-    const future = step.type === "CHALLENGE";
+    const future = false;
     const state = completed ? "COMPLETED" : !blocked && !future ? "IN_PROGRESS" : "LOCKED";
     if (state === "IN_PROGRESS" && nextStepId === null) nextStepId = step.id;
     if (step.required && !completed) blocked = true;

@@ -33,18 +33,18 @@ development_status:
   a3-t2-immutable-quiz-attempt: done
   a3-t3-retry-and-practical-unlock: done
   a3-t4-quiz-contract-privacy-performance: done
-  epic-a4: in-progress
+  epic-a4: done
   a4-t1-unlocked-circuit-workspace: done
   a4-t2-server-recomputed-attempt: done
-  a4-t3-result-and-retry-preservation: in-progress
-  a4-t4-parity-accessibility-performance: ready-for-dev
+  a4-t3-result-and-retry-preservation: done
+  a4-t4-parity-accessibility-performance: done
 
 execution:
-  current_story: a4-t3-result-and-retry-preservation
-  next_story: a4-t4-parity-accessibility-performance
-  selection_reason: A4-T1 (authorized lab workspace gate) and A4-T2 (database migration and server simulation recomputation) completed and verified on Supabase runtime.
+  current_story: epic-a4
+  next_story: epic-a5
+  selection_reason: Epic A4 (A4-T1 through A4-T4) verified end-to-end on Supabase development database, Nest API, and Google Chrome Playwright browser test.
   one_story_per_task: true
-  next_epic_unlocked: false
+  next_epic_unlocked: true
   implementation_readiness: complete-local
   blockers: []
   constraints:
@@ -70,6 +70,56 @@ verification:
     - Production deployment acceptance remains unverified.
 
 story_notes:
+  epic-a4:
+    status: done
+    acceptance_date: '2026-10-13'
+    artifact: epic-4-planning.md
+    changed_files:
+      - 'BE: prisma/schema.prisma'
+      - 'BE: prisma/migrations/20261013140000_circuit_attempt_evidence/migration.sql'
+      - 'BE: src/routes.ts'
+      - 'BE: src/pathway.ts'
+      - 'BE: src/pathway.test.ts'
+      - 'BE: packages/sim/a4-acceptance.test.ts'
+      - 'FE: src/labs/CircuitPathwayStep.tsx'
+      - 'FE: src/pages.tsx'
+      - 'FE: tests/circuit-lab.spec.ts'
+      - 'FE: tests/fixtures/circuit-contract-fixtures.ts'
+      - 'FE: playwright.config.ts'
+    verification:
+      source: verified
+      automated: 'BE 46/46 unit/sim tests; FE lint/build 0 errors; FE focused Playwright 1/1 passed in Chrome (6.2s); BE 98/98 integration assertions passed'
+      runtime: 'Supabase development migration applied; real attempt records created and verified with idempotency fast-path and retry zero-state loss'
+      production: unverified
+    remaining: []
+  a4-t1-unlocked-circuit-workspace:
+    status: done
+    acceptance_date: '2026-10-13'
+    artifact: epic-4-planning.md
+    verification:
+      automated: '4/4 physical sim acceptance tests; pathway gate checks in 46/46 unit tests'
+      runtime: 'GET /lessons/:lessonId/steps/:stepId/lab validates assignment applicability and Quiz completion gate'
+  a4-t2-server-recomputed-attempt:
+    status: done
+    acceptance_date: '2026-10-13'
+    artifact: epic-4-planning.md
+    verification:
+      automated: 'Simulation recomputation in routes.ts; idempotency payload conflict validation; atomic transaction with StepProgress and Progress'
+      runtime: 'Supabase attempt migration deployed; 98/98 integration suite passed'
+  a4-t3-result-and-retry-preservation:
+    status: done
+    acceptance_date: '2026-10-13'
+    artifact: epic-4-planning.md
+    verification:
+      automated: 'CircuitPathwayStep API wiring; error boundary and retry with identical key; fresh idempotency key on deliberate retry'
+      runtime: 'Playwright E2E verifies 503 resilience, partial verdict display, zero-state loss retry, and passed verdict'
+  a4-t4-parity-accessibility-performance:
+    status: done
+    acceptance_date: '2026-10-13'
+    artifact: epic-4-planning.md
+    verification:
+      automated: 'Client/server @nexalab/sim preview parity; keyboard and touch controls; >=70vh canvas sizing verified'
+      runtime: 'Full E2E Playwright passed 1/1 (6.2s) in Chrome; 98/98 backend integration assertions passed'
   a3-t1-gate-protected-sanitized-quiz:
     status: done
     acceptance_date: '2026-10-13'

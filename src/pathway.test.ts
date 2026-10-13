@@ -220,5 +220,32 @@ describe("lesson pathway", () => {
       : step));
     expect(passed.steps.map((step) => step.state)).toEqual(["COMPLETED", "COMPLETED", "COMPLETED", "IN_PROGRESS"]);
   });
+
+  it("unlocks CHALLENGE when LAB is completed, keeping it locked with PRACTICE_NOT_PASSED before that", () => {
+    const questions = materializeQuizQuestions([{ prompt: "Q", options: ["A", "B"], answer: 1 }]);
+    const steps = [
+      { id: "read", type: "READING" as const, position: 10, required: true, config: { html: "Read" }, progress: [{ status: "COMPLETED" as const, progressValue: 100 }] },
+      { id: "video", type: "VIDEO" as const, position: 20, required: true, config: { title: "Text", equivalentText: "Read" }, progress: [{ status: "COMPLETED" as const, progressValue: 100 }] },
+      { id: "quiz", type: "QUIZ" as const, position: 40, required: true, config: { questions }, progress: [{ status: "COMPLETED" as const, progressValue: 100 }] },
+      { id: "lab", type: "LAB" as const, position: 50, required: true, config: { labId: "circuit" } },
+      { id: "challenge", type: "CHALLENGE" as const, position: 60, required: true, config: { challengeId: "circuit_001" } },
+    ];
+
+    // LAB is IN_PROGRESS, CHALLENGE is LOCKED with PRACTICE_NOT_PASSED
+    const initial = buildPathwaySteps(steps);
+    expect(initial.steps[3].state).toBe("IN_PROGRESS");
+    expect(initial.steps[4].state).toBe("LOCKED");
+    expect(initial.steps[4].lockReasonCode).toBe("PRACTICE_NOT_PASSED");
+    expect(initial.steps[4].resource).toBeNull();
+
+    // Student completes LAB
+    const labCompleted = buildPathwaySteps(steps.map((step) => step.id === "lab"
+      ? { ...step, progress: [{ status: "COMPLETED" as const, progressValue: 100 }] }
+      : step));
+    expect(labCompleted.steps[3].state).toBe("COMPLETED");
+    expect(labCompleted.steps[4].state).toBe("IN_PROGRESS");
+    expect(labCompleted.steps[4].lockReasonCode).toBeNull();
+    expect(labCompleted.steps[4].resource).toEqual({ challengeId: "circuit_001" });
+  });
 });
 
