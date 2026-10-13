@@ -236,7 +236,7 @@ export function validateLessonSteps<T extends { type: StepType; position: number
 function resource(step: StoredStep) {
   const config = stepConfigSchemas[step.type].parse(step.config);
   if (step.type === "QUIZ") return sanitizeQuizConfig(config);
-  return step.type === "READING" || step.type === "VIDEO" || step.type === "STUDY_CARDS" ? config : null;
+  return step.type === "READING" || step.type === "VIDEO" || step.type === "STUDY_CARDS" || step.type === "LAB" || step.type === "CHALLENGE" ? config : null;
 }
 
 export function buildPathwaySteps(steps: StoredStep[]) {
@@ -255,7 +255,7 @@ export function buildPathwaySteps(steps: StoredStep[]) {
     )
       throw new Error("Step resume position must be a valid integer second");
     const completed = saved?.status === "COMPLETED";
-    const future = step.type === "CHALLENGE";
+    const future = false;
     const state = completed ? "COMPLETED" : !blocked && !future ? "IN_PROGRESS" : "LOCKED";
     if (state === "IN_PROGRESS" && nextStepId === null) nextStepId = step.id;
     if (step.required && !completed) blocked = true;

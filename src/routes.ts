@@ -720,10 +720,10 @@ export class ApiController {
   private async assertPracticalGate(labId: string, studentId: string, db: any) {
     const lessons = await db.lesson.findMany({
       where: { status: "published" },
-      include: { steps: { where: { type: "LAB" }, select: { config: true } } },
+      include: { steps: { where: { type: { in: ["LAB", "CHALLENGE"] } }, select: { config: true, type: true } } },
     });
     const linked = lessons.filter((lesson: any) =>
-      lesson.steps.some((step: any) => (step.config as any)?.labId === labId),
+      lesson.steps.some((step: any) => (step.config as any)?.labId === labId || (step.config as any)?.challengeId?.startsWith(labId)),
     );
     if (!linked.length) return;
     let hasApplicableAssignment = false;
@@ -732,13 +732,32 @@ export class ApiController {
       hasApplicableAssignment = true;
       try {
         const pathway = await this.studentPathway(lesson.id, studentId, db);
-        if (pathway.steps.some((step: any) => step.type === "LAB" && step.state !== "LOCKED")) return;
+        if (pathway.steps.some((step: any) => (step.type === "LAB" || step.type === "CHALLENGE") && step.state !== "LOCKED")) return;
       } catch {
         // An unassigned lesson cannot grant practical access.
       }
     }
     if (!hasApplicableAssignment) return;
     throw new NotFoundException("Hoàn thành và vượt qua bài kiểm tra được giao để mở phòng thực hành");
+  }
+  private circuitRetryGuidance(verdict: string, simulationResult: any): string | null {
+    if (verdict === "passed") return null;
+    if (verdict === "partial" || simulationResult?.status === "LED_OVERLOAD") {
+      return "Dòng điện qua LED vượt mức an toàn (> 20 mA). Hãy tăng giá trị điện trở (R ≥ 350Ω) để bảo vệ linh kiện.";
+    }
+    if (simulationResult?.status === "OPEN_CIRCUIT") {
+      return "Mạch điện đang bị hở hoặc thiếu dây nối. Hãy nối kín các linh kiện thành một vòng hoàn chỉnh.";
+    }
+    if (simulationResult?.status === "SWITCH_OPEN") {
+      return "Công tắc đang mở làm ngắt dòng điện. Hãy bấm vào công tắc để đóng mạch.";
+    }
+    if (simulationResult?.status === "NO_LED") {
+      return "Mạch điện chưa có đèn LED. Hãy bổ sung ít nhất một đèn LED vào mạch.";
+    }
+    if (simulationResult?.status === "LOW_CURRENT") {
+      return "Dòng điện quá nhỏ (dưới 1 mA) khiến đèn không sáng. Hãy giảm bớt điện trở hoặc kiểm tra nguồn điện.";
+    }
+    return "Hãy kiểm tra lại các linh kiện và mối nối trên mạch điện.";
   }
   @Roles("STUDENT")
   @Get("lessons/:lessonId/quiz")
@@ -923,6 +942,33 @@ export class ApiController {
         pathway: await this.studentPathway(lessonId, studentId),
       };
     }
+  }
+  @Roles("STUDENT")
+  @Get("lessons/:lessonId/steps/:stepId/lab")
+  @ApiOperation({ summary: "Get the sanitized lab/challenge workspace for an eligible student" })
+  async studentLab(
+    @Param("lessonId") lessonId: string,
+    @Param("stepId") stepId: string,
+    @Req() req: any,
+  ) {
+    const pathway = await this.studentPathway(lessonId, req.user.sub);
+    const step = pathway.steps.find((item: any) => item.id === stepId && (item.type === "LAB" || item.type === "CHALLENGE"));
+    if (!step) throw new NotFoundException("Bước thực hành không tồn tại");
+    if (step.state === "LOCKED")
+      throw new ForbiddenException(step.lockReasonCode === "QUIZ_NOT_PASSED" ? "Hoàn thành và vượt qua bài kiểm tra để mở phòng thực hành" : "Bước thực hành chưa khả dụng");
+    const stepResource = step.resource as any;
+    const challengeId = stepResource?.challengeId ?? (stepResource?.labId ? `${stepResource.labId}_001` : "circuit_001");
+    const challenge = challengeId ? await this.db.challenge.findUnique({ where: { id: challengeId }, include: { lab: true } }) : null;
+    return {
+      lessonId,
+      stepId,
+      challengeId: challenge?.id ?? challengeId,
+      labId: challenge?.labId ?? stepResource?.labId ?? "circuit",
+      title: challenge?.lab?.title ?? "Thực hành mạch điện",
+      instruction: challenge?.objective ?? "Tạo mạch kín an toàn cho đèn LED",
+      targetObjective: "Giữ dòng qua mỗi LED từ 1 đến 20 mA.",
+      config: stepResource,
+    };
   }
   private quizAttemptSummary(attempt: any) {
     const answers = attempt.answers as Array<{ questionId: string; optionId: string }>;
@@ -1384,6 +1430,9 @@ export class ApiController {
     const b = z
       .object({
         challengeId: text,
+        lessonStepId: text.optional(),
+        assignmentId: text.optional(),
+        idempotencyKey: z.string().uuid().optional(),
         labState: z.unknown(),
         durationMs: z.number().int().min(0).max(86400000),
       })
@@ -1393,33 +1442,123 @@ export class ApiController {
       include: { lab: true },
     });
     if (!c || c.lab.status !== "published") throw new NotFoundException();
+
+    // Idempotency fast-path
+    if (b.idempotencyKey) {
+      const existing = await this.db.attempt.findUnique({
+        where: {
+          studentId_idempotencyKey: {
+            studentId: req.user.sub,
+            idempotencyKey: b.idempotencyKey,
+          },
+        },
+      });
+      if (existing) {
+        const samePayload =
+          existing.challengeId === b.challengeId &&
+          JSON.stringify(existing.labState) === JSON.stringify(b.labState);
+        if (!samePayload) {
+          throw new ConflictException({
+            code: "IDEMPOTENCY_KEY_REUSED",
+            message: "Khóa gửi lại đã được dùng cho nội dung khác",
+          });
+        }
+        const attemptNumber = await this.db.attempt.count({
+          where: {
+            studentId: req.user.sub,
+            challengeId: existing.challengeId,
+            createdAt: { lte: existing.createdAt },
+          },
+        });
+        let pathway: any = undefined;
+        if (existing.lessonStepId) {
+          const step = await this.db.lessonStep.findUnique({
+            where: { id: existing.lessonStepId },
+          });
+          if (step) {
+            pathway = await this.studentPathway(step.lessonId, req.user.sub);
+          }
+        }
+        return {
+          ...existing,
+          attempt: {
+            ...existing,
+            attemptNumber,
+          },
+          pathway,
+          retryGuidance: this.circuitRetryGuidance(
+            existing.verdict,
+            existing.simulationResult,
+          ),
+        };
+      }
+    }
+
     let result: any;
     try {
       result = simulate(c.labId, b.labState);
     } catch (e: any) {
       throw new BadRequestException(e.message);
     }
+    const normalizedVerdict =
+      result.verdict === "not_passed" ? "needs_practice" : result.verdict;
+
     return this.db.$transaction(async (tx) => {
       await this.assertPracticalGate(c.labId, req.user.sub, tx);
       const a = await tx.attempt.create({
         data: {
           studentId: req.user.sub,
           challengeId: c.id,
+          assignmentId: b.assignmentId ?? null,
+          lessonStepId: b.lessonStepId ?? null,
+          simulationModelVersion: "1.0.0",
+          idempotencyKey: b.idempotencyKey ?? null,
           labState: b.labState as any,
           simulationResult: result,
-          verdict: result.verdict,
+          verdict: normalizedVerdict,
           durationMs: b.durationMs,
         },
       });
+
+      const attemptCount = await tx.attempt.count({
+        where: { studentId: req.user.sub, challengeId: c.id },
+      });
+
+      let pathway: any = undefined;
+      if (b.lessonStepId) {
+        const isCompleted = normalizedVerdict === "passed";
+        const step = await tx.lessonStep.findUnique({ where: { id: b.lessonStepId } });
+        await tx.stepProgress.upsert({
+          where: {
+            studentId_stepId: { studentId: req.user.sub, stepId: b.lessonStepId },
+          },
+          create: {
+            studentId: req.user.sub,
+            stepId: b.lessonStepId,
+            status: isCompleted ? "COMPLETED" : "IN_PROGRESS",
+            progressValue: isCompleted ? 100 : 50,
+            completedAt: isCompleted ? new Date() : null,
+          },
+          update: {
+            status: isCompleted ? "COMPLETED" : "IN_PROGRESS",
+            progressValue: isCompleted ? 100 : 50,
+            completedAt: isCompleted ? new Date() : null,
+          },
+        });
+        if (step) {
+          pathway = await this.studentPathway(step.lessonId, req.user.sub, tx);
+        }
+      }
+
       const old = await tx.progress.findUnique({
         where: {
           studentId_contentId: { studentId: req.user.sub, contentId: c.labId },
         },
       });
       const score =
-        result.verdict === "passed"
+        normalizedVerdict === "passed"
           ? 100
-          : result.verdict === "partial"
+          : normalizedVerdict === "partial"
             ? 50
             : 0;
       await tx.progress.upsert({
@@ -1442,7 +1581,15 @@ export class ApiController {
               : "in_progress",
         },
       });
-      return a;
+      return {
+        ...a,
+        attempt: {
+          ...a,
+          attemptNumber: attemptCount,
+        },
+        pathway,
+        retryGuidance: this.circuitRetryGuidance(normalizedVerdict, result),
+      };
     });
   }
   @Roles("STUDENT") @Get("attempts") attempts(@Req() req: any) {
