@@ -11,6 +11,12 @@ active_specs:
   - ../specs/spec-student-quiz-learning-gates/SPEC.md
   - ../specs/spec-student-verified-lab-challenge-retry/SPEC.md
   - ../specs/spec-student-progress-attempt-history/SPEC.md
+  - ../specs/spec-b0-platform/SPEC.md
+  - ../specs/spec-content-foundation/SPEC.md
+  - ../specs/spec-b1-teacher-operations/SPEC.md
+  - ../specs/spec-b2-teacher-evidence/SPEC.md
+  - ../specs/spec-c1-parent-progress/SPEC.md
+  - ../specs/spec-c2-admin-operations/SPEC.md
 ---
 
 # NexaLab Release 1 Epic Breakdown
@@ -77,7 +83,7 @@ The teacher manages owned-class membership, permitted content, and assignments b
 
 **Coverage:** FR-16, FR-17.
 
-**Planning:** decisions locked 2026-10-14 in `increment-b-c-plan.md` (B0 foundation + B1-T1..T6: class lifecycle, membership statuses, join code with approval, content library/editor with clone-on-lock, lesson and lab assignments). Detailed SPEC/tickets pending.
+**Detailed specs:** `../specs/spec-b1-teacher-operations/SPEC.md`, with `../specs/spec-b0-platform/SPEC.md` and `../specs/spec-content-foundation/SPEC.md` as required foundation contracts. Feature implementation may use synthetic fixtures; baseline catalog release waits on the Content Foundation release gates.
 
 ### B2 — A teacher acts on traceable learning evidence
 
@@ -85,7 +91,7 @@ The teacher identifies students who need support and opens the exact quiz, attem
 
 **Coverage:** FR-18.
 
-**Planning:** decisions locked 2026-10-14 in `increment-b-c-plan.md` (B2-T1..T6: tracking board from A5 derivation, deterministic needs-support flags, student evidence drill-down, audited quiz-gate override). No advanced or AI-generated analytics.
+**Detailed spec:** `../specs/spec-b2-teacher-evidence/SPEC.md`. B2-T0 first normalizes assignment-scoped evidence; then the tracking board, deterministic support flags, evidence drill-down, and audited quiz-gate override follow. No advanced or AI-generated analytics.
 
 ## Increment C — Parent and Admin
 
@@ -95,7 +101,7 @@ The parent sees read-only progress for explicitly linked children and cannot mut
 
 **Coverage:** FR-19.
 
-**Planning:** decisions locked 2026-10-14 in `increment-b-c-plan.md` (C1-T1..T4: teacher/admin-issued single-use 7-day link code, unlink, read-only progress reusing A5 derivation; no weekly/monthly report).
+**Detailed spec:** `../specs/spec-c1-parent-progress/SPEC.md`. The link lifecycle, activation prerequisites, exact read-model aggregation, limited evidence, and unlink behavior are specified; approved consent copy remains a pilot release gate.
 
 ### C2 — An admin operates the platform without bypassing controls
 
@@ -103,7 +109,7 @@ The admin manages users, subjects, content, labs, and assets through explicit au
 
 **Coverage:** FR-20.
 
-**Planning:** decisions locked 2026-10-14 in `increment-b-c-plan.md` (C2-T1..T6: deactivate instead of delete, subjects/chapters, labs/challenges/simulation config, one-time reset link, assets; 3D validator is P2).
+**Detailed spec:** `../specs/spec-c2-admin-operations/SPEC.md`. User lifecycle/ownership resolution, taxonomy/content, simulation versions, adult reset, assets/sources, and the audited admin console are specified; per-asset budgets and per-template scientific ranges remain release gates.
 
 ## Future
 
@@ -131,4 +137,4 @@ Shared Foundation is adopted and verified inside each epic. Future epics do not 
 
 ## Readiness gate
 
-Product Owner decisions for Increment A are closed in `docs/product/prd.md` Section 10. A1–A5 each have a detailed ready-for-implementation spec and ordered vertical tickets. Each epic still requires its predecessor's real runtime acceptance before implementation of the next begins; planning readiness is not implementation completion.
+Product Owner decisions for Increment A are closed in `docs/product/prd.md` Section 10. A1–A5 and B1–C2 each have a detailed spec and ordered vertical tickets. B0 Platform and Content Foundation are required B1 companions rather than product epics. Each epic still requires its predecessor's real runtime acceptance; content/media/model release gates do not block fixture-based platform implementation.
