@@ -6,7 +6,7 @@
 
 **Inputs:** Product owner direction, current repositories, product brief, discovery notes, and Student P0 UX definition
 
-**Scope:** One Release 1 architecture for Vietnamese THCS Natural Science, delivered student-first
+**Scope:** One Release 1 architecture for Vietnamese THCS Natural Science, delivered student-first. The MVP content catalog targets Grade 8–9; the initial measured pilot may remain a bounded Grade 8 sample as described in Section 9.
 
 ## 1. Product intent
 
@@ -56,7 +56,7 @@ The detailed planning scope for this cycle:
 
 ### Increment B — Teacher Operations
 
-Full teacher UX for owned-class management, content and assignment operations, and evidence review. Increment A may expose a minimal operator path but must not silently expand into the complete Teacher experience.
+Full teacher UX for owned-class management, content and assignment operations, and evidence review. The MVP content catalog targets Grade 8–9 Natural Science. The initial pilot sample can remain Grade 8-only and does not narrow the product content target. Baseline/shared learning materials use NexaLab-authored or item-level openly reusable sources and pass the shared-content review gates. Teachers may publish class-private authored materials under the separate private-content policy in Section 10. Increment A may expose a minimal operator path but must not silently expand into the complete Teacher experience.
 
 ### Increment C — Parent and Admin
 
@@ -96,7 +96,7 @@ Lab/Practice remains visible but locked until the quiz gate is met or an authori
 - **FR-06:** An authorized operator shall be able to provision or seed the minimum student, class, published content, and assignment data required for the student journey.
 - **FR-07:** A provisioned student shall log in with username and password and shall change a valid temporary password before entering protected learning routes.
 - **FR-08:** A student shall see only assignments applicable to their approved enrollment and student targeting.
-- **FR-09:** A student shall open assigned published content organized by subject, grade, chapter, and topic, with curriculum reference, learning objective, and prerequisites.
+- **FR-09:** A student shall open assigned published content organized by subject, grade, chapter, and topic, with curriculum reference, learning objective, and prerequisites. The MVP content catalog targets Grade 8–9 Khoa học tự nhiên and reports coverage by grade and outcome.
 - **FR-10:** A lesson shall support reading content, video or equivalent material with a recoverable unavailable state, and study cards.
 - **FR-11:** A student shall complete a scored quiz; the server shall determine quiz outcome and the next unlocked learning step.
 - **FR-12:** The UI shall show the complete ordered pathway, keep locked steps visible, and direct the primary action to the next unlocked step.
@@ -113,7 +113,7 @@ Lab/Practice remains visible but locked until the quiz gate is met or an authori
 ### Increment C — Parent and Admin capability envelope
 
 - **FR-19:** A parent shall have read-only progress access for explicitly linked children.
-- **FR-20:** An admin shall manage users, content, subjects, labs, and assets under server-side authorization and audit boundaries.
+- **FR-20:** An admin shall manage users, content, subjects, labs, and assets under server-side authorization and audit boundaries. Explicit administrative recovery/operations may quarantine, archive, or reassign content/assets outside the actor's ownership only with a recorded reason and audit; these actions do not bypass scientific, rights, or publication gates.
 
 ### Future capability envelope
 
@@ -129,7 +129,7 @@ Lab/Practice remains visible but locked until the quiz gate is met or an authori
 - **QR-05 — Responsive use:** Increment A is verified at 390, 768, 1024, and 1440 px without horizontal overflow or obscured primary actions.
 - **QR-06 — Honest learning UX:** one primary next-step action per learning screen; no fabricated metrics, peer ranking, shame language, or score without evidence drill-down.
 - **QR-07 — Resilience:** every async learning surface has loading, empty, and recoverable-error states; a failed verdict/progress write must not be presented as saved.
-- **QR-08 — Content governance:** software tests do not constitute subject-matter approval of curriculum content or scientific models.
+- **QR-08 — Content governance and scientific accuracy:** every released shared/baseline unit has traceable source and rights evidence plus named subject-matter approval. Important scientific claims, answer keys, formulas, and models are cross-checked against at least two independent references, including an appropriate authoritative scientific/educational reference. Software tests do not constitute subject-matter approval. Teacher-private content uses the distinct, scoped review policy in Section 10; a scored lab must still use an approved scientific model and golden cases.
 - **QR-09 — Interaction performance:** supported Student screens acknowledge input within 100 ms, keep the primary action usable during recoverable failures, and target p95 API latency of 500 ms for reads and 1,000 ms for mutations in the pilot environment, excluding file/video transfer and simulation rendering.
 - **QR-10 — Runtime reliability:** the A1–A5 seeded journey targets at least 95% successful completion without an unrecoverable application error and at least 99% crash-free pilot sessions. These are measured pilot gates, not claims about the current code.
 
@@ -141,6 +141,7 @@ Lab/Practice remains visible but locked until the quiz gate is met or an authori
 - The two repositories are delivered against explicit API contracts; no frontend-only authorization or progress truth.
 - Supabase is the managed PostgreSQL provider for MVP environments. Prisma remains the schema, migration, and query boundary; Supabase Auth, browser database access, and RLS are not substitutes for NexaLab backend authentication, RBAC, or ownership checks.
 - Runtime API traffic uses a pooled Supabase connection and Prisma migration/seed/admin commands use a direct or session-pooled connection. Database secrets are server-only and never use a `VITE_` prefix.
+- Cloudflare R2 Standard is the private object store for video and binary learning assets. PostgreSQL stores metadata/provenance and immutable object references; API-issued temporary access, upload finalization, file validation, and immutable versioning are required. Upload implementation details belong to the architecture/epic specs.
 - Existing routes, schema, UI, tests, mockups, and README statements are evidence of current shape, not automatic proof that a requirement is complete.
 
 ## 8. Verification and release evidence
@@ -162,7 +163,7 @@ The pilot gate is measured with one school, up to two Grade 8 classes and at mos
 
 ## 10. Product Owner decisions
 
-1. **Curriculum/content:** Increment A uses a NexaLab-authored Grade 8 Natural Science pilot set mapped to the 2018 Vietnamese general education curriculum. Every published lesson records subject, grade, chapter, topic, learning objective, prerequisites, and curriculum reference. No textbook content is copied without a separate rights decision and subject review.
+1. **Curriculum/content:** Increment A's representative pilot set is NexaLab-authored Grade 8 Natural Science mapped to the official subject-specific KHTN curriculum. The MVP content target for B/C is Grade 8–9 KHTN; this expands the Grade 8-only content scope recorded on 2026-10-12. Every lesson records subject, grade, curriculum outcome/reference, learning objective, prerequisites, source evidence, and review state. The baseline/shared catalog uses NexaLab-authored or item-level openly reusable sources; free-to-view textbook content is not ingested or reproduced without explicit reuse rights.
 2. **Enrollment:** Increment A uses teacher/school provisioning only. Student join-code enrollment is not exposed in Student P0 and does not count as an accepted A1 path.
 3. **Quiz gate:** a server-calculated score of at least 50% unlocks the representative practical step. Students may retry. Teacher override is deferred to Increment B and cannot be simulated by the client in Increment A.
 4. **Representative practical:** the Grade 8 circuit lab and its existing deterministic circuit model are the A4 representative lab/challenge.
@@ -173,6 +174,9 @@ The pilot gate is measured with one school, up to two Grade 8 classes and at mos
 9. **Minimal operations:** A1 supports both an idempotent seed for development/E2E and the smallest existing teacher-owned operator path for provisioning, publishing/choosing content, and assigning it. This is not approval for full Teacher/Admin UX.
 10. **MVP data platform:** Supabase supplies managed PostgreSQL only. NexaLab continues to own identity/session logic in NestJS and all clients access data through the backend API.
 11. **Authentication delivery and fixtures:** authentication/session hardening is the first functional prerequisite inside A1 and may be implemented on an independent coordinated branch, but it is not a separate product epic. Development and E2E use environment-driven seeded Teacher/Student personas; these accounts never enable Student self-registration, bypass backend auth, or ship as production credentials.
+12. **Content scope and review:** shared/baseline catalog content must pass editorial, scientific-accuracy, and rights review. Teacher-private authored content can be self-reviewed and published only to the teacher's owned classes; it cannot enter the shared library or bypass source/rights declarations, child-safety checks, or the approved scientific-model gate for scored labs. Admin may quarantine/reassign content or assets for operations with reason and audit, but cannot attest scientific correctness or force-release an item.
+13. **Parent ID privacy:** on parent child-progress detail routes, any student ID not linked to the authenticated parent returns the same 403 response and audited denial, whether the ID exists or not. This overrides the conflicting generic SRS CR-11 not-found wording for this route to prevent student-existence enumeration.
+14. **Parent-link lifecycle:** the relationship status is `pending` or `approved`; only `approved` links grant progress access. The responsible teacher verifies the guardian relationship against school-held records before issuing a single-use, seven-day code. Parent email verification proves mailbox control, not parentage; required consent and email-verification prerequisites must be complete before activation. The C1 SPEC defines the exact `pending → approved` transition and invitation persistence.
 
 ## 11. Current implementation evidence note
 

@@ -61,7 +61,7 @@
 - **CR-05:** thao tác phá huỷ phải hỏi xác nhận (MSG-41).
 - **CR-08:** ghi audit.
 - **CR-09:** danh sách dài phải phân trang.
-- **CR-11:** ownership lấy từ người đang đăng nhập; route chi tiết trả cùng một not-found cho ID không tồn tại và ID không có quyền.
+- **CR-11:** ownership lấy từ người đang đăng nhập; route chi tiết trả cùng một not-found cho ID không tồn tại và ID không có quyền. **Ngoại lệ do PRD chốt cho parent child-progress:** mọi student ID không liên kết trả cùng 403 audited, dù ID tồn tại hay không, để không lộ việc học sinh có trong hệ thống.
 - **NS-01:** từ chối 403 (MSG-11) và **ghi audit**. NS-12 Audit logger và NS-13 retention đều là **Foundation**.
 - **BR-21:** mã lớp, mật khẩu tạm và mã liên kết phụ huynh là ba credential riêng biệt.
 - **BR-22:** giữ evidence và audit 12 tháng sau lần hoạt động cuối của học sinh.

@@ -10,7 +10,7 @@ There are no open Product Owner decisions blocking A1–A5 implementation planni
 
 - Legal/launch policy for export and deletion after the 12-month pilot retention window.
 - Teacher override workflow and audit UX in Increment B.
-- Full Teacher, Parent, and Admin UX details in Increments B and C.
+- Detailed Admin UX and the remaining Teacher/Parent implementation interaction details. Role UX definitions are in `../../../nexalab-fe/docs/design/09-TEACHER-UX-DEFINITION.md` and `../../../nexalab-fe/docs/design/10-PARENT-UX-DEFINITION.md`; unresolved consent, link activation, and evidence aggregation rules remain open in the Increment B/C plan.
 - Production scale tier, final hosting region, disaster-recovery RPO/RTO, and paid Supabase backup/PITR options before pilot launch.
 
 Teacher AI Content Assistant and Student AI Tutor are Future scope. Their provider, review, audit, and safety decisions are intentionally deferred until Release 1 foundations are validated.

@@ -7,7 +7,7 @@ paradigm: layered server-authoritative domain with a contract-driven client
 scope: Shared Foundation and Release 1 Increments A, B, and C across nexalab-be and nexalab-fe
 status: final
 created: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-14
 binds: [FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20]
 sources:
   - docs/product/prd.md
@@ -25,6 +25,7 @@ Use a layered, server-authoritative domain. `nexalab-fe` renders role-specific j
 flowchart LR
   FE[nexalab-fe\nReact client] -->|validated API contract| BE[nexalab-be\nNestJS domain/API]
   BE -->|Prisma runtime pool| DB[(Supabase PostgreSQL)]
+  BE -->|S3-compatible signed object operations| R2[(Cloudflare R2 private media)]
   BE --> SIM[packages/sim]
   FE -. versioned preview package .-> SIM
 ```
@@ -124,6 +125,21 @@ flowchart LR
 - **Prevents:** frontend/backend payload drift, duplicate mutations, and false success during network failure
 - **Rule:** backend Zod schemas and generated OpenAPI are the canonical HTTP contract. A contract-changing vertical ticket updates route schema, OpenAPI snapshot/contract tests, frontend API types/fixtures, and error handling together. Errors use `{ statusCode, code, message, details? }`. Mutations that may be retried use an idempotency key or return a stable conflict; the client may retry safe reads once with bounded backoff but never blindly repeats a non-idempotent mutation. Loading preserves layout, failures preserve recoverable student input, and official success is shown only after the server confirms persistence.
 
+### AD-13 — Versioned content and private object storage [ADOPTED]
+
+- **Binds:** FR-10, FR-17, FR-20, QR-08, QR-09
+- **Prevents:** binary media in PostgreSQL, production content delivered through development seed, public-bucket authorization bypass, mutable published assets, and incompatible teacher/admin asset ownership.
+- **Rule:** Supabase PostgreSQL stores content, source, ownership, review, release and object metadata; private Cloudflare R2 stores binary media. Backend APIs or approved jobs mint short-lived object access after authorization; clients never receive R2 credentials. Assets are explicitly teacher-private or shared-library scoped, while published content pins immutable asset versions. Admin capability is explicit and audited; it may manage shared assets and quarantine/reassign any asset without silently replacing teacher subject review.
+- **Delivery rule:** Prisma migration changes schema only; guarded seed creates development/E2E fixtures only; a dry-run-capable versioned Content Release Importer bootstraps or promotes pilot/production packs and assets; runtime authoring and allowlisted connector ingestion use the same validation and provenance contracts. MVP content ingestion is limited to NexaLab-created material and items with verified reusable licenses; public visibility is not a reuse license. Store the exact item-level license, attribution, source locator and checksum. Ingested source items remain staging candidates until editorial/scientific review and publication.
+
+### AD-14 — Topic-bound simulation packs [ADOPTED]
+
+- **Binds:** FR-10, FR-17, FR-20, QR-01, QR-08
+- **Prevents:** treating a GLB as simulation logic, hardcoded lab IDs becoming the content model, arbitrary teacher formulas/scripts, visuals drifting from authoritative results, and historical attempts resolving against a newer model or asset.
+- **Rule:** a publishable interactive lab must be derived from a versioned learning/practical activity and reviewed scientific model; it pins one immutable topic simulation pack version containing curriculum outcome, activity/model evidence, deterministic simulation model version, teacher-safe parameter schema, challenge template version, visual asset version, semantic node map, declarative visual binding manifest, limitations, accessibility fallback, provenance and golden cases. Scientific expected outputs and golden cases are verified before visual QA. The backend resolves model/version from an allowlisted registry and computes the official result; GLB, materials and animations render that state but never decide the verdict. Published attempts retain the exact pack/model/config versions needed to explain historical evidence.
+- **Authoring rule:** teachers select a reviewed shared pack or clone an owned pack and may configure only allowlisted parameters and constraints. A custom GLB may be ordinary lesson media after technical/license validation; it becomes a scored lab asset only after activity/model review, semantic mapping, model compatibility validation, golden cases and subject-matter approval. Admin manages taxonomy, availability, provenance, technical validation and shared scope without creating scientific attestation.
+- **Accuracy gate:** every published scientific claim has source evidence; important facts, formulas, answer keys and models require at least two independent references, including one appropriate authoritative scientific/educational source. Named subject-matter review and rights review are mandatory release gates. Curriculum defines scope/outcomes and is not by itself proof of every scientific claim; passing automated checks alone never authorizes publication.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -143,9 +159,10 @@ flowchart LR
 | Identity and sessions | `nexalab-be/src/auth.ts`, auth routes, `nexalab-fe/src/api.ts` and auth UI | AD-2, AD-3, AD-5 |
 | Classes and assignments | Prisma domain and backend routes; frontend operator/student views | AD-3, AD-4, AD-5 |
 | Student learning path | Backend content/progress APIs and frontend Student routes/pages | AD-4, AD-5, AD-6 |
-| Labs and attempts | `packages/sim`, backend attempt routes, frontend labs | AD-7, AD-8, AD-9 |
+| Labs and attempts | `packages/sim`, allowlisted model registry, versioned topic simulation packs, backend attempt routes, frontend labs | AD-7, AD-8, AD-9, AD-14 |
 | Parent/Admin envelopes | Backend ownership/admin routes; deferred dedicated UX | AD-2, AD-3, AD-4 |
 | Supabase/Prisma operations | Supabase project configuration, Prisma schema/migrations/seed, deployment secret store | AD-9, AD-10 |
+| Content/media releases | Content Release Importer and source connectors in backend jobs; metadata in Supabase; immutable binary versions in private R2 | AD-3, AD-5, AD-9, AD-10, AD-12, AD-13, AD-14 |
 | Learning evidence | `LessonStep`, `StepProgress`, `QuizAttempt`, practical `Attempt`, rebuildable `Progress` projection | AD-4, AD-6, AD-11, AD-12 |
 
 ## Deferred
@@ -153,4 +170,5 @@ flowchart LR
 - Final application hosting and observability vendor remain open; Supabase PostgreSQL and the database connection/migration boundary are fixed for MVP.
 - Paid Supabase plan, final region, production RPO/RTO, and backup/PITR policy must be selected before pilot launch and verified by restore rehearsal.
 - Teacher, Parent, and Admin screen architecture waits for their increments; shared identity and ownership invariants do not.
+- Exact R2 bucket names, signed-URL TTLs, media size limits, connector schedules, and source-specific parsers are epic/spec configuration under AD-13 rather than initiative-level architecture decisions.
 - AI provider and prompt architecture wait for Future scope; no Release 1 contract depends on them.
