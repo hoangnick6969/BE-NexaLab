@@ -892,11 +892,6 @@ try {
       )
     ).status === 403,
   );
-  const refreshedOutsider = await req("/auth/student/login", "POST", {
-    username: process.env.SEED_STUDENT_OUTSIDER_USERNAME ?? "student.outsider",
-    password: fixturePassword,
-  });
-  check("refresh unassigned student session for standalone lab checks", !!refreshedOutsider.data.accessToken);
   const first = (
     await req(
       "/attempts",
@@ -966,7 +961,7 @@ try {
         labState: { reactionId: "mg-hcl", molesA: 0.1, molesB: 0.2 },
         durationMs: 100,
       },
-      refreshedOutsider.data.accessToken,
+      outsider.data.accessToken,
     )
   ).data;
   check("unassigned student completes chemistry full stack", chem.verdict === "passed");
@@ -985,7 +980,7 @@ try {
       "/attempts",
       "POST",
       { challengeId: "eye_001", labState: { answers }, durationMs: 100 },
-      refreshedOutsider.data.accessToken,
+      outsider.data.accessToken,
     )
   ).data;
   check("unassigned student receives eye anatomy server grade", eye.simulationResult.score === 100);
