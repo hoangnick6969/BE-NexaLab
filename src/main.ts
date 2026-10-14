@@ -9,10 +9,11 @@ import { Db } from "./db";
 import { AuthGuard } from "./auth";
 import { ApiController } from "./routes";
 import { FilesController } from "./files";
+import { ClassesController } from "./classes";
 import { Errors } from "./errors";
 import { quizOpenApiSchemas } from "./quiz-contract";
 @Module({
-  controllers: [ApiController, FilesController],
+  controllers: [ApiController, ClassesController, FilesController],
   providers: [Db, { provide: APP_GUARD, useClass: AuthGuard }],
 })
 class AppModule {}

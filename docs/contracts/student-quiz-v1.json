@@ -2,7 +2,7 @@
   "version": 1,
   "forbiddenResponseProperties": ["answer", "answerOptionId", "correctOptionId"],
   "schemas": {
-    "ApiErrorEnvelope": ["message"],
+    "ApiErrorEnvelope": ["statusCode", "code", "message"],
     "StudentQuiz": ["lessonId", "stepId", "questions"],
     "QuizAttemptRequest": ["answers", "idempotencyKey"],
     "QuizAttemptSummary": ["id", "score", "passed", "correctCount", "questionCount", "createdAt", "results"],

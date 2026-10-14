@@ -47,6 +47,15 @@ const circuit = (resistance = 350, closed = true) => ({
     { source: "s", target: "b" },
   ],
 });
+// B1: teacher-private lessons publish only with the self-review checklist (D1).
+const review = {
+  sources: "Tài liệu kiểm thử A5 tự biên soạn",
+  license: "ORIGINAL",
+  outcome: "KHTN8 – Điện: mạch kín",
+  answerKeyChecked: true,
+  safetyChecked: true,
+  accessibilityChecked: true,
+};
 function projection(args) {
   const tsxCli = resolve("node_modules", "tsx", "dist", "cli.mjs");
   const run = spawnSync(process.execPath, [tsxCli, "scripts/progress-projection.ts", ...args], { encoding: "utf8" });
@@ -78,6 +87,7 @@ try {
     content: "<p>Dòng điện chạy trong mạch kín.</p>",
     labId: "circuit",
     status: "published",
+    review,
     materials: [],
     questions: [
       { prompt: prefix + " Tăng điện trở thì dòng điện?", options: ["Giảm", "Tăng"], answer: 0 },
@@ -89,7 +99,7 @@ try {
   const S = (type) => `step-${lessonId}-${type}`;
   const klass = await req("/classes", "POST", { name: prefix + " class", grade: 8 }, teacherToken);
   check("teacher creates an isolated class", klass.status === 201);
-  classroomId = klass.data.id;
+  classroomId = klass.data.class.id;
 
   async function provision(suffix) {
     const username = `${prefix}-${suffix}`;
@@ -112,7 +122,7 @@ try {
   const due = new Date(Date.now() + 7 * 86400000).toISOString();
   const assignment = await req(`/classes/${classroomId}/assignments`, "POST", { contentId: lessonId, contentType: "lesson", title: prefix + " Mạch điện", dueDate: due, studentIds: [student.id] }, teacherToken);
   check("teacher assigns the lesson to one student", assignment.status === 201);
-  const assignmentId = assignment.data.id;
+  const assignmentId = assignment.data.assignment.id;
 
   check("teacher role cannot read /me/progress", (await req("/me/progress", "GET", undefined, teacherToken)).status === 403);
   check("anonymous request to /me/activity is rejected", (await req("/me/activity")).status === 401);

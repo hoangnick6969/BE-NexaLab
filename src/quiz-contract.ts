@@ -1,8 +1,13 @@
 export const quizOpenApiSchemas = {
   ApiErrorEnvelope: {
     type: "object",
-    required: ["message"],
-    properties: { message: { type: "string" } },
+    required: ["statusCode", "code", "message"],
+    properties: {
+      statusCode: { type: "integer" },
+      code: { type: "string" },
+      message: { type: "string" },
+      details: {},
+    },
     additionalProperties: false,
   },
   StudentQuiz: {

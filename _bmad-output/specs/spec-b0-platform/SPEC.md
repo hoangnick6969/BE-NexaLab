@@ -1,6 +1,6 @@
 ---
 id: SPEC-b0-platform
-status: ready-for-implementation
+status: in-progress  # T1,T2 review; T3 partial; T4 backlog — see implementation-artifacts/sprint-status.yaml
 companions:
   - tickets.md
   - ../../planning-artifacts/architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md
