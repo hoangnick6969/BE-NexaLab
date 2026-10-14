@@ -7,6 +7,7 @@ import {
   Put,
   Delete,
   Param,
+  Query,
   Req,
   Res,
   BadRequestException,
@@ -43,6 +44,15 @@ import {
   quizConfigSchema,
   sanitizeQuizConfig,
 } from "./pathway";
+import {
+  decodeCursor,
+  deriveLesson,
+  mergeActivityPage,
+  normalizeVerdict,
+  quizSummary,
+  withDerivedCompletion,
+} from "./progress";
+import { loadLessonEvidence, projectLab, projectLesson } from "./progress-projection";
 const text = z.string().trim().min(1).max(200);
 const password = z.string().min(12).max(128);
 const email = z
@@ -677,22 +687,8 @@ export class ApiController {
     let pathway;
     try {
       validateLessonSteps(lesson.steps as any);
-      const passed = await db.quizAttempt.findMany({
-        where: { studentId, lessonId: id, passed: true },
-        select: { stepId: true, createdAt: true },
-      });
-      const passedSteps = new Map(passed.map((attempt: any) => [attempt.stepId, attempt.createdAt]));
-      const steps = lesson.steps.map((step: any) => {
-        if (step.type !== "QUIZ") return step;
-        const completedAt = passedSteps.get(step.id);
-        return {
-          ...step,
-          progress: completedAt
-            ? [{ status: "COMPLETED", progressValue: 100, completedAt }]
-            : [],
-        };
-      });
-      pathway = buildPathwaySteps(steps as any);
+      const evidence = await loadLessonEvidence(db, studentId, id, lesson.steps.map((step: any) => step.id));
+      pathway = buildPathwaySteps(withDerivedCompletion(lesson.steps as any, evidence));
     } catch {
       throw new NotFoundException("Nội dung không còn khả dụng");
     }
@@ -910,16 +906,7 @@ export class ApiController {
           completedAt: priorProgress?.completedAt ?? (passed ? new Date() : null),
         },
       });
-      const progress = await tx.progress.findUnique({ where: { studentId_contentId: { studentId, contentId: lessonId } } });
-      await tx.progress.upsert({
-        where: { studentId_contentId: { studentId, contentId: lessonId } },
-        create: { studentId, contentId: lessonId, status: passed ? "completed" : "in_progress", score, attemptsCount: 1 },
-        update: {
-          attemptsCount: { increment: 1 },
-          score: Math.max(progress?.score ?? 0, score),
-          status: progress?.status === "completed" || passed ? "completed" : "in_progress",
-        },
-      });
+      await projectLesson(tx, studentId, lessonId);
       return {
         attempt: this.quizAttemptSummary(created),
         pathway: await this.studentPathway(lessonId, studentId, tx),
@@ -1079,39 +1066,20 @@ export class ApiController {
       } else {
         throw new NotFoundException("Bước học không còn khả dụng");
       }
-      await tx.progress.createMany({
-        data: [{ studentId, contentId: lessonId, status: "in_progress", score: 0 }],
-        skipDuplicates: true,
-      });
-      await tx.progress.updateMany({
-        where: { studentId, contentId: lessonId, status: { not: "completed" } },
-        data: { status: "in_progress" },
-      });
+      await projectLesson(tx, studentId, lessonId);
       const pathway = await this.studentPathway(lessonId, studentId, tx);
       return { step: pathway.steps.find((item) => item.id === stepId), pathway };
     }, { isolationLevel: "Serializable" });
   }
   @Roles("STUDENT") @Post("lessons/:id/complete") async complete(
     @Param("id") id: string,
-    @Req() req: any,
   ) {
-    const l = await this.db.lesson.findFirst({
-      where: { id, status: "published" },
-    });
-    if (!l) throw new NotFoundException();
-    if ((l.questions as any[]).length)
-      throw new BadRequestException("Cần làm quiz để hoàn thành bài");
-    return this.db.progress.upsert({
-      where: {
-        studentId_contentId: { studentId: req.user.sub, contentId: id },
-      },
-      create: {
-        studentId: req.user.sub,
-        contentId: id,
-        status: "completed",
-        score: 100,
-      },
-      update: { status: "completed", score: 100 },
+    // Official completion is derived from step evidence (A5); a bare
+    // "mark complete" would create progress without a source record.
+    void id;
+    throw new ConflictException({
+      code: "ASSIGNMENT_PATHWAY_REQUIRED",
+      message: "Tiến độ chính thức chỉ được ghi nhận trong lộ trình bài được giao",
     });
   }
   @Roles("STUDENT") @Post("lessons/:id/quiz") async legacyQuiz(
@@ -1505,12 +1473,15 @@ export class ApiController {
 
     return this.db.$transaction(async (tx) => {
       await this.assertPracticalGate(c.labId, req.user.sub, tx);
+      // The step link and assignment are derived server-side; client-sent
+      // assignmentId is ignored so evidence cannot be attributed elsewhere.
+      const link = await this.practicalStepLink(b.lessonStepId, c, req.user.sub, tx);
       const a = await tx.attempt.create({
         data: {
           studentId: req.user.sub,
           challengeId: c.id,
-          assignmentId: b.assignmentId ?? null,
-          lessonStepId: b.lessonStepId ?? null,
+          assignmentId: link?.assignmentId ?? null,
+          lessonStepId: link?.stepId ?? null,
           simulationModelVersion: "1.0.0",
           idempotencyKey: b.idempotencyKey ?? null,
           labState: b.labState as any,
@@ -1525,62 +1496,38 @@ export class ApiController {
       });
 
       let pathway: any = undefined;
-      if (b.lessonStepId) {
+      if (link) {
         const isCompleted = normalizedVerdict === "passed";
-        const step = await tx.lessonStep.findUnique({ where: { id: b.lessonStepId } });
+        const now = new Date();
+        const saved = await tx.stepProgress.findUnique({
+          where: { studentId_stepId: { studentId: req.user.sub, stepId: link.stepId } },
+        });
+        // High-water evidence: a later failed retry never undoes a pass.
         await tx.stepProgress.upsert({
           where: {
-            studentId_stepId: { studentId: req.user.sub, stepId: b.lessonStepId },
+            studentId_stepId: { studentId: req.user.sub, stepId: link.stepId },
           },
           create: {
             studentId: req.user.sub,
-            stepId: b.lessonStepId,
+            stepId: link.stepId,
             status: isCompleted ? "COMPLETED" : "IN_PROGRESS",
             progressValue: isCompleted ? 100 : 50,
-            completedAt: isCompleted ? new Date() : null,
+            startedAt: now,
+            completedAt: isCompleted ? now : null,
           },
-          update: {
-            status: isCompleted ? "COMPLETED" : "IN_PROGRESS",
-            progressValue: isCompleted ? 100 : 50,
-            completedAt: isCompleted ? new Date() : null,
-          },
+          update: saved?.status === "COMPLETED"
+            ? { startedAt: saved.startedAt ?? now }
+            : {
+                status: isCompleted ? "COMPLETED" : "IN_PROGRESS",
+                progressValue: isCompleted ? 100 : 50,
+                startedAt: saved?.startedAt ?? now,
+                completedAt: isCompleted ? now : null,
+              },
         });
-        if (step) {
-          pathway = await this.studentPathway(step.lessonId, req.user.sub, tx);
-        }
+        await projectLesson(tx, req.user.sub, link.lessonId);
+        pathway = await this.studentPathway(link.lessonId, req.user.sub, tx);
       }
-
-      const old = await tx.progress.findUnique({
-        where: {
-          studentId_contentId: { studentId: req.user.sub, contentId: c.labId },
-        },
-      });
-      const score =
-        normalizedVerdict === "passed"
-          ? 100
-          : normalizedVerdict === "partial"
-            ? 50
-            : 0;
-      await tx.progress.upsert({
-        where: {
-          studentId_contentId: { studentId: req.user.sub, contentId: c.labId },
-        },
-        create: {
-          studentId: req.user.sub,
-          contentId: c.labId,
-          status: score === 100 ? "completed" : "in_progress",
-          score,
-          attemptsCount: 1,
-        },
-        update: {
-          attemptsCount: { increment: 1 },
-          score: Math.max(old?.score ?? 0, score),
-          status:
-            old?.status === "completed" || score === 100
-              ? "completed"
-              : "in_progress",
-        },
-      });
+      await projectLab(tx, req.user.sub, c.labId);
       return {
         ...a,
         attempt: {
@@ -1591,6 +1538,25 @@ export class ApiController {
         retryGuidance: this.circuitRetryGuidance(normalizedVerdict, result),
       };
     });
+  }
+  private async practicalStepLink(
+    lessonStepId: string | undefined,
+    challenge: { id: string; labId: string },
+    studentId: string,
+    db: any,
+  ) {
+    if (!lessonStepId) return null;
+    const step = await db.lessonStep.findUnique({ where: { id: lessonStepId } });
+    const config = step?.config as any;
+    const matches =
+      (step?.type === "LAB" && config?.labId === challenge.labId) ||
+      (step?.type === "CHALLENGE" && config?.challengeId === challenge.id);
+    if (!step || !matches) throw new NotFoundException("Bước thực hành không tồn tại");
+    const pathway = await this.studentPathway(step.lessonId, studentId, db);
+    const current = pathway.steps.find((item: any) => item.id === step.id);
+    if (!current || current.state === "LOCKED")
+      throw new ForbiddenException("Bước thực hành chưa khả dụng");
+    return { stepId: step.id as string, lessonId: step.lessonId as string, assignmentId: pathway.assignment.id as string };
   }
   @Roles("STUDENT") @Get("attempts") attempts(@Req() req: any) {
     return this.db.attempt.findMany({
@@ -1646,10 +1612,11 @@ export class ApiController {
             } as any,
           },
         });
-        await tx.progress.updateMany({
-          where: { studentId: req.user.sub, contentId: a.challenge.labId },
-          data: { lastHintLevel: level },
-        });
+        await projectLab(tx, req.user.sub, a.challenge.labId);
+        if (a.lessonStepId) {
+          const step = await tx.lessonStep.findUnique({ where: { id: a.lessonStepId }, select: { lessonId: true } });
+          if (step) await projectLesson(tx, req.user.sub, step.lessonId);
+        }
         return h;
       },
       { timeout: 20000 },
@@ -1712,6 +1679,327 @@ export class ApiController {
       }),
     ]);
     return { progress, attempts };
+  }
+  @Roles("STUDENT")
+  @Get("me/progress")
+  @ApiOperation({ summary: "Official progress for the authenticated student, derived from source evidence" })
+  async myProgress(@Req() req: any) {
+    const studentId = req.user.sub;
+    const now = new Date();
+    const assignments = (
+      await this.db.assignment.findMany({
+        where: {
+          status: "ACTIVE",
+          contentType: "lesson",
+          classroom: { enrollments: { some: { studentId, approved: true } } },
+        },
+        orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      })
+    ).filter((item) => {
+      const targets = item.studentIds as string[];
+      return !targets.length || targets.includes(studentId);
+    });
+    const lessonIds = [...new Set(assignments.map((item) => item.contentId))];
+    // One parallel batch: each sequential round trip to the database costs the most here.
+    const [lessons, stepProgress, quizEvidence, practicalEvidence, quizAttempts, practicalAttempts, passedPracticals, latestQuiz, latestPractical] = await Promise.all([
+      this.db.lesson.findMany({
+        where: { id: { in: lessonIds }, status: "published" },
+        include: { subject: true, steps: { orderBy: { position: "asc" } } },
+      }),
+      this.db.stepProgress.findMany({ where: { studentId, step: { lessonId: { in: lessonIds } } } }),
+      this.db.quizAttempt.findMany({
+        where: { studentId, lessonId: { in: lessonIds } },
+        select: { id: true, stepId: true, lessonId: true, assignmentId: true, score: true, passed: true, createdAt: true },
+      }),
+      this.db.attempt.findMany({
+        where: { studentId, lessonStepId: { not: null } },
+        select: { id: true, challengeId: true, lessonStepId: true, assignmentId: true, verdict: true, createdAt: true },
+      }),
+      this.db.quizAttempt.count({ where: { studentId } }),
+      this.db.attempt.count({ where: { studentId } }),
+      this.db.attempt.count({ where: { studentId, verdict: "passed" } }),
+      this.db.quizAttempt.findFirst({ where: { studentId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { createdAt: true } }),
+      this.db.attempt.findFirst({ where: { studentId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { createdAt: true } }),
+    ]);
+    const derivedByLesson = new Map<string, ReturnType<typeof deriveLesson> | null>();
+    for (const lesson of lessons) {
+      const stepIds = new Set(lesson.steps.map((step) => step.id));
+      const evidence = {
+        stepProgress: stepProgress.filter((item) => stepIds.has(item.stepId)) as any,
+        quizAttempts: quizEvidence.filter((item) => item.lessonId === lesson.id),
+        attempts: practicalEvidence.filter((item) => stepIds.has(item.lessonStepId!)).map((item) => ({ ...item, hintLevel: 0 })),
+      };
+      try {
+        derivedByLesson.set(lesson.id, deriveLesson(lesson.steps as any, evidence));
+      } catch {
+        derivedByLesson.set(lesson.id, null);
+      }
+    }
+    const items = assignments.flatMap((assignment) => {
+      const lesson = lessons.find((item) => item.id === assignment.contentId);
+      const derived = lesson ? derivedByLesson.get(lesson.id) : null;
+      if (!lesson || !derived) return [];
+      const quizStep = derived.steps.find((step) => step.type === "QUIZ");
+      const practicalStep = derived.steps.find((step) => step.type === "LAB") ?? derived.steps.find((step) => step.type === "CHALLENGE");
+      return [{
+        assignmentId: assignment.id,
+        lessonId: lesson.id,
+        title: assignment.title,
+        lessonTitle: lesson.title,
+        subject: { id: lesson.subject.id, name: lesson.subject.name },
+        chapter: lesson.chapter,
+        dueDate: assignment.dueDate.toISOString(),
+        overdue: assignment.dueDate < now,
+        completed: derived.completed,
+        completedRequired: derived.completedRequired,
+        totalRequired: derived.totalRequired,
+        percent: derived.percent,
+        nextStepId: derived.nextStepId,
+        quiz: quizStep?.quiz ?? null,
+        practical: practicalStep?.practical ?? null,
+        updatedAt: derived.updatedAt,
+        steps: derived.steps,
+      }];
+    });
+    const timestamps = [
+      ...items.map((item) => item.updatedAt),
+      latestQuiz?.createdAt.toISOString(),
+      latestPractical?.createdAt.toISOString(),
+    ].filter((value): value is string => Boolean(value)).sort();
+    return {
+      assignments: items,
+      summary: {
+        activeAssignments: items.length,
+        completedAssignments: items.filter((item) => item.completed).length,
+        remainingRequiredSteps: items.reduce((sum, item) => sum + item.totalRequired - item.completedRequired, 0),
+        quizAttempts,
+        practicalAttempts,
+        passedPracticals,
+        updatedAt: timestamps.at(-1) ?? null,
+      },
+      generatedAt: now.toISOString(),
+    };
+  }
+  @Roles("STUDENT")
+  @Get("me/activity")
+  @ApiOperation({ summary: "Newest-first page of the authenticated student's quiz and practical attempts" })
+  async myActivity(@Req() req: any, @Query() query: unknown) {
+    const studentId = req.user.sub;
+    const q = z
+      .object({
+        cursor: z.string().max(200).optional(),
+        limit: z.coerce.number().int().min(1).max(50).default(20),
+        stepId: z.string().min(1).max(200).optional(),
+        kind: z.enum(["QUIZ", "PRACTICAL"]).optional(),
+      })
+      .strict()
+      .parse(query);
+    let cursor;
+    try {
+      cursor = decodeCursor(q.cursor);
+    } catch {
+      throw new BadRequestException({ code: "INVALID_CURSOR", message: "Con trỏ phân trang không hợp lệ" });
+    }
+    const before = cursor
+      ? { OR: [{ createdAt: { lt: new Date(cursor.t) } }, { createdAt: new Date(cursor.t), id: { lt: cursor.id } }] }
+      : {};
+    const orderBy = [{ createdAt: "desc" as const }, { id: "desc" as const }];
+    const [quiz, practical] = await Promise.all([
+      q.kind === "PRACTICAL"
+        ? []
+        : this.db.quizAttempt.findMany({
+            where: { studentId, ...(q.stepId ? { stepId: q.stepId } : {}), ...before },
+            orderBy,
+            take: q.limit + 1,
+            select: { id: true, lessonId: true, stepId: true, assignmentId: true, score: true, passed: true, createdAt: true },
+          }),
+      q.kind === "QUIZ"
+        ? []
+        : this.db.attempt.findMany({
+            where: { studentId, ...(q.stepId ? { lessonStepId: q.stepId } : {}), ...before },
+            orderBy,
+            take: q.limit + 1,
+            select: {
+              id: true,
+              challengeId: true,
+              lessonStepId: true,
+              assignmentId: true,
+              verdict: true,
+              createdAt: true,
+              challenge: { select: { lab: { select: { id: true, title: true } } } },
+            },
+          }),
+    ]);
+    const page = mergeActivityPage<any>(
+      [quiz.map((item) => ({ ...item, kind: "QUIZ" })), practical.map((item) => ({ ...item, kind: "PRACTICAL" }))],
+      q.limit,
+    );
+    const stepIds = [...new Set(page.items.map((item: any) => item.stepId ?? item.lessonStepId).filter(Boolean))] as string[];
+    const quizLessonIds = [...new Set(page.items.map((item: any) => item.lessonId).filter(Boolean))] as string[];
+    const [steps, quizLessons] = await Promise.all([
+      this.db.lessonStep.findMany({
+        where: { id: { in: stepIds } },
+        select: { id: true, lessonId: true, type: true, lesson: { select: { id: true, title: true, status: true } } },
+      }),
+      this.db.lesson.findMany({ where: { id: { in: quizLessonIds } }, select: { id: true, title: true, status: true } }),
+    ]);
+    const lessons = [...quizLessons, ...steps.map((step) => step.lesson)];
+    return {
+      items: page.items.map((item: any) => {
+        if (item.kind === "QUIZ") {
+          const step = steps.find((entry) => entry.id === item.stepId);
+          const lesson = lessons.find((entry) => entry.id === item.lessonId);
+          return {
+            id: item.id,
+            kind: "QUIZ" as const,
+            lessonId: item.lessonId,
+            stepId: item.stepId,
+            stepType: step?.type ?? "QUIZ",
+            assignmentId: item.assignmentId,
+            title: lesson?.title ?? "Bài học không còn khả dụng",
+            occurredAt: item.createdAt.toISOString(),
+            score: item.score,
+            passed: item.passed,
+            verdict: null,
+            sourceAvailable: Boolean(step && lesson?.status === "published"),
+            legacy: !item.assignmentId,
+          };
+        }
+        const step = steps.find((entry) => entry.id === item.lessonStepId);
+        const lesson = step ? lessons.find((entry) => entry.id === step.lessonId) : undefined;
+        const verdict = normalizeVerdict(item.verdict);
+        return {
+          id: item.id,
+          kind: "PRACTICAL" as const,
+          lessonId: step?.lessonId ?? null,
+          stepId: item.lessonStepId,
+          stepType: step?.type ?? null,
+          assignmentId: item.assignmentId,
+          challengeId: item.challengeId,
+          title: lesson?.title ?? item.challenge.lab.title,
+          labTitle: item.challenge.lab.title,
+          occurredAt: item.createdAt.toISOString(),
+          score: null,
+          passed: verdict === "passed",
+          verdict,
+          sourceAvailable: Boolean(step && lesson?.status === "published"),
+          legacy: !item.lessonStepId || !step || verdict !== item.verdict,
+        };
+      }),
+      nextCursor: page.nextCursor,
+    };
+  }
+  /** Unknown and foreign IDs share one response; probing another student's record is logged without exposing it. */
+  private async evidenceNotFound(kind: "quiz_attempt" | "attempt", id: string, actorId: string): Promise<never> {
+    const exists =
+      kind === "quiz_attempt"
+        ? await this.db.quizAttempt.count({ where: { id } })
+        : await this.db.attempt.count({ where: { id } });
+    if (exists)
+      console.warn(JSON.stringify({ event: "evidence_access_denied", resource: kind, actorId, at: new Date().toISOString() }));
+    throw new NotFoundException({ code: "EVIDENCE_NOT_FOUND", message: "Không tìm thấy bản ghi" });
+  }
+  @Roles("STUDENT")
+  @Get("me/quiz-attempts/:id")
+  @ApiOperation({ summary: "One quiz attempt of the authenticated student" })
+  async myQuizAttempt(@Param("id") id: string, @Req() req: any) {
+    const studentId = req.user.sub;
+    const attempt = await this.db.quizAttempt.findFirst({ where: { id, studentId } });
+    if (!attempt) return this.evidenceNotFound("quiz_attempt", id, studentId);
+    const [siblings, lesson, step] = await Promise.all([
+      this.db.quizAttempt.findMany({
+        where: { studentId, stepId: attempt.stepId },
+        select: { id: true, stepId: true, lessonId: true, assignmentId: true, score: true, passed: true, createdAt: true },
+      }),
+      this.db.lesson.findUnique({ where: { id: attempt.lessonId }, select: { id: true, title: true, status: true } }),
+      this.db.lessonStep.findUnique({ where: { id: attempt.stepId }, select: { id: true } }),
+    ]);
+    const summary = quizSummary(siblings)!;
+    const ordered = [...siblings].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : 1));
+    const snapshot = attempt.questionSnapshot as any[];
+    const answers = attempt.answers as Array<{ questionId: string; optionId: string }>;
+    return {
+      id: attempt.id,
+      kind: "QUIZ" as const,
+      lessonId: attempt.lessonId,
+      lessonTitle: lesson?.title ?? "Bài học không còn khả dụng",
+      stepId: attempt.stepId,
+      assignmentId: attempt.assignmentId,
+      sourceAvailable: Boolean(step && lesson?.status === "published"),
+      createdAt: attempt.createdAt.toISOString(),
+      attemptNumber: ordered.findIndex((item) => item.id === attempt.id) + 1,
+      totalAttempts: ordered.length,
+      latest: summary.latest.attemptId === attempt.id,
+      best: summary.best.attemptId === attempt.id,
+      score: attempt.score,
+      passed: attempt.passed,
+      passThreshold: 50,
+      correctCount: attempt.correctCount,
+      questionCount: attempt.questionCount,
+      // Allowed feedback only: the student's own choice and correctness, never the answer key.
+      results: snapshot.map((question) => {
+        const answer = answers.find((item) => item.questionId === question.id);
+        const selected = question.options.find((option: any) => option.id === answer?.optionId);
+        return {
+          questionId: question.id,
+          prompt: question.prompt,
+          selectedOptionText: selected?.text ?? "",
+          correct: answer?.optionId === question.answerOptionId,
+        };
+      }),
+    };
+  }
+  @Roles("STUDENT")
+  @Get("me/attempts/:id")
+  @ApiOperation({ summary: "One practical attempt of the authenticated student" })
+  async myAttempt(@Param("id") id: string, @Req() req: any) {
+    const studentId = req.user.sub;
+    const attempt = await this.db.attempt.findFirst({
+      where: { id, studentId },
+      include: { challenge: { include: { lab: true } }, hints: { select: { level: true, createdAt: true }, orderBy: { level: "asc" } } },
+    });
+    if (!attempt) return this.evidenceNotFound("attempt", id, studentId);
+    const step = attempt.lessonStepId
+      ? await this.db.lessonStep.findUnique({ where: { id: attempt.lessonStepId }, select: { id: true, type: true, lessonId: true } })
+      : null;
+    const lesson = step ? await this.db.lesson.findUnique({ where: { id: step.lessonId }, select: { id: true, title: true, status: true } }) : null;
+    const attemptNumber = await this.db.attempt.count({
+      where: {
+        studentId,
+        challengeId: attempt.challengeId,
+        OR: [{ createdAt: { lt: attempt.createdAt } }, { createdAt: attempt.createdAt, id: { lte: attempt.id } }],
+      },
+    });
+    const verdict = normalizeVerdict(attempt.verdict);
+    const result = attempt.simulationResult as any;
+    return {
+      id: attempt.id,
+      kind: "PRACTICAL" as const,
+      challengeId: attempt.challengeId,
+      challengeObjective: attempt.challenge.objective,
+      labId: attempt.challenge.labId,
+      labTitle: attempt.challenge.lab.title,
+      lessonId: step?.lessonId ?? null,
+      lessonTitle: lesson?.title ?? null,
+      stepId: attempt.lessonStepId,
+      stepType: step?.type ?? null,
+      assignmentId: attempt.assignmentId,
+      sourceAvailable: Boolean(step && lesson?.status === "published"),
+      legacy: !attempt.lessonStepId || !step || verdict !== attempt.verdict,
+      createdAt: attempt.createdAt.toISOString(),
+      attemptNumber,
+      verdict,
+      durationMs: attempt.durationMs,
+      simulationModelVersion: attempt.simulationModelVersion,
+      // Server-recomputed outcome context; the verdict is the official result.
+      outcome: {
+        status: typeof result?.status === "string" ? result.status : null,
+        currentMa: typeof result?.currentMa === "number" ? result.currentMa : null,
+        ledState: typeof result?.ledState === "string" ? result.ledState : null,
+      },
+      retryGuidance: this.circuitRetryGuidance(verdict ?? "needs_practice", result),
+      hintLevels: attempt.hints.map((hint) => hint.level),
+    };
   }
   @Roles("STUDENT") @Post("parent-code") async parentCode(@Req() req: any) {
     const linkCode = token();
