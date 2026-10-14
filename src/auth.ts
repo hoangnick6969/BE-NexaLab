@@ -63,14 +63,18 @@ export class AuthGuard implements CanActivate {
         kind: "refresh",
         expiresAt: { gt: new Date() },
       },
+      select: {
+        user: {
+          select: { role: true, status: true, mustChangePassword: true },
+        },
+      },
     });
     if (!session)
       throw new UnauthorizedException("Phiên đã hết hạn hoặc bị thu hồi");
-    const user = await this.db.user.findUnique({
-      where: { id: req.user.sub },
-      select: { role: true, status: true, mustChangePassword: true },
-    });
-    if (!user) throw new UnauthorizedException("Tài khoản không còn tồn tại");
+    // Fetch the session and its owner in one database round trip. This keeps
+    // revocation/status checks authoritative while avoiding a second remote
+    // query on every authenticated request.
+    const user = session.user;
     if (user.status !== "active")
       throw new UnauthorizedException("Tài khoản đã bị khóa");
     req.user.role = user.role;

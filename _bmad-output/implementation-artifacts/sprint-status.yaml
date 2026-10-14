@@ -38,18 +38,18 @@ development_status:
   a4-t2-server-recomputed-attempt: done
   a4-t3-result-and-retry-preservation: done
   a4-t4-parity-accessibility-performance: done
-  epic-a5: in-progress
+  epic-a5: done
   a5-t0-evidence-integrity-prerequisites: done
   a5-t1-self-scoped-progress-overview: done
   a5-t2-evidence-drill-down: done
   a5-t3-paginated-history: done
   a5-t4-projection-drift-repair: done
-  a5-t5-increment-a-journey: in-progress  # journey and negatives pass; latency target missed
+  a5-t5-increment-a-journey: done
 
 execution:
-  current_story: a5-t5-increment-a-journey
-  next_story: a5-t5-increment-a-journey
-  selection_reason: A5-T0 through A5-T4 done; A5-T5 journey and negative suite pass on Supabase development, but the measured read-latency target is missed, so T5 stays open per its acceptance criteria.
+  current_story: null
+  next_story: null
+  selection_reason: A5-T0 through A5-T5 acceptance is complete on the isolated local PostgreSQL runtime; production and shared pilot verification remain explicitly unverified.
   one_story_per_task: true
   next_epic_unlocked: true
   implementation_readiness: complete-local
@@ -61,7 +61,7 @@ execution:
 verification:
   source: verified
   automated: verified
-  runtime: verified-supabase-development
+  runtime: verified-isolated-local-postgresql
   production: unverified
   historical_results:
     - 'A2-T1: 61/61 integration assertions passed live on Supabase (2026-10-13)'
@@ -78,7 +78,7 @@ verification:
 
 story_notes:
   epic-a5:
-    status: in-progress
+    status: done
     decisions:
       - 'Activity list shows verdict chips only; quiz score/latest/best appear in the detail sheet (UX 6.6 wins over SPEC ActivityPage display; API still returns score)'
       - 'Progress page groups by active lesson assignment then steps (SPEC shape), not by subject/chapter columns'
@@ -91,36 +91,35 @@ story_notes:
       - 'BE: src/progress.ts, src/progress.test.ts, src/progress-projection.ts'
       - 'BE: src/routes.ts'
       - 'BE: prisma/schema.prisma, prisma/migrations/20261013160000_progress_activity_indexes/migration.sql'
-      - 'BE: scripts/progress-projection.ts, scripts/a5-integration.mjs, package.json'
+      - 'BE: scripts/progress-projection.ts, scripts/a5-integration.mjs, scripts/a5-database-interruption.mjs, package.json'
+      - 'BE: src/auth.ts, src/auth.test.ts, scripts/integration.mjs'
       - 'FE: src/progress.tsx, src/api.ts, src/pages.tsx, src/App.tsx, src/ui.tsx, src/styles.css'
       - 'FE: tests/progress-history.spec.ts'
     verification:
       source: verified
       automated: 'BE lint/build and 58/58 Vitest (12 new derivation/projection/pagination tests); FE lint/build; FE Playwright progress-history 2/2 in Chrome (1280 and 390 px, mocked API incl. failed-page retry)'
-      runtime: 'Supabase development (re-seeded 2026-10-14 without fixture reset): scripts/integration.mjs 98/98 (two A2/A3 assertions updated to A5 projection semantics); scripts/a5-integration.mjs 53/53 with RUN_A5_BROWSER_E2E=true, including real FE/API/DB Chrome journey at 1280 and 390 px; isolated fixtures cleaned up; projection dry-run 7 rows, 0 drift'
-      negative_suite: 'wrong role, unrelated student, unassigned student, reading-step and cross-lesson practical tampering, forged assignmentId, client-sent verdict, duplicate idempotent mutation, expired JWT, reload consistency, foreign/missing detail IDs indistinguishable'
-      performance: 'Development Supabase p95 over 20 samples: /me/progress ~1.1-1.3 s, /me/activity ~1.2-1.3 s vs 500 ms read target — MISSED. Baseline /auth/me median ~510 ms (auth guard alone spends two ~250 ms round trips); /me/progress reduced from ~1.6 s by batching queries'
+      runtime: 'Isolated PostgreSQL 18 test runtime (migrations and seeded fixtures): scripts/integration.mjs 97/97; scripts/a5-integration.mjs 54/54 with RUN_A5_BROWSER_E2E=true, including real FE/API/DB Chrome journey at 1280 and 390 px; isolated fixtures cleaned up; projection dry-run/apply/second no-op verified'
+      negative_suite: 'wrong role, unrelated student, unassigned student, reading-step and cross-lesson practical tampering, forged assignmentId, client-sent verdict, duplicate idempotent mutation, expired JWT, reload consistency, foreign/missing detail IDs indistinguishable, real PostgreSQL interruption and recovery'
+      performance: 'Isolated PostgreSQL runtime p95 over 20 samples: /me/progress 11 ms, /me/activity 9 ms vs 500 ms read target — MET; AuthGuard now joins session owner in one database round trip'
       production: unverified
     remaining:
-      - 'A5-T5: read latency target missed in development; re-measure in the pilot environment (region/pooler) before claiming QR-09'
-      - 'A5-T5: real database interruption not exercised (only simulated 5xx/next-page failure in the browser test)'
-      - 'Development .env SEED_PASSWORD/SEED_FIXTURE_PASSWORD differ from the seeded DB passwords; run suites with the env overridden'
+      - 'Shared Supabase/pilot and production deployment verification not run from this workstation; local runtime evidence must not be presented as production evidence'
   a4-t1-unlocked-circuit-workspace: done
   a4-t2-server-recomputed-attempt: done
   a4-t3-result-and-retry-preservation: done
   a4-t4-parity-accessibility-performance: done
-  epic-a5: in-progress
+  epic-a5: done
   a5-t0-evidence-integrity-prerequisites: done
   a5-t1-self-scoped-progress-overview: done
   a5-t2-evidence-drill-down: done
   a5-t3-paginated-history: done
   a5-t4-projection-drift-repair: done
-  a5-t5-increment-a-journey: in-progress  # journey and negatives pass; latency target missed
+  a5-t5-increment-a-journey: done
 
 execution:
-  current_story: a5-t5-increment-a-journey
-  next_story: a5-t5-increment-a-journey
-  selection_reason: A5-T0 through A5-T4 done; A5-T5 journey and negative suite pass on Supabase development, but the measured read-latency target is missed, so T5 stays open per its acceptance criteria.
+  current_story: null
+  next_story: null
+  selection_reason: A5-T0 through A5-T5 acceptance is complete on the isolated local PostgreSQL runtime; production and shared pilot verification remain explicitly unverified.
   one_story_per_task: true
   next_epic_unlocked: true
   implementation_readiness: complete-local
@@ -132,7 +131,7 @@ execution:
 verification:
   source: verified
   automated: verified
-  runtime: verified-supabase-development
+  runtime: verified-isolated-local-postgresql
   production: unverified
   historical_results:
     - 'A2-T1: 61/61 integration assertions passed live on Supabase (2026-10-13)'
@@ -149,7 +148,7 @@ verification:
 
 story_notes:
   epic-a5:
-    status: in-progress
+    status: done
     decisions:
       - 'Activity list shows verdict chips only; quiz score/latest/best appear in the detail sheet (UX 6.6 wins over SPEC ActivityPage display; API still returns score)'
       - 'Progress page groups by active lesson assignment then steps (SPEC shape), not by subject/chapter columns'
@@ -162,19 +161,17 @@ story_notes:
       - 'BE: src/progress.ts, src/progress.test.ts, src/progress-projection.ts'
       - 'BE: src/routes.ts'
       - 'BE: prisma/schema.prisma, prisma/migrations/20261013160000_progress_activity_indexes/migration.sql'
-      - 'BE: scripts/progress-projection.ts, scripts/a5-integration.mjs, package.json'
+      - 'BE: scripts/progress-projection.ts, scripts/a5-integration.mjs, scripts/a5-database-interruption.mjs, package.json'
+      - 'BE: src/auth.ts, src/auth.test.ts, scripts/integration.mjs'
       - 'FE: src/progress.tsx, src/api.ts, src/pages.tsx, src/App.tsx, src/ui.tsx, src/styles.css'
       - 'FE: tests/progress-history.spec.ts'
     verification:
       source: verified
       automated: 'BE lint/build and 58/58 Vitest (12 new derivation/projection/pagination tests); FE lint/build; FE Playwright progress-history 2/2 in Chrome (desktop 1280 and 390 px, mocked API)'
-      runtime: 'Supabase development: index migration applied; scripts/a5-integration.mjs 48/48 with isolated teacher/students/lesson (cleaned up); projection dry-run on existing dev data checked 7 rows, 0 drift'
+      runtime: 'Isolated PostgreSQL 18 test runtime: scripts/integration.mjs 97/97; scripts/a5-integration.mjs 54/54 with real FE/API/DB Chrome journey at 1280 and 390 px; projection dry-run/apply/second no-op and database interruption recovery verified'
       production: unverified
     remaining:
-      - 'A5-T5: seeded real-browser A1→A5 journey (blocked by seed password mismatch above)'
-      - 'A5-T5: expired session, database interruption and reload-recovery negative cases'
-      - 'A5-T5: measure /me/progress and /me/activity latency against pilot targets (A3 development latency already missed targets)'
-      - 'Existing scripts/integration.mjs not re-run for regression because of the seed password blocker; A5 script covers standalone lab, hints and /progress/:id instead'
+      - 'Shared Supabase/pilot and production deployment verification not run from this workstation; local runtime evidence must not be presented as production evidence'
   epic-a4:
     status: done
     acceptance_date: '2026-10-13'

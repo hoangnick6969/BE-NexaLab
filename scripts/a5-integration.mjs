@@ -48,7 +48,11 @@ const circuit = (resistance = 350, closed = true) => ({
   ],
 });
 function projection(args) {
-  const run = spawnSync("npx", ["tsx", "scripts/progress-projection.ts", ...args], { encoding: "utf8" });
+  const tsxCli = resolve("node_modules", "tsx", "dist", "cli.mjs");
+  const run = spawnSync(process.execPath, [tsxCli, "scripts/progress-projection.ts", ...args], { encoding: "utf8" });
+  // The projection CLI intentionally exits 2 when a dry-run finds drift.
+  if (run.status !== 0 && !(run.status === 2 && !args.includes("--apply")))
+    throw new Error(`Projection command failed: ${run.stderr || run.error?.message || "unknown error"}`);
   return JSON.parse(run.stdout);
 }
 
@@ -246,8 +250,10 @@ try {
     return Math.round(times.sort((a, b) => a - b)[Math.ceil(samples * 0.95) - 1]);
   }
   const latency = { "/me/progress": await p95("/me/progress"), "/me/activity": await p95("/me/activity?limit=20") };
+  const runtimeLabel = process.env.A5_RUNTIME_LABEL ?? "configured runtime";
   for (const [path, value] of Object.entries(latency))
-    console.log(`${value <= 500 ? "TARGET MET" : "TARGET MISSED"} ${path} p95 ${value} ms (target 500 ms, development Supabase)`);
+    console.log(`${value <= 500 ? "TARGET MET" : "TARGET MISSED"} ${path} p95 ${value} ms (target 500 ms, ${runtimeLabel})`);
+  check("A5 read endpoints meet the 500 ms p95 pilot target", Object.values(latency).every((value) => value <= 500), latency);
 
   // Regression: standalone lab practice, hints and the Teacher/Parent progress route.
   const standalone = await req("/attempts", "POST", { challengeId: "circuit_001", labState: circuit(100), durationMs: 100 }, peer.token);
@@ -264,7 +270,8 @@ try {
   // this script's fetch pool to be closed by the server.
   if (process.env.RUN_A5_BROWSER_E2E === "true") {
     const frontendRoot = process.env.FRONTEND_ROOT ?? [resolve("..", "nexalab-fe"), resolve("..", "FE-NexaLab")].find((path) => existsSync(path));
-    const run = spawnSync("npx", ["playwright", "test", "tests/progress-live.spec.ts", "--reporter=list"], {
+    const playwrightCli = resolve(frontendRoot, "node_modules", "@playwright", "test", "cli.js");
+    const run = spawnSync(process.execPath, [playwrightCli, "test", "tests/progress-live.spec.ts", "--reporter=list"], {
       cwd: frontendRoot,
       encoding: "utf8",
       env: {
