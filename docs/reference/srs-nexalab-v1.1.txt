@@ -1,0 +1,2029 @@
+
+=== PAGE 1 ===
+NexaLab — Software Requirement Specification
+Oct 8, 2026 · @Suong
+Document Information
+This SRS specifies Release 1 of NexaLab, a virtual science lab platform for lower-secondary (THCS) Natural Science. Scope and priorities follow the NexaLab PRD , the Release 1 baseline approved by the Product Owner on 12/10/2026. Detailed flows come from NexaLab — Use Case & Feature Specs v1.0 , whose IDs are kept so every requirement traces back to it. Where the two differ, the PRD wins; use cases outside the Release 1 increments are kept and labeled R1-later or Future.
+Item Value
+Product NexaLab
+Document Software Requirement Specification (SRS)
+Version 1.1 (draft)
+Source documents
+NexaLab PRD (Release 1 baseline, 12/10/2026); NexaLab Product Brief; Product Owner decisions (open-questions, 12/10/2026); Product idea and Discovery notes (evidence only, not decisions); NexaLab Use Case & Feature Specs v1.0; NexaLab Product Blueprint v1.1
+Team members
+To be filled in by the team
+
+=== PAGE 2 ===
+Class / Supervisor
+To be filled in by the team
+Identifier conventions
+Prefix Meaning Example
+UC-<module>-<nn> Use case UC-LAB-04
+FS-<layer>-<nn> Feature specification FS-L2-03
+FR-<nn> Functional requirement inside a feature FR-02
+AC-<nn> Acceptance criterion inside a feature AC-03
+BR-<nn> Global business rule BR-07
+NFR-<nn> Non-functional requirement NFR-02
+MSG-<nn> Application message MSG-05
+Use case modules: AUTH (accounts and authorization), CNT (content), CLS (classes), PRG (progress and profile), PAR (parent portal), 3D (3D models), LAB (virtual lab), CV (computer vision), AI (AI Tutor), ADM (administration).
+Product layers: L0 learning platform, L1 interactive 3D models, L2 virtual lab, L3 computer-vision control, L4 AI Tutor.
+Priority tiers
+
+=== PAGE 3 ===
+Tier Meaning Rule when time runs short
+P0 Product core
+Never cut
+P1 Should have Cut from the bottom of the list upward
+P2 Nice to have Cut first
+Cut order: P2, then P1 from the bottom up. P0 is never cut.
+Release increments
+Release 1 is one shared architecture delivered in increments (PRD §3). Each use case carries an increment, which says when it is delivered, and a priority, which says what is cut first within that increment.
+Increment Label in this SRS Scope
+Shared Foundation
+Foundation Role-aware identity and sessions, server-side RBAC and resource ownership, the shared domain (Teacher → Class → Student; Content → Assignment → Attempt → Progress), deterministic simulation, shared API, validation and error conventions
+Increment A — Student Learning Core
+A Provisioned student login, assigned learning, the lesson path with study cards and the quiz gate, one representative lab and challenge (Grade 8 circuit lab), retry, official progress and attempt history
+
+=== PAGE 4 ===
+Increment A — Minimal Operations
+A-min Only the operations needed to seed or manage a student, class, content item and assignment for the student flow; not the full Teacher or Admin UX
+Increment B — Teacher Operations
+B Full teacher UX: owned classes, membership, content and assignment operations, outcome and evidence review
+Increment C — Parent and Admin
+C Read-only linked-child progress; complete admin operations for users, content, labs and assets
+Release 1 labs outside Increment A
+R1-later The 3D human-eye model and the fixed Chemistry reactions. Both belong to the MVP direction (Product Brief) and are partly built, but the PRD has not yet assigned them to an increment
+Future Future Teacher AI Content Assistant, then Student AI Tutor; computer-vision gesture control (research); sandbox mode; saved experiments
+Increment A is delivered as five epics, each implemented only after the previous one passes runtime acceptance. Each epic SPEC is the canonical contract for its scope; this SRS follows them.
+Epic Title Use cases SRS functions
+A1 A provisioned student starts assigned learning
+UC-AUTH-02, 03, 07, UC-ADM-03, UC-CLS-01, 03, UC-PRG-01
+3.2, 3.5.1, 3.7.1, 3.7.2, 3.7.6
+
+=== PAGE 5 ===
+A2 A student learns from complete core materials
+UC-LRN-01 to 04 3.3.1 to 3.3.4
+A3 A student proves understanding and unlocks practice
+UC-PRG-02 3.3.5
+A4 A student practices, receives a verified verdict and retries
+UC-LAB-02 to 05, 07, 08 3.4
+A5 A student understands official progress and history
+UC-PRG-03 3.5.2
+A1 starts with authentication and session hardening, in the order A1-T0 data path → A1-T1 auth/session → A1-T2 assignment → A1-T3 student open → A1-T4 journey.
+I. Record of Changes
+Add one row per change, newest first. The "In charge" column is left for the team to fill in.
+Date A/M/D In charge
+Change description 12/10/2026 M
+Aligned with the Epic A1–A5 specs: added the epic map; renamed verdicts to passed, partial and needs_practice; added lock reasons, explicit reading completion, video heartbeat and resume, and the all-cards-visited rule; quiz with stable IDs, idempotent immutable attempts and per-question results; lab submission with idempotency, rate limit, server-derived identity and accessibility; one Progress page with /me routes, cursor history and projection rebuild; added LessonStep and StepProgress to the ERD; added NS-17,
+
+=== PAGE 6 ===
+BR-27 to BR-29, CR-11 to CR-13, MSG-46 and MSG-47; updated the open-questions checklist. 12/10/2026 M
+Applied the Product Brief, Product Owner decisions, idea and discovery notes: added the R1-later label and moved the 3D human-eye model (UC-3D-01 to 07) and the Chemistry lab (UC-LAB-06) from Future to R1-later; put the Teacher AI Content Assistant before the Student AI Tutor and noted the existing rules-based lab tutor; added teacher outcome review and analytics priorities; added deferred operational decisions (4.2.8) and the unverified textbook references (QR-08); regrouped the open questions (5.4.6). 12/10/2026 A
+Added section 3 (screen flow, 35 screens, screen authorization, non-screen functions, ERD and entities, features 3.2 to 3.10), section 4 (external interfaces and quality attributes) and section 5 (business rules BR-01 to BR-26, common requirements, messages MSG-01 to MSG-45, other requirements and open questions). 12/10/2026 M
+Aligned sections 1 and 2 with the NexaLab PRD (Release 1 baseline). Added release increments; labeled AI, 3D, CV, Chemistry lab and saved experiments as Future; changed student login to provisioned username with mandatory temporary-password change; added the lesson path, video and study-card use cases, UC-AUTH-07, UC-CNT-07 and UC-ADM-03; updated UC-AUTH-02/03/04/05, UC-CNT-01/04, UC-CLS-03/04, UC-PRG-01/02/03, UC-LAB-04/05 and UC-PAR-02. 08/10/2026 A
+Created the SRS from Use Case & Feature Specs v1.0. Added Document Information, Product Overview, Actors, Use Case Diagrams and Use Case Descriptions.
+A = Added, M = Modified, D = Deleted
+
+=== PAGE 7 ===
+II. Software Requirement Specification
+1. Product Overview
+NexaLab is a web-based learning platform for Vietnamese lower-secondary (THCS) Natural Science, aligned with the 2018 general education curriculum. It combines a familiar learning path with deterministic virtual labs and practical challenges, so students can learn, act, observe, retry and review evidence of their progress. It runs in the browser on desktop and mobile; no lab equipment or chemicals are needed.
+Release 1 closes two gaps. The practice gap: students need to do more than consume content. The diagnostic gap: the platform must keep trustworthy evidence that teachers can use later. Delivery is student-first: the first increment is usable by students, while identity, ownership and authorization support all four roles from the start.
+The platform serves four user roles. Students follow assigned lessons, take quizzes, run lab experiments and review their own progress. Teachers manage their own classes, assign content and review student evidence. Parents follow a linked child's progress in read-only mode. Admins manage users, content, subjects, labs and assets.
+The student loop is Learn → Quiz → Practice/Simulation → Challenge → Retry → Progress. Inside a lesson, the ordered path is Reading → Video → Study cards → Quiz → Lab/Practice → Challenge. Later steps stay visible but locked until the earlier gate is met, and the server, not the client, decides access and official completion.
+Two principles shape the system. First, only the deterministic Simulation Engine and Challenge Evaluator determine official results and verdicts; the backend recomputes every simulation, and client previews are never official. Second, every score, count or status shown to a user can be traced back to the content or attempts behind it.
+The Release 1 pilot runs in one school with up to two Grade 8 classes and at most 80 students; Grade 9 is a later direction. The Grade 8 electric-circuit lab is the representative lab and challenge for Increment A. The current product also has a human-eye model and fixed Chemistry reactions, which stay in Release 1 but are not yet assigned to an increment:
+Scenario What it demonstrates Release
+Physics — Electric circuits (Grade 8)
+The full student loop: lesson path, quiz gate, circuit building, server-side simulation, challenge with auto-grading, retry and progress
+Release 1, Increment A
+
+=== PAGE 8 ===
+Biology — Human eye
+Interactive 3D model with typed part labels Release 1, not yet assigned (R1-later). Hand-gesture control is Future research
+Chemistry — Virtual reactions
+The Simulation Engine in a second domain (six fixed reactions)
+Release 1, not yet assigned (R1-later)
+Not in Release 1 Increment A: AI features (Student AI Tutor, Teacher AI Content Assistant), leaderboards, gamification economies and advanced analytics. Out of scope for the whole MVP: full VR, mobile AR, multi-user experiments, AI-generated 3D models or challenges, fully adaptive learning paths, community forums, payments, scheduled parent reports and video transcoding.
+2. User Requirements
+2.1 Actors
+NexaLab has four human actors and eight system actors, four of which are Future. Abbreviations used in later tables: HS = Student, GV = Teacher, PH = Parent, AD = Admin, SIM = Simulation Engine, EVAL = Challenge Evaluator, CTX = AI Context Builder, AI = AI Tutor Service.
+Primary actors (human)
+# Actor Description Main goal Access boundary
+1 Student (HS)
+A THCS student (the Release 1 pilot uses Grade 8) on a laptop, tablet or phone. Logs in with a username and temporary password provisioned by a teacher or the school; cannot self-register and cannot reset the password by email.
+Complete assigned learning, practise in the lab and review own evidence
+Own assignments, attempts and progress only
+
+=== PAGE 9 ===
+2 Teacher (GV)
+A Natural Science teacher at THCS level, using an adult email account.
+Operate owned classes and act on student evidence
+Owned classes and enrolled students only
+3 Parent (PH)
+A guardian linked to a student through a parent-link code, using an adult email account.
+Understand a linked child's progress
+Read-only access to explicitly linked children
+4 Admin (AD)
+Operates users, content, labs and assets, using an adult email account.
+Manage users, subjects, content, labs and assets
+Administrative capability without bypassing audit or ownership rules
+Open question: the PRD does not say whether teachers may self-register (UC-AUTH-01). The team should confirm this.
+Secondary actors (system)
+# Actor Role Boundary Release
+5 Simulation Engine (SIM, packages/sim)
+Computes scientific results
+The single source of truth. Pure, deterministic, versioned code; the backend recomputes every result
+Release 1
+6 Challenge Evaluator (EVAL)
+Grades an attempt as passed, partial or needs_practice
+Grades only against successConditions; never calls an LLM
+Release 1
+7 Object Storage + CDN
+Stores and serves videos, uploaded files and 3D models
+Delivery only; no business logic Release 1
+
+=== PAGE 10 ===
+8 Managed PostgreSQL (Supabase)
+Stores all persistent data
+Accessed only by the backend through Prisma; Supabase Auth, browser database access and RLS are not used for authentication or authorization
+Release 1
+9 AI Context Builder (CTX)
+Packs lab state, simulation result and action history into a context JSON
+Does no scientific inference Future
+10 AI Tutor Service (AI)
+Calls the LLM and produces four-level hints
+Advisory only; never calculates or overrides result, verdict, score or progress Future
+11 LLM Provider External language model (Claude API or GPT)
+Called from the server only, never from the browser Future
+12 MediaPipe Hand Landmarker
+Detects 21 hand landmarks from the webcam
+Runs fully client-side; no video frame leaves the device Future
+Permission matrix
+Permission HS GV PH AD Increment
+Study assigned lessons, take quizzes, run labs and challenges
+✓ own assignments
+✓ preview
+— — A
+
+=== PAGE 11 ===
+View own progress and attempt history
+✓ — — — A
+Provision student accounts — ✓ own classes
+— ✓ A-min
+Create and publish lessons, study cards, quizzes and labs
+— ✓ — ✓ A-min, B
+Create classes and assign content
+— ✓ own classes
+— — A-min, B
+Review student outcomes and evidence (quiz scores and lab verdicts stay server-calculated)
+— ✓ own classes
+— — B
+View a child's progress — — ✓ linked children, read-only
+— C
+Manage users, subjects, labs and assets
+— — — ✓ C
+Configure simulation parameters
+— — — ✓ C
+Receive hints from the AI Tutor
+✓ — — — Future
+
+=== PAGE 12 ===
+All permission checks are enforced at the API layer, not only by hiding buttons in the UI (BR-01). A request sent directly to an endpoint must be blocked exactly as if the button were hidden.
+A class join code, a temporary password and a parent-link code are separate credentials with separate purposes.
+2.2 Use Cases
+2.2.1 Diagram(s)
+The overview below shows the ten modules inside the system boundary and the system actors that serve them. The detailed UML diagram for each module follows as PlantUML code; paste each block into PlantUML (plantuml.com or the draw.io / StarUML plugin) to export the images for the final report.
+[embed: node/b6829901-ceae]
+Release 1 increments cover eight modules plus most of the Lab. The 3D models and the Chemistry lab are in Release 1 but not yet assigned to an increment (R1-later). The AI Tutor and computer-vision control are Future, together with their three system actors. In the PlantUML code below, such use cases are marked "(R1-later)" or "(Future)".
+Module AUTHENTICATION
+@startuml left to right direction actor "Student" as HS actor "Teacher" as GV actor "Parent" as PH actor "Admin" as AD rectangle "AUTH - Accounts & Authorization" { usecase "UC-AUTH-01\nRegister teacher account" as A1 usecase "UC-AUTH-02\nProvision student account" as A2 usecase "UC-AUTH-03\nLog in / log out" as A3 usecase "UC-AUTH-04\nForgot (adult) / change password" as A4 usecase "UC-AUTH-05\nJoin class with class code" as A5 usecase "UC-AUTH-06\nLink parent to child" as A6 usecase "UC-AUTH-07\nChange temporary password" as A7 } GV -- A1 GV -- A2 AD -- A2 HS -- A3 GV -- A3 PH -- A3 AD -- A3 HS -- A4
+
+=== PAGE 13 ===
+GV -- A4 PH -- A4 AD -- A4 HS -- A5 PH -- A6 HS -- A7 A7 ..> A3 : <<extend>> @enduml
+Module LRN @startuml
+
+=== PAGE 14 ===
+left to right direction actor "Student" as HS actor "Object Storage + CDN" as OS rectangle "LRN - Learning Path" { usecase "UC-LRN-01\nFollow assigned lesson path" as N1 usecase "UC-LRN-02\nRead lesson content" as N2 usecase "UC-LRN-03\nWatch video / read transcript" as N3 usecase "UC-LRN-04\nStudy with study cards" as N4 usecase "UC-PRG-02\nTake quiz, pass quiz gate" as Q } HS -- N1 HS -- N2 HS -- N3 HS -- N4 HS -- Q N3 -- OS N1 ..> N2 : <<include>> N1 ..> N3 : <<include>> N1 ..> N4 : <<include>> N1 ..> Q : <<include>>
+
+=== PAGE 15 ===
+@enduml
+Module CNT
+@startuml left to right direction actor "Teacher" as GV actor "Admin" as AD rectangle "CNT - Content" { usecase "UC-CNT-01\nCreate lesson with metadata" as C1 usecase "UC-CNT-02\nUpload learning materials" as C2 usecase "UC-CNT-03\nWrite theory (rich text)" as C3 usecase "UC-CNT-04\nCreate multiple-choice quiz" as C4 usecase "UC-CNT-05\nAttach existing lab" as C5 usecase "UC-CNT-06\nChange content lifecycle" as C6 usecase "UC-CNT-07\nCreate study cards" as C7 } GV -- C1 GV -- C2
+
+=== PAGE 16 ===
+GV -- C3 GV -- C4 GV -- C5 GV -- C6 GV -- C7 AD -- C6 @enduml
+Module CLS
+
+=== PAGE 17 ===
+@startuml left to right direction actor "Teacher" as GV rectangle "CLS - Classes" { usecase "UC-CLS-01\nCreate class and join code" as L1 usecase "UC-CLS-02\nApprove / remove members" as L2 usecase "UC-CLS-03\nAssign work to class or group" as L3 usecase "UC-CLS-04\nView class tracking board" as L4 } GV -- L1 GV -- L2 GV -- L3 GV -- L4 @enduml
+
+=== PAGE 18 ===
+Module PRG, ADM and PAR
+@startuml left to right direction actor "Student" as HS actor "Teacher" as GV actor "Admin" as AD actor "Parent" as PH rectangle "PRG - Progress & Profile" { usecase "UC-PRG-01\nView dashboard and queue" as P1 usecase "UC-PRG-02\nTake quiz, pass quiz gate" as P2 usecase "UC-PRG-03\nView progress and attempt history" as P3 usecase "UC-PRG-04 (Future)\nSave experiment" as P4 usecase "UC-PRG-05 (Future)\nReopen saved experiment" as P5 } rectangle "ADM - Administration" { usecase "UC-ADM-01\nManage users, subjects, labs, assets" as D1 usecase "UC-ADM-02\nConfigure simulation parameters" as D2 usecase "UC-ADM-03\nProvision minimum journey data" as D3 } rectangle "PAR - Parent Portal" { usecase "UC-PAR-01\nView child's progress" as R1 usecase "UC-PAR-02\nView weekly / monthly report" as R2 } HS -- P1 HS -- P2 HS -- P3 HS -- P4 HS -- P5 P5 ..> P4 : <<extend>> AD -- D1 AD -- D2 AD -- D3 GV -- D3 PH -- R1 PH -- R2 R2 ..> R1 : <<extend>>
+
+=== PAGE 19 ===
+@enduml
+Module 3D (R1-later)
+@startuml left to right direction actor "Student" as HS actor "Teacher" as GV actor "Object Storage + CDN" as OS rectangle "3D - Interactive 3D Models" { usecase "UC-3D-01\nLoad and display 3D model" as T1 usecase "UC-3D-02\nRotate / zoom / pan" as T2 usecase "UC-3D-03\nExplode into parts" as T3 usecase "UC-3D-04\nShow / hide layers" as T4 usecase "UC-3D-05\nSelect part, read label" as T5 usecase "UC-3D-06\nClip with cutting plane" as T6 usecase "UC-3D-07\nPart-naming quiz mode" as T7 } HS -- T1 GV -- T1 T1 -- OS HS -- T2 HS -- T3 HS -- T4 HS -- T5 HS -- T6 HS -- T7 T2 ..> T1 : <<include>> T3 ..> T1 : <<include>> T4 ..> T1 : <<include>> T5 ..> T1 : <<include>> T6 ..> T1 : <<include>> T7 ..> T1 : <<include>>
+
+=== PAGE 20 ===
+@enduml
+Module LAB
+@startuml left to right direction actor "Student" as HS actor "Simulation Engine" as SIM actor "Challenge Evaluator" as EVAL rectangle "LAB - Virtual Lab" { usecase "UC-LAB-01 (Future)\nEnter lab in sandbox mode" as B1 usecase "UC-LAB-02\nBuild circuit on canvas" as B2 usecase "UC-LAB-03\nSet parameters" as B3 usecase "UC-LAB-04\nRun simulation" as B4 usecase "UC-LAB-05\nTake challenge, auto-graded" as B5 usecase "UC-LAB-06 (R1-later)\nPerform chemistry reaction" as B6 usecase "UC-LAB-07\nBlock out-of-range parameters" as B7 usecase "UC-LAB-08\nClient preview, server grading" as B8
+
+=== PAGE 21 ===
+} HS -- B1 HS -- B2 HS -- B3 HS -- B4 HS -- B5 HS -- B6 B4 -- SIM B7 -- SIM B8 -- SIM B5 -- EVAL B5 ..> B2 : <<include>> B5 ..> B3 : <<include>> B5 ..> B4 : <<include>> B4 ..> B8 : <<include>> B7 ..> B4 : <<extend>> B6 ..> B4 : <<include>> @enduml
+Module CV (Future)
+@startuml left to right direction actor "Student" as HS actor "MediaPipe Hand Landmarker" as MP rectangle "CV - Computer Vision Control" { usecase "UC-CV-01\nGrant camera permission" as V1 usecase "UC-CV-02\nControl model by hand gestures" as V2
+
+=== PAGE 22 ===
+usecase "UC-CV-03\nContinue with mouse / keyboard" as V3 } HS -- V1 HS -- V2 HS -- V3 V2 -- MP V2 ..> V1 : <<include>> V3 ..> V2 : <<extend>> @enduml
+Module AI (Future)
+@startuml left to right direction actor "Student" as HS actor "Teacher" as GV actor "AI Context Builder" as CTX actor "AI Tutor Service" as AIS actor "LLM Provider" as LLM rectangle "AI - AI Tutor" { usecase "UC-AI-01\nBuild context from lab state" as I1 usecase "UC-AI-02\nRequest a hint" as I2 usecase "UC-AI-03\nEscalate hint level" as I3 usecase "UC-AI-04\nLog HintLog" as I4 usecase "UC-AI-05\nDetect misconceptions" as I5 usecase "UC-AI-06\nView class-wide AI summary" as I6 usecase "UC-AI-07\nTrace insight to source" as I7 usecase "UC-AI-08\nBlock out-of-curriculum questions" as I8 usecase "UC-AI-09\nRate-limit and cache hints" as I9 } HS -- I2 GV -- I6 GV -- I7 I1 -- CTX
+
+=== PAGE 23 ===
+I2 -- AIS I2 -- LLM I3 -- AIS I4 -- AIS I5 -- AIS I8 -- AIS I9 -- AIS I2 ..> I1 : <<include>> I2 ..> I4 : <<include>> I2 ..> I9 : <<include>> I3 ..> I2 : <<extend>> I8 ..> I2 : <<extend>> I7 ..> I6 : <<extend>> @enduml
+2.2.2 Use Case Descriptions
+NexaLab has 59 use cases across eleven modules. 36 are scheduled in Release 1 increments: 3 Foundation, 14 Increment A, 11 minimal operations for Increment A (A-min), 3 Increment B and 5 Increment C. 8 are Release 1 labs not yet assigned to an increment (R1-later: the 3D human-eye model and the Chemistry lab). The other 15 are Future. Twelve use cases that define the product's value carry a full specification with main, alternative and exception flows; the rest use the standard five-field table.
+Use case catalogue
+
+=== PAGE 24 ===
+ID Use case Actor(s) Increment Priority Feature UC-AUTH-01
+Register teacher account GV Foundation
+P0 FS-L0-01 UC-AUTH-02
+Provision student account with username and temporary password
+GV, AD A-min P0 FS-L0-01 UC-AUTH-03
+Log in / log out All Foundation
+P0 FS-L0-01 UC-AUTH-04
+Forgot password (adult accounts) / change password
+All Foundation
+P0 FS-L0-01 UC-AUTH-05
+Join a class with a class code HS B P0 FS-L0-01 UC-AUTH-06
+Link parent to child with a link code
+PH C P2 FS-L0-01, FS-L0-05 UC-AUTH-07
+Change temporary password on first login
+HS A P0 FS-L0-01 UC-LRN-01
+Follow the assigned lesson path with step gates
+HS A P0 FS-L0-02
+
+=== PAGE 25 ===
+UC-LRN-02
+Read lesson content HS A P0 FS-L0-02 UC-LRN-03
+Watch lesson video or read the transcript fallback
+HS A P0 FS-L0-02 UC-LRN-04
+Study with study cards HS A P0 FS-L0-02 UC-CNT-01
+Create a lesson with required metadata
+GV A-min P0 FS-L0-02 UC-CNT-02
+Upload learning materials (video, PDF, image)
+GV A-min P0 FS-L0-02 UC-CNT-03
+Write theory in the rich-text editor GV A-min P0 FS-L0-02 UC-CNT-04
+Create a multiple-choice quiz GV A-min P0 FS-L0-02 UC-CNT-05
+Attach an existing lab to a lesson GV A-min P0 FS-L0-02 UC-CNT-06
+Change content lifecycle: draft → published → archived
+GV, AD A-min P0 FS-L0-02
+
+=== PAGE 26 ===
+UC-CNT-07
+Create study cards GV A-min P0 FS-L0-02 UC-CLS-01
+Create a class and generate a join code
+GV A-min P0 FS-L0-03 UC-CLS-02
+Approve / remove class members GV B P0 FS-L0-03 UC-CLS-03
+Assign work to a class or group with a due date
+GV A-min P0 FS-L0-03 UC-CLS-04
+View class tracking board and review outcomes
+GV B P0 FS-L0-03 UC-PRG-01
+View personal dashboard and assignment queue
+HS A P0 FS-L0-04 UC-PRG-02
+Take a quiz and pass the quiz gate
+HS A P0 FS-L0-02 UC-PRG-03
+View progress and attempt history with evidence drill-down
+HS A P0 FS-L0-04 UC-PRG-04
+Save an experiment HS Future P1 FS-L0-04
+
+=== PAGE 27 ===
+UC-PRG-05
+Reopen a saved experiment HS Future P1 FS-L0-04 UC-ADM-01
+Manage users, subjects, labs and 3D assets (CRUD)
+AD C P0 FS-L0-01, FS-L1-02 UC-ADM-02
+Configure simulation parameters AD C P1 FS-L2-01 UC-ADM-03
+Provision minimum data for the student journey
+GV, AD A-min P0 FS-L0-03 UC-PAR-01
+View child's progress (read-only) PH C P2 FS-L0-05 UC-PAR-02
+View weekly/monthly report generated on open
+PH C P2 FS-L0-05 UC-3D-01
+Load and display a lesson's 3D model
+HS, GV R1-later P0 FS-L1-01 UC-3D-02
+Rotate / zoom / pan the model HS R1-later P0 FS-L1-01 UC-3D-03
+Explode the model into parts HS R1-later P0 FS-L1-01
+
+=== PAGE 28 ===
+UC-3D-04
+Show / hide structural layers HS R1-later P1 FS-L1-01 UC-3D-05
+Select a part and read its label and function
+HS R1-later P0 FS-L1-01 UC-3D-06
+Clip with a cutting plane to view a cross-section
+HS R1-later P0 FS-L1-01 UC-3D-07
+Take the part-naming quiz with auto-grading
+HS R1-later P1 FS-L1-01 UC-LAB-01
+Enter a lab in sandbox mode HS Future P0 FS-L2-02 UC-LAB-02
+Build a circuit on the canvas HS A P0 FS-L2-02 UC-LAB-03
+Set parameters for components / substances
+HS A P0 FS-L2-02, FS-L2-04 UC-LAB-04
+Run the simulation and observe the result
+HS, SIM A P0 FS-L2-01 UC-LAB-05
+Take a challenge and get auto-graded in three states
+HS, EVAL
+A P0 FS-L2-03
+
+=== PAGE 29 ===
+UC-LAB-06
+Perform a reaction in the Chemistry lab (6 fixed reactions)
+HS R1-later P1 FS-L2-04 UC-LAB-07
+Block / warn on out-of-range parameters
+SIM A P0 FS-L2-01 UC-LAB-08
+Instant preview on client, official grading on server
+HS, SIM A P0 FS-L2-01 UC-CV-01
+Grant camera permission per session
+HS Future P2 FS-L3-01 UC-CV-02
+Control the human-eye model with hand gestures
+HS Future P2 FS-L3-01 UC-CV-03
+Continue with mouse/keyboard when camera is denied or lost
+HS Future P2 FS-L3-01
+UC-AI-01 Build AI context from the lab state CTX Future P0 FS-L4-01
+UC-AI-02 Request a hint and receive it at the allowed level
+HS, AI Future P0 FS-L4-02
+UC-AI-03 Escalate hint level when the student has retried
+AI Future P0 FS-L4-02
+UC-AI-04 Log full context and response in HintLog
+AI Future P0 FS-L4-02
+
+=== PAGE 30 ===
+UC-AI-05 Detect misconceptions with a fixed rule set
+AI Future P1 FS-L4-03
+UC-AI-06 View class-wide AI summary GV Future P1 FS-L4-04
+UC-AI-07 Trace an AI insight back to its Attempt/HintLog
+GV Future P1 FS-L4-04
+UC-AI-08 Block questions outside the curriculum
+AI Future P0 FS-L4-02
+UC-AI-09 Rate-limit and cache hints AI Future P0 FS-L4-02
+The Teacher AI Content Assistant (PRD FR-21) is Future and comes before the Student AI Tutor. It has no use case yet; its intended scope is described in 3.10.
+The Teacher AI Content Assistant (PRD FR-21) is also Future. It has no use case yet because the Use Case Specs do not describe it.
+Module AUTH — Accounts & Authorization
+Release: UC-AUTH-01, 03 and 04 are Foundation; UC-AUTH-02 is A-min; UC-AUTH-07 is A; UC-AUTH-05 is B; UC-AUTH-06 is C.
+UC-AUTH-01: Register Teacher Account
+Field Description
+Objective Allow a teacher to create a teacher account.
+Actor(s) Teacher
+
+=== PAGE 31 ===
+Priority P0
+Trigger Teacher clicks "Register" on the public sign-up page and chooses the Teacher role.
+Pre-condition The email is not yet registered. Post-condition
+A User record with role = TEACHER is created and the teacher can log in.
+UC-AUTH-02: Create Student Account
+Field Description
+Objective Provision a student account with a username and a temporary password. Students cannot self-register (BR-02).
+Actor(s) Teacher (own classes), Admin
+Priority P0
+Trigger The actor opens "Create student account" (single or bulk). Pre-condition
+The actor is logged in; a teacher can only provision students into classes they own.
+
+=== PAGE 32 ===
+Post-condition
+A User record with role = STUDENT, a unique username and a temporary password exists; the credentials are handed to the student.
+UC-AUTH-03: Log In / Log Out
+Field Description
+Objective Authenticate a user and grant access to role-specific features; end the session on logout.
+Actor(s) Student, Teacher, Parent, Admin
+Priority P0
+Trigger User submits the login form, or clicks "Log out". Pre-condition
+The user has an active account. Students log in with a username; teachers, parents and admins log in with an email. Post-condition
+Login: a session with a revocable refresh token is created and the user lands on their role's dashboard. A student with a temporary password is sent to UC-AUTH-07 and cannot open protected learning routes. Logout: the session is revoked.
+UC-AUTH-04: Forgot Password (Adult Accounts) / Change Password
+Field Description
+
+=== PAGE 33 ===
+Objective Let a teacher, parent or admin reset a forgotten password by email, and let any logged-in user change the current password.
+Actor(s) Forgot: Teacher, Parent, Admin. Change: all roles
+Priority P0
+Trigger User clicks "Forgot password" on the login page, or "Change password" in the profile. Pre-condition
+Forgot: an adult account with that email exists. Change: the user is logged in and knows the current password. Post-condition
+The new password is stored as an Argon2 hash and existing refresh sessions are revoked. Students cannot reset through email.
+Open question: the PRD does not say how a student who forgets the password regains access. A likely option is that the teacher issues a new temporary password; the team should confirm.
+UC-AUTH-05: Join a Class with a Class Code
+Field Description
+Objective Allow a student to join a teacher's class with the class code.
+Actor(s) Student
+Priority P0
+
+=== PAGE 34 ===
+Trigger Student opens "My classes" and clicks "Join class".
+Pre-condition The student has a valid account; the teacher has created the class and shared its code. Post-condition
+An Enrollment {classId, studentId, joinedAt} exists and the student sees the class's assignments.
+Main flow
+1. The student opens "My classes" and selects Join class. 2. The student enters the class code. 3. The system checks that the code exists, the class is active and the student is not already a member.
+4. The system creates the Enrollment, or a pending record if the teacher has turned on approval mode.
+5. The system shows the class name, the teacher's name and the list of assignments.
+Alternative flows
+● 3a. The code does not exist or has been disabled: show an error that does not reveal which codes exist, and let the student try again.
+● 3b. The student is already in the class: go straight to the class without creating a duplicate record.
+● 4a. The class requires approval: the status is pending, and the student sees no assignments until the teacher approves (UC-CLS-02). Exceptions
+● E1. More than 10 wrong codes within 10 minutes: lock code entry for 15 minutes to prevent code guessing.
+Related rules: BR-01, BR-02.
+UC-AUTH-06: Link Parent to Child
+Field Description
+
+=== PAGE 35 ===
+Objective Link a parent account to a student account so the parent can follow that child's progress.
+Actor(s) Parent
+Priority P2
+Trigger Parent enters a link code in "Link a child".
+Pre-condition The parent is logged in; the code was issued by the school or teacher, is unused and has not expired. Post-condition
+A verified ParentLink {parentId, studentId, verifiedAt} exists and the code is marked as used.
+UC-AUTH-07: Change Temporary Password on First Login
+Field Description
+Objective Make a student replace a temporary password with their own before entering protected learning routes.
+Actor(s) Student
+Priority P0
+
+=== PAGE 36 ===
+Trigger The student logs in with a temporary password. Pre-condition
+The account was provisioned (UC-AUTH-02) and the temporary password is still valid. Post-condition
+The new password is stored as an Argon2 hash, the temporary-password flag is cleared and the student reaches the dashboard.
+Main flow
+1. The student logs in with username and temporary password (UC-AUTH-03). 2. The system detects the temporary password and redirects to Change password; protected learning routes stay blocked.
+3. The student enters the new password twice. 4. The system checks that both entries match, follow the password rules and differ from the temporary password.
+5. The system saves the new password, clears the flag and opens the dashboard.
+Alternative flows
+● 4a. The two entries do not match, or the password breaks a rule: show which rule failed and let the student try again. Exceptions
+● E1. The temporary password is no longer valid: login is refused and the student is told to ask the teacher for a new one.
+● E2. A protected endpoint is called directly with a temporary-password session: the API refuses it (BR-01).
+Module LRN — Learning Path
+Release: all four use cases are Increment A. This module comes from the PRD (§4, FR-09 to FR-12, decision 5); the Use Case Specs do not cover it.
+UC-LRN-01: Follow the Assigned Lesson Path
+Field Description
+
+=== PAGE 37 ===
+Objective Guide the student through Reading → Video → Study cards → Quiz → Lab/Practice → Challenge, with gates enforced by the server.
+Actor(s) Student
+Priority P0
+Trigger The student opens an assignment from the dashboard.
+Pre-condition The student is logged in; the lesson is published and assigned to the student through an approved enrollment.
+Post-condition Each completed step is stored as step evidence and official progress is updated through the backend.
+Main flow
+1. The student opens an assignment from the dashboard. 2. The system shows the lesson's subject, grade, chapter, topic, learning objective, prerequisites and curriculum reference.
+3. The system shows the full ordered path with each step's state: done, available or locked. Locked steps stay visible.
+4. One primary action points to the next unlocked step. 5. The student completes that step (UC-LRN-02, UC-LRN-03, UC-LRN-04, UC-PRG-02, UC-LAB-04 or UC-LAB-05).
+6. The server records the step evidence, decides the next unlocked step and returns it. 7. Steps 4–6 repeat until the challenge is done, and the lesson is marked complete in official progress.
+Alternative flows
+● 3a. A required earlier step is incomplete: the step shows lock reason PREREQUISITE_INCOMPLETE. The Quiz opens only after Reading, Video and Study cards are complete.
+
+=== PAGE 38 ===
+● 3b. The quiz score is below 50%: Lab/Practice stays locked with QUIZ_NOT_PASSED until the student passes on a retry. There is no teacher override in Increment A, and the client can never simulate one.
+● 3c. The practical step is not passed: Challenge stays locked with PRACTICE_NOT_PASSED. Exceptions
+● E1. Writing step evidence or progress fails: the system shows a recoverable error and never presents the step as saved (QR-07).
+● E2. The client requests a locked step directly: the server refuses it.
+Related rules: BR-01; PRD QR-02, QR-06.
+UC-LRN-02: Read Lesson Content
+Field Description
+Objective Let the student read the lesson's theory: text, formulas, images and tables.
+Actor(s) Student
+Priority P0
+Trigger The student opens the Reading step. Pre-condition
+The lesson is assigned and published. Post-condition
+The student completes the step with an explicit Complete action; the server records it idempotently and it survives reload.
+Completion rule (Epic A2): reading is complete only after the explicit Complete action.
+
+=== PAGE 39 ===
+UC-LRN-03: Watch Lesson Video or Read the Transcript Fallback
+Field Description
+Objective Let the student watch the lesson video, with a text fallback when the video is unavailable.
+Actor(s) Student
+Priority P0
+Trigger The student opens the Video step.
+Pre-condition The lesson has a required video or a published transcript/equivalent text. Post-condition
+The video step is recorded as complete.
+Main flow
+1. The student opens the Video step. The video never autoplays. 2. The student plays the video. 3. The client sends periodic heartbeats; the server records the highest point watched (0–100%) and the last position. Seeking back never lowers the mark, and the video resumes from the last position.
+4. When the student reaches 90% or the media ended event fires, whichever comes first, the server records the step as complete.
+Alternative flows
+● 2a. The video is unavailable: the system shows a recoverable unavailable state and the published transcript or equivalent text. The student completes the step with an explicit completion action.
+
+=== PAGE 40 ===
+UC-LRN-04: Study with Study Cards
+Field Description
+Objective Let the student review the lesson's key ideas as study cards before the quiz.
+Actor(s) Student
+Priority P0
+Trigger The student opens the Study cards step. Pre-condition
+The lesson has published study cards (UC-CNT-07). Post-condition
+The study-cards step is recorded as complete after every published card has been visited and the student confirms completion.
+Completion rule (Epic A2): the student visits each card; visits from earlier sessions count. The Complete action is accepted only when every valid card has been visited. Cards work with keyboard and touch, without flip motion, and use 44×44 px actions. The fields of a card (for example front and back text, images) are still to confirm.
+Module CNT — Content
+Release: all use cases are A-min. Increment A needs only the smallest teacher-owned path to author and publish the pilot content; the full content UX is Increment B. The Grade 8 pilot set is NexaLab-authored, and no textbook content is copied without a separate rights decision and subject review.
+UC-CNT-01: Create a Lesson with Required Metadata
+
+=== PAGE 41 ===
+Field Description
+Objective Allow a teacher to create a lesson with all required metadata.
+Actor(s) Teacher
+Priority P0
+Trigger Teacher clicks "New lesson" in the content library. Pre-condition
+Teacher is logged in; the subject and chapter exist. Post-condition
+A Lesson in draft status exists with subject, grade, chapter, topic, learning objective, prerequisites and curriculum reference (BR-15).
+UC-CNT-02: Upload Learning Materials
+Field Description
+Objective Allow a teacher to add videos, PDFs and images to a lesson.
+Actor(s) Teacher
+Priority P0
+
+=== PAGE 42 ===
+Trigger Teacher clicks "Upload material" inside a lesson. Pre-condition
+The lesson exists and belongs to the teacher. Post-condition
+The file is stored in Object Storage and a Material record is linked to the lesson. Videos are played as uploaded (no transcoding in the MVP). A required video must have a published transcript or equivalent text, used as the fallback in UC-LRN-03.
+UC-CNT-03: Write Theory in the Rich-Text Editor
+Field Description
+Objective Allow a teacher to write lesson theory with formulas, images and tables.
+Actor(s) Teacher
+Priority P0
+Trigger Teacher opens the theory editor in a lesson.
+Pre-condition The lesson exists and belongs to the teacher.
+Post-condition The theory content is saved as a Material of type text.
+UC-CNT-04: Create a Multiple-Choice Quiz
+
+=== PAGE 43 ===
+Field Description
+Objective Allow a teacher to add a scored multiple-choice quiz to a lesson. The quiz is the gate to the lab step.
+Actor(s) Teacher
+Priority P0
+Trigger Teacher clicks "Add quiz" inside a lesson. Pre-condition
+The lesson exists and belongs to the teacher. Post-condition
+A Quiz with its questions and correct answers is linked to the lesson. Correct answers are stored on the server only.
+UC-CNT-05: Attach an Existing Lab to a Lesson
+Field Description
+Objective Allow a teacher to attach a ready-made lab from the library to a lesson. Teachers do not build 3D models themselves.
+Actor(s) Teacher
+
+=== PAGE 44 ===
+Priority P0
+Trigger Teacher clicks "Attach lab" inside a lesson. Pre-condition
+The lab is published in the library. Post-condition
+The lesson references the selected lab.
+UC-CNT-06: Change Content Lifecycle
+Field Description
+Objective Move a lesson or lab through draft → published → archived.
+Actor(s) Teacher, Admin
+Priority P0
+Trigger Actor clicks "Publish" or "Archive". Pre-condition
+Publishing requires complete metadata (BR-15); a lab also requires passed unit tests and review (BR-12).
+
+=== PAGE 45 ===
+Post-condition
+The content status is updated. Publishing is blocked with the missing fields named if metadata is incomplete.
+UC-CNT-07: Create Study Cards
+Field Description
+Objective Allow a teacher to write the study cards a student reviews before the quiz.
+Actor(s) Teacher
+Priority P0
+Trigger Teacher opens the Study cards tab inside a lesson.
+Pre-condition The lesson exists and belongs to the teacher.
+Post-condition The lesson has an ordered set of study cards, published together with the lesson.
+Module CLS — Classes
+Release: UC-CLS-01 and UC-CLS-03 are A-min; UC-CLS-02 and UC-CLS-04 are B. In Increment A, students are placed in classes by provisioning, not by join code.
+UC-CLS-01: Create a Class and Generate a Join Code
+Field Description
+
+=== PAGE 46 ===
+Objective Allow a teacher to create a class and get a code for students to join.
+Actor(s) Teacher
+Priority P0
+Trigger Teacher clicks "Create class".
+Pre-condition Teacher is logged in. Post-condition
+A Class exists with a random, non-sequential joinCode that the teacher can disable later.
+UC-CLS-02: Approve / Remove Class Members
+Field Description
+Objective Allow a teacher to approve pending join requests and remove members.
+Actor(s) Teacher
+Priority P0
+Trigger Teacher opens the class's member list.
+
+=== PAGE 47 ===
+Pre-condition
+Teacher owns the class. Post-condition
+Approved students get an active Enrollment; removed students no longer see the class's assignments.
+UC-CLS-03: Assign Work to a Class or Group
+Field Description
+Objective Allow a teacher to assign a lesson or lab to a whole class or a group, with an optional due date.
+Actor(s) Teacher
+Priority P0
+Trigger Teacher opens a class and clicks "Assign work". Pre-condition
+Teacher owns the class; the content (Lesson or Lab) is published. Post-condition
+An Assignment {classId, contentId, contentType, dueDate} exists and the targeted students see it on their dashboard.
+Main flow
+1. The teacher opens the class and selects Assign work. 2. The teacher chooses the content type: lesson or lab exercise.
+
+=== PAGE 48 ===
+3. The teacher picks the content from their own library or the shared library. 4. The teacher chooses the scope: the whole class or a group of students. 5. The teacher sets the due date. 6. The system creates the Assignment and updates the dashboards of the students in scope.
+Alternative flows
+● 3a. The content is a draft: it does not appear in the list, and the system suggests publishing it first.
+● 5a. No due date is set: allowed; the assignment has no deadline. Exceptions
+● E1. The due date is in the past: rejected, and the teacher is asked to choose again. ● E2. The content is archived after being assigned: the Assignment remains. Students who have started can continue; students who have not started see the label "content no longer updated".
+● E3. The assignment itself is archived: it leaves the student's main queue but stays visible in history wherever evidence exists.
+UC-CLS-04: View Class Tracking Board
+Field Description
+Objective Let a teacher see who has done each assignment, quiz scores and the number of experiment attempts.
+Actor(s) Teacher
+Priority P0
+Trigger Teacher opens the class's tracking board.
+
+=== PAGE 49 ===
+Pre-condition
+Teacher owns the class. Post-condition
+The board shows per-student status for owned classes only. Every score, count and status opens the content or attempts behind it, and attempt counts match the Attempt records. Late submissions are labeled overdue, not blocked.
+Module PRG — Progress & Profile
+Release: UC-PRG-01, 02 and 03 are Increment A; UC-PRG-04 and 05 (saved experiments) are Future.
+UC-PRG-01: View Personal Dashboard
+Field Description
+Objective Show a student their assignment queue, work in progress and progress by subject.
+Actor(s) Student
+Priority P0
+Trigger Student logs in or clicks "Dashboard". Pre-condition
+Student is logged in and has changed any temporary password (UC-AUTH-07).
+
+=== PAGE 50 ===
+Post-condition
+The queue shows only active assignments that apply to the student's approved enrollment and targeting, ordered by due date ascending, then creation time ascending, then ID. Overdue assignments stay actionable and are labeled overdue. Archived assignments are left out of the queue and remain in history.
+UC-PRG-02: Take a Quiz and Receive a Score
+Field Description
+Objective Let a student take a lesson's quiz, get a server-calculated score and unlock the lab step.
+Actor(s) Student
+Priority P0
+Trigger Student reaches the Quiz step on the lesson path (UC-LRN-01). Pre-condition
+The lesson is published and has a quiz. Post-condition
+A quiz attempt with its score is stored. A server-calculated score of at least 50% unlocks the Lab/Practice step; below 50%, the student may retry.
+UC-PRG-03: View Attempt History
+Field Description
+
+=== PAGE 51 ===
+Objective Let a student review official progress and all past attempts.
+Actor(s) Student
+Priority P0
+Trigger Student opens "Progress" or the attempt history of a lab. Pre-condition
+Student is logged in. Post-condition
+Progress and attempts are shown newest first with verdict and time. Every score, count or status opens the content or attempts behind it. Each run is its own record and is never overwritten. An empty state is shown when there is no attempt yet.
+UC-PRG-04: Save an Experiment
+Field Description
+Objective Let a student save the setup and result of a run to their profile.
+Actor(s) Student
+Priority P1
+
+=== PAGE 52 ===
+Trigger Student clicks "Save experiment" after a run.
+Pre-condition The experiment has been run at least once.
+Post-condition A SavedExperiment {labId, labState, createdAt} exists in the student's profile.
+UC-PRG-05: Reopen a Saved Experiment
+Field Description
+Objective Let a student reopen a saved experiment exactly as it was.
+Actor(s) Student
+Priority P1
+Trigger Student opens a saved experiment from their profile.
+Pre-condition The SavedExperiment exists and belongs to the student.
+Post-condition The canvas restores the saved labState and shows the earlier result.
+Module ADM — Administration
+Release: UC-ADM-01 and 02 are Increment C; UC-ADM-03 is A-min. Every admin action stays under server-side authorization and audit.
+
+=== PAGE 53 ===
+UC-ADM-01: Manage Users, Subjects, Labs and 3D Assets
+Field Description
+Objective Let an admin create, view, update and delete users, subjects, labs and 3D assets.
+Actor(s) Admin
+Priority P0
+Trigger Admin opens the matching management page. Pre-condition
+Admin is logged in. Post-condition
+The record is changed. A 3D asset that breaks the asset standard (FS-L1-02) triggers a warning and cannot be published.
+UC-ADM-02: Configure Simulation Parameters
+Field Description
+Objective Let an admin set the valid parameter ranges and constants of each simulation module.
+Actor(s) Admin
+
+=== PAGE 54 ===
+Priority P1
+Trigger Admin opens a lab's simulation settings.
+Pre-condition The lab and its simulation module exist. Post-condition
+The new configuration is saved and used for later runs.
+UC-ADM-03: Provision Minimum Data for the Student Journey
+Field Description
+Objective Create the minimum student, class, published content and assignment needed for a student to walk the Increment A path (PRD FR-06).
+Actor(s) Teacher, Admin (as authorized operators)
+Priority P0
+Trigger An operator runs the seed for development or E2E, or uses the minimal teacher-owned operator path. Pre-condition
+The operator is authorized. Seed personas come from environment configuration.
+
+=== PAGE 55 ===
+Post-condition
+A teacher, class, provisioned student, published lesson and assignment exist. Running the seed again creates no duplicates. Seed accounts never enable student self-registration, bypass backend authentication or ship as production credentials.
+Module PAR — Parent Portal
+Release: both use cases are Increment C.
+UC-PAR-01: View Child's Progress
+Field Description
+Objective Let a parent follow their own child's progress in read-only mode.
+Actor(s) Parent
+Priority P2
+Trigger Parent logs in and opens the child's progress page.
+Pre-condition A verified ParentLink {parentId, studentId, verifiedAt} exists.
+Post-condition No data is changed; the page is read-only.
+Main flow
+1. The parent logs in and opens the child's progress page. 2. The API checks the ParentLink before returning any data. 3. The system shows completed lessons, study time, quiz scores and the number of experiments run.
+
+=== PAGE 56 ===
+4. The system generates a weekly or monthly report at the moment the page opens, in language a parent can understand. Exceptions
+● E1. The parent requests a studentId outside their ParentLink: the API returns 403 and logs the abnormal access.
+Related rules: BR-11. Parents see only the child's level of help-seeking in summary form, never the detailed conversation with the AI Tutor.
+UC-PAR-02: View Weekly / Monthly Report
+Field Description
+Objective Give a parent a plain-language summary of the child's learning over the past week or month.
+Actor(s) Parent
+Priority P2
+Trigger Parent opens the progress page or switches the report period.
+Pre-condition A verified ParentLink exists. Post-condition
+The report is generated on open; no report is sent automatically on a schedule (Phase 2).
+Open question: the PRD grants parents read-only progress access but does not mention generated reports. The team should confirm whether UC-PAR-02 stays.
+Module 3D — Interactive 3D Models
+
+=== PAGE 57 ===
+Release: R1-later. The human-eye model is part of the MVP direction and already exists in the product (with typed part labels), but the PRD has not yet assigned it to an increment.
+UC-3D-01: Load and Display a 3D Model
+Field Description
+Objective Load and render the 3D model attached to a lesson.
+Actor(s) Student, Teacher
+Priority P0
+Trigger User opens the 3D model section of a lesson. Pre-condition
+The lesson has a published 3D asset in glTF/GLB format. Post-condition
+The scene loads in under 3 s on a 10 Mbps connection and runs at 30 fps or more on integrated graphics (NFR-01).
+UC-3D-02: Rotate / Zoom / Pan the Model
+Field Description
+Objective Let a student view the object from every side.
+Actor(s) Student
+
+=== PAGE 58 ===
+Priority P0
+Trigger Student drags, scrolls or uses the keyboard on the 3D viewer.
+Pre-condition The model is loaded (UC-3D-01).
+Post-condition The camera view changes accordingly.
+UC-3D-03: Explode the Model into Parts
+Field Description
+Objective Separate the model's parts so the student can see its inner structure.
+Actor(s) Student
+Priority P0
+Trigger Student moves the explode slider.
+Pre-condition The model is loaded and each part is a separate node (BR-08).
+Post-condition Parts move apart in proportion to the slider value.
+
+=== PAGE 59 ===
+UC-3D-04: Show / Hide Structural Layers
+Field Description
+Objective Hide outer layers so the student can see inner layers.
+Actor(s) Student
+Priority P1
+Trigger Student toggles a layer in the layer panel.
+Pre-condition The model is loaded.
+Post-condition The selected layer is shown or hidden.
+UC-3D-05: Select a Part and Read Its Label and Function
+Field Description
+Objective Highlight a part and show its name and a short description of its function.
+Actor(s) Student
+Priority P0
+
+=== PAGE 60 ===
+Trigger Student clicks a part of the model.
+Pre-condition The part's node name matches a label key in the database (BR-08). Post-condition
+The part is highlighted and the panel shows its name and function from the database.
+UC-3D-06: Clip with a Cutting Plane
+Field Description
+Objective Cut the model with a plane so the student can see a cross-section.
+Actor(s) Student
+Priority P0
+Trigger Student turns on the cutting plane and moves it.
+Pre-condition The model is loaded.
+Post-condition The model is rendered clipped at the plane's position.
+UC-3D-07: Part-Naming Quiz Mode
+
+=== PAGE 61 ===
+Field Description
+Objective Test whether the student can name each part of the model, with automatic grading.
+Actor(s) Student
+Priority P1
+Trigger Student turns on Quiz mode on the human-eye model.
+Pre-condition The 3D model is loaded; every part is a separate node with a label key in the database. Post-condition
+An Attempt with verdict and score exists; Progress is updated.
+Main flow
+1. The student turns on Quiz mode on the human-eye model. 2. The system hides all labels. 3. The system highlights one part at a time and asks the student to name it, by choosing from a list or typing.
+4. The student answers for each part. 5. The system grades automatically by matching the node key against the answer in the database.
+6. The system shows the number of correct answers, marks the wrong parts and lets the student review the labels.
+Alternative flows
+● 4a. The student skips a part: it counts as unanswered, not wrong, but earns no points.
+
+=== PAGE 62 ===
+● 6a. The student retakes the quiz: a new Attempt is created; the old one is not overwritten. Exceptions
+● E1. A node in the asset matches no label key: that part is removed from the question set and a warning is logged for the admin. The score is based on the questions actually asked.
+Related rules: BR-08. Labels must not be readable through tooltips or the DOM while Quiz mode is on.
+Module LAB — Virtual Lab
+Release: UC-LAB-02, 03, 04, 05, 07 and 08 are Increment A, using the Grade 8 circuit lab and its existing deterministic circuit model as the representative lab and challenge. UC-LAB-06 (Chemistry lab, already in the product) is R1-later. UC-LAB-01 (sandbox) is Future.
+UC-LAB-01: Enter a Lab in Sandbox Mode
+Field Description
+Objective Let a student experiment freely without a challenge or grading.
+Actor(s) Student
+Priority P0
+Trigger Student opens a lab and chooses "Free mode".
+Pre-condition The lab is published. Post-condition
+The lab canvas opens with the full component toolbox and no success conditions.
+
+=== PAGE 63 ===
+UC-LAB-02: Build a Circuit on the Canvas
+Field Description
+Objective Let a student build an electric circuit by dragging components and wiring them.
+Actor(s) Student
+Priority P0
+Trigger Student drags a component from the toolbox onto the canvas.
+Pre-condition The student is in lab_circuit.
+Post-condition labState in the store matches the current node–edge graph.
+Main flow
+1. The student picks a component from the toolbox: battery, LED, resistor, wire or switch. 2. The student drags it onto the canvas. 3. The student connects wires between component terminals. 4. The system updates the circuit graph and shows closed/open state in real time. 5. The student can move, rotate or delete components; the system updates the graph again.
+Alternative flows
+● 3a. Wiring to a terminal that already has a wire: allowed, since parallel circuits are supported.
+● 3b. Connecting a component to itself: rejected with a short reason. ● 5a. Deleting a wired component: its wires are deleted too and the student is notified. Exceptions
+
+=== PAGE 64 ===
+● E1. The canvas exceeds the component limit (default 20): adding is blocked, with the explanation that this is the lesson's scope limit.
+UC-LAB-03: Set Parameters for Components / Substances
+Field Description
+Objective Let a student set values such as source voltage, resistance, switch state, or substance volume and concentration.
+Actor(s) Student
+Priority P0
+Trigger Student selects a component or substance and edits its parameters. Pre-condition
+The component or substance is on the canvas. Post-condition
+labState holds the new values. Out-of-range values go to UC-LAB-07.
+UC-LAB-04: Run the Simulation and Observe the Result
+Field Description
+Objective Compute the experiment's result and show it as both a visible phenomenon and data.
+
+=== PAGE 65 ===
+Actor(s) Student; secondary: Simulation Engine
+Priority P0
+Trigger Student clicks "Run". Pre-condition
+At least one component is on the canvas; all parameters are within the valid range; the Lab/Practice step is unlocked (UC-LRN-01). Post-condition
+An immutable Attempt {studentId, assignmentId, lessonStepId, challengeId, labState, simulationResult, verdict, durationMs, simulationModelVersion, createdAt} exists; the result is shown as a phenomenon plus a data table.
+Main flow
+1. The student clicks Run. 2. The client calls @nexalab/sim to show an instant preview. 3. The client sends labState to the server. 4. The server runs the same version of @nexalab/sim and returns the official result. 5. The system shows the phenomenon (LED on or burnt out, bubbling, precipitate) with a data table.
+6. The system records the Attempt.
+Alternative flows
+● 4a. The server result differs from the client result: the server wins, and the client updates the display. The mismatch is logged to investigate version drift (BR-04).
+● 4b. The network is lost: the preview stays, labeled "not yet recorded", and is queued to sync when the connection returns. Exceptions
+● E1. Open circuit: not an error. SIM returns circuit = OPEN and current = 0, displayed normally as valid learning data.
+● E2. A parameter is out of the valid range: go to UC-LAB-07.
+Related rules: BR-03, BR-04, BR-05.
+
+=== PAGE 66 ===
+UC-LAB-05: Take a Challenge and Get Auto-Graded
+Field Description
+Objective Give the student a clear goal and grade the result automatically as passed, partial or needs_practice.
+Actor(s) Student; secondary: Challenge Evaluator
+Priority P0
+Trigger Student opens a challenge in a lab. Pre-condition
+The challenge is published with successConditions and constraints; the required practical step is complete, so the Challenge step is unlocked (UC-LRN-01). Post-condition
+Attempt.verdict ∈ {passed, partial, needs_practice}, as recomputed by the backend. The challenge step completes only on passed.
+Main flow
+1. The system shows the challenge objective and the list of allowed components. 2. The student builds (UC-LAB-02), sets parameters (UC-LAB-03) and runs (UC-LAB-04). 3. EVAL checks simulationResult against each condition in successConditions. 4. EVAL decides the verdict: ○ All conditions met → passed. ○ Some conditions met (for example, circuit closed and LED on, but over the rated current) → partial.
+○ Minimum conditions not met → needs_practice. 5. The system shows the verdict and which conditions were and were not met. 6. If the verdict is not passed, the student can change the setup and retry; each retry creates a new Attempt. In a future release this step also opens the AI Tutor (UC-AI-02).
+
+=== PAGE 67 ===
+Alternative flows
+● 2a. The student uses a component outside availableObjects: the toolbox shows only allowed components, so this can only happen through the API, and the server refuses to grade.
+● 4a. The first attempt is not passed: it is kept, and a second attempt counts toward the pilot retry metric (PRD §9). Exceptions
+● E1. successConditions refers to a field missing from simulationResult: no grading; a configuration error is sent to the admin, and the student is not blamed.
+Related rules: BR-03. The AI takes no part in grading.
+UC-LAB-06: Perform a Reaction in the Chemistry Lab
+Field Description
+Objective Let a student carry out one of six fixed MVP reactions and observe the phenomenon and quantities.
+Actor(s) Student
+Priority P1
+Trigger Student opens the Chemistry lab and picks equipment and substances. Pre-condition
+The chosen pair of substances is one of the six supported reactions. Post-condition
+An Attempt records the equipment, substances, volume/concentration and the observed phenomenon.
+
+=== PAGE 68 ===
+Main flow
+1. The student picks equipment (test tube, beaker, virtual alcohol burner…). 2. The student picks substances from the chemical shelf. 3. The student sets volume and concentration within the valid range. 4. The student performs an action: pour or heat. 5. SIM computes by stoichiometric ratio and determines the excess and limiting reactant. 6. The system shows the phenomenon (color change, precipitate, bubbling) with a table of quantities.
+Alternative flows
+● 2a. The pair is not one of the six supported reactions: the system says clearly that this reaction is outside the MVP scope and lists the supported pairs. It never guesses or gives a vague description.
+● 5a. One reactant is in excess: the system shows which one and by how much. This is learning content, not an error. Exceptions
+● E1. The student describes a dangerous procedure in the notes or asks the AI about it: BR-07 applies, and the system gives no instructions applicable in real life.
+Supported MVP reactions
+# Reaction Main phenomenon Reference
+1 Mg + HCl H ₂ gas bubbles KHTN 8, Lesson 6, p. 28
+2 CaCO ₃ + HCl CO ₂ gas bubbles KHTN 8, Lesson 7, p. 35
+3 NaOH + HCl (with indicator)
+Neutralization, indicator changes color
+KHTN 8, Lesson 9, p. 42
+
+=== PAGE 69 ===
+4 CuSO ₄ + NaOH Blue Cu(OH) ₂ precipitate KHTN 8, Lesson 9, p. 45
+5 NaCl + AgNO ₃ White AgCl precipitate KHTN 8, Lesson 10, p. 50
+6 Fe + CuSO ₄ Solution changes color, red metal deposits
+KHTN 9, Lesson 18, p. 82
+UC-LAB-07: Block / Warn on Out-of-Range Parameters
+Field Description
+Objective Prevent meaningless results by blocking or warning on parameters outside each module's valid range.
+Actor(s) Simulation Engine
+Priority P0
+Trigger A parameter is set or a run is requested with a value outside the declared range (for example, resistance = 0 Ω). Pre-condition
+The simulation module declares its valid parameter ranges.
+
+=== PAGE 70 ===
+Post-condition
+The run is blocked or a warning is shown; no meaningless number is returned.
+UC-LAB-08: Instant Preview on Client, Official Grading on Server
+Field Description
+Objective Give the student instant feedback while keeping the server as the only official result.
+Actor(s) Student, Simulation Engine
+Priority P0
+Trigger Student runs an experiment (UC-LAB-04). Pre-condition
+Client and server use the same version of @nexalab/sim. Post-condition
+The preview appears in under 100 ms; the official server result (under 500 ms at p95) replaces it if they differ (BR-04).
+Module CV — Computer Vision Control
+Release: Future, and a research direction. The Product Brief keeps gesture control optional and outside the first release.
+UC-CV-01: Grant Camera Permission per Session
+
+=== PAGE 71 ===
+Field Description
+Objective Ask for webcam access only when the student wants gesture control, once per session.
+Actor(s) Student
+Priority P2
+Trigger Student turns on gesture control.
+Pre-condition The device has a webcam and the browser supports camera access. Post-condition
+Permission is granted for the current session only, or denied (UC-CV-03).
+UC-CV-02: Control the Model with Hand Gestures
+Field Description
+Objective Let a student interact with the human-eye model by hand gestures in front of the webcam.
+Actor(s) Student; secondary: MediaPipe Hand Landmarker
+Priority P2
+
+=== PAGE 72 ===
+Trigger Student turns on gesture control.
+Pre-condition Camera permission is granted for this session; the student is on the human-eye model. Post-condition
+No image data is stored or transmitted.
+Main flow
+1. The student turns on gesture control. 2. The browser opens the camera; MediaPipe detects 21 hand landmarks locally. 3. The recognizer maps the gesture to an interaction command. 4. The 3D model responds to the command.
+Gesture mapping
+Gesture Action Mouse equivalent
+Pinch Select a part Click
+Fist Move the object Drag and drop
+Wrist rotation Rotate the model Hold left button and drag
+Spread / close both hands
+Zoom in / out Scroll
+Horizontal swipe Explode the model Explode slider
+
+=== PAGE 73 ===
+Alternative flows
+● 1a. The student denies camera permission: the system continues in mouse–keyboard mode with no loss of function.
+● 2a. No hand detected for 5 seconds: show guidance to place the hand in frame, with mouse mode still active.
+● 3a. Ambiguous gesture: no command is executed, to avoid unintended actions. Exceptions
+● E1. The camera is taken by another app or falls below 15 fps: exit gesture mode automatically with a short notice.
+Related rules: BR-10. Gestures are a secondary path; every gesture has a mouse equivalent, and students without a webcam can use 100% of the features.
+UC-CV-03: Continue with Mouse and Keyboard
+Field Description
+Objective Keep every feature usable when the camera is denied, missing or lost.
+Actor(s) Student
+Priority P2
+Trigger Camera permission is denied, or the camera stops working during a session.
+Pre-condition The student is on a 3D model.
+Post-condition The student continues with mouse and keyboard; no feature is locked.
+Module AI — AI Tutor
+
+=== PAGE 74 ===
+Release: Future (PRD §3). The Teacher AI Content Assistant comes before this Student AI Tutor. When built, AI stays advisory: it never calculates or overrides a result, verdict, score or progress (PRD FR-22). The current product already has an optional, rules-based lab tutor that can add one bounded question from a configured LLM; it is not part of the Release 1 requirements and is not used for grading.
+UC-AI-01: Build AI Context from the Lab State
+Field Description
+Objective Pack the lab state, simulation output and action history into one context JSON for the AI Tutor.
+Actor(s) AI Context Builder
+Priority P0
+Trigger A hint is requested (UC-AI-02) or an Attempt is recorded. Pre-condition
+The student has at least one Attempt in the current lab. Post-condition
+A context with studentLevel, challenge, labState, simulation, actionHistory, attempts, hintsUsed and hintLevel exists. The simulation field is an exact copy of SIM output; no field is generated by the AI.
+UC-AI-02: Request a Hint
+Field Description
+
+=== PAGE 75 ===
+Objective Give the student a hint at the level they are allowed, without revealing the answer too early.
+Actor(s) Student; secondary: Context Builder, AI Tutor Service, LLM Provider
+Priority P0
+Trigger Student clicks "I need a hint".
+Pre-condition At least one Attempt has a verdict other than passed. Post-condition
+A HintLog {attemptId, level, content, contextSnapshot, triggeredBy} exists.
+Main flow
+1. The student clicks I need a hint. 2. CTX builds the context JSON (UC-AI-01). 3. The AI Tutor Service determines the allowed hint level (UC-AI-03). 4. If the level is 1 or 2 and a static template matches the state, the system returns the template without calling the LLM.
+5. Otherwise, the AI Tutor Service picks a prompt template by level and studentLevel and calls the LLM.
+6. The system shows the hint and logs a HintLog with the full context (UC-AI-04).
+Alternative flows
+● 4a. The lab state matches a state with a cached hint: return the cached hint and still log a HintLog.
+● 5a. The LLM fails or times out: return the static template for that level and record the incident. The student never sees a blank screen. Exceptions
+
+=== PAGE 76 ===
+● E1. The student asks about something outside the curriculum: UC-AI-08 applies, and the AI politely declines and steers back to the current exercise.
+● E2. The student exceeds the rate limit: show how long until the next question is allowed, and suggest reviewing the data on screen.
+Four hint levels
+Level Type Example
+1 Observation question
+"Look at the current value — is it high or low compared with what the LED can handle?"
+2 Concept hint "Voltage, current and resistance are related. Try to recall Ohm's law."
+3 Action hint "Try adding a resistor to the circuit and run it again. See how the current changes."
+4 Explanation A full explanation of why the circuit failed and how to calculate the needed resistance
+UC-AI-03: Escalate Hint Level
+Field Description
+Objective Move to a more direct hint only after the student has genuinely tried again.
+Actor(s) AI Tutor Service
+
+=== PAGE 77 ===
+Priority P0
+Trigger Student clicks "Still don't get it" after receiving a level-n hint.
+Pre-condition The student has received at least one hint at the current level.
+Post-condition Progress.lastHintLevel is updated.
+Main flow
+1. The student clicks Still don't get it after a level-n hint. 2. The system checks the escalation condition: since the level-n hint, the student has changed labState and run again at least once.
+3. If met, the system gives a level n+1 hint. 4. If not met, the system stays at level n, rephrases the hint and invites the student to try again.
+Related rules: BR-06. The order is fixed: ask → guide → hint → explain. No escalation on waiting time, and no shortcut to level 4.
+UC-AI-04: Log HintLog
+Field Description
+Objective Record every hint with its full context so teachers and admins can review it and trace AI insights.
+Actor(s) AI Tutor Service
+Priority P0
+
+=== PAGE 78 ===
+Trigger A hint is returned to the student (template, cache or LLM).
+Pre-condition A hint has been produced for an Attempt. Post-condition
+A HintLog with level, content, contextSnapshot and triggeredBy is stored for every hint.
+UC-AI-05: Detect Misconceptions with a Fixed Rule Set
+Field Description
+Objective Infer likely misconceptions from repeated behavior patterns and report them to the teacher.
+Actor(s) AI Tutor Service (rule layer, no LLM call)
+Priority P1
+Trigger An Attempt is recorded in the circuit lab. Pre-condition
+The student has a series of Attempts in the circuit lab. Post-condition
+A Misconception {studentId, topic, hypothesis, confidence, evidence[]} is stored and shown on the teacher dashboard.
+Main flow
+
+=== PAGE 79 ===
+1. After each Attempt, the system matches actionHistory against a fixed set of 3–5 behavior patterns.
+2. When a pattern matches, the system creates a hypothesis with a confidence level. Example: removing the resistor 3 times in a row without changing parameters before re-running suggests "the student thinks the resistor is unnecessary" (confidence: medium).
+3. The system attaches evidence[] pointing to specific Attempts and HintLogs. 4. The hypothesis appears on the teacher dashboard. 5. The hypothesis changes how the AI phrases later hint questions.
+Related rules: BR-09. A misconception hypothesis is never shown to the student, only to the teacher. The student never sees a label such as "you misunderstand…".
+UC-AI-06: View Class-Wide AI Summary
+Field Description
+Objective Show a teacher where the class and each student are stuck, for example "12/30 students are stuck on the concept of resistance".
+Actor(s) Teacher
+Priority P1
+Trigger Teacher opens the AI insights tab of a class. Pre-condition
+Students in the class have Attempts and HintLogs. Post-condition
+Class-level and per-student summaries are shown, each traceable to its evidence (BR-13).
+UC-AI-07: Trace an AI Insight to Its Source
+
+=== PAGE 80 ===
+Field Description
+Objective Let a teacher verify an AI insight by opening the exact Attempts and HintLogs behind it.
+Actor(s) Teacher
+Priority P1
+Trigger Teacher clicks an insight on the dashboard. Pre-condition
+The insight exists and has evidence. Post-condition
+The evidence list is shown and each record opens. The teacher can mark disagreement, which feeds the "diagnosis accuracy" metric.
+UC-AI-08: Block Out-of-Curriculum Questions
+Field Description
+Objective Keep the AI Tutor within the curriculum and the current exercise.
+Actor(s) AI Tutor Service
+Priority P0
+
+=== PAGE 81 ===
+Trigger A student question falls outside the lesson's scope (for example, "what's the weather today?").
+Pre-condition Input filtering is active. Post-condition
+The AI politely declines and steers back to the exercise; the exchange is logged.
+UC-AI-09: Rate-Limit and Cache Hints
+Field Description
+Objective Control LLM cost and abuse through per-student rate limits and caching of repeated lab states.
+Actor(s) AI Tutor Service
+Priority P0
+Trigger Every hint request.
+Pre-condition Rate limits and cache are configured. Post-condition
+Requests over the limit are rejected with the waiting time; repeated lab states are served from cache.
+3. Functional Requirements
+
+=== PAGE 82 ===
+3.1 System Functional Overview
+3.1.1 Screens Flow [embed: node/ffcff25a-a727]
+A student without a temporary password goes straight from Login to the Dashboard. On the lesson path, the lab opens only after a quiz score of at least 50%, and the challenge only after the practice step; each step returns to the lesson path.
+3.1.2 Screen Descriptions
+Release 1 has 35 screens: 6 shared, 12 for students, 8 for teachers, 3 for parents and 6 for admins. The list is derived from the use cases because the source documents contain no screen inventory; the team should check it against the wireframes or Figma.
+ID Screen Role Increment Description
+SC-01 Login All Foundation Username (student) or email (adult) and password. Shows the Forgot password link only for adult accounts.
+SC-02 Change Temporary Password
+HS A Shown right after login with a temporary password. Blocks every learning route until a new password is saved.
+SC-03 Forgot Password
+GV, PH, AD
+Foundation Enter an email to receive a reset link.
+SC-04 Reset Password GV, PH, AD
+Foundation Set a new password from the reset link.
+SC-05 Profile All Foundation Account information and Change password.
+
+=== PAGE 83 ===
+SC-06 Teacher Registration
+GV Foundation Public sign-up for teachers. Depends on the open question about teacher self-registration.
+SC-07 Student Dashboard
+HS A Assignment queue in the BR-19 order with overdue labels, work in progress and progress by subject. One primary action: continue the next assignment.
+SC-08 Lesson Path HS A Lesson metadata and the six ordered steps, each marked done, available or locked. One primary action to the next unlocked step.
+SC-09 Reading HS A Lesson theory with formulas, images and tables.
+SC-10 Video HS A Video player with no autoplay; shows the transcript fallback when the video is unavailable.
+SC-11 Study Cards HS A The lesson's study cards, one at a time.
+SC-12 Quiz HS A Multiple-choice questions and Submit.
+SC-13 Quiz Result HS A Server-calculated score, pass or fail against the 50% gate, Retry, and the next unlocked step.
+
+=== PAGE 84 ===
+SC-14 Circuit Lab HS A Component toolbox, canvas, parameter panel, Run button, and a result panel with phenomenon and data table.
+SC-15 Challenge HS A The circuit lab plus an objective panel listing allowed components; after a run, the verdict and which conditions were met.
+SC-16 Progress HS A One Progress page: summary, completion table by assignment and step, paginated activity history and a detail side sheet. Every score, count and status opens its evidence.
+SC-17 Attempt History and Detail
+HS A Side sheet inside SC-16 for one quiz or practical attempt: per-question results or the submitted lab state, official result, verdict, duration and time.
+SC-18 Join Class HS B Enter a class code.
+SC-19 Teacher Dashboard
+GV A-min The teacher's own classes and recent assignments.
+SC-20 Class Detail GV A-min Students and assignments of one class. Approving and removing members is Increment B.
+SC-21 Provision Students
+GV, AD A-min Create one or many student accounts; temporary passwords are shown once.
+
+=== PAGE 85 ===
+SC-22 Content Library GV, AD A-min Lessons and labs with status draft, published or archived.
+SC-23 Lesson Editor GV, AD A-min Tabs for Metadata, Reading, Video, Study cards, Quiz and Lab; Publish and Archive actions.
+SC-24 Assign Work GV A-min Dialog to choose content, the whole class or a group, and a due date.
+SC-25 Class Tracking Board
+GV B Per-student status, quiz scores and attempt counts, each opening its evidence.
+SC-26 Student Evidence
+GV B One student's attempts, quiz attempts and step evidence in an owned class.
+SC-27 Parent Dashboard
+PH C The parent's linked children.
+SC-28 Link Child PH C Enter a parent-link code.
+SC-29 Child Progress PH C Read-only progress of one linked child, with the report generated on open.
+SC-30 Admin Dashboard
+AD C Entry to every management screen.
+
+=== PAGE 86 ===
+SC-31 User Management
+AD C Search, create, edit and deactivate users of all roles.
+SC-32 Subject and Chapter Management
+AD C Manage subjects and chapters used in lesson metadata.
+SC-33 Lab and Challenge Management
+AD C Manage labs, challenges, successConditions and constraints.
+SC-34 3D Asset Management
+AD C Upload and validate 3D assets against the asset standard.
+SC-35 Simulation Configuration
+AD C Valid parameter ranges and constants per simulation module.
+Screens for the R1-later labs (3D human-eye viewer with typed part labels, Chemistry lab) will be added when the PRD assigns them to an increment. Future screens, not specified further: AI hint panel (inside SC-14 and SC-15), AI class insights, Teacher AI content drafts, gesture-control overlay and Saved experiments.
+3.1.3 Screen Authorization
+Each screen is open only to the roles marked below, and the API applies the same check (BR-01). "Own" means the user's own data, own classes or linked children only.
+Screen HS GV PH AD
+SC-01 Login ✓ ✓ ✓ ✓
+
+=== PAGE 87 ===
+SC-02 Change Temporary Password
+✓ — — —
+SC-03 Forgot Password — ✓ ✓ ✓
+SC-04 Reset Password — ✓ ✓ ✓
+SC-05 Profile ✓ own ✓ own ✓ own ✓ own
+SC-06 Teacher Registration — ✓ (not logged in)
+— —
+SC-07 Student Dashboard ✓ own — — —
+SC-08 Lesson Path ✓ assigned
+✓ preview — —
+SC-09 Reading ✓ assigned
+✓ preview — —
+SC-10 Video ✓ assigned
+✓ preview — —
+SC-11 Study Cards ✓ assigned
+✓ preview — —
+
+=== PAGE 88 ===
+SC-12 Quiz ✓ assigned
+✓ preview — —
+SC-13 Quiz Result ✓ own — — —
+SC-14 Circuit Lab ✓ assigned
+✓ preview — —
+SC-15 Challenge ✓ assigned
+✓ preview — —
+SC-16 Progress ✓ own — — —
+SC-17 Attempt History and Detail ✓ own — — —
+SC-18 Join Class ✓ — — —
+SC-19 Teacher Dashboard — ✓ own — —
+SC-20 Class Detail — ✓ own — —
+SC-21 Provision Students — ✓ own classes — ✓
+SC-22 Content Library — ✓ — ✓
+
+=== PAGE 89 ===
+SC-23 Lesson Editor — ✓ own content — ✓
+SC-24 Assign Work — ✓ own classes — —
+SC-25 Class Tracking Board — ✓ own — —
+SC-26 Student Evidence — ✓ own classes — —
+SC-27 Parent Dashboard — — ✓ own —
+SC-28 Link Child — — ✓ —
+SC-29 Child Progress — — ✓ linked, read-only —
+SC-30 to SC-35 Admin screens — — — ✓
+A teacher's preview never creates student evidence, attempts or progress.
+3.1.4 Non-Screen Functions
+These functions run on the server or in the background with no screen of their own. They carry the authority rules: access, grading and official progress are decided here, never in the client.
+ID Function Increment Description
+
+=== PAGE 90 ===
+NS-01 Authorization guard
+Foundation Checks role and resource ownership on every protected endpoint. Refuses with 403 (MSG-11) and writes an audit record (BR-01).
+NS-02 Session manager Foundation Issues an access token and a revocable refresh session; revokes sessions on logout and password change; refuses expired sessions (MSG-12).
+NS-03 Temporary-password gate
+A Blocks every protected learning route while the account's temporary-password flag is set (UC-AUTH-07).
+NS-04 Request validation and error contract
+Foundation Validates every request body at the API boundary and returns errors in one consistent, recoverable format (see 5.2).
+NS-05 Step gate and evidence writer
+A Records StepProgress (monotonic and idempotent), decides the next unlocked step and updates the Progress projection in the same transaction. A failed write is reported as failed, never as saved (MSG-15).
+NS-06 Quiz scorer A Scores quiz attempts on the server and applies the 50% gate (BR-16). Answer keys never reach the client, and submissions are idempotent by key.
+NS-07 Video progress tracker
+A Stores each student's highest watched point per video; marks the step complete at 90% or on the ended event (BR-18).
+
+=== PAGE 91 ===
+NS-08 Server simulation runner
+A Re-runs every submitted lab state with the same versioned packages/sim; submissions are idempotent by key and rate-limited. The server result is official; mismatches with the client preview are logged (BR-04).
+NS-09 Challenge Evaluator
+A Decides passed, partial or needs_practice from successConditions. Refuses lab states with components outside availableObjects (MSG-23) and reports configuration errors to admins (MSG-24).
+NS-10 Assignment queue builder
+A Returns only applicable active assignments in the BR-19 order, with overdue flags; archived assignments go to history only.
+NS-11 Seed and provisioning script
+A-min Idempotent seed for development and E2E using personas from environment configuration (BR-25).
+NS-12 Audit logger Foundation Records authorization denials, admin actions, abnormal parent access and account changes.
+NS-13 Data retention Foundation Keeps attempts, quiz attempts, step evidence, progress, assignment evidence and audit records for 12 months after the student's last activity (BR-22).
+NS-14 3D asset validator C Checks uploaded assets against the asset standard (FS-L1-02) and blocks publishing when they fail (MSG-38).
+
+=== PAGE 92 ===
+NS-15 Parent report generator
+C Builds the weekly or monthly report when the parent opens SC-29.
+NS-F1 AI Context Builder Future Packs lab state, simulation output and action history into the AI context (UC-AI-01).
+NS-F2 Misconception rule engine
+Future Matches action history against fixed behavior patterns (UC-AI-05).
+NS-F3 Hint rate limiter and cache
+Future Per-student rate limit and cache by repeated lab state (UC-AI-09).
+NS-16 3D level-of-detail switcher
+R1-later Drops to LOD1 or LOD2 when fps stays below 25 for 3 seconds.
+NS-17 Progress projection rebuild and check
+A An operations-only command that recomputes Progress from StepProgress, QuizAttempt and Attempt. It is idempotent, reports drift and never rewrites evidence.
+3.1.5 Entity Relationship Diagram
+The data model follows two chains from the PRD: Teacher → Class → Student, and Content → Assignment → Attempt → Progress. Every displayed learning state can be traced through these chains to its source evidence (FR-04). The ERD below is PlantUML in crow's-foot notation; fields marked "to confirm" are not defined in the source documents. LessonStep, StepProgress, QuizAttempt and Attempt follow the Epic A2–A4 contracts.
+
+=== PAGE 93 ===
+Entities Description
+# Entity Description Increment
+1 User One account of any role. Students have a username and no email login; adults have an email. mustChangePassword marks a temporary password. Foundation
+
+=== PAGE 94 ===
+2 Session A revocable refresh session for one login. Foundation
+3 Class A class owned by one teacher, with an optional join code. A-min
+4 Enrollment A student's membership in a class; status is pending, approved or removed. Only approved enrollments receive assignments. A-min
+5 ParentLink A verified link between a parent and one child. C
+6 LinkCode A single-use, expiring code used to create a ParentLink. C
+7 Subject Physics, Chemistry or Biology within Natural Science. Foundation
+8 Chapter A chapter of a subject for one grade. Foundation
+9 Lesson A lesson with the required metadata (BR-15) and status draft, published or archived. A-min
+10 LessonStep One ordered step of a lesson: READING, VIDEO, STUDY_CARDS, QUIZ, LAB or CHALLENGE, with its position, required flag and configuration. Positions are unique within a lesson. A
+
+=== PAGE 95 ===
+11 StepProgress A student's evidence for one step: NOT_STARTED, IN_PROGRESS or COMPLETED, a 0–100 high-water mark that only goes up, the last position and server timestamps. One row per student and step. A
+12 Material Reading content, video, PDF or image of a lesson; a required video carries a transcript or equivalent text. A-min
+13 StudyCard One study card of a lesson, in order. A-min
+14 Quiz The multiple-choice quiz of a lesson, with its revision and its pass threshold (50 in Increment A). A-min
+15 QuizQuestion One question with stable IDs for the question and its options, and the correct option (server-only). A-min
+16 QuizAttempt One immutable submission: answers by question and option ID, correct count, question count, score, pass result and idempotency key. Unique per student and key. A
+17 Lab A virtual lab with its learning objective and simulation model. A-min
+18 Challenge A goal inside a lab with allowed components, constraints and success conditions. A-min
+
+=== PAGE 96 ===
+19 Assignment Content assigned to a class, with a due date. A-min
+20 AssignmentTarget The students of a group assignment; empty means the whole class. A-min
+21 Attempt One immutable lab run linked to student, assignment, lesson step and challenge: submitted state, official result, verdict, duration, simulation model version, idempotency key and server time. Older rows without these links are kept and marked legacy. A
+22 Progress A projection rebuilt from StepProgress, QuizAttempt and Attempt; never an independent source of truth. A
+23 AuditLog Authorization denials, admin actions and account changes. Foundation
+— HintLog, Misconception, SavedExperiment
+Data for the AI Tutor and saved experiments. Future
+3.2 Feature: Authentication and Accounts
+Four roles log in with separate rules: students with a provisioned username and temporary password, adults with an email. Increment: Foundation, A and A-min. Source: FS-L0-01; PRD FR-01, FR-02, FR-07. Use cases: UC-AUTH-01 to 04, UC-AUTH-07.
+Acceptance criteria
+● AC-01. Given a student token, when POST /classes is called directly, then the API returns 403 and creates nothing.
+● AC-02. Given a parent linked to student A, when GET /students/B/progress is called, then the API returns 403 and writes an audit record.
+
+=== PAGE 97 ===
+● AC-03. Given the public sign-up page, then no student role can be chosen; student accounts come only from provisioning.
+● AC-04. Given a student with a temporary password, when any learning endpoint is called before the password is changed, then the API refuses it.
+3.2.1 Function: Log In
+Trigger: the user submits SC-01. Description: authenticates any role and opens the role's home screen (UC-AUTH-03).
+Field Type Required Validation
+Username or email
+Text Yes A value containing @ is treated as an email (adult); otherwise as a student username
+Password Password
+Yes Not empty
+Function details
+1. Empty fields show MSG-01. 2. Wrong credentials show MSG-02 without saying which field was wrong. 3. An inactive account shows MSG-03. 4. On success, NS-02 creates a session. A student with a temporary password goes to SC-02; otherwise each role lands on its home: SC-07, SC-19, SC-27 or SC-30.
+3.2.2 Function: Change Temporary Password
+Trigger: login with a temporary password. Description: forces the student to set a personal password before learning (UC-AUTH-07, SC-02).
+Field Type Required Validation
+
+=== PAGE 98 ===
+New password Password
+Yes Follows the password rules (to confirm by the team); differs from the temporary password
+Confirm new password Password
+Yes Equals New password
+Function details
+1. While the flag is set, NS-03 blocks every learning route and shows MSG-04. 2. Mismatch shows MSG-05; a broken rule shows MSG-06; reusing the temporary password shows MSG-07.
+3. An invalid temporary password at login shows MSG-08. 4. On success, the flag is cleared, other sessions are revoked, MSG-10 is shown and the student lands on SC-07.
+3.2.3 Function: Forgot and Reset Password
+Trigger: an adult clicks Forgot password on SC-01. Description: resets an adult password by email (UC-AUTH-04, SC-03, SC-04).
+Field Type Required Validation
+Email Email Yes Valid email format
+New password / Confirm Password
+Yes Password rules; both entries equal
+Function details
+1. SC-03 always shows MSG-09, whether or not the email exists, so registered emails cannot be discovered.
+2. The reset link is single-use and expires (duration to confirm). 3. Student usernames are never accepted here (BR-20). 4. A successful reset revokes all sessions and shows MSG-10.
+3.2.4 Function: Change Password
+
+=== PAGE 99 ===
+Trigger: Change password on SC-05. Description: a logged-in user replaces the current password (UC-AUTH-04).
+Field Type Required Validation
+Current password Password
+Yes Matches the stored hash
+New password / Confirm Password
+Yes Password rules; both entries equal
+Function details: a wrong current password shows MSG-02; success revokes the other sessions and shows MSG-10.
+3.2.5 Function: Log Out and Session Expiry
+Trigger: Log out, or an expired session. Description: NS-02 revokes the refresh session. An expired session redirects to SC-01 with MSG-12.
+3.2.6 Function: Provision Student Accounts
+Trigger: Create students on SC-21. Description: a teacher (own classes) or admin creates one or many student accounts with temporary passwords (UC-AUTH-02).
+Field Type Required Validation
+Class Dropdown Yes A class owned by the teacher; any class for an admin
+Full name
+Text Yes Not empty
+
+=== PAGE 100 ===
+Username
+Text Yes Unique across the system (MSG-44); generated if left blank (to confirm)
+Grade Number Yes 6 to 9
+Function details
+1. The system generates each temporary password and shows it once, so the operator can hand it over.
+2. Each new student gets an approved Enrollment in the selected class. 3. A teacher choosing a class they do not own is refused with MSG-11. 4. Bulk creation reports each row's result; failed rows do not block the others.
+3.2.7 Function: Register Teacher Account
+Trigger: submit SC-06. Description: creates a teacher account (UC-AUTH-01). Pending the open question on teacher self-registration.
+Field Type Required Validation
+Full name Text Yes Not empty
+Email Email Yes Valid format; not registered (MSG-45)
+Password / Confirm Password
+Yes Password rules; both entries equal
+3.3 Feature: Learning Path
+A student moves through Reading → Video → Study cards → Quiz → Lab/Practice → Challenge, and the server unlocks each step. Increment: A. Source: PRD §4, FR-09 to FR-12, decisions 3 and 5. Use cases: UC-LRN-01 to 04, UC-PRG-02. Epics: A2 (core materials) and A3 (quiz gate).
+Acceptance criteria
+
+=== PAGE 101 ===
+● AC-01. Given a quiz score of 40%, when the client requests the Lab step directly, then the server refuses it and the step stays locked.
+● AC-02. Given a lesson path, then all six steps are visible, locked steps included, and the screen has exactly one primary action.
+● AC-03. Given a student who watched 80% of a video and then seeks back to 10%, then the recorded mark stays at 80%.
+● AC-04. Given an unavailable video, then the transcript is shown and the step can be completed with an explicit action.
+● AC-05. Given a failed evidence write, then the step is not shown as complete.
+3.3.1 Function: View Lesson Path
+Trigger: the student opens an assignment on SC-07. Description: shows the lesson and its ordered steps on SC-08 (UC-LRN-01).
+Function details
+1. The server returns the pathway only if the assignment applies to the student (GET /lessons/:id/pathway). The header shows subject, grade, chapter, topic, learning objective, prerequisites and curriculum reference.
+2. Each step shows its type, position, required flag and state: NOT_STARTED, IN_PROGRESS, COMPLETED or LOCKED. A locked step carries a lock reason: PREREQUISITE_INCOMPLETE, QUIZ_NOT_PASSED or PRACTICE_NOT_PASSED (MSG-13, MSG-14, MSG-47).
+3. The single primary action opens nextStepId, as decided by the server. A completed lesson shows a link to its progress instead.
+4. The client never derives an unlock. After each mutation it replaces its state with the reconciled pathway returned by the server, while keeping unsent video or card state after a recoverable failure.
+5. Loading, empty/unavailable and recoverable-error states follow 5.2. The pathway never returns quiz answers or hidden authoring data.
+3.3.2 Function: Read Lesson Content
+Trigger: the student opens the Reading step. Description: shows accessible lesson theory on SC-09 (UC-LRN-02). The step completes only when the student clicks Complete; the server records it idempotently (PUT /lessons/:lessonId/steps/:stepId/progress, action complete) and it survives reload.
+3.3.3 Function: Watch Video
+Trigger: the student opens the Video step. Description: plays the lesson video on SC-10 and records completion (UC-LRN-03).
+Function details
+
+=== PAGE 102 ===
+1. The video never autoplays; the transcript is keyboard accessible. 2. While playing, the client sends heartbeats with position and duration in seconds. NS-07 keeps a monotonic high-water mark from 0 to 100 and the last position, so the video resumes where the student stopped.
+3. The step is complete at 90% watched or on the media ended event, whichever comes first (BR-18).
+4. If the video cannot load, SC-10 shows MSG-16, the published transcript or equivalent text and a Mark as complete button. This fallback completion is accepted only when the equivalent text is published.
+3.3.4 Function: Study with Study Cards
+Trigger: the student opens the Study cards step. Description: shows the lesson's cards on SC-11 (UC-LRN-04). Each card the student opens is recorded as visited, including visits from earlier sessions. The Complete action is accepted only when every valid card has been visited. Controls work by keyboard and touch, need no flip motion and use 44×44 px targets. Card fields are still to confirm.
+3.3.5 Function: Take Quiz and Pass the Quiz Gate
+Trigger: the student opens the Quiz step and submits SC-12. Description: scores the quiz on the server and applies the gate (UC-PRG-02).
+Field Type Required Validation
+Answer per question
+Single choice (option ID)
+Yes, for every question
+Exactly one option per question, identified by stable question and option IDs. Unanswered questions show MSG-01 before submit; the server rejects missing, extra or duplicate question IDs as a whole
+Function details
+1. The quiz opens only after the required Reading, Video and Study cards steps are complete. GET /lessons/:lessonId/quiz returns questions and options without answers.
+2. On submit (POST /lessons/:lessonId/quiz-attempts with an idempotency key), NS-06 scores the attempt and stores an immutable QuizAttempt. A repeated delivery with the same key returns the same attempt instead of creating a second one.
+3. A score of at least 50% unlocks Lab/Practice and SC-13 shows MSG-17. Below 50%, SC-13 shows MSG-18 with Retry (BR-16). The wording explains the result without shame and offers one next action.
+4. SC-13 shows whether each question was correct, without revealing correct options.
+
+=== PAGE 103 ===
+5. Every retry creates a new QuizAttempt; earlier attempts are kept. Progress shows both the latest and the best score, each labeled.
+6. Changing a published quiz needs a new content revision, so earlier attempts can still explain their scores (BR-27).
+7. Only multiple-choice questions exist in Increment A. There is no teacher override and no manual grading in Increment A.
+3.4 Feature: Virtual Lab and Challenge
+The Grade 8 circuit lab lets a student build a circuit, run it and be graded, with the server as the only authority on results. Increment: A. Source: FS-L2-01, FS-L2-02, FS-L2-03; PRD FR-13, FR-14, QR-01, decision 4. Use cases: UC-LAB-02 to 05, 07, 08. Epic: A4. Other labs are outside A4 acceptance.
+Acceptance criteria
+● AC-01. Given a 9 V battery and an LED with no resistor, when run, then SIM returns LED_OVERLOAD and the LED shows as burnt out with the current value.
+● AC-02. Given a 9 V battery, an LED and a 330 Ω resistor, when run, then current ≈ 0.021 A and ledState = ON.
+● AC-03. Given an open switch, then circuit = OPEN and current = 0, shown as a normal result, not an error.
+● AC-04. Given the same lab state run 100 times on client and server, then every result is identical.
+● AC-05. Given a closed circuit, LED on and current 0.042 A with maxCurrentMa = 20, then the verdict is partial, not needs_practice.
+● AC-06. Given any grading, then no LLM call appears on the grading path. ● AC-07. Given a lab state with a component outside availableObjects sent through the API, then the server refuses to grade it.
+● AC-08. Given a resistance of 0 Ω, then the system warns that the value is out of range instead of returning a meaningless number.
+● AC-09. Given a student who has not passed the quiz, when GET /lessons/:lessonId/steps/:stepId/lab or POST /attempts is called directly, then the server refuses it.
+● AC-10. Given a request that includes its own result or verdict, then the server ignores them and returns only its recomputed values.
+● AC-11. Given the same submission delivered twice with the same idempotency key, then exactly one Attempt exists.
+● AC-12. Given a retry with a changed state, then both attempts reload unchanged and the challenge step completes only when a verdict is passed.
+3.4.1 Function: Build a Circuit
+Trigger: the student drags a component onto the canvas of SC-14 or SC-15. Description: builds the circuit as a node–edge graph (UC-LAB-02).
+
+=== PAGE 104 ===
+Function details
+1. The lab opens only after the quiz gate (GET /lessons/:lessonId/steps/:stepId/lab returns a sanitized circuit configuration and challenge).
+2. The toolbox offers battery, LED, resistor (variable), wire and switch. In a challenge, only availableObjects appear.
+3. Wires join component terminals; series and parallel circuits are supported. Closed or open state updates in real time, before Run.
+4. Connecting a component to itself is refused with MSG-21. Deleting a wired component also deletes its wires. More than 20 components (default) is refused with MSG-20.
+5. Every canvas action has a keyboard and touch equivalent. A static fallback replaces WebGL when it is unavailable, motion respects the reduced-motion setting, and the target is 30 fps on the pilot devices (a target, not yet proven).
+3.4.2 Function: Set Parameters
+Trigger: the student selects a component and edits the parameter panel. Description: sets values used by the simulation (UC-LAB-03, UC-LAB-07).
+Field Type Required Validation
+Source voltage (V) Number
+Yes Within the module's declared range (NS-08, configured in SC-35)
+Resistance (Ω) Number
+Yes Within the declared range; 0 is out of range
+Switch state Toggle Yes Open or closed
+Function details: an out-of-range value shows MSG-19 and blocks Run until it is fixed.
+3.4.3 Function: Run Simulation
+Trigger: Run. Description: shows an instant client preview, then the official server result (UC-LAB-04, UC-LAB-08).
+Function details
+
+=== PAGE 105 ===
+1. The client runs the same versioned packages/sim for an instant preview. The preview never decides the stored result or verdict.
+2. The client sends POST /attempts with lessonStepId, challengeId, labState, durationMs and an idempotency key. The student and the assignment are derived on the server; any result or verdict sent by the client is ignored.
+3. The server checks the step, challenge and lab belong together and that the gate is open, rejects invalid or oversized states before simulating, and applies a rate limit (MSG-46).
+4. NS-08 re-runs packages/sim and stores an immutable Attempt with studentId, assignmentId, lessonStepId, challengeId, labState, simulationResult, verdict, durationMs, simulationModelVersion and createdAt, in the same transaction as the progress update.
+5. The response returns the attempt with its attempt number, the reconciled pathway and safe retry guidance. The result panel shows the phenomenon (LED on, off or burnt out) and a data table (voltage, resistance, current, LED state).
+6. If the request fails (network or server), the student's lab state is kept and MSG-22 is shown. A resubmission reuses the same idempotency key, so no duplicate Attempt is created.
+3.4.4 Function: Challenge Grading
+Trigger: Run inside SC-15. Description: grades the official result against successConditions (UC-LAB-05).
+Function details
+1. SC-15 shows the objective, the allowed components and the constraints, for example maxCurrentMa = 20.
+2. NS-09 decides the verdict: all conditions met → passed (MSG-25); some met → partial (MSG-26); minimum not met → needs_practice (MSG-27).
+3. The result lists each condition as met or not met. 4. The challenge step completes only on passed; partial and needs_practice leave it in progress (BR-28). Completing it unlocks the next configured step.
+5. Any verdict other than passed offers Retry; each retry is a new Attempt, and earlier attempts are never changed.
+6. A successConditions field missing from simulationResult stops grading and reports MSG-24 to admins; the student sees MSG-43 and is not blamed.
+3.5 Feature: Dashboard and Progress
+The student sees only applicable assignments, and every number on screen opens the evidence behind it. Increment: A. Source: FS-L0-04; PRD FR-08, FR-15, QR-06, decision 8. Use cases: UC-PRG-01, UC-PRG-03. Epics: A1 (assignment queue) and A5 (progress and history).
+Acceptance criteria
+
+=== PAGE 106 ===
+● AC-01. Given a class of 30 students and an assignment targeted at 10, then exactly those 10 see it.
+● AC-02. Given 5 runs of a lab, then there are exactly 5 Attempt records with increasing createdAt, none overwritten.
+● AC-03. Given any score, count or status on SC-07 or SC-16, when clicked, then it opens the content or attempts behind it.
+● AC-04. Given two assignments with the same due date, then the older one comes first; ties are broken by ID.
+● AC-05. Given another student's attempt ID, when requested through a /me detail route, then the response is the same not-found as for an unknown ID.
+● AC-06. Given the activity history, when paged to the end, then no item is duplicated or skipped.
+● AC-07. Given a projection rebuild, then the displayed statuses stay the same and no attempt is changed.
+3.5.1 Function: Student Dashboard and Assignment Queue
+Trigger: login, or the Dashboard link. Description: shows the assignment queue and progress on SC-07 (UC-PRG-01).
+Function details
+1. NS-10 returns active assignments that apply to the student's approved enrollment and targeting only.
+2. Order: due date ascending, then creation time ascending, then ID (BR-19). Assignments with no due date come after dated ones (to confirm).
+3. Overdue assignments stay actionable and carry an Overdue label. 4. Archived assignments are left out of the queue and remain in history. 5. With no assignment, SC-07 shows MSG-39. 6. The page has one primary action: continue the first assignment in the queue. 7. No peer ranking, leaderboard or shaming language is shown (QR-06).
+3.5.2 Function: Progress and Attempt History
+Trigger: Progress, or the history link of a lab. Description: shows official progress on SC-16 and attempts on SC-17 (UC-PRG-03).
+Function details
+1. Identity always comes from the session: the student calls GET /me/progress, GET /me/activity, GET /me/quiz-attempts/:id and GET /me/attempts/:id, and never sends their own student ID.
+2. SC-16 is one page: a summary, a completion table by assignment and step, the paginated activity history, and a detail side sheet (SC-17).
+3. Each active assignment shows its required steps with evidence type, status and timestamps, completed/total required steps and the next action. The denominator is the
+
+=== PAGE 107 ===
+assigned, published, required steps; archived assignments stay in history but leave the denominator.
+4. Quiz scores are labeled latest or best. Practical results show verdicts, never an invented percentage. With no data, a dash and a short explanation are shown, never a fabricated zero.
+5. History lists quiz and practical attempts newest first, in bounded pages ordered by createdAt and ID with an opaque cursor. Attempts from before the trace fields existed are marked legacy.
+6. Every detail route rechecks ownership. Unknown and unauthorized IDs get the same not-found response, so nothing leaks.
+7. Progress is a projection of StepProgress, QuizAttempt and Attempt, updated in the same transaction as each write. NS-17 can rebuild or check it and reports drift without touching evidence.
+3.6 Feature: Content Management
+Teachers and admins author lessons in the Lesson Editor (SC-23) and publish only when the metadata is complete. Increment: A-min (minimal authoring path), with the full UX in B. Source: FS-L0-02; PRD decision 1. Use cases: UC-CNT-01 to 07.
+Acceptance criteria
+● AC-01. Given a lesson missing its learning objective, when Publish is clicked, then publishing is blocked and the missing field is named.
+● AC-02. Given a draft lesson, then it does not appear in the Assign Work dialog. ● AC-03. Given a published lesson, then all seven metadata fields are visible to the teacher.
+● AC-04. Given a required video without a transcript, then the lesson cannot be published.
+3.6.1 Function: Create and Edit Lesson Metadata
+Trigger: New lesson on SC-22, or the Metadata tab of SC-23. Description: creates a draft lesson with its metadata (UC-CNT-01).
+Field Type Required Validation
+Subject Dropdown Yes Existing subject
+Grade Dropdown Yes 6 to 9
+
+=== PAGE 108 ===
+Chapter Dropdown Yes Chapter of that subject and grade
+Topic Text Yes Not empty
+Learning objective Text Yes Not empty
+Prerequisites Text Yes Not empty
+Curriculum reference
+Text Yes Reference to the 2018 general education curriculum
+3.6.2 Function: Write Reading Content
+Trigger: the Reading tab of SC-23. Description: rich-text editor (TipTap) with formulas, images and tables (UC-CNT-03). NexaLab authors its own pilot text; textbook content is not copied without a rights decision (BR-24).
+3.6.3 Function: Upload Materials
+Trigger: the Video tab or Upload material. Description: uploads video, PDF and images to Object Storage (UC-CNT-02).
+Field Type Required Validation
+File File Yes Supported types only (MSG-37); size limit to confirm
+Required for completion Checkbox
+No Marks the video as a required step
+
+=== PAGE 109 ===
+Transcript Rich text Yes, if the video is required
+Not empty
+3.6.4 Function: Create Study Cards
+Trigger: the Study cards tab. Description: adds, edits and orders the lesson's study cards (UC-CNT-07). Card fields are an open question.
+3.6.5 Function: Create Quiz
+Trigger: the Quiz tab. Description: builds the multiple-choice quiz used as the gate (UC-CNT-04).
+Field Type Required Validation
+Question text Text Yes Not empty
+Options Text list Yes At least 2
+Correct option Single choice Yes Exactly one per question
+Function details: the pass threshold is fixed at 50% in Release 1 (BR-16). Correct options are stored on the server only.
+3.6.6 Function: Attach Lab
+Trigger: the Lab tab. Description: attaches a published lab and challenge from the library (UC-CNT-05). Teachers do not build labs or 3D models.
+3.6.7 Function: Publish and Archive
+Trigger: Publish or Archive on SC-23. Description: moves content through draft → published → archived (UC-CNT-06).
+Function details
+
+=== PAGE 110 ===
+1. Publishing checks all metadata (BR-15), the transcript of every required video and, for a lab, BR-12. Any gap shows MSG-28 with the missing items.
+2. Archived content stays in existing assignments; students who have not started see MSG-36.
+3. Only the author or an admin can publish or archive (MSG-11 otherwise).
+3.7 Feature: Classes and Assignments
+A teacher owns classes, students belong through approved enrollments, and assignments target a class or a subset of it. Increment: A-min for the operator path, B for full teacher operations. Source: FS-L0-03; PRD FR-03, FR-06, FR-16 to FR-18, decisions 2, 8, 9 and 11. Use cases: UC-CLS-01 to 04, UC-AUTH-05, UC-ADM-03.
+Acceptance criteria
+● AC-01. Given 3 students who ran the lab, when the teacher opens SC-25, then the attempt count of each matches their Attempt records.
+● AC-02. Given a due date that has passed, when a student submits, then the work is accepted and labeled overdue.
+● AC-03. Given a teacher, when they request a class they do not own, then the API returns 403.
+● AC-04. Given the seed is run twice, then no duplicate records exist.
+3.7.1 Function: Create Class
+Trigger: Create class on SC-19. Description: creates a class owned by the teacher (UC-CLS-01).
+Field Type Required Validation
+Class name
+Text Yes Not empty; unique among the teacher's classes
+Grade Dropdown Yes 6 to 9
+Function details: the join code is random, not sequential and can be disabled. It is not used by students in Increment A.
+3.7.2 Function: Assign Work
+
+=== PAGE 111 ===
+Trigger: Assign work on SC-20. Description: assigns published content to a class or a group (UC-CLS-03, SC-24).
+Field Type Required Validation
+Content type
+Radio Yes Lesson or lab exercise
+Content Dropdown Yes Published content only (MSG-29 for drafts)
+Scope Radio + multi-select
+Yes Whole class, or approved students of this class
+Due date Date No Not in the past (MSG-30)
+Function details: on success, MSG-31 shows how many students received the work, and their queues update.
+3.7.3 Function: Manage Class Members (Increment B)
+Trigger: the member list on SC-20. Description: approves pending students and removes members (UC-CLS-02). Removed students lose access to the class's assignments; their evidence is kept.
+3.7.4 Function: Class Tracking Board and Student Evidence (Increment B)
+Trigger: SC-25, or a student row. Description: shows each student's status, quiz scores and attempt counts, and one student's full evidence on SC-26 (UC-CLS-04). Every number opens its source records, and only owned classes are visible.
+Analytics priorities (Product Brief): progress, completion, quiz scores, attempts, and simulation and challenge results; hint usage and misconception evidence follow once the AI Tutor exists. The board points out students who may need support, together with the evidence behind that conclusion. Teachers review outcomes but do not change server-calculated scores or verdicts.
+3.7.5 Function: Join Class with a Code (Increment B)
+
+=== PAGE 112 ===
+Trigger: SC-18. Description: a student joins a class by code (UC-AUTH-05). An invalid code shows MSG-32; more than 10 wrong codes in 10 minutes locks entry for 15 minutes (MSG-33); a class with approval on shows MSG-34.
+3.7.6 Function: Seed and Minimal Operations
+Trigger: the seed command, or the minimal operator path. Description: creates the teacher, class, student, published lesson and assignment needed for the Increment A journey (UC-ADM-03, NS-11). Seed personas come from environment configuration and never ship as production credentials (BR-25).
+3.8 Feature: Parent Portal
+A parent sees only explicitly linked children, read-only. Increment: C. Source: FS-L0-05; PRD FR-19, QR-03. Use cases: UC-AUTH-06, UC-PAR-01, UC-PAR-02.
+Acceptance criteria
+● AC-01. Given a parent on SC-29, then the screen has no write action and every write endpoint refuses the parent.
+● AC-02. Given a child with AI Tutor conversations (Future), then the parent sees only a summary of help-seeking, never the conversations (BR-11).
+3.8.1 Function: Link a Child
+Trigger: SC-28. Description: creates a ParentLink from a single-use, expiring link code (UC-AUTH-06).
+Field Type Required Validation
+Link code Text Yes Exists, unused and not expired (MSG-35)
+3.8.2 Function: View Child Progress
+Trigger: a child on SC-27. Description: shows completed lessons, study time, quiz scores and experiments run, read-only (UC-PAR-01). A studentId outside the parent's links returns 403 and an audit record. The weekly or monthly report is generated on open (UC-PAR-02, pending the open question).
+3.9 Feature: Administration
+
+=== PAGE 113 ===
+Admins operate users, subjects, content, labs and assets under server-side authorization and audit. Increment: C. Source: FS-L1-02, FS-L2-01; PRD FR-20. Use cases: UC-ADM-01, UC-ADM-02.
+Acceptance criteria
+● AC-01. Given any admin change, then an AuditLog record names the admin, action, resource and outcome.
+● AC-02. Given a 3D asset over the triangle budget, when uploaded, then the system warns and blocks publishing until it meets the standard.
+3.9.1 Function: Manage Users
+Trigger: SC-31. Description: search, create, edit and deactivate accounts of all roles; issue a new temporary password to a student (to confirm with the open question on student password recovery). Deleting a user with evidence is replaced by deactivation, because evidence is retained (BR-22).
+3.9.2 Function: Manage Subjects, Chapters, Labs and Challenges
+Trigger: SC-32 or SC-33. Description: CRUD for the reference data used by lesson metadata, and for labs and challenges with their successConditions and constraints. A lab is published only after BR-12 is met.
+3.9.3 Function: Manage 3D Assets
+Trigger: SC-34. Description: uploads assets and validates them against FS-L1-02 (glTF 2.0/GLB with Draco, 20,000–50,000 triangles per scene, textures up to 2048×2048 in KTX2/Basis, LOD0–LOD2, one node per part named by its label key). Failures show MSG-38.
+3.9.4 Function: Configure Simulation Parameters
+Trigger: SC-35. Description: sets each simulation module's valid parameter ranges and constants (UC-ADM-02). Changes apply to later runs only; earlier Attempts keep their simVersion and results.
+3.10 Features Outside the Release 1 Increments
+These features are specified in the Use Case Specs or the Product Brief but are not in a Release 1 increment yet. R1-later features belong to Release 1 and already exist in part; Future features come after Release 1, with the Teacher AI Content Assistant before the Student AI Tutor. Screens and field-level details will be added when they are scheduled.
+
+=== PAGE 114 ===
+Feature Release Source Functional requirements Key acceptance criteria
+3D model viewer (human eye)
+R1-later FS-L1-01, FS-L1-02; UC-3D-01 to 07
+Rotate, zoom, pan, explode, show/hide layers, select a part and read its label, cutting plane, part-naming quiz with typed labels checked against a fixed set
+Scene loads in under 3 s on 10 Mbps and holds 30 fps or more on integrated graphics; quiz mode hides labels from tooltips and the DOM
+Chemistry lab
+R1-later FS-L2-04; UC-LAB-06
+Equipment, substances, volume and concentration; six fixed reactions; excess and limiting reactant; results recomputed by the backend; purely virtual (BR-07)
+An unsupported pair is named as unsupported with the supported list; CuSO ₄ + NaOH shows a blue precipitate with quantities matching the textbook test
+Teacher AI Content Assistant
+Future (first AI capability)
+PRD FR-21; Product Brief
+Draft quizzes or tests, study cards, questions and learning materials from a lesson or topic; help analyse learning evidence. Every draft goes through teacher review, editing, approval and publication, with an audit trail
+Nothing an AI drafts reaches students without an authorized teacher approving it; AI never makes a grade decision
+
+=== PAGE 115 ===
+Student AI Tutor
+Future (after the Teacher assistant)
+FS-L4-01 to 03; UC-AI-01 to 05, 08, 09; PRD FR-22
+Context from verified lesson, lab, challenge and attempt data only; Question → Concept Hint → Action Hint → Explanation; escalation only after a real retry; HintLog for every hint; misconception rules; curriculum lock; rate limit and cache
+Five "still don't get it" clicks without re-running keep level 1; LLM timeout returns the static template; AI never calculates or overrides a result, verdict, score or progress
+Teacher AI insights
+Future FS-L4-04; UC-AI-06, 07
+Class and per-student summaries traceable to Attempts and HintLogs
+Clicking an insight lists its evidence; a teacher can mark disagreement
+Gesture control
+Future (research)
+FS-L3-01; UC-CV-01 to 03
+Camera permission per session; five gestures mapped to mouse equivalents; MediaPipe runs fully in the browser
+Denying the camera locks no feature; no request carries image data
+Sandbox mode
+Future FS-L2-02; UC-LAB-01
+Free experimentation without a challenge or grading
+Full toolbox, no success conditions
+Saved experiments
+Future FS-L0-04; UC-PRG-04, 05
+Save a run's setup and result; reopen it
+Reopening restores the exact lab state and earlier result
+Other research directions stay outside these requirements until validated: answer similarity and cheating detection, competency prediction, AI-generated simulations or 3D models, multiplayer, VR/AR and paid AI support.
+4. Non-Functional Requirements
+
+=== PAGE 116 ===
+4.1 External Interfaces
+4.1.1 User Interfaces
+● The core student path works with keyboard and touch, uses targets of at least 44×44 px, meets WCAG AA contrast for final rendered colors and respects the reduced-motion setting (QR-04).
+● Increment A screens are verified at 390, 768, 1024 and 1440 px wide with no horizontal overflow and no hidden primary action (QR-05).
+● Each learning screen has one primary next-step action; no fabricated metrics, peer ranking, shame language or score without evidence drill-down (QR-06).
+● Every async surface has loading, empty and recoverable-error states (QR-07). ● UI language: Vietnamese (to confirm). Messages in 5.3 are written in English for this document.
+4.1.2 Hardware Interfaces
+● Student devices: ordinary laptops with integrated graphics, tablets and phones within the pilot browser matrix (4.1.3).
+● Webcam: needed only for gesture control (Future). Every feature works without one (BR-10).
+● No lab hardware, sensors or chemicals are used.
+4.1.3 Software Interfaces
+Component Role Rule
+nexalab-fe (React) Client and student UX Holds no authorization or progress truth
+nexalab-be (NestJS) API, persistence, authentication, RBAC and authoritative simulation
+Product coordination root
+packages/sim Deterministic simulation engine
+Versioned when synchronized to the frontend
+
+=== PAGE 117 ===
+Prisma Schema, migrations and queries
+The only database access layer
+Supabase Managed PostgreSQL only Supabase Auth, browser database access and RLS are not used for NexaLab authentication, RBAC or ownership
+Object Storage + CDN Videos, files and 3D assets Delivery only
+Supported browsers (pilot)
+Chrome and Edge desktop, Chrome Android, Safari iOS
+Latest two stable releases of each
+LLM provider (Claude API or GPT), MediaPipe Tasks Vision
+AI Tutor and gesture control Future
+4.1.4 Communications Interfaces
+● All client traffic goes to the backend REST API over HTTPS; clients never connect to the database.
+● Sessions use a short-lived access token and a revocable refresh session in a cookie. ● Runtime API traffic uses a pooled database connection; migrations, seed and admin commands use a direct or session-pooled connection.
+● Database and API secrets live on the server only and never use a VITE_ prefix. ● Future: LLM calls go from the server only, and the LLM key never reaches the browser (BR-14).
+4.2 Quality Attributes
+IDs QR-xx come from the PRD and NFR-xx from the Use Case Specs. Where they disagree, the PRD target applies.
+4.2.1 Usability
+
+=== PAGE 118 ===
+ID Requirement Target
+QR-04 Accessibility of the core student path
+Keyboard and touch; 44×44 px targets; WCAG AA; reduced motion respected
+QR-05 Responsive layout No overflow at 390, 768, 1024 and 1440 px
+QR-06 Honest learning UX One primary action per learning screen; every score drills into evidence
+— Video Never autoplays (PRD decision 5)
+4.2.2 Reliability
+ID Requirement Target
+QR-07 Resilient states A failed verdict or progress write is never shown as saved
+QR-10 Pilot journey success
+At least 95% of seeded A1–A5 journeys complete without an unrecoverable error; at least 99% crash-free pilot sessions NFR-13
+Degraded operation
+Network loss, LLM failure (Future) or camera failure (Future) always has a fallback; no dead screen
+4.2.3 Performance
+ID Requirement Target
+
+=== PAGE 119 ===
+QR-09 Input acknowledgement
+Supported student screens respond to input within 100 ms
+QR-09 API latency (pilot, p95)
+Reads 500 ms; mutations 1,000 ms; excluding file/video transfer and simulation rendering NFR-02
+Simulation Client preview under 100 ms; server grading within the QR-09 mutation target NFR-01
+3D scene (R1-later) Loads in under 3 s on 10 Mbps; 30 fps or more on integrated graphics NFR-03
+AI hints (Future) Template under 300 ms; LLM under 5 s (p95) with a visible waiting state NFR-04
+Hand tracking (Future)
+About 30 fps; exits gesture mode below 15 fps
+4.2.4 Security
+ID Requirement Target
+BR-01 / FR-02
+Server-side authorization
+Every protected operation checks role and ownership in the API
+QR-03 Ownership boundaries
+Students see only their own evidence; teachers only owned classes; parents only linked children, read-only
+
+=== PAGE 120 ===
+NFR-09 Credentials Passwords hashed with Argon2; JWT access plus revocable refresh session
+— Pilot gate Zero verified cross-user or cross-class authorization leaks (PRD §9)
+4.2.5 Privacy and Compliance
+ID Requirement Target NFR-06
+Data minimization
+Only learning interaction data and what the account needs NFR-07
+Legal compliance Decree 13/2023/ND-CP on personal data of children under 16
+BR-22 Retention Learning and audit records kept 12 months after the student's last activity; deletion and export policy beyond the pilot is a launch/legal review item NFR-05
+Camera privacy (Future)
+No video frame leaves the device
+4.2.6 Scientific Integrity
+ID Requirement Target
+QR-01 Scientific authority
+Only the deterministic engine and evaluator decide results and verdicts; the backend recomputes every simulation
+
+=== PAGE 121 ===
+QR-02 Progress authority
+Official progress is written and read only through authorized backend operations
+QR-08 Content governance
+Software tests do not count as subject-matter approval of content or scientific models (see BR-12). The textbook references in the current scientific-model notes have not yet been independently verified
+— Pilot gate Zero mismatches between stored verdicts and backend recomputation
+4.2.7 Testability and Maintainability
+ID Requirement Target NFR-12
+Automated tests
+Vitest for units; Playwright for the end-to-end student journey
+FR-05 API contract Request validation at the API boundary and one consistent error contract shared by both repositories
+— Evidence levels
+Every release claim states which of the four evidence levels in 5.4 it has reached
+4.2.8 Deferred Operational Decisions
+The Product Owner deliberately deferred these. They must be decided before pilot launch, or before the increment concerned:
+● Production scale tier, final hosting region, disaster-recovery RPO and RTO, and paid Supabase backup or point-in-time recovery (before pilot launch).
+● Export and deletion policy after the 12-month pilot retention window (launch and legal review).
+
+=== PAGE 122 ===
+5. Requirement Appendix
+5.1 Business Rules
+BR-01 to BR-15 come from the Use Case Specs, with BR-02, BR-12 and BR-15 updated for the PRD. BR-16 to BR-26 come from the PRD, and BR-27 to BR-29 from the Epic A3–A5 specs.
+ID Rule Applies to Release
+BR-01 Authorization is checked in the API, not only by hiding UI elements. A direct request must be blocked exactly as if the button were hidden.
+Whole system Foundation
+BR-02 Students cannot self-register. Their accounts are provisioned by a teacher or the school (Decree 13/2023/ND-CP). UC-AUTH-02 A-min
+BR-03 The Simulation Engine owns every scientific result. AI may read its output but never computes results.
+LAB, AI A
+BR-04 The server result is final; the client result is only an instant preview.
+UC-LAB-04, 08 A
+BR-05 Every simulation module is deterministic: the same input always gives the same output.
+LAB A
+BR-06 Hints follow ask → guide → hint → explain and escalate only after the student has retried.
+UC-AI-02, 03 Future
+
+=== PAGE 123 ===
+BR-07 Every dangerous Chemistry or Physics scenario is purely virtual; no explanation gives instructions usable in real life.
+LAB, AI A
+BR-08 Each part of a 3D asset is a separate node named by its label key.
+3D R1-later
+BR-09 Misconception hypotheses go only to the teacher dashboard, never to the student.
+UC-AI-05 Future
+BR-10 Gestures are a secondary path; mouse and keyboard are always available.
+CV Future
+BR-11 Parents are read-only, see only linked children and never see detailed AI conversations.
+PAR C
+BR-12 A lab is published only after its unit tests against textbook figures pass and a subject teacher has reviewed it (temporary option: a textbook checklist cross-checked by two team members). Passing tests alone is not subject approval (QR-08).
+LAB, ADM A-min
+BR-13 Every AI insight on the teacher dashboard traces back to specific Attempts and HintLogs.
+UC-AI-06, 07 Future
+BR-14 The LLM API key stays on the server; the browser never calls the LLM.
+AI Future
+BR-15 Every lesson and lab records subject, grade, chapter, topic, learning objective, prerequisites and curriculum reference; publishing is blocked otherwise.
+CNT A-min
+
+=== PAGE 124 ===
+BR-16 A server-calculated quiz score of at least 50% unlocks Lab/Practice. Students may retry. A teacher override is Increment B, server-side only.
+UC-PRG-02, LRN-01 A
+BR-17 The Challenge step stays locked until the required practical step is complete.
+UC-LRN-01, LAB-05 A
+BR-18 A required video is complete at 90% watched or on the ended event, whichever is first. Seeking back never lowers the mark. Video never autoplays. If unavailable, the published transcript with an explicit completion action replaces it. UC-LRN-03 A
+BR-19 Active applicable assignments are ordered by due date ascending, then creation time ascending, then ID. Overdue assignments stay actionable and labeled; archived ones leave the queue but stay in history. UC-PRG-01 A
+BR-20 Students log in with a username, cannot reset a password by email and must change a temporary password before any learning route.
+AUTH A
+BR-21 A class join code, a temporary password and a parent-link code are separate credentials with separate purposes.
+AUTH Foundation
+BR-22 Attempts, quiz attempts, step evidence, progress, assignment evidence and authorization audit records are kept for 12 months after the student's last activity in the pilot.
+Data Foundation
+
+=== PAGE 125 ===
+BR-23 Every score, count or status shown to a user opens the content or attempts behind it.
+PRG, CLS A
+BR-24 No textbook content is copied without a separate rights decision and subject review.
+CNT A-min
+BR-25 Seed personas come from environment configuration; they exist only in guarded non-production environments, never enable student self-registration, bypass backend authentication or ship as production credentials. No frontend quick-login or mock-auth bypass is allowed. UC-ADM-03 A-min
+BR-26 Every lab run and quiz submission creates a new record; earlier records are never overwritten.
+LAB, PRG A
+BR-27 Changing a published quiz needs a new content revision. Each quiz attempt keeps enough question-version evidence to explain its score later.
+UC-CNT-04, PRG-02 A
+BR-28 A challenge step completes only on a passed verdict; partial and needs_practice keep it in progress. UC-LAB-05 A
+BR-29 StepProgress, QuizAttempt and Attempt are the evidence. Progress is only a projection of them and can be rebuilt; expiry or deletion of evidence is an audited operation, never done silently by the UI.
+PRG, LRN, LAB A
+5.2 Common Requirements
+ID Requirement
+
+=== PAGE 126 ===
+CR-01 Every request body is validated with Zod at the API boundary, and unknown fields are stripped or rejected consistently. Every error uses one stable format shared by both repositories, whose codes distinguish validation, gate (step locked), ownership, conflict, rate limit and dependency/system failure. The client shows a recoverable message, never a raw error. The exact field layout is to confirm.
+CR-02 Field errors appear under the field; on submit, focus moves to the first invalid field. Required fields are marked.
+CR-03 Dates display as dd/mm/yyyy and times as HH:mm in Vietnam time (to confirm).
+CR-04 Every async screen has a loading state, an empty state with a next step, and a recoverable error state with Retry.
+CR-05 Destructive actions (delete, archive, remove member, deactivate) ask for confirmation (MSG-41).
+CR-06 Learning completion, scores, verdicts and progress are written only by the server. The client never marks a step complete by itself.
+CR-07 A save is reported as successful only after the server confirms it (MSG-42); otherwise MSG-15 or MSG-43 is shown.
+CR-08 Admin actions, authorization denials and account changes are written to the audit log.
+CR-09 Long lists are paginated or searchable.
+
+=== PAGE 127 ===
+CR-10 All interactive elements are reachable by keyboard and have visible focus.
+CR-11 Ownership always comes from the authenticated actor, never from a user, student or teacher ID sent by the client. Students reach their own data through /me routes. Unknown and unauthorized IDs on detail routes get the same not-found response.
+CR-12 Learning mutations (step progress, quiz submission, lab attempt) carry an idempotency key. A retry after a timeout reuses the same key; the client never blindly retries with a new key.
+CR-13 Server timestamps are authoritative. Lists use stable cursor pagination ordered by createdAt and ID, with bounded page sizes and opaque cursors.
+5.3 Application Messages List
+Messages are numbered MSG-01 to MSG-47 and referenced by ID from the functions in section 3. Text in braces is filled in at run time. The product shows these messages in Vietnamese (to confirm).
+ID Type Message Context MSG-01
+Error {Field} is required. Any required field left empty MSG-02
+Error Incorrect username/email or password.
+Login, change password MSG-03
+Error Your account is not active. Contact your teacher or administrator.
+Login with an inactive account
+
+=== PAGE 128 ===
+MSG-04
+Info Please set a new password before continuing.
+Temporary-password gate MSG-05
+Error The two passwords do not match. Password forms MSG-06
+Error Your password does not meet the rules: {rule}.
+Password forms MSG-07
+Error Your new password must be different from the temporary password. SC-02 MSG-08
+Error Your temporary password is no longer valid. Ask your teacher for a new one.
+Login with an invalid temporary password MSG-09
+Info If this email is registered, we have sent a password reset link. SC-03 MSG-10 Success
+Your password has been changed. SC-02, SC-04, SC-05 MSG-11
+Error You do not have permission to do this.
+Any 403 MSG-12
+Info Your session has expired. Please log in again.
+Expired session
+
+=== PAGE 129 ===
+MSG-13
+Info Score at least 50% on the quiz to unlock the lab.
+Locked Lab step MSG-14
+Info Complete the practice step to unlock the challenge.
+Locked Challenge step MSG-15
+Error We couldn't save your progress. Please try again.
+Failed evidence or progress write MSG-16
+Warning This video is unavailable. Read the text below to complete this step.
+SC-10 fallback MSG-17 Success
+You scored {score}%. The lab is now unlocked.
+SC-13, passed MSG-18
+Info You scored {score}%. You need 50% to unlock the lab. Review the lesson and try again.
+SC-13, not passed MSG-19
+Error {Parameter} must be between {min} and {max}.
+Out-of-range parameter MSG-20
+Error This lesson allows up to {n} components.
+Component limit MSG-21
+Error A component cannot be connected to itself.
+Circuit canvas
+
+=== PAGE 130 ===
+MSG-22
+Warning Not recorded yet. Your setup is kept; submit again when you are back online.
+Offline run MSG-23
+Error This challenge does not allow {component}.
+Server refuses a lab state MSG-24
+Error Challenge configuration error: {field} is not produced by the simulation.
+Admin notification MSG-25 Success
+Challenge passed. All conditions are met.
+Verdict passed MSG-26
+Info Almost there: {met} of {total} conditions met. Check the ones marked below.
+Verdict partial MSG-27
+Info Not yet: the minimum conditions are not met. Change your setup and try again.
+Verdict needs_practice MSG-28
+Error Cannot publish. Missing: {items}. Publish blocked MSG-29
+Info Publish this content before assigning it.
+Draft content in Assign Work MSG-30
+Error The due date cannot be in the past.
+Assign Work
+
+=== PAGE 131 ===
+MSG-31 Success
+Assigned to {n} students. Assign Work MSG-32
+Error This class code is not valid. Join Class (B) MSG-33
+Error Too many attempts. Please try again in 15 minutes.
+Join Class (B) MSG-34
+Info Your request is waiting for teacher approval.
+Join Class with approval (B) MSG-35
+Error This link code is invalid or has expired.
+Link Child (C) MSG-36
+Info This content is no longer updated. Archived content MSG-37
+Error This file type is not supported. Upload MSG-38
+Error This 3D asset does not meet the asset standard: {issue}.
+3D asset upload (C) MSG-39
+Info You have no assignments right now.
+Empty queue
+
+=== PAGE 132 ===
+MSG-40
+Label Overdue Overdue assignment MSG-41
+Confirm Are you sure you want to {action} {item}?
+Destructive actions MSG-42 Success
+Saved. Any confirmed save MSG-43
+Error Something went wrong. Please try again.
+Unexpected error MSG-44
+Error This username is already taken. Provision students MSG-45
+Error This email is already registered. Teacher registration, user management MSG-46
+Error You are submitting too quickly. Wait a moment and try again.
+Rate limit on lab attempts MSG-47
+Info Finish the earlier steps of this lesson to unlock this one.
+Lock reason PREREQUISITE_INCOMPLETE
+5.4 Other Requirements
+5.4.1 Out of Scope
+Not in Release 1 Increment A: Student AI Tutor, Teacher AI Content Assistant, leaderboards, gamification economies and advanced analytics. Not in the MVP at all: full VR, mobile AR, multi-user experiments, hundreds of 3D models, AI-generated 3D models or challenges, fully adaptive learning paths, an in-browser programming IDE, a parent mobile app, an extended
+
+=== PAGE 133 ===
+gesture set, community forums, payments, scheduled parent reports, video transcoding, full experiment portfolios and in-depth misconception diagnosis for Chemistry.
+5.4.2 Verification Evidence Levels
+Every ticket and release claim states which level it has reached (PRD §8). Integration and E2E tests count as passed only when their real database, API, seed and browser dependencies actually ran.
+1. Source verification: the implementation and authorization paths are traced in code. 2. Automated verification: the relevant unit, typecheck, lint and build commands pass. 3. Runtime verification: the real configured API, database, seed data and browser path are exercised.
+4. Production verification: the deployed environment is exercised; never inferred from local success.
+5.4.3 Definition of Done
+A use case is done when all of the following hold:
+1. Its main, alternative and exception flows are implemented. 2. All acceptance criteria of its feature pass. 3. Authorization is tested at the API, not only in the UI (BR-01). 4. For lab use cases, unit tests against textbook figures pass, the scientific model is documented and BR-12 review is done.
+5. The related quality targets in 4.2 are met, with responsive and accessibility evidence for student screens.
+6. A Playwright scenario exists if the use case lies on the Increment A student journey. 7. For Future AI use cases, every AI response has a traceable HintLog (BR-13).
+5.4.4 Release 1 Outcome Gates
+Increment A is ready for pilot review when a provisioned student completes the assigned path from login to progress with real seeded dependencies, cross-user and cross-class access is refused, the representative simulation result and verdict are server-authoritative, and responsive and accessibility checks have evidence.
+Pilot measure (one school, up to two Grade 8 classes, at most 80 students) Target
+Assigned-path completion At least 70%
+
+=== PAGE 134 ===
+Students who make a second attempt after a first lab attempt that did not pass
+At least 60%
+Seeded A1–A5 journeys without an unrecoverable error At least 95%
+Verified cross-user or cross-class authorization leaks 0
+Mismatches between stored verdicts and backend recomputation 0
+These are acceptance targets and remain unproven until measured with real dependencies.
+5.4.5 Traceability Matrix
+Use cases Feature (SRS)
+Source spec
+Main entities Increment
+UC-AUTH-01 to 04, 07
+3.2 FS-L0-01; FR-01, FR-02, FR-07
+User, Session Foundation, A
+UC-AUTH-02, UC-ADM-03
+3.2.6, 3.7.6
+FS-L0-01; FR-06
+User, Class, Enrollment A-min
+UC-LRN-01 to 04, UC-PRG-02
+3.3 PRD §4; FR-09 to FR-12
+Lesson, Material, StudyCard, Quiz, QuizAttempt, LessonStep, StepProgress A
+
+=== PAGE 135 ===
+UC-LAB-02 to 05, 07, 08
+3.4 FS-L2-01 to 03; FR-13, FR-14
+Lab, Challenge, Attempt A
+UC-PRG-01, 03 3.5 FS-L0-04; FR-08, FR-15
+Assignment, Attempt, Progress A
+UC-CNT-01 to 07 3.6 FS-L0-02 Lesson, Material, StudyCard, Quiz, Lab
+A-min, B
+UC-CLS-01 to 04, UC-AUTH-05
+3.7 FS-L0-03; FR-03, FR-16 to FR-18
+Class, Enrollment, Assignment, AssignmentTarget
+A-min, B
+UC-AUTH-06, UC-PAR-01, 02
+3.8 FS-L0-05; FR-19
+ParentLink, LinkCode, Progress C
+UC-ADM-01, 02 3.9 FS-L1-02, FS-L2-01; FR-20
+User, Subject, Chapter, Lab, Challenge, AuditLog C
+UC-3D-01 to 07, UC-LAB-06
+3.10 FS-L1-01, FS-L1-02, FS-L2-04
+Lab, Challenge, Attempt R1-later
+UC-CV, UC-AI, UC-LAB-01, UC-PRG-04, 05;
+
+=== PAGE 136 ===
+Teacher AI Content Assistant

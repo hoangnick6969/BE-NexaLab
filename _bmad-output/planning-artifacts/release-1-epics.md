@@ -2,7 +2,7 @@
 title: NexaLab Release 1 Epic Breakdown
 status: ready-for-implementation
 created: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-14
 source: docs/product/prd.md
 architecture: architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md
 active_specs:
@@ -77,7 +77,7 @@ The teacher manages owned-class membership, permitted content, and assignments b
 
 **Coverage:** FR-16, FR-17.
 
-**Envelope only:** detailed Teacher UX/spec/tickets are deferred.
+**Planning:** decisions locked 2026-10-14 in `increment-b-c-plan.md` (B0 foundation + B1-T1..T6: class lifecycle, membership statuses, join code with approval, content library/editor with clone-on-lock, lesson and lab assignments). Detailed SPEC/tickets pending.
 
 ### B2 — A teacher acts on traceable learning evidence
 
@@ -85,7 +85,7 @@ The teacher identifies students who need support and opens the exact quiz, attem
 
 **Coverage:** FR-18.
 
-**Envelope only:** no advanced or AI-generated analytics.
+**Planning:** decisions locked 2026-10-14 in `increment-b-c-plan.md` (B2-T1..T6: tracking board from A5 derivation, deterministic needs-support flags, student evidence drill-down, audited quiz-gate override). No advanced or AI-generated analytics.
 
 ## Increment C — Parent and Admin
 
@@ -95,7 +95,7 @@ The parent sees read-only progress for explicitly linked children and cannot mut
 
 **Coverage:** FR-19.
 
-**Envelope only:** detailed Parent UX/spec/tickets are deferred.
+**Planning:** decisions locked 2026-10-14 in `increment-b-c-plan.md` (C1-T1..T4: teacher/admin-issued single-use 7-day link code, unlink, read-only progress reusing A5 derivation; no weekly/monthly report).
 
 ### C2 — An admin operates the platform without bypassing controls
 
@@ -103,7 +103,7 @@ The admin manages users, subjects, content, labs, and assets through explicit au
 
 **Coverage:** FR-20.
 
-**Envelope only:** detailed Admin UX/spec/tickets are deferred.
+**Planning:** decisions locked 2026-10-14 in `increment-b-c-plan.md` (C2-T1..T6: deactivate instead of delete, subjects/chapters, labs/challenges/simulation config, one-time reset link, assets; 3D validator is P2).
 
 ## Future
 
@@ -125,7 +125,7 @@ Progressive hints use approved learning and attempt context while deterministic 
 
 ## Build order
 
-`A1 → A2 → A3 → A4 → A5 → B1 → B2 → C1 → C2`
+`A1 → A2 → A3 → A4 → A5 → B0 → B1 → B2 → C1 → C2` (B0 = shared foundation fixes delivered inside the B1 spec)
 
 Shared Foundation is adopted and verified inside each epic. Future epics do not enter Release 1 build order.
 
