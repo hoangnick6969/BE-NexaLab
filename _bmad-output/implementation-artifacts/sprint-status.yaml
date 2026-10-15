@@ -83,9 +83,8 @@ execution:
   current_story: c1-t4-parent-journey-negative
   next_story: epic-c2-admin-operations
   selection_reason: >
-    2026-10-15: C1 link lifecycle, sanitized parent read model, responsive parent UI, unlink flow, and negative access handling completed; build/lint/unit verification passed.
-    Fresh migration/seed passed, B2 integration passed 13/13, unit tests passed 107/107, and mobile browser evidence
-    journey passed 1/1. Shared development credentials were rejected, so shared migration is not claimed. C1-T1 is next.
+    2026-10-15: C1 link lifecycle, sanitized parent read model, responsive parent UI, unlink flow, and negative access handling completed; backend/frontend build and lint passed, and backend unit tests passed 107/107.
+    Fresh migration/seed and B2 integration evidence remain recorded below; shared development credentials were rejected, so shared migration is not claimed. C1 is complete; C2 is next.
   one_story_per_task: true
   next_epic_unlocked: true
   implementation_readiness: complete
