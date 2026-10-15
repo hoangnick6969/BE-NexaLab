@@ -92,7 +92,8 @@ async function teacher(label, role = "TEACHER") {
     },
   });
   createdUsers.push(user.id);
-  const login = await req("/auth/login", "POST", {
+  // C2-T4: admins sign in only through the dedicated admin route.
+  const login = await req(role === "ADMIN" ? "/auth/admin/login" : "/auth/login", "POST", {
     email: user.email,
     password,
   });
@@ -566,10 +567,10 @@ try {
       envelope(await req(path, method, body, studentA.token), 403, "FORBIDDEN"),
     );
   check(
-    "teachers can no longer provision through legacy POST /users",
+    "teachers cannot provision through the admin user API",
     envelope(
       await req(
-        "/users",
+        "/admin/users",
         "POST",
         {
           username: `${prefix}-legacy`,
@@ -1439,7 +1440,7 @@ try {
   // ---------- admin-only legacy provisioning is audited ----------
   const admin = await teacher("admin", "ADMIN");
   const adminMade = await req(
-    "/users",
+    "/admin/users",
     "POST",
     {
       username: `${prefix}-admin-made`,
@@ -1454,7 +1455,7 @@ try {
   );
   createdUsers.push(adminMade.data.id);
   check(
-    "admin provisioning through POST /users is audited",
+    "admin provisioning through POST /admin/users is audited",
     adminMade.status === 201 &&
       (await db.auditLog.count({
         where: {

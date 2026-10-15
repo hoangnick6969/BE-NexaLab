@@ -142,7 +142,7 @@ try {
   progress = (await req("/me/progress", "GET", undefined, student.token)).data;
   item = progress.assignments.find((entry) => entry.assignmentId === assignmentId);
   const reading = item.steps.find((step) => step.stepId === S("reading"));
-  const direct = await db.stepProgress.findUnique({ where: { studentId_stepId: { studentId: student.id, stepId: reading.stepId } } });
+  const direct = await db.stepProgress.findFirst({ where: { studentId: student.id, stepId: reading.stepId } });
   check("partial: 2 of 4 with percent 50 and next step quiz", item.completedRequired === 2 && item.percent === 50 && item.nextStepId === S("quiz"), item);
   check("partial: lab is locked behind the quiz", item.steps.find((step) => step.type === "LAB").state === "LOCKED");
   check("reading evidence timestamp equals the StepProgress row", reading.evidenceType === "STEP_PROGRESS" && reading.completedAt === direct.completedAt.toISOString());
@@ -167,7 +167,7 @@ try {
   const labPass = await req("/attempts", "POST", { challengeId: "circuit_001", lessonStepId: S("lab"), labState: circuit(), durationMs: 100, idempotencyKey: randomUUID() }, student.token);
   const labRetryFail = await req("/attempts", "POST", { challengeId: "circuit_001", lessonStepId: S("lab"), labState: circuit(350, false), durationMs: 100, idempotencyKey: randomUUID() }, student.token);
   check("lab passes, then a failed retry is recorded", labPass.data.verdict === "passed" && labRetryFail.status === 201 && labRetryFail.data.verdict !== "passed");
-  const labRow = await db.stepProgress.findUnique({ where: { studentId_stepId: { studentId: student.id, stepId: S("lab") } } });
+  const labRow = await db.stepProgress.findFirst({ where: { studentId: student.id, stepId: S("lab") } });
   check("failed retry does not downgrade the passed lab step", labRow.status === "COMPLETED" && labRow.completedAt !== null);
 
   // A5-T1/T2: completed and traceable
