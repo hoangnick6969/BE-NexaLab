@@ -4,19 +4,19 @@
 project: NexaLab
 project_key: nexalab-release-1
 tracking_system: file-system
-story_location: _bmad-output/specs/spec-b1-teacher-operations
-scope: Release 1 / Epic B1 Teacher Operations + B0 Platform (both done 2026-10-15; A1-A5 accepted history retained)
+story_location: _bmad-output/specs/spec-c1-parent-progress
+scope: Release 1 / Epic C1 Parent Progress (B2 completed on isolated local runtime 2026-10-15)
 last_updated: '2026-10-15'
 tracking_timezone: Asia/Saigon
 repositories:
-  backend: 'BE-NexaLab (branch feat/b1-teacher-operations)'
-  frontend: 'FE-NexaLab (branch feat/b1-teacher-operations)'
+  backend: 'BE-NexaLab (branch feat/c1-parent-progress)'
+  frontend: 'FE-NexaLab (branch feat/c1-parent-progress)'
 sources:
   plan: ../planning-artifacts/increment-b-c-plan.md
-  acceptance_criteria: ../specs/spec-b1-teacher-operations/tickets.md
-  spec: ../specs/spec-b1-teacher-operations/SPEC.md
+  acceptance_criteria: ../specs/spec-c1-parent-progress/tickets.md
+  spec: ../specs/spec-c1-parent-progress/SPEC.md
   platform_spec: ../specs/spec-b0-platform/SPEC.md
-  implementation_record: b1-teacher-operations-implementation.md
+  implementation_record: b2-teacher-evidence-implementation.md
 
 # Status values: backlog | ready-for-dev | in-progress | review | done.
 # review = implemented and verified on the isolated local runtime, awaiting commit/PR, shared Supabase migration and PO decisions.
@@ -64,22 +64,33 @@ development_status:
   b1-t4-teacher-content-library: done
   b1-t5-assignment-targets-lifecycle: done
   b1-t6-teacher-journey-verification: done
-  epic-b2-teacher-evidence: backlog
-  epic-c1-parent-progress: backlog
+  epic-b2-teacher-evidence: done
+  b2-t0-assignment-scoped-evidence: done
+  b2-t1-class-tracking-board: done
+  b2-t2-needs-support-flags: done
+  b2-t3-student-evidence: done
+  b2-t4-replace-legacy-analytics: done
+  b2-t5-quiz-gate-override: done
+  b2-t6-journey-negative: done
+  epic-c1-parent-progress: done
+  c1-t1-link-code-consent-lifecycle: done
+  c1-t2-parent-read-model: done
+  c1-t3-parent-ui: done
+  c1-t4-parent-journey-negative: done
   epic-c2-admin-operations: backlog
 
 execution:
-  current_story: none
-  next_story: push-and-merge-b1-then-epic-b2-planning
+  current_story: c1-t4-parent-journey-negative
+  next_story: epic-c2-admin-operations
   selection_reason: >
-    2026-10-15: Epic B1 done for local and shared Supabase development. Owner approved the shared migrations; preflight
-    and post-migration reconciliation were clean; b1-integration 172/172, integration 98/98 and Playwright
-    b1-teacher-live 8/8 passed against Supabase. Branch feat/b1-teacher-operations (BE bda586a, 3ce0527 + timeout fix;
-    FE 0b1fc25, 5ccb9f7) awaits the user's push and PRs. Production remains unverified.
+    2026-10-15: C1 link lifecycle, sanitized parent read model, responsive parent UI, unlink flow, and negative access handling completed; backend/frontend build and lint passed, and backend unit tests passed 107/107.
+    Fresh migration/seed and B2 integration evidence remain recorded below; shared development credentials were rejected, so shared migration is not claimed. C1 is complete; C2 is next.
   one_story_per_task: true
-  next_epic_unlocked: false
+  next_epic_unlocked: true
   implementation_readiness: complete
   blockers:
+    - 'C1 pilot activation requires approved Vietnamese consent purpose/version/copy/content hash; implementation may use clearly marked development copy'
+    - 'Shared development database migration for B2 is unverified because configured credentials were rejected'
     - 'Production requires JOIN_CODE_HMAC_KEYS and JOIN_CODE_HMAC_KEY_VERSION'
     - 'Released catalog and coverage claims wait for Content Foundation CF-T5 (released outcome map, reviewed corpus); Q-C2-04 parameter ranges are pending, so parameterised challenges cannot enter the shared library yet'
   decisions:

@@ -34,6 +34,11 @@ enum StepProgressStatus {
   IN_PROGRESS
   COMPLETED
 }
+enum ParentLinkStatus {
+  pending
+  approved
+  revoked
+}
 model User {
   id String @id @default(cuid())
   username String? @unique
@@ -47,6 +52,7 @@ model User {
   mustChangePassword Boolean @default(false)
   temporaryPasswordExpiresAt DateTime?
   consentAt DateTime?
+  emailVerifiedAt DateTime?
   linkCode String? @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -77,7 +83,38 @@ model ParentLink {
   parent User @relation("parent", fields: [parentId], references: [id], onDelete: Cascade)
   student User @relation("student", fields: [studentId], references: [id], onDelete: Cascade)
   verifiedAt DateTime @default(now())
+  status ParentLinkStatus @default(pending)
+  revokedAt DateTime?
+  codeId String?
   @@id([parentId, studentId])
+  @@index([parentId, status])
+  @@index([studentId, status])
+}
+model ParentLinkCode {
+  id String @id @default(cuid())
+  studentId String
+  teacherId String
+  classId String
+  codeHash String @unique
+  keyVersion Int @default(1)
+  guardianVerifiedAt DateTime
+  expiresAt DateTime
+  consumedAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([studentId, expiresAt])
+  @@index([teacherId, classId, createdAt])
+}
+model ParentConsent {
+  id String @id @default(cuid())
+  userId String
+  purpose String
+  version String
+  contentHash String
+  actorId String?
+  acceptedAt DateTime @default(now())
+  withdrawnAt DateTime?
+  @@index([userId, purpose, version])
 }
 model Classroom {
   id String @id @default(cuid())
@@ -187,10 +224,14 @@ model LessonStep {
   @@index([lessonId, type])
 }
 model StepProgress {
+  id String @id @default(cuid())
   studentId String
   student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
   stepId String
   step LessonStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  /// Null is retained only for legacy/free-practice evidence. Assigned writes must set this.
+  assignmentId String?
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   status StepProgressStatus @default(NOT_STARTED)
   progressValue Int @default(0)
   lastPosition Int?
@@ -198,8 +239,9 @@ model StepProgress {
   startedAt DateTime?
   completedAt DateTime?
   updatedAt DateTime @updatedAt
-  @@id([studentId, stepId])
-  @@index([stepId])
+  @@unique([studentId, assignmentId, stepId])
+  @@index([studentId, stepId])
+  @@index([assignmentId, studentId])
 }
 model QuizAttempt {
   id String @id @default(cuid())
@@ -266,6 +308,7 @@ model Assignment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   targets AssignmentTarget[]
+  stepProgress StepProgress[]
   @@index([classId, status, dueDate])
   @@index([contentType, contentId, status])
 }
@@ -277,6 +320,19 @@ model AssignmentTarget {
   createdAt DateTime @default(now())
   @@id([assignmentId, studentId])
   @@index([studentId])
+}
+model TeacherGateOverride {
+  id String @id @default(cuid())
+  studentId String
+  assignmentId String
+  stepId String
+  actorId String
+  reason String
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+  revokedById String?
+  @@unique([studentId, assignmentId, stepId])
+  @@index([assignmentId, studentId, revokedAt])
 }
 model Attempt {
   id String @id @default(cuid())

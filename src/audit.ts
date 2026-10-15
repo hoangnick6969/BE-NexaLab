@@ -57,6 +57,9 @@ export const AUDIT_FIELDS = new Set([
   "reviewKind",
   "releaseReviewsReset",
   "contentVersion",
+  "assignmentId",
+  "stepId",
+  "active",
 ]);
 
 const credentialLike = [
