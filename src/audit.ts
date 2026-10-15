@@ -51,6 +51,12 @@ export const AUDIT_FIELDS = new Set([
   "enrollments",
   "assignments",
   "evidence",
+  "domain",
+  "outcomeCodes",
+  "challengeParams",
+  "reviewKind",
+  "releaseReviewsReset",
+  "contentVersion",
 ]);
 
 const credentialLike = [

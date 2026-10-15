@@ -156,6 +156,29 @@ async function main() {
       simulationModelRef: "chemistry@1.0.0",
     },
   ];
+  // Synthetic outcome map for development: it exercises coverage denominators
+  // and gap lists, and is never reported as the released curriculum map (CF-T5).
+  const fixtureOutcomes = [
+    { code: "FX8-ENERGY-01", grade: 8, domain: "ENERGY", chapter: "Điện", statement: "Lắp được mạch điện đơn giản và giải thích vai trò của điện trở bảo vệ." },
+    { code: "FX8-ENERGY-02", grade: 8, domain: "ENERGY", chapter: "Điện", statement: "Đo và so sánh cường độ dòng điện trong mạch nối tiếp." },
+    { code: "FX8-LIVING-01", grade: 8, domain: "LIVING", chapter: "Cơ thể người", statement: "Nêu được đường đi của ánh sáng qua các bộ phận của mắt." },
+    { code: "FX8-MATTER-01", grade: 8, domain: "MATTER", chapter: "Phản ứng hóa học", statement: "Dùng hệ số phương trình để xác định chất phản ứng hết và chất dư." },
+    { code: "FX8-EARTH_SKY-01", grade: 8, domain: "EARTH_SKY", chapter: "Khí hậu", statement: "Mô tả được một số tác động của biến đổi khí hậu ở địa phương." },
+    { code: "FX9-ENERGY-01", grade: 9, domain: "ENERGY", chapter: "Điện từ", statement: "Giải thích được hiện tượng cảm ứng điện từ trong ví dụ quen thuộc." },
+    { code: "FX9-MATTER-01", grade: 9, domain: "MATTER", chapter: "Kim loại", statement: "So sánh được mức độ hoạt động hóa học của một số kim loại." },
+    { code: "FX9-LIVING-01", grade: 9, domain: "LIVING", chapter: "Di truyền", statement: "Nêu được ý nghĩa của nhiễm sắc thể trong di truyền." },
+  ];
+  for (const outcome of fixtureOutcomes)
+    await db.curriculumOutcome.upsert({
+      where: { code: outcome.code },
+      create: { ...outcome, synthetic: true },
+      update: { synthetic: true },
+    });
+  const fixtureTaxonomy: Record<string, { domain: string; outcomeCodes: string[] }> = {
+    circuit: { domain: "ENERGY", outcomeCodes: ["FX8-ENERGY-01"] },
+    eye: { domain: "LIVING", outcomeCodes: ["FX8-LIVING-01"] },
+    chemistry: { domain: "MATTER", outcomeCodes: ["FX8-MATTER-01"] },
+  };
   for (const l of labs) {
     await db.lab.upsert({ where: { id: l.id }, create: l, update: {} });
     await db.challenge.upsert({
@@ -191,6 +214,7 @@ async function main() {
         status: "published",
         scope: "SHARED_LIBRARY",
         synthetic: true,
+        ...fixtureTaxonomy[l.id],
         publishedAt: new Date(),
         questions: [
           {
@@ -215,7 +239,7 @@ async function main() {
         ],
       },
       // Synthetic fixtures are shared demo content, never released corpus.
-      update: { scope: "SHARED_LIBRARY", synthetic: true },
+      update: { scope: "SHARED_LIBRARY", synthetic: true, ...fixtureTaxonomy[l.id] },
     });
     const seededLesson = await db.lesson.findUniqueOrThrow({
       where: { id: "lesson-" + l.id },

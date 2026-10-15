@@ -61,7 +61,7 @@ development_status:
   b1-t1-class-lifecycle: review
   b1-t2-managed-enrollment: review
   b1-t3-secure-join-code: review
-  b1-t4-teacher-content-library: in-progress
+  b1-t4-teacher-content-library: review
   b1-t5-assignment-targets-lifecycle: review
   b1-t6-teacher-journey-verification: review
   epic-b2-teacher-evidence: backlog
@@ -69,19 +69,21 @@ development_status:
   epic-c2-admin-operations: backlog
 
 execution:
-  current_story: b1-t4-teacher-content-library
-  next_story: commit-and-shared-preflight
+  current_story: b1-t6-teacher-journey-verification
+  next_story: shared-supabase-migration-and-pilot-evidence
   selection_reason: >
-    Re-audited 2026-10-15 after closing the review gaps: B1-T1, T2, T3, T5, T6 are review (implemented and verified on the
-    isolated local runtime); B1-T4 stays in-progress until Content Foundation. Work is uncommitted on
-    feat/b1-teacher-operations (BE+FE); the shared Supabase migration is not applied.
+    2026-10-15 (second round): every B1 ticket is review. B1-T4 was completed on the fixture lane as its ticket allows
+    (domain/outcome taxonomy, coverage denominators, challenge variants, preview, attribution, named shared-library
+    reviews); T3 three-IP account evidence and the T5 content version were added. Committed on feat/b1-teacher-operations
+    (BE bda586a + follow-up, FE 0b1fc25 + follow-up). Epic B1 moves to done after the owner approves the shared Supabase
+    migrations and the suites pass there.
   one_story_per_task: true
   next_epic_unlocked: false
-  implementation_readiness: complete-local-except-b1-t4
+  implementation_readiness: complete-local
   blockers:
-    - 'Shared Supabase migration 20261014120000_b1_teacher_operations needs owner approval; run npm run b1:preflight first'
+    - 'Shared Supabase migrations 20261014120000_b1_teacher_operations and 20261015120000_b1_content_customization need owner approval; npm run b1:preflight first'
     - 'Production requires JOIN_CODE_HMAC_KEYS and JOIN_CODE_HMAC_KEY_VERSION'
-    - 'B1-T4 outcome/domain filters, coverage denominator, baseline publication and scientific/range gates depend on Content Foundation CF-T1..T5'
+    - 'Released catalog and coverage claims wait for Content Foundation CF-T5 (released outcome map, reviewed corpus); Q-C2-04 parameter ranges are pending, so parameterised challenges cannot enter the shared library yet'
   decisions:
     - id: D-B1-01
       status: accepted
@@ -128,7 +130,7 @@ story_notes:
   epic-b1-teacher-operations:
     status: in-progress
     audited_against_code: '2026-10-15'
-    branch: feat/b1-teacher-operations (BE and FE, from origin/main 46e2c92; uncommitted)
+    branch: feat/b1-teacher-operations (BE and FE, from origin/main 46e2c92; committed, not pushed)
     artifact: b1-teacher-operations-implementation.md
     tickets:
       b1-t1-class-lifecycle:
@@ -149,39 +151,39 @@ story_notes:
           - 'Endpoint+IP aggregate: 60 attempts across 7 accounts lock the endpoint for that IP for any account/code; scoped to the IP'
           - 'Timing medians unknown 7.8 / wrong-secret 7.8 / disabled 8.8 / archived 9.8 ms, one identical response body'
           - 'Captured API stdout/stderr contains no join code or temporary password from the run (API_LOG_FILE check)'
-        gaps:
-          - 'Account rule (20/10 min across IPs) needs three source IPs; covered by unit tests only'
+          - 'Account aggregate: 20 failures spread over 127.0.0.1, ::1 and a LAN address stay under every pair limit, then lock the account on every IP even for a valid code; another account on the same IPs still joins (2026-10-15 round 2)'
+        gaps: []
       b1-t4-teacher-content-library:
-        status: in-progress
-        blocked_by: Content Foundation CF-T1..T5
-        met: 'GET teacher/content filters grade/subject/chapter/topic/text/scope/status; coverage per dimension without invented percentage; clone to private draft with new step/question/option IDs and reused assets; baseline and other-owner edits refused; self-review checklist and video transcript gate (MSG-28); D7 structure lock'
-        gaps:
-          - 'No KHTN domain-tag or outcome filter and no coverage denominator (curriculum map, CF-T5)'
-          - 'Challenge/parameter value customization and private asset upload for variants not built'
-          - 'No reviewer/model/scientific-range gate and no shared-library publication workflow'
-          - 'No preview with text/accessibility fallback; released content does not render attribution/license'
+        status: review
+        lane: 'fixture (ticket: synthetic fixtures are sufficient; released catalog waits on CF-T5)'
+        met: 'GET teacher/content filters grade/subject/chapter/topic/text/scope/status plus KHTN domain and outcome code; CurriculumOutcome map with coverage per grade x domain as numerator/denominator/gap list, released map and synthetic fixture map reported separately (released denominator null until CF-T5); clone to private draft with new step/question/option IDs and reused assets; baseline and other-owner edits refused; teacher challenge variants with model-allowlisted parameter ranges (circuit maxCurrentMa 5-20 mA/minLitLeds 1-3, chemistry reactionId, eye minScore 50-100) creating a lesson-owned Challenge + CHALLENGE step, evaluated server-side without changing the model; private assets owner-only until published and not attachable by others; self-review checklist, transcript gate and parameter range gate; shared library is admin-only and needs named editorial/subject/rights/safety(/model) reviews with distinct subject and rights reviewers, cleared by structural edits, and pending Q-C2-04 ranges block parameterised shared release; preview with text alternative per step and readiness blockers; attribution (sources/license, fixture note) on preview, library and student pathway; D7 structure lock includes challenge parameters'
+        gaps: []
+        external_gates:
+          - 'CF-T5 released outcome map and reviewed corpus (Q-DATA-02..04) before any coverage claim'
+          - 'Q-C2-04 reviewed parameter ranges (rangeReview stays pending in src/content.ts)'
+          - 'CF-T2 R2 media; uploads still use the local private store (20 MB)'
       b1-t5-assignment-targets-lifecycle:
         status: review
-        met: 'AssignmentTarget snapshot for whole-class and subset; later members not added; optional due date not in past; list/update/archive with confirm; duplicate rule on class + content + target hash + due date; idempotent create; lab attempts carry assignment identity; D-B1-01 implemented (standalone lab attempt allowed, recorded only on the LAB assignment, lesson lab step stays LOCKED); MSG-36; class archive/removal revokes access'
+        met: 'AssignmentTarget snapshot for whole-class and subset; later members not added; optional due date not in past; list/update/archive with confirm; duplicate rule on class + content + immutable contentVersion (lesson structure hash or lab model/config hash) + target hash + due date; idempotent create; lab attempts carry assignment identity; D-B1-01 implemented (standalone lab attempt allowed, recorded only on the LAB assignment, lesson lab step stays LOCKED); MSG-36; class archive/removal revokes access'
         gaps:
-          - 'Duplicate rule keys on lessonId/labId; content is structure-locked (D7) while assigned, so the id stands in for an immutable version until content versioning exists'
-          - 'Assignment.studentIds still dual-written as a legacy mirror; contract phase deferred'
+          - 'Contract phase (stop writing the deprecated Assignment.studentIds mirror, drop it) deferred until every deploy reads AssignmentTarget — not an acceptance gap'
       b1-t6-teacher-journey-verification:
         status: review
-        met: 'b1-integration 137/137 on real local API+PostgreSQL; outsider denial on every class/member/assignment route plus student-role denial; legacy POST /users restricted to ADMIN and audited (user.create); Playwright 6/6 real FE/API/DB at 390/768/1024/1440 px with keyboard, plus loading/empty/retryable-error states (LoadError retry added to class, roster, assignment, assignable-content and analytics reads)'
+        met: 'b1-integration 172/172 on real local API+PostgreSQL; outsider denial on every class/member/assignment/content-preview route plus student-role denial; legacy POST /users restricted to ADMIN and audited (user.create); Playwright 8/8 real FE/API/DB at 390/768/1024/1440 px with keyboard, loading/empty/retryable-error states, and the content library (filters, coverage, preview, challenge variant to student objective and attribution)'
         gaps:
-          - 'Evidence is local only; pilot (shared Supabase) evidence is collected after migration approval'
+          - 'Local evidence only; shared Supabase (pilot) evidence is the remaining step to done and needs migration approval'
     verification:
       source: verified
-      automated: 'BE lint/build, Vitest 89/89; FE lint/build'
-      runtime: 'Isolated local PostgreSQL 18 (API HOST=:: for a second source IP): b1-integration 137/137, a5-integration 53/53, integration 98/98 (RUN_A3_TIMING_SAMPLES=false); Playwright tests/b1-teacher-live.spec.ts 6/6 in Chrome'
+      automated: 'BE lint/build, Vitest 97/97; FE lint/build'
+      runtime: 'Isolated local PostgreSQL 18 (API HOST=:: so ::1 and the LAN address act as extra source IPs): b1-integration 172/172, a5-integration 53/53, integration 98/98 with A3 timing (p95 GET quiz 6.1 ms, GET quiz-attempts 7.8 ms, POST quiz-attempts 17.1 ms; targets 500/500/1000); Playwright b1-teacher-live 8/8 and A2/A4 specs 6/7 in Chrome'
+      known_unrelated_failures:
+        - 'tests/video-completion.spec.ts "asset video refreshes authentication" expects 2 file requests, receives 3; fails identically without the B1 changes (pre-existing, see deferred-work.md)'
       shared_supabase: not-run
       production: unverified
     remaining:
-      - 'B1-T4 completion after Content Foundation'
-      - 'Commit both repositories when the user asks; user pushes and opens PRs'
-      - 'Apply migration to shared Supabase only after approval and a clean b1:preflight; then collect pilot evidence'
-      - 'A3 timing samples not re-measured after B1'
+      - 'User pushes feat/b1-teacher-operations (BE+FE) and opens PRs; BE and FE ship together (D-B1-02)'
+      - 'Owner approval, then prisma migrate deploy (both B1 migrations) and db:seed (no SEED_RESET_FIXTURES) on shared Supabase; rerun b1:preflight for reconciliation'
+      - 'Run b1-integration, integration, a5-integration and b1-teacher-live against Supabase; then mark B1 tickets and the epic done'
   epic-b0-platform:
     status: in-progress
     decisions:

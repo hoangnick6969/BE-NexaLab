@@ -25,6 +25,7 @@ import { idempotent, readIdempotencyKey, replay } from "./idempotency";
 import { JOIN_LIMITS, clear, hit, limiterKey, lockedAny, sweep } from "./limiter";
 import { parseJoinCode, verifySecret, withFreshJoinCode } from "./join-code";
 import { applicableAssignmentWhere, isOverdue, ownedClass, targetHash } from "./access";
+import { labVersion, lessonVersion } from "./content";
 
 const text = z.string().trim().min(1).max(200);
 const grade = z.number().int().min(6).max(9);
@@ -916,18 +917,23 @@ export class ClassesController {
               status: "published",
               OR: [{ scope: "SHARED_LIBRARY" }, { authorId: teacherId }],
             },
-            select: { id: true, title: true },
+            select: { id: true, title: true, content: true, materials: true, questions: true, labId: true, challengeParams: true },
           })
         : await tx.lab.findFirst({
             where: { id: contentId, status: "published" },
-            select: { id: true, title: true },
+            select: { id: true, title: true, simulationModelRef: true, config: true },
           });
     if (!content)
       throw new BadRequestException({
         code: "CONTENT_NOT_PUBLISHED",
         message: MSG.publishFirst,
       });
-    return content;
+    // D7 keeps an in-use lesson's structure immutable, so this hash names the version students receive.
+    return {
+      id: content.id as string,
+      title: content.title as string,
+      version: contentType === "lesson" ? lessonVersion(content) : labVersion(content),
+    };
   }
 
   private assertDueDate(dueDate: string | null | undefined, now: Date) {
@@ -975,6 +981,7 @@ export class ClassesController {
       classId: string;
       contentType: string;
       contentId: string;
+      contentVersion: string | null;
       dueDate: Date | null;
       targetHash: string;
     },
@@ -985,6 +992,8 @@ export class ClassesController {
         classId: a.classId,
         contentType: a.contentType,
         contentId: a.contentId,
+        // Rows created before the version column count as the same version.
+        OR: [{ contentVersion: a.contentVersion }, { contentVersion: null }],
         status: "ACTIVE",
         dueDate: a.dueDate,
         targetHash: a.targetHash,
@@ -995,7 +1004,7 @@ export class ClassesController {
     if (duplicate)
       throw new ConflictException({
         code: "ASSIGNMENT_DUPLICATE",
-        message: "Bài này đã được giao cho cùng nhóm học sinh với cùng hạn nộp",
+        message: "Bài này (cùng phiên bản nội dung) đã được giao cho cùng nhóm học sinh với cùng hạn nộp",
         details: { assignmentId: duplicate.id },
       });
   }
@@ -1026,6 +1035,7 @@ export class ClassesController {
         classId: id,
         contentType: b.contentType,
         contentId: b.contentId,
+        contentVersion: content.version,
         dueDate,
         targetHash: hash,
       });
@@ -1039,6 +1049,7 @@ export class ClassesController {
           dueDate,
           audience,
           targetHash: hash,
+          contentVersion: content.version,
           // Deprecated mirror for older deployments: [] meant "whole class".
           studentIds: audience === "SUBSET" ? targets : [],
           createdById: req.user.sub,
@@ -1058,6 +1069,7 @@ export class ClassesController {
           classId: id,
           contentType: b.contentType,
           contentId: b.contentId,
+          contentVersion: content.version,
           dueDate,
           audience,
           recipientCount: targets.length,
@@ -1116,6 +1128,7 @@ export class ClassesController {
           classId: id,
           contentType: existing.contentType,
           contentId: existing.contentId,
+          contentVersion: existing.contentVersion,
           dueDate,
           targetHash: hash,
         },

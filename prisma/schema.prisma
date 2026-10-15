@@ -146,12 +146,31 @@ model Lesson {
   clonedFromId String?
   /// Allowlisted self-review attestation required to publish teacher-private content.
   review Json?
+  /// KHTN content strand (MATTER | ENERGY | LIVING | EARTH_SKY).
+  domain String?
+  /// CurriculumOutcome codes this lesson addresses.
+  outcomeCodes Json @default("[]")
+  /// Teacher-chosen challenge parameters, validated against the model's allowed ranges.
+  challengeParams Json?
+  /// Named shared-library release reviews: { kind: { reviewerId, at, note? } }.
+  releaseReview Json?
   publishedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
   steps LessonStep[]
   @@index([scope, status, grade])
   @@index([authorId, status])
+}
+/// Grade 8–9 KHTN outcome map (Content Foundation). `synthetic` rows are dev fixtures and never count as released coverage.
+model CurriculumOutcome {
+  code String @id
+  grade Int
+  domain String
+  chapter String
+  statement String
+  synthetic Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@index([grade, domain])
 }
 model LessonStep {
   id String @id @default(cuid())
@@ -239,6 +258,8 @@ model Assignment {
   audience String @default("CLASS")
   /// sha256 of the sorted target student IDs, used by the active-duplicate rule.
   targetHash String?
+  /// Immutable content version at assignment time (lesson structure or lab model/config hash).
+  contentVersion String?
   status String @default("ACTIVE")
   createdById String?
   archivedAt DateTime?

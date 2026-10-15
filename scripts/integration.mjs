@@ -1138,7 +1138,9 @@ try {
   await db.idempotencyRecord.deleteMany({ where: { actorId: { in: created } } });
   for (const id of uploaded) {
     await db.assetFile.deleteMany({ where: { id } });
-    await unlink(resolve("uploads", id));
+    await unlink(resolve(process.env.UPLOAD_DIR ?? "uploads", id)).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
   }
   await db.user.deleteMany({ where: { id: { in: created } } });
   await db.$disconnect();

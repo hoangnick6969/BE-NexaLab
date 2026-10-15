@@ -314,7 +314,7 @@ describe("teacher content gates (B1-T4)", () => {
   });
 
   it("lists each missing item: review, transcript, answer-key check", () => {
-    expect(publishBlockers({ ...lesson, review: null }, "TEACHER_PRIVATE")).toEqual([expect.stringContaining("phiếu tự kiểm duyệt")]);
+    expect(publishBlockers({ ...lesson, review: null }, "TEACHER_PRIVATE")).toEqual([expect.stringContaining("phiếu kiểm duyệt")]);
     expect(
       publishBlockers(
         {
@@ -329,8 +329,10 @@ describe("teacher content gates (B1-T4)", () => {
     ]);
   });
 
-  it("never lets the self-review checklist publish shared library content", () => {
-    expect(publishBlockers(lesson, "SHARED_LIBRARY")).toEqual([expect.stringContaining("thư viện chung")]);
+  it("never lets the self-review checklist alone publish shared library content", () => {
+    expect(publishBlockers(lesson, "SHARED_LIBRARY")).toEqual(
+      expect.arrayContaining(["duyệt biên tập", "duyệt chuyên môn", "duyệt bản quyền", "duyệt an toàn"]),
+    );
   });
 
   it("treats content, media, questions and lab as structure but not metadata", () => {

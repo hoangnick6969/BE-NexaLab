@@ -1,6 +1,6 @@
 ---
 id: SPEC-b1-teacher-operations
-status: in-progress  # re-audited 2026-10-15: T1,T2,T3,T5,T6 review; T4 in-progress (Content Foundation); see implementation-artifacts/b1-teacher-operations-implementation.md
+status: in-progress  # 2026-10-15 round 2: T1–T6 review (T4 on fixture lane); done after shared Supabase migration + suites; see implementation-artifacts/b1-teacher-operations-implementation.md
 companions:
   - tickets.md
   - ../spec-b0-platform/SPEC.md

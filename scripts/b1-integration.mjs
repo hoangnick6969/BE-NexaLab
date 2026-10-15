@@ -9,6 +9,7 @@ import "dotenv/config";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { networkInterfaces } from "node:os";
 import { PrismaClient } from "@prisma/client";
 import * as argon from "argon2";
 
@@ -20,6 +21,11 @@ const createdStudents = [];
 let passed = 0;
 let setupComplete = false;
 const joinLocators = [];
+// A non-loopback address of this machine acts as a third source IP (API started with HOST=::).
+const lanIp = Object.values(networkInterfaces())
+  .flat()
+  .find((item) => item && item.family === "IPv4" && !item.internal)?.address;
+const sourceIps = ["127.0.0.1", "::1", "::ffff:127.0.0.1", ...(lanIp ? [lanIp, "::ffff:" + lanIp] : [])];
 
 // Secrets this run saw; none may appear in the API log (API_LOG_FILE, optional).
 const secrets = [];
@@ -672,9 +678,10 @@ try {
     "library lists the shared baseline as synthetic, not released",
     baseline?.scope === "SHARED_LIBRARY" && baseline.synthetic === true && baseline.editable === false,
   );
+  const releasedOutcomes = await db.curriculumOutcome.count({ where: { synthetic: false, grade: { in: [8, 9] } } });
   check(
-    "coverage reports dimensions without an invented denominator",
-    library.data.coverage.every((row) => row.outcomeMap === null),
+    "released coverage has no denominator without a released outcome map",
+    releasedOutcomes > 0 || library.data.coverage.every((row) => row.releasedBaseline === null),
   );
   const baselineBefore = await db.lesson.findUnique({
     where: { id: "lesson-circuit" },
@@ -831,6 +838,286 @@ try {
     queueD.data.some((a) => a.contentId === cloneId && a.canOpen === false && a.notice),
   );
 
+  // ---------- B1-T4 taxonomy, coverage, challenge variants, preview, attribution ----------
+  const energy = await req("/teacher/content?domain=ENERGY", "GET", undefined, owner.token);
+  check(
+    "library filters by KHTN domain",
+    energy.status === 200 &&
+      energy.data.items.some((i) => i.id === "lesson-circuit") &&
+      !energy.data.items.some((i) => i.id === "lesson-eye"),
+  );
+  const byOutcome = await req("/teacher/content?outcome=FX8-LIVING-01&scope=SHARED_LIBRARY", "GET", undefined, owner.token);
+  check("library filters by curriculum outcome", byOutcome.status === 200 && byOutcome.data.items.map((i) => i.id).join() === "lesson-eye");
+  const energyMap = await db.curriculumOutcome.findMany({ where: { grade: 8, domain: "ENERGY" } });
+  const cell = energy.data.coverage.find((row) => row.grade === 8 && row.domain === "ENERGY");
+  const fixtureCell = energyMap.filter((o) => o.synthetic);
+  check(
+    "coverage has a denominator and gap list per grade and domain",
+    cell &&
+      (energyMap.some((o) => !o.synthetic)
+        ? cell.releasedBaseline?.total === energyMap.filter((o) => !o.synthetic).length
+        : cell.releasedBaseline === null) &&
+      cell.fixture?.total === fixtureCell.length &&
+      cell.fixture.covered + cell.fixture.gaps.length === cell.fixture.total,
+    cell,
+  );
+  check(
+    "fixture outcome coverage is reported apart from released coverage",
+    cell.fixture.covered >= 1 && cell.fixture.gaps.includes("FX8-ENERGY-02") && typeof energy.data.coverageNote === "string",
+  );
+  const variantBody = {
+    title: `${prefix} thử thách 10 mA`,
+    subjectId: "physics",
+    chapter: "Điện",
+    grade: 8,
+    topic: "Định luật Ohm",
+    learningObjective: "Giữ dòng điện qua LED dưới mức giáo viên đặt",
+    prerequisites: "Mạch điện kín",
+    curriculum: "GDPT 2018 – KHTN 8",
+    content: "<p>Dòng điện qua LED phụ thuộc điện trở mắc nối tiếp.</p>",
+    labId: "circuit",
+    status: "published",
+    review,
+    domain: "ENERGY",
+    outcomeCodes: ["FX8-ENERGY-01"],
+    questions: [{ prompt: `${prefix}: Tăng R thì I?`, options: ["Giảm", "Tăng"], answer: 0 }],
+  };
+  check(
+    "out-of-range challenge parameters are rejected",
+    envelope(
+      await req("/lessons", "POST", { ...variantBody, challengeParams: { maxCurrentMa: 25 } }, owner.token),
+      400,
+      "INVALID_CHALLENGE_PARAMS",
+    ),
+  );
+  check(
+    "parameters the model does not allow are rejected",
+    envelope(
+      await req("/lessons", "POST", { ...variantBody, challengeParams: { voltage: 30 } }, owner.token),
+      400,
+      "INVALID_CHALLENGE_PARAMS",
+    ),
+  );
+  check(
+    "an outcome from another grade is rejected",
+    envelope(await req("/lessons", "POST", { ...variantBody, outcomeCodes: ["FX9-ENERGY-01"] }, owner.token), 400, "INVALID_OUTCOME"),
+  );
+  check(
+    "a teacher cannot create shared-library content",
+    envelope(await req("/lessons", "POST", { ...variantBody, scope: "SHARED_LIBRARY" }, owner.token), 403, "BASELINE_READ_ONLY"),
+  );
+  const sharedChallengeBefore = await db.challenge.findUnique({ where: { id: "circuit_001" } });
+  const variant = await req("/lessons", "POST", { ...variantBody, challengeParams: { maxCurrentMa: 10, minLitLeds: 1 } }, owner.token);
+  check(
+    "a private challenge variant with in-range parameters publishes",
+    variant.status === 201 && variant.data.status === "published",
+    variant.data,
+  );
+  const variantId = variant.data.id;
+  const variantChallenge = await db.challenge.findUnique({ where: { id: `circuit_v-${variantId}` } });
+  const variantSteps = await db.lessonStep.findMany({ where: { lessonId: variantId }, orderBy: { position: "asc" } });
+  check(
+    "the variant owns a new challenge row and the shared challenge is unchanged",
+    variantChallenge?.constraints?.params?.maxCurrentMa === 10 &&
+      variantSteps.at(-1)?.type === "CHALLENGE" &&
+      variantSteps.at(-1).config.challengeId === variantChallenge.id &&
+      JSON.stringify((await db.challenge.findUnique({ where: { id: "circuit_001" } })).constraints) ===
+        JSON.stringify(sharedChallengeBefore.constraints),
+  );
+  const publicLabs = await req("/labs", "GET", undefined, studentA.token);
+  check(
+    "a teacher variant challenge is not listed in the public lab catalog",
+    publicLabs.status === 200 && !publicLabs.data.some((lab) => lab.challenges.some((c) => c.id === variantChallenge.id)),
+  );
+  const preview = await req(`/teacher/content/${variantId}/preview`, "GET", undefined, owner.token);
+  check(
+    "preview renders every step with a text alternative, attribution and readiness",
+    preview.status === 200 &&
+      preview.data.steps.length === variantSteps.length &&
+      preview.data.steps.every((step) => step.textAlternative && !step.missingAlternative) &&
+      preview.data.readiness.ready === true &&
+      preview.data.attribution.sources === review.sources &&
+      preview.data.attribution.licenseLabel === "Tự biên soạn",
+    preview.data,
+  );
+  const unreviewed = await req(
+    "/lessons",
+    "POST",
+    { ...variantBody, title: `${prefix} nháp chưa duyệt`, status: "draft", review: undefined },
+    owner.token,
+  );
+  const draftPreview = await req(`/teacher/content/${unreviewed.data.id}/preview`, "GET", undefined, owner.token);
+  check(
+    "preview of an incomplete draft lists its readiness blockers",
+    draftPreview.status === 200 &&
+      draftPreview.data.readiness.ready === false &&
+      draftPreview.data.readiness.blockers.some((b) => /phiếu kiểm duyệt/.test(b)),
+  );
+  check(
+    "another teacher cannot preview a private variant",
+    envelope(await req(`/teacher/content/${variantId}/preview`, "GET", undefined, outsider.token), 404, "LESSON_NOT_FOUND"),
+  );
+
+  // Private assets: owner-only until published; another teacher cannot attach them.
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(64)])], { type: "image/png" }),
+    "so-do.png",
+  );
+  const uploaded = await fetch(origin + "/files", { method: "POST", headers: { authorization: "Bearer " + owner.token }, body: form }).then(
+    async (r) => ({
+      status: r.status,
+      data: await r.json(),
+    }),
+  );
+  check("teacher uploads a private asset", uploaded.status === 201 && uploaded.data.url === "asset:" + uploaded.data.id);
+  const readAsset = (token) =>
+    fetch(`${origin}/files/${uploaded.data.id}`, { headers: { authorization: "Bearer " + token } }).then((r) => r.status);
+  check(
+    "the owner reads the unpublished asset and another teacher cannot",
+    (await readAsset(owner.token)) === 200 && (await readAsset(outsider.token)) === 403,
+  );
+  check(
+    "another teacher cannot publish with someone else's private asset",
+    envelope(
+      await req(
+        "/lessons",
+        "POST",
+        { ...variantBody, materials: [{ type: "image", url: uploaded.data.url, title: "Sơ đồ" }] },
+        outsider.token,
+      ),
+      400,
+      "INVALID_LESSON_PATHWAY",
+    ),
+  );
+
+  // T5: the assignment pins the content version; same version/targets/due date is a duplicate.
+  const assignVariant = await req(
+    `/classes/${classId}/assignments`,
+    "POST",
+    { contentType: "lesson", contentId: variantId },
+    owner.token,
+    key(),
+  );
+  check(
+    "a variant assignment records its immutable content version",
+    assignVariant.status === 201 &&
+      (await db.assignment.findUnique({ where: { id: assignVariant.data.assignment.id } })).contentVersion?.startsWith("lesson:"),
+  );
+  check(
+    "same content version, targets and due date is a duplicate",
+    envelope(
+      await req(`/classes/${classId}/assignments`, "POST", { contentType: "lesson", contentId: variantId }, owner.token, key()),
+      409,
+      "ASSIGNMENT_DUPLICATE",
+    ),
+  );
+  const storedQuiz = variantSteps.find((step) => step.type === "QUIZ").config.questions;
+  let variantPath = await req(`/lessons/${variantId}/pathway`, "GET", undefined, studentA.token);
+  for (const step of variantPath.data.steps) {
+    const progress = (body) => req(`/lessons/${variantId}/steps/${step.id}/progress`, "PUT", body, studentA.token);
+    if (step.type === "READING") await progress({ action: "complete" });
+    if (step.type === "VIDEO") await progress({ action: "complete-fallback" });
+    if (step.type === "QUIZ")
+      await req(
+        `/lessons/${variantId}/quiz-attempts`,
+        "POST",
+        { idempotencyKey: randomUUID(), answers: storedQuiz.map((q) => ({ questionId: q.id, optionId: q.answerOptionId })) },
+        studentA.token,
+      );
+    if (step.type === "LAB")
+      await req(
+        "/attempts",
+        "POST",
+        { challengeId: "circuit_001", lessonStepId: step.id, labState: circuit(470), durationMs: 1000 },
+        studentA.token,
+      );
+  }
+  variantPath = await req(`/lessons/${variantId}/pathway`, "GET", undefined, studentA.token);
+  check(
+    "the student pathway renders the variant's attribution",
+    variantPath.data.attribution?.sources === review.sources && variantPath.data.attribution.licenseLabel === "Tự biên soạn",
+  );
+  const challengeStep = variantPath.data.steps.find((step) => step.type === "CHALLENGE");
+  check("the teacher challenge opens after the lab", challengeStep && challengeStep.state !== "LOCKED", variantPath.data.steps);
+  const challengeView = await req(`/lessons/${variantId}/steps/${challengeStep.id}/lab`, "GET", undefined, studentA.token);
+  check(
+    "the student sees the teacher's parameterised objective",
+    challengeView.status === 200 &&
+      challengeView.data.challengeId === variantChallenge.id &&
+      /10 mA/.test(challengeView.data.targetObjective),
+  );
+  const tooHigh = await req(
+    "/attempts",
+    "POST",
+    { challengeId: variantChallenge.id, lessonStepId: challengeStep.id, labState: circuit(470), durationMs: 1000 },
+    studentA.token,
+  );
+  check(
+    "a circuit that passes the base model fails the stricter teacher limit",
+    tooHigh.status === 201 &&
+      tooHigh.data.verdict === "partial" &&
+      tooHigh.data.simulationResult.challengeCheck.unmet.includes("maxCurrentMa") &&
+      /10 mA/.test(tooHigh.data.retryGuidance),
+    tooHigh.data,
+  );
+  const within = await req(
+    "/attempts",
+    "POST",
+    { challengeId: variantChallenge.id, lessonStepId: challengeStep.id, labState: circuit(1000), durationMs: 1000 },
+    studentA.token,
+  );
+  check(
+    "a circuit within the teacher limit passes, as evidence of this assignment",
+    within.status === 201 && within.data.verdict === "passed" && within.data.assignmentId === assignVariant.data.assignment.id,
+    within.data,
+  );
+
+  // Shared library: admin-only, released only with named and independent reviews.
+  const reviewerA = await teacher("reviewer-a", "ADMIN");
+  const reviewerB = await teacher("reviewer-b", "ADMIN");
+  const sharedBody = { ...variantBody, title: `${prefix} bài nền mới` };
+  const shared = await req("/lessons", "POST", { ...sharedBody, scope: "SHARED_LIBRARY", status: "draft" }, reviewerA.token);
+  check("admin creates a shared-library draft", shared.status === 201 && shared.data.scope === "SHARED_LIBRARY");
+  const publishShared = (body = sharedBody) => req(`/lessons/${shared.data.id}`, "PUT", body, reviewerA.token);
+  const sharedBlocked = await publishShared();
+  check(
+    "shared release is blocked until every named review exists",
+    envelope(sharedBlocked, 400, "PUBLISH_BLOCKED") &&
+      ["duyệt biên tập", "duyệt chuyên môn", "duyệt bản quyền", "duyệt an toàn", "duyệt mô hình khoa học"].every((item) =>
+        sharedBlocked.data.details.missing.includes(item),
+      ),
+    sharedBlocked.data,
+  );
+  check(
+    "a teacher cannot record a release review",
+    envelope(await req(`/lessons/${shared.data.id}/release-reviews`, "POST", { kind: "subject" }, owner.token), 403, "FORBIDDEN"),
+  );
+  check(
+    "private content has no release-review workflow",
+    envelope(await req(`/lessons/${variantId}/release-reviews`, "POST", { kind: "subject" }, reviewerA.token), 400, "NOT_SHARED_LIBRARY"),
+  );
+  for (const kind of ["editorial", "subject", "rights", "safety", "model"])
+    assert.equal(
+      (await req(`/lessons/${shared.data.id}/release-reviews`, "POST", { kind }, reviewerA.token)).status,
+      201,
+      "review " + kind,
+    );
+  const sameReviewer = await publishShared();
+  check(
+    "one person signing both subject and rights review blocks release",
+    envelope(sameReviewer, 400, "PUBLISH_BLOCKED") && sameReviewer.data.details.missing.some((item) => /khác nhau/.test(item)),
+  );
+  await req(`/lessons/${shared.data.id}/release-reviews`, "POST", { kind: "rights" }, reviewerB.token);
+  const sharedReleased = await publishShared();
+  check(
+    "with named, independent reviews the shared lesson releases",
+    sharedReleased.status === 200 && sharedReleased.data.status === "published",
+  );
+  const sharedEdited = await publishShared({ ...sharedBody, content: "<p>Nội dung đã đổi.</p>", status: "draft" });
+  check("a structural edit clears earlier release reviews", sharedEdited.status === 200 && sharedEdited.data.releaseReview === null);
+
   // ---------- class archive ----------
   const countsBefore = {
     enrollments: await db.enrollment.count({ where: { classId } }),
@@ -875,7 +1162,7 @@ try {
 
   // ---------- B1-T3 abuse controls on real dependencies ----------
   const digest = (...parts) => createHash("sha256").update(parts.join("\u0000")).digest("hex");
-  const localIps = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
+  const localIps = sourceIps;
   // Tests start each aggregate scenario from a clean endpoint window for this machine only.
   const resetEndpoint = () =>
     db.rateLimitBucket.deleteMany({
@@ -1011,6 +1298,38 @@ try {
   if (v6Reachable) check("the endpoint lock is scoped to the IP", (await fail(freshB, conc.code, v6)).status === 201);
   await resetEndpoint();
 
+  // Account aggregate: 20 failures spread over three source IPs lock the account on every IP.
+  const lanBase = lanIp ? origin.replace("127.0.0.1", lanIp) : null;
+  const lanReachable =
+    lanBase &&
+    (await fetch(lanBase + "/health")
+      .then((r) => r.ok)
+      .catch(() => false));
+  if (v6Reachable && lanReachable) {
+    await resetProbes();
+    const roamer = pool[0];
+    const bases = [origin, v6, lanBase];
+    for (let i = 0; i < 20; i++) {
+      const res = await fail(roamer, `NL-${randomLocator()}-0000000000`, bases[i % 3]);
+      assert.equal(res.status, 404, `account failure ${i + 1}`);
+    }
+    const pairs = await db.rateLimitBucket.findMany({
+      where: { key: { in: sourceIps.map((ip) => digest("join:pair", ip, roamer.id)) } },
+    });
+    check(
+      "20 failures over three IPs stay under every per-IP pair limit",
+      pairs.length === 3 && pairs.every((bucket) => bucket.count < 10 && !bucket.lockedUntil),
+      pairs.map((b) => b.count),
+    );
+    check(
+      "the account aggregate then locks that account on a new IP, even for a valid code",
+      envelope(await fail(roamer, conc.code, lanBase), 429, "JOIN_RATE_LIMITED") &&
+        envelope(await fail(roamer, conc.code, v6), 429, "JOIN_RATE_LIMITED"),
+    );
+    check("another account on the same IPs is not locked", (await fail(pool[1], conc.code, lanBase)).status === 201);
+    await resetEndpoint();
+  } else console.log("SKIP three-IP account check: API not reachable on [::1] and " + (lanIp ?? "a LAN address"));
+
   // ---------- admin-only legacy provisioning is audited ----------
   const admin = await teacher("admin", "ADMIN");
   const adminMade = await req(
@@ -1059,6 +1378,7 @@ try {
     "lesson.publish",
     "lesson.update",
     "lesson.archive",
+    "lesson.release_review",
   ];
   const auditRows = await db.auditLog.findMany({
     where: { actorId: { in: createdUsers } },
@@ -1112,7 +1432,7 @@ try {
   });
   await db.auditLog.deleteMany({ where: { actorId: { in: createdUsers } } });
   const digest = (...parts) => createHash("sha256").update(parts.join("\u0000")).digest("hex");
-  const ips = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
+  const ips = sourceIps;
   const locators = ["ZZZZZZ", "malformed", ...joinLocators];
   await db.rateLimitBucket.deleteMany({
     where: {
@@ -1125,6 +1445,9 @@ try {
       },
     },
   });
+  await db.assetFile.deleteMany({ where: { ownerId: { in: createdUsers } } });
   await db.user.deleteMany({ where: { id: { in: createdUsers } } });
+  // Variant challenges outlive their lesson rows until the attempts (cascaded with users) are gone.
+  if (lessons.length) await db.challenge.deleteMany({ where: { OR: lessons.map((l) => ({ id: { endsWith: "_v-" + l.id } })) } });
   await db.$disconnect();
 }
