@@ -11,10 +11,11 @@ import { ApiController } from "./routes";
 import { FilesController } from "./files";
 import { ClassesController } from "./classes";
 import { B2Controller } from "./b2";
+import { AdminController } from "./admin";
 import { Errors } from "./errors";
 import { quizOpenApiSchemas } from "./quiz-contract";
 @Module({
-  controllers: [ApiController, ClassesController, B2Controller, FilesController],
+  controllers: [ApiController, ClassesController, B2Controller, AdminController, FilesController],
   providers: [Db, { provide: APP_GUARD, useClass: AuthGuard }],
 })
 class AppModule {}

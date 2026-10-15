@@ -54,6 +54,8 @@ model User {
   consentAt DateTime?
   emailVerifiedAt DateTime?
   linkCode String? @unique
+  /// Set when an admin disables the account (C2-T1); cleared on reactivation.
+  disabledAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   sessions Session[]
@@ -191,6 +193,10 @@ model Lesson {
   challengeParams Json?
   /// Named shared-library release reviews: { kind: { reviewerId, at, note? } }.
   releaseReview Json?
+  /// Admin quarantine (C2-T2): status becomes "quarantined"; the prior status is restored on release.
+  quarantinedAt DateTime?
+  quarantineReason String?
+  statusBeforeQuarantine String?
   publishedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -206,8 +212,39 @@ model CurriculumOutcome {
   chapter String
   statement String
   synthetic Boolean @default(false)
+  /// active | archived. Archived outcomes stay traceable but cannot be newly mapped.
+  status String @default("active")
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
   @@index([grade, domain])
+}
+/// Curriculum chapter (C2-T2). `code` is an immutable identifier; a duplicate conflicts instead of overwriting.
+model CurriculumChapter {
+  code String @id
+  subjectId String
+  grade Int
+  domain String
+  title String
+  /// active | archived
+  status String @default("active")
+  synthetic Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  topics CurriculumTopic[]
+  @@index([grade, domain])
+}
+/// Topic inside a chapter, mapped to the outcomes it teaches.
+model CurriculumTopic {
+  code String @id
+  chapterCode String
+  chapter CurriculumChapter @relation(fields: [chapterCode], references: [code])
+  title String
+  outcomeCodes Json @default("[]")
+  /// active | archived
+  status String @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  @@index([chapterCode])
 }
 model LessonStep {
   id String @id @default(cuid())
@@ -347,6 +384,8 @@ model Attempt {
   verdict String
   durationMs Int
   simulationModelVersion String @default("1.0.0")
+  /// Simulation configuration version evaluated for this attempt (C2-T3); null before C2.
+  configVersionId String?
   idempotencyKey String?
   createdAt DateTime @default(now())
   hints HintLog[]
@@ -393,7 +432,41 @@ model AssetFile {
   name String
   mime String
   size Int
+  /// Full SHA-256 of the stored bytes; null only for files uploaded before C2.
+  sha256 String?
+  /// TEACHER_PRIVATE | SHARED_LIBRARY
+  scope String @default("TEACHER_PRIVATE")
+  /// READY | QUARANTINED. A quarantined file is served to admins only.
+  status String @default("READY")
+  source String?
+  license String?
+  quarantinedAt DateTime?
+  quarantineReason String?
   createdAt DateTime @default(now())
+  @@index([ownerId])
+  @@index([status, scope])
+}
+/// Immutable simulation configuration for one lab (C2-T3). Activating a version
+/// affects future attempts only; attempts pin the version they were evaluated with.
+model SimulationConfigVersion {
+  id String @id @default(cuid())
+  labId String
+  version Int
+  /// Allowlisted model reference, e.g. circuit@1.0.0.
+  modelRef String
+  /// Per base challenge: allowlisted parameters, validated against the model's ranges.
+  challengeParams Json
+  /// Golden cases verified by the server engine before the version is stored.
+  goldenCases Json
+  /// draft | active | retired
+  status String @default("draft")
+  reason String
+  createdById String
+  createdAt DateTime @default(now())
+  activatedAt DateTime?
+  retiredAt DateTime?
+  @@unique([labId, version])
+  @@index([labId, status])
 }
 model AuditLog {
   id String @id @default(cuid())

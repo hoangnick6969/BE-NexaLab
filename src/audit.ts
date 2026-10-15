@@ -60,6 +60,19 @@ export const AUDIT_FIELDS = new Set([
   "assignmentId",
   "stepId",
   "active",
+  // C2 admin operations
+  "ownerId",
+  "sessionsRevoked",
+  "resolutions",
+  "nameChanged",
+  "statementChanged",
+  "labId",
+  "version",
+  "modelRef",
+  "goldenCases",
+  "resultCount",
+  "license",
+  "activeAssignments",
 ]);
 
 const credentialLike = [

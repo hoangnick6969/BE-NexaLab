@@ -27,7 +27,6 @@ import {
 import { z } from "zod";
 import * as argon from "argon2";
 import { createHmac, randomBytes } from "node:crypto";
-import { createTransport } from "nodemailer";
 import { Db } from "./db";
 
 const PARENT_CONSENT_VERSION = "2026-10-v1";
@@ -67,10 +66,12 @@ import {
 } from "./progress";
 import { loadLessonEvidence, projectLab, projectLesson } from "./progress-projection";
 import { applicableAssignmentWhere, assignmentQueueOrder, isOverdue, ownedClass } from "./access";
-import { temporaryPassword as issueTemporaryPassword } from "./classes";
 import { audit, changedFields } from "./audit";
 import { idempotent, readIdempotencyKey } from "./idempotency";
 import { requestHint } from "./hint";
+import { smtpDeliver } from "./mail";
+import { ENGINE as SIMULATION_ENGINE, evaluate, versionParams } from "./simulation-versions";
+import { FORGOT_MESSAGE, completePasswordReset, requestPasswordReset } from "./password-reset";
 import {
   CHALLENGE_PARAMETERS,
   DOMAINS,
@@ -81,7 +82,6 @@ import {
   challengeObjective,
   challengeParamErrors,
   domainSchema,
-  evaluateChallenge,
   isStructureChange,
   publishBlockers,
   reviewDraftSchema,
@@ -250,8 +250,10 @@ export class ApiController {
     if (referenced.length) {
       const assets = await this.db.assetFile.findMany({
         where: { id: { in: referenced } },
-        select: { id: true, ownerId: true },
+        select: { id: true, ownerId: true, scope: true, status: true },
       });
+      if (assets.some((asset) => asset.status === "QUARANTINED"))
+        throw new BadRequestException({ code: "ASSET_QUARANTINED", message: "Bài học tham chiếu tệp đang bị cách ly" });
       // A clone intentionally reuses the asset references of its source (D7).
       const inherited = new Set<string>();
       if (clonedFromId) {
@@ -260,7 +262,8 @@ export class ApiController {
       }
       if (
         assets.length !== new Set(referenced).size ||
-        (actor.role !== "ADMIN" && assets.some((asset) => asset.ownerId !== actor.sub && !inherited.has(asset.id)))
+        (actor.role !== "ADMIN" &&
+          assets.some((asset) => asset.ownerId !== actor.sub && asset.scope !== "SHARED_LIBRARY" && !inherited.has(asset.id)))
       )
         throw new BadRequestException({
           code: "INVALID_LESSON_PATHWAY",
@@ -452,58 +455,18 @@ export class ApiController {
   ) {
     this.rate("forgot:" + req.ip, 3);
     const b = z.object({ email }).parse(body);
-    const u = await this.db.user.findUnique({ where: { email: b.email } });
-    if (u && u.role !== "STUDENT" && u.status === "active") {
-      const resetToken = token();
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-      const resetUrl = `${process.env.APP_ORIGIN ?? "http://127.0.0.1:5173"}/?reset=${encodeURIComponent(resetToken)}`;
-      await this.db.$transaction(async (tx) => {
-        await tx.session.deleteMany({ where: { userId: u.id, kind: "reset" } });
-        await tx.session.create({ data: { userId: u.id, kind: "reset", tokenHash: hashToken(resetToken), expiresAt } });
-      });
-      try {
-        await createTransport({
-          host: process.env.SMTP_HOST,
-          port: Number(process.env.SMTP_PORT ?? 1025),
-          secure: false,
-          ...(process.env.SMTP_USER ? { auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD } } : {}),
-        }).sendMail({
-          from: process.env.SMTP_FROM,
-          to: u.email!,
-          subject: "Đặt lại mật khẩu NexaLab",
-          text: `Mở liên kết một lần để đặt lại mật khẩu (hết hạn sau 60 phút): ${resetUrl}`,
-        });
-      } catch (error) {
-        await this.db.session.deleteMany({ where: { tokenHash: hashToken(resetToken), kind: "reset" } });
-        throw error;
-      }
-    }
-    return { message: "Nếu email tồn tại, hướng dẫn đã được gửi." };
+    // C2-T4: answered before lookup or delivery finishes, so neither existence
+    // nor delivery failure shows in the response or its timing.
+    void requestPasswordReset(this.db, b.email, smtpDeliver).catch(() => console.error("NexaLab password-reset request failed"));
+    return { message: FORGOT_MESSAGE };
   }
   @Public() @Post("auth/reset") async reset(
     @Body() body: unknown,
     @Req() req: any,
   ) {
     this.rate("reset:" + req.ip, 5);
-    const b = z.object({ token: z.string(), password }).parse(body);
-    const s = await this.db.session.findUnique({
-      where: { tokenHash: hashToken(b.token) },
-    });
-    if (!s || s.kind !== "reset" || s.expiresAt < new Date())
-      throw new BadRequestException("Mã không hợp lệ hoặc hết hạn");
-    await this.db.$transaction(async (tx) => {
-      const used = await tx.session.deleteMany({ where: { id: s.id } });
-      if (!used.count) throw new BadRequestException("Mã đã sử dụng");
-      await tx.user.update({
-        where: { id: s.userId },
-        data: {
-          passwordHash: await argon.hash(b.password),
-          mustChangePassword: false,
-          temporaryPasswordExpiresAt: null,
-        },
-      });
-      await tx.session.deleteMany({ where: { userId: s.userId } });
-    });
+    const b = z.object({ token: z.string().max(200), password }).parse(body);
+    await completePasswordReset(this.db, b.token, b.password);
     return { ok: true };
   }
   @Get("tutor/status") tutorStatus() {
@@ -517,119 +480,11 @@ export class ApiController {
   @Get("subjects") subjects() {
     return this.db.subject.findMany();
   }
-  @Roles("ADMIN") @Post("subjects") subjectCreate(@Body() b: unknown) {
-    const data = z.object({ id: text, name: text }).parse(b);
-    return this.db.subject.upsert({
-      where: { id: data.id },
-      create: data,
-      update: { name: data.name },
-    });
-  }
-  @Roles("ADMIN") @Get("admin/labs") allLabs() {
-    return this.db.lab.findMany({ include: { challenges: true } });
-  }
-  @Roles("ADMIN") @Put("subjects/:id") updateSubject(
-    @Param("id") id: string,
-    @Body() body: unknown,
-  ) {
-    return this.db.subject.update({
-      where: { id },
-      data: z.object({ name: text }).parse(body),
-    });
-  }
-  @Roles("ADMIN") @Delete("subjects/:id") async deleteSubject(
-    @Param("id") id: string,
-  ) {
-    if (
-      (await this.db.lesson.count({ where: { subjectId: id } })) ||
-      (await this.db.lab.count({ where: { subjectId: id } }))
-    )
-      throw new BadRequestException(
-        "Môn học còn bài học hoặc lab; không thể xóa",
-      );
-    return this.db.subject.delete({ where: { id } });
-  }
-  @Roles("ADMIN") @Delete("users/:id") async deleteUser(
-    @Param("id") id: string,
-    @Req() req: any,
-  ) {
-    if (id === req.user.sub)
-      throw new BadRequestException("Không thể xóa tài khoản đang đăng nhập");
-    const [classes, lessons, enrollments, attempts, progress, saved, links, consents, auditRefs] = await Promise.all([
-      this.db.classroom.count({ where: { teacherId: id } }),
-      this.db.lesson.count({ where: { authorId: id } }),
-      this.db.enrollment.count({ where: { studentId: id } }),
-      this.db.attempt.count({ where: { studentId: id } }),
-      this.db.progress.count({ where: { studentId: id } }),
-      this.db.savedExperiment.count({ where: { studentId: id } }),
-      this.db.parentLink.count({ where: { OR: [{ parentId: id }, { studentId: id }] } }),
-      this.db.parentConsent.count({ where: { userId: id } }),
-      this.db.auditLog.count({ where: { OR: [{ actorId: id }, { targetId: id }] } }),
-    ]);
-    if (classes || lessons || enrollments || attempts || progress || saved || links || consents || auditRefs)
-      throw new BadRequestException(
-        { code: "DELETE_INELIGIBLE", message: "Tài khoản còn dữ liệu lịch sử hoặc sở hữu; hãy vô hiệu hóa thay vì xóa", blockers: { classes, lessons, enrollments, attempts, progress, saved, links, consents, auditRefs } },
-      );
-    return this.db.$transaction(async (tx) => {
-      await tx.session.deleteMany({ where: { userId: id } });
-      const deleted = await tx.user.delete({ where: { id }, select: { id: true } });
-      await audit(tx, { actor: req.user, action: "user.delete", targetType: "User", targetId: id, after: { deleted: true } });
-      return deleted;
-    });
-  }
-
-  @Roles("ADMIN") @Post("users/:id/disable") async disableUser(@Param("id") id: string, @Req() req: any) {
-    if (id === req.user.sub) throw new BadRequestException("Không thể vô hiệu hóa tài khoản đang đăng nhập");
-    return this.db.$transaction(async (tx) => {
-      const user = await tx.user.update({ where: { id }, data: { status: "disabled" } });
-      await tx.session.deleteMany({ where: { userId: id } });
-      await audit(tx, { actor: req.user, action: "user.disable", targetType: "User", targetId: id, after: { status: "disabled" } });
-      return publicUser(user);
-    });
-  }
-
-  @Roles("ADMIN") @Post("users/:id/reactivate") async reactivateUser(@Param("id") id: string, @Req() req: any) {
-    return this.db.$transaction(async (tx) => {
-      const user = await tx.user.update({ where: { id }, data: { status: "active" } });
-      await audit(tx, { actor: req.user, action: "user.reactivate", targetType: "User", targetId: id, after: { status: "active" } });
-      return publicUser(user);
-    });
-  }
   @Get("labs") labs() {
     return this.db.lab.findMany({
       where: { status: "published" },
       // Lesson-variant challenges belong to their lesson pathway, not the public lab list.
       include: { challenges: { where: { NOT: { id: { contains: "_v-" } } } } },
-    });
-  }
-  @Roles("ADMIN") @Put("labs/:id") labUpdate(
-    @Param("id") id: string,
-    @Body() b: unknown,
-  ) {
-    return this.db.lab.update({
-      where: { id },
-      data: z
-        .object({
-          title: text,
-          topic: text,
-          learningObjective: text,
-          status: z.enum(["draft", "published", "archived"]),
-          assets: z
-            .array(
-              z.object({
-                name: text,
-                url: z
-                  .string()
-                  .refine(
-                    (u) =>
-                      /^https?:\/\//.test(u) || /^asset:[0-9a-f-]{36}$/.test(u),
-                  ),
-                license: text,
-              }),
-            )
-            .optional(),
-        })
-        .parse(b),
     });
   }
   @Get("lessons") async lessons(@Req() req: any) {
@@ -697,7 +552,7 @@ export class ApiController {
     };
   }
   /** Outcome codes must exist in the map for the lesson's grade; challenge parameters must be in range. */
-  private async assertTaxonomy(data: z.infer<typeof lessonSchema>) {
+  private async assertTaxonomy(data: z.infer<typeof lessonSchema>, alreadyMapped: string[] = []) {
     const errors = challengeParamErrors(data.labId, data.challengeParams);
     if (errors.length)
       throw new BadRequestException({ code: "INVALID_CHALLENGE_PARAMS", message: errors.join("; "), details: { errors } });
@@ -708,7 +563,13 @@ export class ApiController {
     const outcomes = await this.db.curriculumOutcome.findMany({ where: { code: { in: codes } } });
     const invalid = codes.filter((code) => {
       const outcome = outcomes.find((item) => item.code === code);
-      return !outcome || outcome.grade !== data.grade || (data.domain && outcome.domain !== data.domain);
+      // An archived outcome stays on lessons that already map it but cannot be newly mapped (C2-T2).
+      return (
+        !outcome ||
+        outcome.grade !== data.grade ||
+        (data.domain && outcome.domain !== data.domain) ||
+        (outcome.status !== "active" && !alreadyMapped.includes(code))
+      );
     });
     if (invalid.length)
       throw new BadRequestException({
@@ -786,16 +647,25 @@ export class ApiController {
     const l = await this.db.lesson.findUnique({ where: { id } });
     if (!l || (l.authorId !== req.user.sub && req.user.role !== "ADMIN"))
       throw new ForbiddenException({ code: "LESSON_ACCESS_DENIED", message: "Bạn chỉ sửa được bài học của mình" });
+    // C2-T2: an admin operates another teacher's private content (inspect, quarantine,
+    // archive, reassign) but never rewrites its body.
+    if (req.user.role === "ADMIN" && l.scope !== "SHARED_LIBRARY" && l.authorId !== req.user.sub)
+      throw new ForbiddenException({
+        code: "PRIVATE_CONTENT_READ_ONLY",
+        message: "Quản trị viên không sửa nội dung riêng của giáo viên; hãy dùng thao tác quản trị có lý do",
+      });
+    if (l.status === "quarantined")
+      throw new ConflictException({ code: "CONTENT_QUARANTINED", message: "Bài học đang bị cách ly; quản trị viên cần gỡ cách ly trước" });
     if (l.scope === "SHARED_LIBRARY" && req.user.role !== "ADMIN")
       throw new ForbiddenException({
         code: "BASELINE_READ_ONLY",
         message: "Bài nền dùng chung không sửa trực tiếp; hãy tạo bản riêng để tùy biến",
       });
     const { scope: _ignoredScope, ...parsed } = lessonSchema.parse(b);
+    await this.assertTaxonomy(parsed, (l.outcomeCodes as string[]) ?? []);
     // Structural edits invalidate earlier shared-library release reviews.
     const reviewsStale = l.scope === "SHARED_LIBRARY" && isStructureChange(l as any, parsed as any);
     const data = { ...parsed, releaseReview: reviewsStale ? null : l.releaseReview };
-    await this.assertTaxonomy(parsed);
     this.assertPublishable(data as any, l.scope);
     const locked = l.status !== "draft" && (await this.structureLocked(id));
     if (locked) {
@@ -1737,17 +1607,21 @@ export class ApiController {
       }
     }
 
+    // C2-T3: a base challenge is evaluated with the lab's active configuration
+    // version, which the attempt pins; a teacher variant keeps its own reviewed
+    // parameters. Either way the scientific model is unchanged.
+    const isVariant = c.id.includes("_v-");
+    const configVersion = isVariant
+      ? null
+      : await this.db.simulationConfigVersion.findFirst({ where: { labId: c.labId, status: "active" } });
+    const params = (isVariant ? null : versionParams(configVersion, c.id)) ?? (c.constraints as any)?.params;
     let result: any;
+    let normalizedVerdict: string;
     try {
-      result = simulate(c.labId, b.labState);
+      ({ result, verdict: normalizedVerdict } = evaluate(c.labId, b.labState, params));
     } catch (e: any) {
       throw new BadRequestException(e.message);
     }
-    // A teacher variant's reviewed parameters tighten success; the model is unchanged.
-    const variant = evaluateChallenge(c.labId, b.labState, result, (c.constraints as any)?.params);
-    if (variant.check) result = { ...result, verdict: variant.verdict, challengeCheck: variant.check };
-    const normalizedVerdict =
-      result.verdict === "not_passed" ? "needs_practice" : result.verdict;
 
     return this.db.$transaction(async (tx) => {
       // The step link and assignment are derived server-side; client-sent
@@ -1765,7 +1639,8 @@ export class ApiController {
           challengeId: c.id,
           assignmentId: link?.assignmentId ?? labAssignment?.id ?? null,
           lessonStepId: link?.stepId ?? null,
-          simulationModelVersion: "1.0.0",
+          simulationModelVersion: SIMULATION_ENGINE,
+          configVersionId: configVersion?.id ?? null,
           idempotencyKey: b.idempotencyKey ?? null,
           labState: b.labState as any,
           simulationResult: result,
@@ -2421,101 +2296,5 @@ export class ApiController {
         s.attempts.filter((a) => a.challengeId === "circuit_001"),
       ),
     }));
-  }
-  // Teachers provision students only through POST classes/:id/students (audited, idempotent).
-  @Roles("ADMIN") @Post("users") async createUser(
-    @Req() req: any,
-    @Body() body: unknown,
-  ) {
-    const b = z
-      .discriminatedUnion("role", [
-        z.object({
-          username,
-          password,
-          fullName: text,
-          role: z.literal("STUDENT"),
-          grade: z.number().int().min(6).max(9).default(8),
-          consent: z.literal(true),
-          classId: z.string().optional(),
-        }),
-        z.object({
-          email,
-          password,
-          fullName: text,
-          role: z.enum(["TEACHER", "PARENT", "ADMIN"]),
-          grade: z.number().int().min(6).max(9).default(8),
-          consent: z.literal(true),
-        }),
-      ])
-      .parse(body);
-    if ("classId" in b && b.classId) {
-      const target = await this.db.classroom.findUnique({ where: { id: b.classId }, select: { status: true } });
-      if (!target) throw new NotFoundException({ code: "CLASS_NOT_FOUND", message: "Không tìm thấy lớp" });
-      if (target.status === "ARCHIVED")
-        throw new ConflictException({ code: "CLASS_ARCHIVED", message: "Lớp đã lưu trữ; không thể thêm thành viên" });
-    }
-    return this.db.$transaction(async (tx) => {
-      const u = await tx.user.create({
-        data: {
-          email: "email" in b ? b.email : null,
-          username: "username" in b ? b.username : null,
-          passwordHash: await argon.hash(b.password),
-          fullName: b.fullName,
-          role: b.role,
-          grade: b.grade,
-          consentAt: new Date(),
-          mustChangePassword: b.role === "STUDENT",
-          temporaryPasswordExpiresAt:
-            b.role === "STUDENT" ? new Date(Date.now() + 86400000) : null,
-        },
-      });
-      if ("classId" in b && b.classId)
-        await tx.enrollment.create({
-          data: { classId: b.classId, studentId: u.id, status: "approved", approved: true },
-        });
-      await audit(tx, {
-        actor: req.user,
-        action: "user.create",
-        targetType: "User",
-        targetId: u.id,
-        after: { role: u.role, grade: u.grade, ...("classId" in b && b.classId ? { classId: b.classId, enrollmentStatus: "approved" } : {}) },
-      });
-      return publicUser(u);
-    });
-  }
-  @Roles("ADMIN") @Get("users") async users() {
-    return (
-      await this.db.user.findMany({ orderBy: { createdAt: "desc" } })
-    ).map(publicUser);
-  }
-  @Roles("ADMIN") @Put("users/:id") async updateUser(
-    @Param("id") id: string,
-    @Body() body: unknown,
-  ) {
-    const b = z
-      .object({ fullName: text, grade: z.number().int().min(6).max(9) })
-      .parse(body);
-    return publicUser(await this.db.user.update({ where: { id }, data: b }));
-  }
-  @Roles("ADMIN") @Post("users/:id/reset-password") async resetUserPassword(
-    @Param("id") id: string,
-  ) {
-    const user = await this.db.user.findUnique({ where: { id } });
-    if (!user || user.role === "STUDENT")
-      throw new NotFoundException("Không tìm thấy tài khoản người lớn");
-    const temporaryPassword = issueTemporaryPassword();
-    const expiresAt = new Date(Date.now() + 86400000);
-    await this.db.$transaction([
-      this.db.user.update({
-        where: { id },
-        data: {
-          passwordHash: await argon.hash(temporaryPassword),
-          mustChangePassword: true,
-          temporaryPasswordExpiresAt: expiresAt,
-        },
-      }),
-      this.db.session.deleteMany({ where: { userId: id } }),
-    ]);
-    return { credentials: { email: user.email, temporaryPassword, expiresAt } };
   }
 }

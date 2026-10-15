@@ -21,6 +21,9 @@
     "b1:preflight": "tsx scripts/b1-preflight.ts",
     "test:b1": "node scripts/b1-integration.mjs",
     "test:b0": "tsx scripts/b0-integration.mjs",
+    "test:c2": "node scripts/c2-integration.mjs",
+    "c2:preflight": "node scripts/c2-preflight.mjs",
+    "mailbox": "node scripts/mailbox.mjs",
     "format": "prettier --write src packages prisma scripts"
   },
   "dependencies": {
