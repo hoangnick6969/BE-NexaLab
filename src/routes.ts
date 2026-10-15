@@ -1141,7 +1141,8 @@ export class ApiController {
     if (!hasApplicableAssignment) return;
     throw new NotFoundException("Hoàn thành và vượt qua bài kiểm tra được giao để mở phòng thực hành");
   }
-  private circuitRetryGuidance(verdict: string, simulationResult: any): string | null {
+  /** Retry guidance for the model that produced the result (circuit, chemistry or eye). */
+  private retryGuidance(labId: string, verdict: string, simulationResult: any): string | null {
     if (verdict === "passed") return null;
     const check = simulationResult?.challengeCheck;
     if (check?.unmet?.includes("maxCurrentMa"))
@@ -1150,6 +1151,12 @@ export class ApiController {
       return `Thử thách yêu cầu ít nhất ${check.params.minLitLeds} LED sáng. Hãy thêm LED hoặc nhánh song song an toàn.`;
     if (check?.unmet?.includes("reactionId")) return "Thử thách yêu cầu một phản ứng khác; hãy đọc lại đề bài.";
     if (check?.unmet?.includes("minScore")) return `Cần đạt ít nhất ${check.params.minScore}% để hoàn thành thử thách.`;
+    if (labId === "chemistry") {
+      if (!simulationResult?.extent) return "Chưa có phản ứng xảy ra. Hãy đặt lượng cả hai chất lớn hơn 0.";
+      const leftover = simulationResult.limiting === simulationResult.a ? simulationResult.b : simulationResult.a;
+      return `Còn ${leftover} dư. Dựa vào hệ số trong phương trình để chỉnh tỉ lệ số mol cho hai chất phản ứng vừa đủ.`;
+    }
+    if (labId === "eye") return "Còn bộ phận chưa đúng tên. Chuyển sang Khám phá để đọc mô tả từng bộ phận rồi thử lại.";
     if (verdict === "partial" || simulationResult?.status === "LED_OVERLOAD") {
       return "Dòng điện qua LED vượt mức an toàn (> 20 mA). Hãy tăng giá trị điện trở (R ≥ 350Ω) để bảo vệ linh kiện.";
     }
@@ -1370,7 +1377,11 @@ export class ApiController {
       instruction: challenge?.objective ?? "Tạo mạch kín an toàn cho đèn LED",
       targetObjective: (challenge?.constraints as any)?.params
         ? challengeObjective(challenge!.labId, (challenge!.constraints as any).params)
-        : "Giữ dòng qua mỗi LED từ 1 đến 20 mA.",
+        : ({
+            circuit: "Giữ dòng qua mỗi LED từ 1 đến 20 mA.",
+            chemistry: "Chọn lượng chất để hai chất phản ứng vừa đủ, không còn chất dư.",
+            eye: "Gọi đúng tên cả 8 bộ phận của mắt.",
+          } as Record<string, string>)[challenge?.labId ?? stepResource?.labId ?? "circuit"] ?? null,
       config: stepResource,
     };
   }
@@ -1657,7 +1668,8 @@ export class ApiController {
             attemptNumber,
           },
           pathway,
-          retryGuidance: this.circuitRetryGuidance(
+          retryGuidance: this.retryGuidance(
+            c.labId,
             existing.verdict,
             existing.simulationResult,
           ),
@@ -1746,7 +1758,7 @@ export class ApiController {
           attemptNumber: attemptCount,
         },
         pathway,
-        retryGuidance: this.circuitRetryGuidance(normalizedVerdict, result),
+        retryGuidance: this.retryGuidance(c.labId, normalizedVerdict, result),
       };
       // Gate, evidence, projections and the pathway reconcile in one transaction; at
       // pooled-database round-trip latency that exceeds Prisma's 5 s default.
@@ -2204,7 +2216,7 @@ export class ApiController {
         currentMa: typeof result?.currentMa === "number" ? result.currentMa : null,
         ledState: typeof result?.ledState === "string" ? result.ledState : null,
       },
-      retryGuidance: this.circuitRetryGuidance(verdict ?? "needs_practice", result),
+      retryGuidance: this.retryGuidance(attempt.challenge.labId, verdict ?? "needs_practice", result),
       hintLevels: attempt.hints.map((hint) => hint.level),
     };
   }

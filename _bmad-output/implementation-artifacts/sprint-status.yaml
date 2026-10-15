@@ -174,11 +174,11 @@ story_notes:
     verification:
       source: verified
       automated: 'BE lint/build, Vitest 97/97; FE lint/build'
-      runtime: 'Isolated local PostgreSQL 18 (API HOST=:: so ::1 and the LAN address act as extra source IPs): b1-integration 172/172, a5-integration 53/53, integration 98/98 with A3 timing (p95 GET quiz 6.1 ms, GET quiz-attempts 7.8 ms, POST quiz-attempts 17.1 ms; targets 500/500/1000); Playwright b1-teacher-live 8/8 and A2/A4 specs 6/7 in Chrome'
+      runtime: 'Isolated local PostgreSQL 18 (API HOST=:: so ::1 and the LAN address act as extra source IPs): b1-integration 177/177, a5-integration 53/53, integration 98/98 with A3 timing (p95 GET quiz 6.1 ms, GET quiz-attempts 7.8 ms, POST quiz-attempts 17.1 ms; targets 500/500/1000); Playwright b1-teacher-live 9/9 plus circuit-lab and quiz-learning in Chrome'
       known_unrelated_failures:
         - 'tests/video-completion.spec.ts "asset video refreshes authentication" expects 2 file requests, receives 3; fails identically without the B1 changes (pre-existing, see deferred-work.md)'
-      shared_supabase: 'verified 2026-10-15 (API local -> Supabase ap-southeast-1 pooler, ~176 ms RTT): b1-integration 172/172 (twice; three-IP account check included), integration 98/98, Playwright b1-teacher-live 8/8; a5-integration 48 functional checks passed then stopped at its 500 ms p95 latency gate (986/1075 ms), so its last 4 regression checks ran locally only (53/53)'
-      supabase_latency: 'A3 p95 GET quiz 1320 ms, GET quiz-attempts 1462 ms, POST quiz-attempts 2984 ms; A5 /me/progress 986 ms, /me/activity 1075 ms; join failure medians about 2.1 s — dev-network round trips, same pattern as the accepted A3 history; production latency unverified'
+      shared_supabase: 'final run 2026-10-15 on the latest code incl. B0 hint boundary and practical step UIs (API local -> Supabase ap-southeast-1 pooler, ~176 ms RTT): b1-integration 177/177, integration 98/98, a5-integration 52 passed + latency gate SKIP (A5_LATENCY_ADVISORY=true; p95 1082/1100 ms), b0-integration 13/13, Playwright b1-teacher-live 9/9 + circuit-lab 1/1; no 500 in the API log'
+      supabase_latency: 'A3 p95 GET quiz 1550 ms, GET quiz-attempts 1754 ms, POST quiz-attempts 3192 ms; A5 /me/progress 1082 ms, /me/activity 1100 ms; join failure medians 1.8-2.4 s; graded practical attempt about 5 s — dev-network round trips, same pattern as the accepted A3 history; production latency unverified (pilot targets not met on this link)'
       fixes_from_supabase_run:
         - 'POST attempts transaction timeout raised to 20 s (same as the hint transaction): an intermittent 500 appeared once on Supabase because about 30 sequential queries at ~176 ms RTT exceeded Prisma''s 5 s default'
       fixture_maintenance: 'student.temp temporaryPasswordExpiresAt extended by 24 h (targeted update, owner-approved; no SEED_RESET_FIXTURES)' 

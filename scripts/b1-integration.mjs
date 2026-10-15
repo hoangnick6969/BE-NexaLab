@@ -1075,6 +1075,111 @@ try {
     within.data,
   );
 
+  // A chemistry variant runs through its own model, objective and guidance.
+  const chem = await req(
+    "/lessons",
+    "POST",
+    {
+      ...variantBody,
+      title: `${prefix} phản ứng trung hòa`,
+      subjectId: "chemistry",
+      chapter: "Phản ứng hóa học",
+      topic: "Tỉ lệ mol",
+      labId: "chemistry",
+      domain: "MATTER",
+      outcomeCodes: ["FX8-MATTER-01"],
+      questions: [],
+      challengeParams: { reactionId: "naoh-hcl" },
+    },
+    owner.token,
+  );
+  check("a chemistry challenge variant publishes", chem.status === 201 && chem.data.status === "published", chem.data);
+  const chemAssign = await req(
+    `/classes/${classId}/assignments`,
+    "POST",
+    { contentType: "lesson", contentId: chem.data.id },
+    owner.token,
+    key(),
+  );
+  let chemPath = await req(`/lessons/${chem.data.id}/pathway`, "GET", undefined, studentA.token);
+  for (const step of chemPath.data.steps) {
+    if (step.type === "READING")
+      await req(`/lessons/${chem.data.id}/steps/${step.id}/progress`, "PUT", { action: "complete" }, studentA.token);
+    if (step.type === "VIDEO")
+      await req(`/lessons/${chem.data.id}/steps/${step.id}/progress`, "PUT", { action: "complete-fallback" }, studentA.token);
+  }
+  chemPath = await req(`/lessons/${chem.data.id}/pathway`, "GET", undefined, studentA.token);
+  const chemLab = chemPath.data.steps.find((step) => step.type === "LAB");
+  const chemLabView = await req(`/lessons/${chem.data.id}/steps/${chemLab.id}/lab`, "GET", undefined, studentA.token);
+  check(
+    "the chemistry lab step names its own model and objective",
+    chemLabView.data.labId === "chemistry" &&
+      chemLabView.data.challengeId === "chemistry_001" &&
+      /phản ứng vừa đủ/.test(chemLabView.data.targetObjective),
+  );
+  const leftover = await req(
+    "/attempts",
+    "POST",
+    {
+      challengeId: "chemistry_001",
+      lessonStepId: chemLab.id,
+      labState: { reactionId: "mg-hcl", molesA: 0.2, molesB: 0.2 },
+      durationMs: 1000,
+    },
+    studentA.token,
+  );
+  check(
+    "an unbalanced chemistry attempt gets chemistry guidance, not circuit guidance",
+    leftover.data.verdict === "partial" && /dư/.test(leftover.data.retryGuidance) && !/LED|điện trở/.test(leftover.data.retryGuidance),
+    leftover.data.retryGuidance,
+  );
+  await req(
+    "/attempts",
+    "POST",
+    {
+      challengeId: "chemistry_001",
+      lessonStepId: chemLab.id,
+      labState: { reactionId: "mg-hcl", molesA: 0.1, molesB: 0.2 },
+      durationMs: 1000,
+    },
+    studentA.token,
+  );
+  chemPath = await req(`/lessons/${chem.data.id}/pathway`, "GET", undefined, studentA.token);
+  const chemChallenge = chemPath.data.steps.find((step) => step.type === "CHALLENGE");
+  const chemChallengeId = `chemistry_v-${chem.data.id}`;
+  const wrongReaction = await req(
+    "/attempts",
+    "POST",
+    {
+      challengeId: chemChallengeId,
+      lessonStepId: chemChallenge.id,
+      labState: { reactionId: "mg-hcl", molesA: 0.1, molesB: 0.2 },
+      durationMs: 1000,
+    },
+    studentA.token,
+  );
+  check(
+    "a balanced but different reaction does not meet the teacher's reaction",
+    wrongReaction.data.verdict === "needs_practice" && wrongReaction.data.simulationResult.challengeCheck.unmet.includes("reactionId"),
+    wrongReaction.data,
+  );
+  const rightReaction = await req(
+    "/attempts",
+    "POST",
+    {
+      challengeId: chemChallengeId,
+      lessonStepId: chemChallenge.id,
+      labState: { reactionId: "naoh-hcl", molesA: 0.1, molesB: 0.1 },
+      durationMs: 1000,
+    },
+    studentA.token,
+  );
+  check(
+    "the teacher's reaction, balanced, passes the chemistry challenge for that assignment",
+    rightReaction.data.verdict === "passed" && rightReaction.data.assignmentId === chemAssign.data.assignment.id,
+    rightReaction.data,
+  );
+
   // Shared library: admin-only, released only with named and independent reviews.
   const reviewerA = await teacher("reviewer-a", "ADMIN");
   const reviewerB = await teacher("reviewer-b", "ADMIN");

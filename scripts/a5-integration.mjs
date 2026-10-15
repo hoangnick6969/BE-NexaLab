@@ -263,7 +263,11 @@ try {
   const runtimeLabel = process.env.A5_RUNTIME_LABEL ?? "configured runtime";
   for (const [path, value] of Object.entries(latency))
     console.log(`${value <= 500 ? "TARGET MET" : "TARGET MISSED"} ${path} p95 ${value} ms (target 500 ms, ${runtimeLabel})`);
-  check("A5 read endpoints meet the 500 ms p95 pilot target", Object.values(latency).every((value) => value <= 500), latency);
+  // A5_LATENCY_ADVISORY=true (for a remote dev link) reports a miss as SKIP so the
+  // remaining regression checks still run; it is never counted as a pass.
+  if (process.env.A5_LATENCY_ADVISORY === "true" && !Object.values(latency).every((value) => value <= 500))
+    console.log("SKIP A5 read endpoints meet the 500 ms p95 pilot target (advisory on this runtime): " + JSON.stringify(latency));
+  else check("A5 read endpoints meet the 500 ms p95 pilot target", Object.values(latency).every((value) => value <= 500), latency);
 
   // Regression: standalone lab practice, hints and the Teacher/Parent progress route.
   const standalone = await req("/attempts", "POST", { challengeId: "circuit_001", labState: circuit(100), durationMs: 100 }, peer.token);

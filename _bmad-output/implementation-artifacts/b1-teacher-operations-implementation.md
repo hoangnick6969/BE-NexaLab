@@ -38,6 +38,13 @@
 - FE `LoadError` with "Thử lại" on every read in the class workspace (no dead-end error state)
 - `integration.mjs` A3 check now targets the lesson lab step (403 `STEP_LOCKED`)
 
+## Practical step UIs and final shared run (2026-10-15)
+
+- FE `src/labs/PracticalPathwayStep.tsx`: LAB/CHALLENGE steps pick the workspace from the step resource — circuit keeps `CircuitPathwayStep`; chemistry and eye get their own workspace (existing `Chemistry`/`Eye` components), server-graded attempts with idempotency key, retry, verdict, teacher objective
+- BE: retry guidance and default objectives are lab-specific (no circuit text on chemistry/eye)
+- `b1-integration` 177/177 (chemistry variant: own objective, chemistry guidance, wrong reaction fails, teacher reaction passes); Playwright `b1-teacher-live` 9/9 incl. chemistry LAB → CHALLENGE and the eye naming check in the browser
+- Final shared Supabase run on the latest code: b1 177/177, integration 98/98, a5 52 + latency SKIP (`A5_LATENCY_ADVISORY=true`), b0 13/13, Playwright 10/10; the spec uses a 20 s assertion timeout because a graded attempt takes ~5 s on this link
+
 ## Shared Supabase development (2026-10-15, owner-approved)
 
 - `npm run b1:preflight` before: RESULT ok (7 enrollments, 5 active assignments, 0 bad rows, 0 duplicate class names)

@@ -7,6 +7,6 @@
 - source_spec: `../specs/spec-b1-teacher-operations/SPEC.md` (B1 round 2, 2026-10-15)
   summary: FE `tests/video-completion.spec.ts` "asset video refreshes authentication, creates a blob URL, and revokes it on cleanup" expects 2 `/files` requests and receives 3.
   evidence: Fails identically on the FE tree without the B1 round-2 changes (stash check against the local API); the other A2/A4 specs pass after pointing their student login at `/login` (the public landing page now owns `/`). Likely a dev-mode double mount or an extra refresh retry; needs an A2 owner to decide whether the count or the client is wrong.
-- source_spec: `../specs/spec-b1-teacher-operations/SPEC.md` (B1-T4)
-  summary: Teacher challenge variants render through the circuit pathway workspace; chemistry and eye variants are validated and evaluated server-side but their lesson-step UI is still the circuit canvas.
-  evidence: `CircuitPathwayStep` is the only practical step UI in the pathway (pre-existing for all LAB/CHALLENGE steps); per-model step UIs belong with CF-T4 simulation pack registry.
+- source_spec: `../specs/spec-b1-teacher-operations/SPEC.md` (B1 final run, 2026-10-15)
+  summary: On the shared dev link a graded practical attempt takes ~5 s and join ~2 s; pilot latency targets are not met there.
+  evidence: ~176 ms per round trip from the dev machine to the Supabase pooler and ~30 sequential queries per attempt; measure from the pilot region before optimising (fewer round trips in the attempt transaction would help everywhere).
