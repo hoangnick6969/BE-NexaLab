@@ -187,10 +187,14 @@ model LessonStep {
   @@index([lessonId, type])
 }
 model StepProgress {
+  id String @id @default(cuid())
   studentId String
   student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
   stepId String
   step LessonStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  /// Null is retained only for legacy/free-practice evidence. Assigned writes must set this.
+  assignmentId String?
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   status StepProgressStatus @default(NOT_STARTED)
   progressValue Int @default(0)
   lastPosition Int?
@@ -198,8 +202,9 @@ model StepProgress {
   startedAt DateTime?
   completedAt DateTime?
   updatedAt DateTime @updatedAt
-  @@id([studentId, stepId])
-  @@index([stepId])
+  @@unique([studentId, assignmentId, stepId])
+  @@index([studentId, stepId])
+  @@index([assignmentId, studentId])
 }
 model QuizAttempt {
   id String @id @default(cuid())
@@ -266,6 +271,7 @@ model Assignment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   targets AssignmentTarget[]
+  stepProgress StepProgress[]
   @@index([classId, status, dueDate])
   @@index([contentType, contentId, status])
 }

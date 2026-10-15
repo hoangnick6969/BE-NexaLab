@@ -1307,12 +1307,13 @@ export class ApiController {
           idempotencyKey: request.idempotencyKey,
         },
       });
-      const priorProgress = await tx.stepProgress.findUnique({ where: { studentId_stepId: { studentId, stepId: currentStep.id } } });
+      const priorProgress = await tx.stepProgress.findUnique({ where: { studentId_assignmentId_stepId: { studentId, assignmentId: assignment.id, stepId: currentStep.id } } });
       await tx.stepProgress.upsert({
-        where: { studentId_stepId: { studentId, stepId: currentStep.id } },
+        where: { studentId_assignmentId_stepId: { studentId, assignmentId: assignment.id, stepId: currentStep.id } },
         create: {
           studentId,
           stepId: currentStep.id,
+          assignmentId: assignment.id,
           status: passed ? "COMPLETED" : "IN_PROGRESS",
           progressValue: passed ? 100 : 0,
           startedAt: new Date(),
@@ -1325,7 +1326,7 @@ export class ApiController {
           completedAt: priorProgress?.completedAt ?? (passed ? new Date() : null),
         },
       });
-      await projectLesson(tx, studentId, lessonId);
+      await projectLesson(tx, studentId, lessonId, assignment.id);
       return {
         attempt: this.quizAttemptSummary(created),
         pathway: await this.studentPathway(lessonId, studentId, tx),
@@ -1411,14 +1412,15 @@ export class ApiController {
     const studentId = req.user.sub;
     const now = new Date();
     return this.db.$transaction(async (tx) => {
-      if (!(await this.applicableLessonAssignment(lessonId, studentId, tx)))
+      const assignment = await this.applicableLessonAssignment(lessonId, studentId, tx);
+      if (!assignment)
         throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
       const lesson = await tx.lesson.findFirst({
         where: { id: lessonId, status: { in: ["published", "archived"] } },
         include: {
           steps: {
             orderBy: { position: "asc" },
-            include: { progress: { where: { studentId } } },
+            include: { progress: { where: { studentId, assignmentId: assignment.id } } },
           },
         },
       });
@@ -1441,10 +1443,11 @@ export class ApiController {
         if (action.action !== "complete")
           throw new NotFoundException("Bước học không còn khả dụng");
         await tx.stepProgress.upsert({
-          where: { studentId_stepId: { studentId, stepId } },
+          where: { studentId_assignmentId_stepId: { studentId, assignmentId: assignment.id, stepId } },
           create: {
             studentId,
             stepId,
+            assignmentId: assignment.id,
             status: "COMPLETED",
             progressValue: 100,
             startedAt: now,
@@ -1469,8 +1472,8 @@ export class ApiController {
           throw new NotFoundException("Bước học không còn khả dụng");
         }
         await tx.stepProgress.upsert({
-          where: { studentId_stepId: { studentId, stepId } },
-          create: { studentId, stepId, ...evidence },
+          where: { studentId_assignmentId_stepId: { studentId, assignmentId: assignment.id, stepId } },
+          create: { studentId, stepId, assignmentId: assignment.id, ...evidence },
           update: evidence,
         });
       } else if (step.type === "STUDY_CARDS") {
@@ -1483,8 +1486,8 @@ export class ApiController {
           throw new BadRequestException(error instanceof Error ? error.message : "Thẻ học không hợp lệ");
         }
         await tx.stepProgress.upsert({
-          where: { studentId_stepId: { studentId, stepId } },
-          create: { studentId, stepId, ...evidence },
+          where: { studentId_assignmentId_stepId: { studentId, assignmentId: assignment.id, stepId } },
+          create: { studentId, stepId, assignmentId: assignment.id, ...evidence },
           update: {
             status: evidence.status,
             progressValue: Math.max(saved?.progressValue ?? 0, evidence.progressValue),
@@ -1496,7 +1499,7 @@ export class ApiController {
       } else {
         throw new NotFoundException("Bước học không còn khả dụng");
       }
-      await projectLesson(tx, studentId, lessonId);
+      await projectLesson(tx, studentId, lessonId, assignment.id);
       const pathway = await this.studentPathway(lessonId, studentId, tx);
       return { step: pathway.steps.find((item) => item.id === stepId), pathway };
     }, { isolationLevel: "Serializable" });
@@ -1723,16 +1726,17 @@ export class ApiController {
         const isCompleted = normalizedVerdict === "passed";
         const now = new Date();
         const saved = await tx.stepProgress.findUnique({
-          where: { studentId_stepId: { studentId: req.user.sub, stepId: link.stepId } },
+          where: { studentId_assignmentId_stepId: { studentId: req.user.sub, assignmentId: link.assignmentId!, stepId: link.stepId } },
         });
         // High-water evidence: a later failed retry never undoes a pass.
         await tx.stepProgress.upsert({
           where: {
-            studentId_stepId: { studentId: req.user.sub, stepId: link.stepId },
+            studentId_assignmentId_stepId: { studentId: req.user.sub, assignmentId: link.assignmentId!, stepId: link.stepId },
           },
           create: {
             studentId: req.user.sub,
             stepId: link.stepId,
+            assignmentId: link.assignmentId!,
             status: isCompleted ? "COMPLETED" : "IN_PROGRESS",
             progressValue: isCompleted ? 100 : 50,
             startedAt: now,
@@ -1747,7 +1751,7 @@ export class ApiController {
                 completedAt: isCompleted ? now : null,
               },
         });
-        await projectLesson(tx, req.user.sub, link.lessonId);
+        await projectLesson(tx, req.user.sub, link.lessonId, link.assignmentId);
         pathway = await this.studentPathway(link.lessonId, req.user.sub, tx);
       }
       await projectLab(tx, req.user.sub, c.labId);
@@ -1891,23 +1895,25 @@ export class ApiController {
       this.db.quizAttempt.findFirst({ where: { studentId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { createdAt: true } }),
       this.db.attempt.findFirst({ where: { studentId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { createdAt: true } }),
     ]);
-    const derivedByLesson = new Map<string, ReturnType<typeof deriveLesson> | null>();
-    for (const lesson of lessons) {
+    const derivedByAssignment = new Map<string, ReturnType<typeof deriveLesson> | null>();
+    for (const assignment of assignments) {
+      const lesson = lessons.find((item) => item.id === assignment.contentId);
+      if (!lesson) continue;
       const stepIds = new Set(lesson.steps.map((step) => step.id));
       const evidence = {
-        stepProgress: stepProgress.filter((item) => stepIds.has(item.stepId)) as any,
-        quizAttempts: quizEvidence.filter((item) => item.lessonId === lesson.id),
-        attempts: practicalEvidence.filter((item) => stepIds.has(item.lessonStepId!)).map((item) => ({ ...item, hintLevel: 0 })),
+        stepProgress: stepProgress.filter((item) => item.assignmentId === assignment.id && stepIds.has(item.stepId)) as any,
+        quizAttempts: quizEvidence.filter((item) => item.assignmentId === assignment.id && item.lessonId === lesson.id),
+        attempts: practicalEvidence.filter((item) => item.assignmentId === assignment.id && stepIds.has(item.lessonStepId!)).map((item) => ({ ...item, hintLevel: 0 })),
       };
       try {
-        derivedByLesson.set(lesson.id, deriveLesson(lesson.steps as any, evidence));
+        derivedByAssignment.set(assignment.id, deriveLesson(lesson.steps as any, evidence));
       } catch {
-        derivedByLesson.set(lesson.id, null);
+        derivedByAssignment.set(assignment.id, null);
       }
     }
     const items = assignments.flatMap((assignment) => {
       const lesson = lessons.find((item) => item.id === assignment.contentId);
-      const derived = lesson ? derivedByLesson.get(lesson.id) : null;
+      const derived = lesson ? derivedByAssignment.get(assignment.id) : null;
       if (!lesson || !derived) return [];
       // Archived content stays visible only once the student has started it (Q-B1-02).
       if (lesson.status === "archived" && !derived.steps.some((step) => step.evidenceId || step.stepProgress)) return [];
@@ -2260,6 +2266,44 @@ export class ApiController {
           select: { id: true, fullName: true, grade: true, progress: true },
         },
       },
+    });
+  }
+  @Roles("TEACHER") @Get("classes/:classId/assignments/:assignmentId/progress") async assignmentProgressBoard(
+    @Param("classId") classId: string,
+    @Param("assignmentId") assignmentId: string,
+    @Req() req: any,
+  ) {
+    await ownedClass(this.db, classId, req.user);
+    const assignment = await this.db.assignment.findFirst({
+      where: { id: assignmentId, classId, status: { in: ["ACTIVE", "ARCHIVED"] } },
+      include: { targets: { include: { student: { select: { id: true, fullName: true, username: true } } } } },
+    });
+    if (!assignment) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài giao" });
+    if (assignment.contentType === "lesson") {
+      const lesson = await this.db.lesson.findUnique({ where: { id: assignment.contentId }, include: { steps: { orderBy: { position: "asc" } } } });
+      if (!lesson) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy nội dung" });
+      const stepIds = lesson.steps.map((step) => step.id);
+      const studentIds = assignment.targets.map((target) => target.studentId);
+      const [progress, quizzes, attempts] = await Promise.all([
+        this.db.stepProgress.findMany({ where: { assignmentId, studentId: { in: studentIds }, stepId: { in: stepIds } } }),
+        this.db.quizAttempt.findMany({ where: { assignmentId, studentId: { in: studentIds }, stepId: { in: stepIds } }, select: { id: true, studentId: true, stepId: true, score: true, passed: true, createdAt: true } }),
+        this.db.attempt.findMany({ where: { assignmentId, studentId: { in: studentIds }, lessonStepId: { in: stepIds } }, select: { id: true, studentId: true, lessonStepId: true, verdict: true, createdAt: true } }),
+      ]);
+      return assignment.targets.map(({ student }) => {
+        const evidence = {
+          stepProgress: progress.filter((row) => row.studentId === student.id),
+          quizAttempts: quizzes.filter((row) => row.studentId === student.id),
+          attempts: attempts.filter((row) => row.studentId === student.id).map((row) => ({ ...row, challengeId: "", assignmentId, hintLevel: 0 })),
+        };
+        const derived = deriveLesson(lesson.steps as any, evidence as any);
+        return { student, completed: derived.completed, completedRequired: derived.completedRequired, totalRequired: derived.totalRequired, percent: derived.percent, steps: derived.steps };
+      });
+    }
+    const studentIds = assignment.targets.map((target) => target.studentId);
+    const attempts = await this.db.attempt.findMany({ where: { assignmentId, studentId: { in: studentIds } }, select: { id: true, studentId: true, verdict: true, createdAt: true } });
+    return assignment.targets.map(({ student }) => {
+      const rows = attempts.filter((attempt) => attempt.studentId === student.id);
+      return { student, attempts: rows.length, latestVerdict: rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]?.verdict ?? null, passed: rows.some((attempt) => attempt.verdict === "passed") };
     });
   }
   @Roles("TEACHER") @Get("classes/:id/analytics") async analytics(
