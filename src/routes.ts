@@ -308,6 +308,7 @@ export class ApiController {
     if (
       !user ||
       user.role === "STUDENT" ||
+      user.role === "ADMIN" ||
       user.status !== "active" ||
       !(await argon.verify(user.passwordHash, b.password))
     )
@@ -453,37 +454,29 @@ export class ApiController {
     const b = z.object({ email }).parse(body);
     const u = await this.db.user.findUnique({ where: { email: b.email } });
     if (u && u.role !== "STUDENT" && u.status === "active") {
-      const temporaryPassword = issueTemporaryPassword();
-      const expiresAt = new Date(Date.now() + 86400000);
-      await createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT ?? 1025),
-        secure: false,
-        ...(process.env.SMTP_USER
-          ? {
-              auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASSWORD,
-              },
-            }
-          : {}),
-      }).sendMail({
-        from: process.env.SMTP_FROM,
-        to: u.email!,
-        subject: "Mật khẩu tạm thời NexaLab",
-        text: `Mật khẩu tạm thời của bạn là: ${temporaryPassword}\nMật khẩu có hiệu lực đến ${expiresAt.toLocaleString("vi-VN")} và sẽ buộc đổi sau khi đăng nhập.`,
+      const resetToken = token();
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+      const resetUrl = `${process.env.APP_ORIGIN ?? "http://127.0.0.1:5173"}/?reset=${encodeURIComponent(resetToken)}`;
+      await this.db.$transaction(async (tx) => {
+        await tx.session.deleteMany({ where: { userId: u.id, kind: "reset" } });
+        await tx.session.create({ data: { userId: u.id, kind: "reset", tokenHash: hashToken(resetToken), expiresAt } });
       });
-      await this.db.$transaction([
-        this.db.user.update({
-          where: { id: u.id },
-          data: {
-            passwordHash: await argon.hash(temporaryPassword),
-            mustChangePassword: true,
-            temporaryPasswordExpiresAt: expiresAt,
-          },
-        }),
-        this.db.session.deleteMany({ where: { userId: u.id } }),
-      ]);
+      try {
+        await createTransport({
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT ?? 1025),
+          secure: false,
+          ...(process.env.SMTP_USER ? { auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD } } : {}),
+        }).sendMail({
+          from: process.env.SMTP_FROM,
+          to: u.email!,
+          subject: "Đặt lại mật khẩu NexaLab",
+          text: `Mở liên kết một lần để đặt lại mật khẩu (hết hạn sau 60 phút): ${resetUrl}`,
+        });
+      } catch (error) {
+        await this.db.session.deleteMany({ where: { tokenHash: hashToken(resetToken), kind: "reset" } });
+        throw error;
+      }
     }
     return { message: "Nếu email tồn tại, hướng dẫn đã được gửi." };
   }
@@ -562,14 +555,45 @@ export class ApiController {
   ) {
     if (id === req.user.sub)
       throw new BadRequestException("Không thể xóa tài khoản đang đăng nhập");
-    if (
-      (await this.db.classroom.count({ where: { teacherId: id } })) ||
-      (await this.db.lesson.count({ where: { authorId: id } }))
-    )
+    const [classes, lessons, enrollments, attempts, progress, saved, links, consents, auditRefs] = await Promise.all([
+      this.db.classroom.count({ where: { teacherId: id } }),
+      this.db.lesson.count({ where: { authorId: id } }),
+      this.db.enrollment.count({ where: { studentId: id } }),
+      this.db.attempt.count({ where: { studentId: id } }),
+      this.db.progress.count({ where: { studentId: id } }),
+      this.db.savedExperiment.count({ where: { studentId: id } }),
+      this.db.parentLink.count({ where: { OR: [{ parentId: id }, { studentId: id }] } }),
+      this.db.parentConsent.count({ where: { userId: id } }),
+      this.db.auditLog.count({ where: { OR: [{ actorId: id }, { targetId: id }] } }),
+    ]);
+    if (classes || lessons || enrollments || attempts || progress || saved || links || consents || auditRefs)
       throw new BadRequestException(
-        "Người dùng đang sở hữu lớp hoặc bài học; cần xử lý các dữ liệu này trước",
+        { code: "DELETE_INELIGIBLE", message: "Tài khoản còn dữ liệu lịch sử hoặc sở hữu; hãy vô hiệu hóa thay vì xóa", blockers: { classes, lessons, enrollments, attempts, progress, saved, links, consents, auditRefs } },
       );
-    return this.db.user.delete({ where: { id }, select: { id: true } });
+    return this.db.$transaction(async (tx) => {
+      await tx.session.deleteMany({ where: { userId: id } });
+      const deleted = await tx.user.delete({ where: { id }, select: { id: true } });
+      await audit(tx, { actor: req.user, action: "user.delete", targetType: "User", targetId: id, after: { deleted: true } });
+      return deleted;
+    });
+  }
+
+  @Roles("ADMIN") @Post("users/:id/disable") async disableUser(@Param("id") id: string, @Req() req: any) {
+    if (id === req.user.sub) throw new BadRequestException("Không thể vô hiệu hóa tài khoản đang đăng nhập");
+    return this.db.$transaction(async (tx) => {
+      const user = await tx.user.update({ where: { id }, data: { status: "disabled" } });
+      await tx.session.deleteMany({ where: { userId: id } });
+      await audit(tx, { actor: req.user, action: "user.disable", targetType: "User", targetId: id, after: { status: "disabled" } });
+      return publicUser(user);
+    });
+  }
+
+  @Roles("ADMIN") @Post("users/:id/reactivate") async reactivateUser(@Param("id") id: string, @Req() req: any) {
+    return this.db.$transaction(async (tx) => {
+      const user = await tx.user.update({ where: { id }, data: { status: "active" } });
+      await audit(tx, { actor: req.user, action: "user.reactivate", targetType: "User", targetId: id, after: { status: "active" } });
+      return publicUser(user);
+    });
   }
   @Get("labs") labs() {
     return this.db.lab.findMany({
