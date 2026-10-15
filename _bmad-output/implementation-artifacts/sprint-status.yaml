@@ -9,8 +9,8 @@ scope: Release 1 / Epic C1 Parent Progress (B2 completed on isolated local runti
 last_updated: '2026-10-15'
 tracking_timezone: Asia/Saigon
 repositories:
-  backend: 'BE-NexaLab (branch feat/b2-c1)'
-  frontend: 'FE-NexaLab (branch feat/b2-c1)'
+  backend: 'BE-NexaLab (branch feat/c1-parent-progress)'
+  frontend: 'FE-NexaLab (branch feat/c1-parent-progress)'
 sources:
   plan: ../planning-artifacts/increment-b-c-plan.md
   acceptance_criteria: ../specs/spec-c1-parent-progress/tickets.md
@@ -72,8 +72,8 @@ development_status:
   b2-t4-replace-legacy-analytics: done
   b2-t5-quiz-gate-override: done
   b2-t6-journey-negative: done
-  epic-c1-parent-progress: ready-for-dev
-  c1-t1-link-code-consent-lifecycle: ready-for-dev
+  epic-c1-parent-progress: in-progress
+  c1-t1-link-code-consent-lifecycle: review
   c1-t2-parent-read-model: backlog
   c1-t3-parent-ui: backlog
   c1-t4-parent-journey-negative: backlog
@@ -81,9 +81,9 @@ development_status:
 
 execution:
   current_story: c1-t1-link-code-consent-lifecycle
-  next_story: c1-t1-link-code-consent-lifecycle
+  next_story: c1-t2-parent-read-model
   selection_reason: >
-    2026-10-15: Epic B2 completed against isolated local PostgreSQL 18, real API and real Chromium UI.
+    2026-10-15: C1-T1 link-code and consent lifecycle implemented and backend-verified by build/unit suite; C1-T2 is next.
     Fresh migration/seed passed, B2 integration passed 13/13, unit tests passed 107/107, and mobile browser evidence
     journey passed 1/1. Shared development credentials were rejected, so shared migration is not claimed. C1-T1 is next.
   one_story_per_task: true

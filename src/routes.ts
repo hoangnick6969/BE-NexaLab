@@ -26,8 +26,22 @@ import {
 } from "@nestjs/swagger";
 import { z } from "zod";
 import * as argon from "argon2";
+import { createHmac, randomBytes } from "node:crypto";
 import { createTransport } from "nodemailer";
 import { Db } from "./db";
+
+const PARENT_CONSENT_VERSION = "2026-10-v1";
+const PARENT_CONSENT_HASH = createHmac("sha256", process.env.JWT_SECRET ?? "dev").update("PARENT_CHILD_PROGRESS|2026-10-v1|vi").digest("hex");
+const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+function parentCode(): string {
+  const bytes = randomBytes(13);
+  let value = "";
+  for (let i = 0; i < 20; i++) value += crockford[bytes[i % bytes.length] % crockford.length];
+  return `NP-${value.slice(0, 5)}-${value.slice(5, 10)}-${value.slice(10, 15)}-${value.slice(15)}`;
+}
+function parentCodeHash(code: string): string {
+  return createHmac("sha256", process.env.JWT_SECRET ?? "dev").update(code.toUpperCase()).digest("hex");
+}
 import { Public, Roles, publicUser, access, token, hashToken } from "./auth";
 import { simulate } from "../packages/sim";
 import { misconceptions } from "./tutor";
@@ -262,7 +276,9 @@ export class ApiController {
         where: {
           parentId_studentId: { parentId: req.user.sub, studentId: id },
         },
-      }))
+        select: { status: true, revokedAt: true },
+      }))?.status === "approved" &&
+      !(await this.db.parentLink.findUnique({ where: { parentId_studentId: { parentId: req.user.sub, studentId: id } }, select: { revokedAt: true } }))?.revokedAt
     )
       return;
     if (
@@ -2243,41 +2259,47 @@ export class ApiController {
       hintLevels: attempt.hints.map((hint) => hint.level),
     };
   }
-  @Roles("STUDENT") @Post("parent-code") async parentCode(@Req() req: any) {
-    const linkCode = token();
-    await this.db.user.update({
-      where: { id: req.user.sub },
-      data: { linkCode },
-    });
-    return { code: linkCode };
+  @Roles("TEACHER") @Post("classes/:classId/students/:studentId/parent-link-codes") async issueParentLinkCode(
+    @Req() req: any, @Param("classId") classId: string, @Param("studentId") studentId: string,
+    @Body() body: unknown,
+  ) {
+    const b = z.object({ guardianVerified: z.literal(true) }).parse(body);
+    const enrollment = await this.db.enrollment.findFirst({ where: { classId, studentId, status: "approved", classroom: { teacherId: req.user.sub, status: "ACTIVE" } } });
+    if (!enrollment) throw new ForbiddenException("Học sinh không thuộc lớp đang quản lý");
+    const code = parentCode();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await this.db.parentLinkCode.create({ data: { studentId, teacherId: req.user.sub, classId, codeHash: parentCodeHash(code), guardianVerifiedAt: new Date(), expiresAt } });
+    return { code, expiresAt, consentVersion: PARENT_CONSENT_VERSION };
+  }
+  @Roles("PARENT") @Post("auth/email/verify") async verifyParentEmail(@Req() req: any) {
+    await this.db.user.update({ where: { id: req.user.sub }, data: { emailVerifiedAt: new Date() } });
+    return { verified: true };
+  }
+  @Roles("PARENT") @Post("auth/consents") async acceptParentConsent(@Req() req: any, @Body() body: unknown) {
+    const b = z.object({ purpose: z.literal("PARENT_CHILD_PROGRESS"), version: z.string().min(1), contentHash: z.string().min(1) }).parse(body);
+    if (b.version !== PARENT_CONSENT_VERSION || b.contentHash !== PARENT_CONSENT_HASH) throw new BadRequestException("Phiên bản đồng ý không hợp lệ");
+    const consent = await this.db.parentConsent.create({ data: { userId: req.user.sub, purpose: b.purpose, version: b.version, contentHash: b.contentHash, actorId: req.user.sub } });
+    await this.db.parentLink.updateMany({ where: { parentId: req.user.sub, status: "pending", revokedAt: null }, data: { status: "approved", verifiedAt: new Date() } });
+    return consent;
   }
   @Roles("PARENT") @Post("children/link") async link(
     @Req() req: any,
     @Body() body: unknown,
   ) {
-    const b = z.object({ code: text, consent: z.literal(true) }).parse(body);
+    const b = z.object({ code: z.string().regex(/^NP-[0-9A-Z]{5}(?:-[0-9A-Z]{5}){3}$/i) }).parse(body);
     return this.db.$transaction(async (tx) => {
-      const student = await tx.user.findFirst({
-        where: { linkCode: b.code, role: "STUDENT" },
-      });
-      if (!student) throw new BadRequestException("Mã liên kết không đúng");
-      const consumed = await tx.user.updateMany({
-        where: { id: student.id, linkCode: b.code },
-        data: { linkCode: null },
-      });
-      if (!consumed.count) throw new BadRequestException("Mã đã sử dụng");
-      return tx.parentLink.upsert({
-        where: {
-          parentId_studentId: { parentId: req.user.sub, studentId: student.id },
-        },
-        create: { parentId: req.user.sub, studentId: student.id },
-        update: {},
-      });
+      const linkCode = await tx.parentLinkCode.findUnique({ where: { codeHash: parentCodeHash(b.code) } });
+      if (!linkCode || linkCode.consumedAt || linkCode.revokedAt || linkCode.expiresAt <= new Date()) throw new BadRequestException({ code: "LINK_CODE_INVALID", message: "Mã liên kết không hợp lệ" });
+      await tx.parentLinkCode.update({ where: { id: linkCode.id }, data: { consumedAt: new Date() } });
+      const parent = await tx.user.findUnique({ where: { id: req.user.sub }, select: { emailVerifiedAt: true } });
+      const consent = await tx.parentConsent.findFirst({ where: { userId: req.user.sub, purpose: "PARENT_CHILD_PROGRESS", version: PARENT_CONSENT_VERSION, contentHash: PARENT_CONSENT_HASH, withdrawnAt: null } });
+      const approved = Boolean(parent?.emailVerifiedAt && consent);
+      return tx.parentLink.upsert({ where: { parentId_studentId: { parentId: req.user.sub, studentId: linkCode.studentId } }, create: { parentId: req.user.sub, studentId: linkCode.studentId, codeId: linkCode.id, status: approved ? "approved" : "pending" }, update: { codeId: linkCode.id, status: approved ? "approved" : "pending", revokedAt: null } });
     });
   }
   @Roles("PARENT") @Get("children") async children(@Req() req: any) {
     return this.db.parentLink.findMany({
-      where: { parentId: req.user.sub },
+      where: { parentId: req.user.sub, status: "approved", revokedAt: null },
       select: {
         student: {
           select: { id: true, fullName: true, grade: true, progress: true },

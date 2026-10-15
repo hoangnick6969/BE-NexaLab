@@ -34,6 +34,11 @@ enum StepProgressStatus {
   IN_PROGRESS
   COMPLETED
 }
+enum ParentLinkStatus {
+  pending
+  approved
+  revoked
+}
 model User {
   id String @id @default(cuid())
   username String? @unique
@@ -47,6 +52,7 @@ model User {
   mustChangePassword Boolean @default(false)
   temporaryPasswordExpiresAt DateTime?
   consentAt DateTime?
+  emailVerifiedAt DateTime?
   linkCode String? @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -77,7 +83,38 @@ model ParentLink {
   parent User @relation("parent", fields: [parentId], references: [id], onDelete: Cascade)
   student User @relation("student", fields: [studentId], references: [id], onDelete: Cascade)
   verifiedAt DateTime @default(now())
+  status ParentLinkStatus @default(pending)
+  revokedAt DateTime?
+  codeId String?
   @@id([parentId, studentId])
+  @@index([parentId, status])
+  @@index([studentId, status])
+}
+model ParentLinkCode {
+  id String @id @default(cuid())
+  studentId String
+  teacherId String
+  classId String
+  codeHash String @unique
+  keyVersion Int @default(1)
+  guardianVerifiedAt DateTime
+  expiresAt DateTime
+  consumedAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([studentId, expiresAt])
+  @@index([teacherId, classId, createdAt])
+}
+model ParentConsent {
+  id String @id @default(cuid())
+  userId String
+  purpose String
+  version String
+  contentHash String
+  actorId String?
+  acceptedAt DateTime @default(now())
+  withdrawnAt DateTime?
+  @@index([userId, purpose, version])
 }
 model Classroom {
   id String @id @default(cuid())
