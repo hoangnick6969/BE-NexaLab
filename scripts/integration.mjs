@@ -123,7 +123,7 @@ try {
   await verifyQuizContract();
   check("OpenAPI quiz paths, success/error envelopes, and schemas match the contract fixture", true);
   check("unauthenticated API denied", (await req("/users")).status === 401);
-  const admin = await req("/auth/login", "POST", {
+  const admin = await req("/auth/admin/login", "POST", {
     email: "admin@nexalab.local",
     password: process.env.SEED_PASSWORD,
   });
