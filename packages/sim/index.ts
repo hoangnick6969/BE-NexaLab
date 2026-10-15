@@ -204,12 +204,27 @@ export const reactions = [
   },
 ] as const;
 export const chemistrySchema = z.object({
-  reactionId: z.string(),
-  molesA: z.number().finite().min(0).max(2),
-  molesB: z.number().finite().min(0).max(2),
+  reactionId: z.string().optional(),
+  molesA: z.number().finite().min(0).max(2).optional(),
+  molesB: z.number().finite().min(0).max(2).optional(),
+  samples: z.record(z.enum(["acid", "neutral", "base"])).optional(),
 });
 export function chemistry(raw: unknown) {
   const s = chemistrySchema.parse(raw);
+  if (s.samples) {
+    const expected = { jar1: "acid", jar2: "neutral", jar3: "base" } as const;
+    const samples = Object.entries(expected).map(([id, expectedType]) => ({ id, type: s.samples?.[id] ?? null, correct: s.samples?.[id] === expectedType }));
+    const complete = samples.every((sample) => sample.type !== null);
+    const passed = complete && samples.every((sample) => sample.correct);
+    return {
+      version: VERSION,
+      experiment: "ph",
+      samples,
+      verdict: passed ? "passed" : complete ? "not_passed" : "partial",
+      phenomenon: passed ? "Đã xác định đúng: lọ 1 là axit, lọ 2 trung tính, lọ 3 là bazơ." : "Hãy xác định đúng tính chất của cả ba lọ mất nhãn.",
+    };
+  }
+  if (!s.reactionId || s.molesA == null || s.molesB == null) throw new Error("Thiếu dữ liệu thí nghiệm");
   const r = reactions.find((r) => r.id === s.reactionId);
   if (!r) throw new Error("Phản ứng chưa được hỗ trợ");
   const extent = Math.min(s.molesA / r.ratioA, s.molesB / r.ratioB);
