@@ -12,10 +12,11 @@ import { FilesController } from "./files";
 import { ClassesController } from "./classes";
 import { B2Controller } from "./b2";
 import { AdminController } from "./admin";
+import { AssetsController, LocalStorageController } from "./assets";
 import { Errors } from "./errors";
 import { quizOpenApiSchemas } from "./quiz-contract";
 @Module({
-  controllers: [ApiController, ClassesController, B2Controller, AdminController, FilesController],
+  controllers: [ApiController, ClassesController, B2Controller, AdminController, AssetsController, LocalStorageController, FilesController],
   providers: [Db, { provide: APP_GUARD, useClass: AuthGuard }],
 })
 class AppModule {}
@@ -42,6 +43,8 @@ async function bootstrap() {
       return callback(new Error("Origin not allowed by CORS"), false);
     },
     credentials: true,
+    // Multipart uploads read each part's ETag (local storage driver; R2 exposes it through bucket CORS).
+    exposedHeaders: ["ETag"],
   });
   app.setGlobalPrefix("api");
   app.useGlobalFilters(new Errors());

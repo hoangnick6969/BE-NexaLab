@@ -507,3 +507,64 @@ model RateLimitBucket {
   expiresAt DateTime
   @@index([expiresAt])
 }
+/// Logical media item (CF-T2). Binary bytes live only in object storage; every change is a new immutable AssetVersion.
+model Asset {
+  id String @id @default(cuid())
+  /// TEACHER_PRIVATE | SHARED_LIBRARY
+  scope String @default("TEACHER_PRIVATE")
+  /// Owning teacher/admin; null only for shared assets owned by the platform.
+  ownerId String?
+  title String
+  /// pdf | image | video | caption | model
+  kind String
+  /// ACTIVE | QUARANTINED | ARCHIVED
+  status String @default("ACTIVE")
+  license String?
+  source String?
+  attribution String?
+  quarantinedAt DateTime?
+  quarantineReason String?
+  /// Set when imported from the pre-CF local AssetFile table.
+  legacyFileId String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  versions AssetVersion[]
+  @@index([ownerId])
+  @@index([status, scope])
+}
+/// Immutable stored object. Content and published lessons pin a READY version; replacement creates a new version and key.
+model AssetVersion {
+  id String @id @default(cuid())
+  assetId String
+  asset Asset @relation(fields: [assetId], references: [id])
+  version Int
+  /// PENDING | READY | FAILED | QUARANTINED
+  status String @default("PENDING")
+  /// r2 | local
+  storage String
+  bucket String
+  /// Upload target; removed after finalize.
+  stagingKey String?
+  /// Released object key; set only once READY and never rewritten.
+  objectKey String? @unique
+  fileName String
+  mime String
+  declaredBytes Int
+  bytes Int?
+  /// Server-computed full-object SHA-256 (never the multipart ETag).
+  sha256 String?
+  /// Optional client claim, compared with the server value.
+  expectedSha256 String?
+  etag String?
+  uploadId String?
+  multipart Boolean @default(false)
+  validation Json?
+  failureReason String?
+  /// Pending uploads not finalized by then are aborted and cleaned up.
+  expiresAt DateTime?
+  createdById String
+  createdAt DateTime @default(now())
+  readyAt DateTime?
+  @@unique([assetId, version])
+  @@index([status, expiresAt])
+}

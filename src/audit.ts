@@ -73,6 +73,12 @@ export const AUDIT_FIELDS = new Set([
   "resultCount",
   "license",
   "activeAssignments",
+  // Content Foundation
+  "kind",
+  "mime",
+  "bytes",
+  "references",
+  "migrated",
 ]);
 
 const credentialLike = [
