@@ -1,6 +1,6 @@
 ---
 id: SPEC-b0-platform
-status: in-progress  # T1,T2 review; T3 partial; T4 backlog — see implementation-artifacts/sprint-status.yaml
+status: done  # 2026-10-15: T1–T4 done; local + shared Supabase dev verified, production unverified; see implementation-artifacts/b0-platform-implementation.md
 companions:
   - tickets.md
   - ../../planning-artifacts/architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md

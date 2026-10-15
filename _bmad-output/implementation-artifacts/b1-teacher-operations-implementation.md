@@ -9,10 +9,10 @@
 
 | Ticket | Status | Met | Gaps |
 |---|---|---|---|
-| B0P-T1 Stable error envelope | review | `src/errors.ts`, contract JSON updated | — |
-| B0P-T2 Allowlisted AuditLog | review | `src/audit.ts`, same-transaction write, allowlist + redaction | — |
-| B0P-T3 Real-dependency harness | in-progress | B1 harness `scripts/b1-integration.mjs` | Generic B/C harness |
-| B0P-T4 Hint provider boundary | backlog | — | LLM call still inside the transaction |
+| B0P-T1 Stable error envelope | done | `src/errors.ts`, contract JSON updated | — |
+| B0P-T2 Allowlisted AuditLog | done | `src/audit.ts`, same-transaction write, allowlist + redaction | — |
+| B0P-T3 Real-dependency harness | done | `scripts/lib/harness.mjs`, see b0-platform-implementation.md | — |
+| B0P-T4 Hint provider boundary | done | `src/hint.ts`, see b0-platform-implementation.md | — |
 | B1-T1 Class lifecycle | done | Create/edit/archive (confirm, reconciled counts), rotate/disable code, unique active name, uniform 403, audit, idempotency | — |
 | B1-T2 Managed enrollment | done | Expand-only migration + `b1:preflight`; provision/enroll/approve/decline/remove; Q-B1-01 rejoin; access by status; evidence kept | Drop `Enrollment.approved` mirror later (contract phase) |
 | B1-T3 Secure join code | done | Format, HMAC-only secret, shown once, collision retry (`withFreshJoinCode`), 4 limiter rules, uniform failure, dummy HMAC, idempotent join; integration covers concurrent joins, locator+IP and endpoint+IP aggregates, the account aggregate across three source IPs (127.0.0.1, ::1, LAN), timing medians 6.7–7.3 ms, API log free of secrets | — |

@@ -30,8 +30,7 @@ import { createTransport } from "nodemailer";
 import { Db } from "./db";
 import { Public, Roles, publicUser, access, token, hashToken } from "./auth";
 import { simulate } from "../packages/sim";
-import { buildContext, misconceptions } from "./tutor";
-import { explain } from "./llm";
+import { misconceptions } from "./tutor";
 import {
   buildPathwaySteps,
   materializeLegacySteps,
@@ -57,6 +56,7 @@ import { applicableAssignmentWhere, assignmentQueueOrder, isOverdue, ownedClass 
 import { temporaryPassword as issueTemporaryPassword } from "./classes";
 import { audit, changedFields } from "./audit";
 import { idempotent, readIdempotencyKey } from "./idempotency";
+import { requestHint } from "./hint";
 import {
   CHALLENGE_PARAMETERS,
   DOMAINS,
@@ -1784,56 +1784,8 @@ export class ApiController {
     @Req() req: any,
   ) {
     this.rate("hint:" + req.user.sub, 8);
-    return this.db.$transaction(
-      async (tx) => {
-        // Serialize hint progression per student, including parallel requests.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${req.user.sub}))`;
-        const a = await tx.attempt.findFirst({
-          where: { id, studentId: req.user.sub },
-          include: { challenge: true, hints: true },
-        });
-        if (!a) throw new NotFoundException();
-        if (a.hints.length) return a.hints[0];
-        const history = await tx.attempt.findMany({
-          where: { studentId: req.user.sub, challengeId: a.challengeId },
-          include: { hints: true },
-          orderBy: { createdAt: "asc" },
-        });
-        if (history.at(-1)?.id !== id)
-          throw new BadRequestException(
-            "Hãy yêu cầu gợi ý cho lần thử mới nhất",
-          );
-        const previous = history.flatMap((x) => x.hints);
-        const level = Math.min(
-          4,
-          1 + Math.max(0, ...previous.map((h) => h.level)),
-        );
-        const user = await tx.user.findUniqueOrThrow({
-          where: { id: req.user.sub },
-        });
-        const context = buildContext(user, a, history, level);
-        const explanation = await explain(context);
-        const content = explanation.content;
-        const h = await tx.hintLog.create({
-          data: {
-            attemptId: id,
-            level,
-            content,
-            contextSnapshot: {
-              ...context,
-              provider: explanation.provider,
-            } as any,
-          },
-        });
-        await projectLab(tx, req.user.sub, a.challenge.labId);
-        if (a.lessonStepId) {
-          const step = await tx.lessonStep.findUnique({ where: { id: a.lessonStepId }, select: { lessonId: true } });
-          if (step) await projectLesson(tx, req.user.sub, step.lessonId);
-        }
-        return h;
-      },
-      { timeout: 20000 },
-    );
+    // B0P-T4: provider call outside the transaction; authorization rechecked before persisting.
+    return requestHint(this.db, req.user, id);
   }
   @Roles("STUDENT") @Post("saved") async save(
     @Req() req: any,

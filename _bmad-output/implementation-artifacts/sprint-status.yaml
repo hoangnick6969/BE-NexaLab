@@ -5,7 +5,7 @@ project: NexaLab
 project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-b1-teacher-operations
-scope: Release 1 / Epic B1 Teacher Operations + B0 Platform prerequisites (A1-A5 accepted history retained)
+scope: Release 1 / Epic B1 Teacher Operations + B0 Platform (both done 2026-10-15; A1-A5 accepted history retained)
 last_updated: '2026-10-15'
 tracking_timezone: Asia/Saigon
 repositories:
@@ -50,11 +50,11 @@ development_status:
   a5-t3-paginated-history: done
   a5-t4-projection-drift-repair: done
   a5-t5-increment-a-journey: done
-  epic-b0-platform: in-progress
-  b0p-t1-stable-error-envelope: review
-  b0p-t2-allowlisted-auditlog: review
-  b0p-t3-real-dependency-harness: in-progress
-  b0p-t4-hint-provider-transaction-boundary: backlog
+  epic-b0-platform: done
+  b0p-t1-stable-error-envelope: done
+  b0p-t2-allowlisted-auditlog: done
+  b0p-t3-real-dependency-harness: done
+  b0p-t4-hint-provider-transaction-boundary: done
   epic-content-foundation: backlog
   cf-t1-to-t5: backlog
   epic-b1-teacher-operations: done
@@ -189,13 +189,32 @@ story_notes:
       - 'Production: set JOIN_CODE_HMAC_KEYS / JOIN_CODE_HMAC_KEY_VERSION, run b1:preflight, migrate'
       - 'External content gates: CF-T5 released outcome map/corpus, Q-C2-04 parameter ranges, CF-T2 R2 media'
   epic-b0-platform:
-    status: in-progress
+    status: done
+    audited_against_code: '2026-10-15'
+    artifact: b0-platform-implementation.md
+    tickets:
+      b0p-t1-stable-error-envelope:
+        status: done
+        met: 'src/errors.ts global filter: framework, Zod, Prisma and unexpected errors -> {statusCode, code, message, details?}; 5xx INTERNAL_ERROR without internals; Prisma connectivity -> 503 DEPENDENCY_FAILURE; FE api.ts parses code; errors.test.ts plus b0-integration 401/403/400/404/409 envelopes on local and Supabase; A suites unchanged'
+      b0p-t2-allowlisted-auditlog:
+        status: done
+        met: 'AuditLog model + audit(tx, event) with allowlist and credential redaction in the business transaction; b0-integration on the real database: forced audit failure rolls back the mutation, sentinel secrets absent, failed validation writes no event; B1 routes audited (b1-integration audit coverage)'
+      b0p-t3-real-dependency-harness:
+        status: done
+        met: 'scripts/lib/harness.mjs: env-driven API/DB/browser, dependency banner, evidence tier (local-runtime | shared-development; pilot/production only with matching APP_ENV and a non-local DB), SETUP FAILURE vs PRODUCT FAILURE, SKIP reporting, always-run cleanup; used by b0-integration and the b1-integration tier report'
+      b0p-t4-hint-provider-transaction-boundary:
+        status: done
+        met: 'src/hint.ts requestHint: context read without a transaction, provider called with no transaction/advisory lock, then a short locked transaction rechecks session/user status, assignment applicability, latest attempt and hint level before persisting; parallel hint returned not duplicated; provider timeout/failure/unsafe output fall back to rules (unit-tested); test-only HINT_PROVIDER_TEST_DELAY_MS honoured only in APP_ENV development/test'
+    verification:
+      automated: 'BE lint/build, Vitest 103/103 (hint.test.ts 6)'
+      runtime_local: 'b0-integration 13/13 (provider delayed 3 s: no advisory lock, no idle-in-transaction session, no hint row during the call; revoked session persists nothing); a5 53/53, integration 98/98, b1 172/172'
+      shared_supabase: 'b0-integration 13/13 on 2026-10-15 (idle-in-transaction check is local-only on a shared database; advisory-lock check ran)'
+      production: unverified
     decisions:
       - 'Error envelope {statusCode, code, message, details?}; 5xx always INTERNAL_ERROR without internals; Prisma connectivity errors map to 503 DEPENDENCY_FAILURE'
       - 'audit(tx, event) writes in the same transaction, field allowlist plus credential-like value redaction'
     remaining:
-      - 'B0P-T3 exists only as the B1 harness (b1-integration.mjs); generic B/C harness pending'
-      - 'B0P-T4 hint LLM call still inside the transaction'
+      - 'C2-T6 delivers the admin-only paginated audit read (out of B0 scope by ticket)'
   epic-a5:
     status: done
     decisions:

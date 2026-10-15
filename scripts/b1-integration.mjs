@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { PrismaClient } from "@prisma/client";
 import * as argon from "argon2";
+import { evidenceTier } from "./lib/harness.mjs";
 
 const db = new PrismaClient();
 const origin = process.env.TEST_API ?? "http://127.0.0.1:4000/api";
@@ -157,7 +158,7 @@ try {
       return "unknown";
     }
   })();
-  console.log(`B1 journey — API ${origin} · database host ${dbHost}`);
+  console.log(`B1 journey — API ${origin} · database host ${dbHost} · tier ${evidenceTier()}`);
   const health = await req("/health");
   assert.equal(health.status, 200, "API health");
 
@@ -1399,7 +1400,9 @@ try {
     check("API log contains no join code or temporary password from this run", leaked.length === 0 && !/\$argon2/.test(log), leaked.length);
   } else console.log("SKIP API log check: set API_LOG_FILE to the API's captured stdout/stderr");
 
-  console.log(`\nB1 journey: ${passed} checks passed. Evidence tier: real API + database (${dbHost}); browser checks run separately.`);
+  console.log(
+    `\nB1 journey: ${passed} checks passed. Evidence tier: ${evidenceTier()} (real API + database ${dbHost}); browser checks run separately.`,
+  );
 } catch (error) {
   console.error(setupComplete ? "PRODUCT FAILURE" : "SETUP FAILURE (not a product result)");
   console.error(error?.message ?? error);
