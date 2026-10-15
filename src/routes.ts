@@ -1079,6 +1079,7 @@ export class ApiController {
     if (check?.unmet?.includes("reactionId")) return "Thử thách yêu cầu một phản ứng khác; hãy đọc lại đề bài.";
     if (check?.unmet?.includes("minScore")) return `Cần đạt ít nhất ${check.params.minScore}% để hoàn thành thử thách.`;
     if (labId === "chemistry") {
+      if (simulationResult?.experiment === "ph") return "Nhúng quỳ tím vào cả ba lọ rồi xác định tính chất của từng lọ theo màu quan sát được.";
       if (!simulationResult?.extent) return "Chưa có phản ứng xảy ra. Hãy đặt lượng cả hai chất lớn hơn 0.";
       const leftover = simulationResult.limiting === simulationResult.a ? simulationResult.b : simulationResult.a;
       return `Còn ${leftover} dư. Dựa vào hệ số trong phương trình để chỉnh tỉ lệ số mol cho hai chất phản ứng vừa đủ.`;
@@ -1307,7 +1308,7 @@ export class ApiController {
         ? challengeObjective(challenge!.labId, (challenge!.constraints as any).params)
         : ({
             circuit: "Giữ dòng qua mỗi LED từ 1 đến 20 mA.",
-            chemistry: "Chọn lượng chất để hai chất phản ứng vừa đủ, không còn chất dư.",
+            chemistry: "Nhúng quỳ tím vào ba lọ mất nhãn và xác định đúng axit, trung tính, bazơ.",
             eye: "Gọi đúng tên cả 8 bộ phận của mắt.",
           } as Record<string, string>)[challenge?.labId ?? stepResource?.labId ?? "circuit"] ?? null,
       config: stepResource,

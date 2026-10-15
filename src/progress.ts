@@ -89,7 +89,7 @@ export function practicalSummary(attempts: PracticalEvidence[]) {
  * StepProgress written by A4 is accepted as well). The evidence reference is
  * the record that made the step complete, otherwise the latest record.
  */
-export function stepEvidence(step: { id: string; type: string }, evidence: LessonEvidence) {
+export function stepEvidence(step: { id: string; type: string; config?: unknown; resource?: unknown }, evidence: LessonEvidence) {
   const saved = evidence.stepProgress.find((item) => item.stepId === step.id) ?? null;
   if (step.type === "QUIZ") {
     const attempts = evidence.quizAttempts.filter((attempt) => attempt.stepId === step.id);
@@ -109,7 +109,13 @@ export function stepEvidence(step: { id: string; type: string }, evidence: Lesso
     };
   }
   if (step.type === "LAB" || step.type === "CHALLENGE") {
-    const attempts = evidence.attempts.filter((attempt) => attempt.lessonStepId === step.id);
+    const config = (step.config ?? step.resource) as { challengeId?: string; sameAsLab?: boolean } | undefined;
+    const ownAttempts = evidence.attempts.filter((attempt) => attempt.lessonStepId === step.id);
+    // The pH demo's final challenge repeats its lab. Keep old evidence, but
+    // derive this optional legacy step from the lab when no direct attempt exists.
+    const attempts = config?.sameAsLab && config.challengeId
+      ? evidence.attempts.filter((attempt) => attempt.challengeId === config.challengeId)
+      : ownAttempts;
     const firstPass = [...attempts].sort(oldestFirst).find((attempt) => normalizeVerdict(attempt.verdict) === "passed");
     const latest = [...attempts].sort(newestFirst)[0];
     const source = firstPass ?? latest;

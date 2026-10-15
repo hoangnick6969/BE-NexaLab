@@ -82,6 +82,21 @@ describe("official lesson derivation", () => {
     const result = deriveLesson(steps, { ...none, attempts: [practical("legacy", "passed", 1, 0, null)] });
     expect(result.completedRequired).toBe(0);
   });
+
+  it("uses the pH lab pass for its duplicate optional demo challenge without another attempt", () => {
+    const pHSteps = [
+      ...steps.slice(0, -1),
+      { ...steps[3], config: { labId: "chemistry" } },
+      { id: "pH-duplicate", type: "CHALLENGE" as const, position: 60, required: false, config: { challengeId: "chemistry_001", sameAsLab: true } },
+    ];
+    const result = deriveLesson(pHSteps, {
+      stepProgress: [done(reading, 1), done(video, 2)],
+      quizAttempts: [quizAttempt("q-pass", 100, 3)],
+      attempts: [{ ...practical("pH-pass", "passed", 4), challengeId: "chemistry_001" }],
+    });
+    expect(result).toMatchObject({ completed: true, totalRequired: 4, completedRequired: 4, nextStepId: null });
+    expect(result.steps.at(-1)).toMatchObject({ state: "COMPLETED", evidenceId: "pH-pass" });
+  });
 });
 
 describe("summaries", () => {
