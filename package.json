@@ -14,6 +14,8 @@
     "test:integration": "node scripts/integration.mjs",
     "test:a5:db-interruption": "node scripts/a5-database-interruption.mjs",
     "b2:preflight": "node scripts/b2-preflight.mjs",
+    "b2:backfill": "node scripts/b2-preflight.mjs --apply",
+    "test:b2": "node scripts/b2-integration.mjs",
     "progress:check": "tsx scripts/progress-projection.ts",
     "progress:rebuild": "tsx scripts/progress-projection.ts --apply",
     "b1:preflight": "tsx scripts/b1-preflight.ts",

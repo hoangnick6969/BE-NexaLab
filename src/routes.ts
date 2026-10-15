@@ -1080,7 +1080,7 @@ export class ApiController {
         subject: true,
         steps: {
           orderBy: { position: "asc" },
-          include: { progress: { where: { studentId } } },
+          include: { progress: { where: { studentId, assignmentId: assignment.id } } },
         },
       },
     });
@@ -1090,11 +1090,28 @@ export class ApiController {
     let pathway;
     try {
       validateLessonSteps(lesson.steps as any);
-      const evidence = await loadLessonEvidence(db, studentId, id, lesson.steps.map((step: any) => step.id));
+      const evidence = await loadLessonEvidence(db, studentId, id, lesson.steps.map((step: any) => step.id), assignment.id);
       pathway = buildPathwaySteps(withDerivedCompletion(lesson.steps as any, evidence));
     } catch {
       throw new NotFoundException("Nội dung không còn khả dụng");
     }
+    const overrides = await db.teacherGateOverride.findMany({
+      where: { studentId, assignmentId: assignment.id, revokedAt: null },
+      select: { stepId: true, reason: true, createdAt: true },
+    });
+    const unlocked = new Map(overrides.map((item: any) => [item.stepId, item]));
+    pathway.steps = pathway.steps.map((step: any) => {
+      const override = unlocked.get(step.id) as any;
+      if (!override || step.state !== "LOCKED") return step;
+      return {
+        ...step,
+        state: "IN_PROGRESS",
+        lockReasonCode: null,
+        teacherUnlocked: true,
+        teacherUnlockReason: override.reason,
+        teacherUnlockedAt: override.createdAt,
+      };
+    });
     return {
       lesson: {
         id: lesson.id,
@@ -2276,7 +2293,7 @@ export class ApiController {
     await ownedClass(this.db, classId, req.user);
     const assignment = await this.db.assignment.findFirst({
       where: { id: assignmentId, classId, status: { in: ["ACTIVE", "ARCHIVED"] } },
-      include: { targets: { include: { student: { select: { id: true, fullName: true, username: true } } } } },
+      include: { targets: { where: { student: { enrollments: { some: { classId, status: "approved" } } } }, include: { student: { select: { id: true, fullName: true, username: true } } } } },
     });
     if (!assignment) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài giao" });
     if (assignment.contentType === "lesson") {

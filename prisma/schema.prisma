@@ -284,6 +284,19 @@ model AssignmentTarget {
   @@id([assignmentId, studentId])
   @@index([studentId])
 }
+model TeacherGateOverride {
+  id String @id @default(cuid())
+  studentId String
+  assignmentId String
+  stepId String
+  actorId String
+  reason String
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+  revokedById String?
+  @@unique([studentId, assignmentId, stepId])
+  @@index([assignmentId, studentId, revokedAt])
+}
 model Attempt {
   id String @id @default(cuid())
   studentId String
