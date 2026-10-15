@@ -179,12 +179,12 @@ export class ApiController {
     });
   }
   /** Q-B1-02: archived content stays open only to students who already started it. */
-  private async lessonStarted(lessonId: string, studentId: string, db: any = this.db) {
+  private async lessonStarted(lessonId: string, studentId: string, db: any = this.db, assignmentId?: string) {
     const stepIds = (await db.lessonStep.findMany({ where: { lessonId }, select: { id: true } })).map((step: any) => step.id);
     const [progress, quiz, practical] = await Promise.all([
-      db.stepProgress.count({ where: { studentId, stepId: { in: stepIds }, status: { not: "NOT_STARTED" } } }),
-      db.quizAttempt.count({ where: { studentId, lessonId } }),
-      db.attempt.count({ where: { studentId, lessonStepId: { in: stepIds } } }),
+      db.stepProgress.count({ where: { studentId, ...(assignmentId ? { assignmentId } : {}), stepId: { in: stepIds }, status: { not: "NOT_STARTED" } } }),
+      db.quizAttempt.count({ where: { studentId, lessonId, ...(assignmentId ? { assignmentId } : {}) } }),
+      db.attempt.count({ where: { studentId, lessonStepId: { in: stepIds }, ...(assignmentId ? { assignmentId } : {}) } }),
     ]);
     return progress + quiz + practical > 0;
   }
@@ -1101,7 +1101,7 @@ export class ApiController {
       },
     });
     if (!lesson) throw new NotFoundException("Nội dung không còn khả dụng");
-    if (lesson.status === "archived" && !(await this.lessonStarted(id, studentId, db)))
+    if (lesson.status === "archived" && !(await this.lessonStarted(id, studentId, db, assignment.id)))
       throw new NotFoundException({ code: "CONTENT_ARCHIVED", message: ARCHIVED_CONTENT_MESSAGE });
     let pathway;
     try {
@@ -1458,7 +1458,7 @@ export class ApiController {
         },
       });
       if (!lesson) throw new NotFoundException("Nội dung không còn khả dụng");
-      if (lesson.status === "archived" && !(await this.lessonStarted(lessonId, studentId, tx)))
+      if (lesson.status === "archived" && !(await this.lessonStarted(lessonId, studentId, tx, assignment.id)))
         throw new NotFoundException({ code: "CONTENT_ARCHIVED", message: ARCHIVED_CONTENT_MESSAGE });
       let currentPathway;
       try {
