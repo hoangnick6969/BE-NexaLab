@@ -4,19 +4,19 @@
 project: NexaLab
 project_key: nexalab-release-1
 tracking_system: file-system
-story_location: _bmad-output/specs/spec-c1-parent-progress
-scope: Release 1 / Epic C1 Parent Progress (B2 completed on isolated local runtime 2026-10-15)
+story_location: _bmad-output/specs/spec-c2-admin-operations
+scope: Release 1 / Epic C2 Admin Operations (C1 merged 2026-10-15; C2 on the current foundation, Content Foundation surfaces deferred)
 last_updated: '2026-10-15'
 tracking_timezone: Asia/Saigon
 repositories:
-  backend: 'BE-NexaLab (branch feat/c1-parent-progress)'
-  frontend: 'FE-NexaLab (branch feat/c1-parent-progress)'
+  backend: 'BE-NexaLab (branch feat/c2-admin-operations)'
+  frontend: 'FE-NexaLab (branch feat/c2-admin-operations)'
 sources:
   plan: ../planning-artifacts/increment-b-c-plan.md
-  acceptance_criteria: ../specs/spec-c1-parent-progress/tickets.md
-  spec: ../specs/spec-c1-parent-progress/SPEC.md
+  acceptance_criteria: ../specs/spec-c2-admin-operations/tickets.md
+  spec: ../specs/spec-c2-admin-operations/SPEC.md
   platform_spec: ../specs/spec-b0-platform/SPEC.md
-  implementation_record: b2-teacher-evidence-implementation.md
+  implementation_record: c2-admin-operations-implementation.md
 
 # Status values: backlog | ready-for-dev | in-progress | review | done.
 # review = implemented and verified on the isolated local runtime, awaiting commit/PR, shared Supabase migration and PO decisions.
@@ -77,18 +77,29 @@ development_status:
   c1-t2-parent-read-model: done
   c1-t3-parent-ui: done
   c1-t4-parent-journey-negative: done
-  epic-c2-admin-operations: backlog
+  epic-c2-admin-operations: review
+  c2-t1-user-lifecycle-ownership: review
+  c2-t2-taxonomy-shared-content: review
+  c2-t3-simulation-versions: review
+  c2-t4-adult-reset-admin-login: review
+  c2-t5-asset-source-operations: review
+  c2-t6-admin-console-audit-journey: review
 
 execution:
-  current_story: c1-t4-parent-journey-negative
-  next_story: epic-c2-admin-operations
+  current_story: c2-t6-admin-console-audit-journey
+  next_story: 'C2 push/PR by the owner; then Content Foundation CF-T1..T4 (unblocks deferred C2-T3/T5 surfaces)'
   selection_reason: >
+    2026-10-15 (C2): all six C2 tickets implemented on feat/c2-admin-operations and verified on the isolated local runtime
+    (Vitest 122/122, test:c2 80/80 + 1 justified SKIP, regressions B0/B1/B2/A1-A3/A5 green, Playwright c2-admin-live 1/1 at 390 px).
+    Owner chose "C2 on the current foundation": R2, AssetVersion, SourceRegistry/ingestion and full topic packs wait for Content Foundation.
+    Shared Supabase dev migrated with approval; test:c2 80/80 there. Status stays review until the owner pushes and merges the PRs.
     2026-10-15: C1 link lifecycle, sanitized parent read model, responsive parent UI, unlink flow, and negative access handling completed; backend/frontend build and lint passed, and backend unit tests passed 107/107.
     Fresh migration/seed and B2 integration evidence remain recorded below; shared development credentials were rejected, so shared migration is not claimed. C1 is complete; C2 is next.
   one_story_per_task: true
   next_epic_unlocked: true
   implementation_readiness: complete
   blockers:
+    - 'C2-T5 R2/AssetVersion/SourceRegistry/ingestion and C2-T3 full topic-pack versions wait for Content Foundation CF-T1..T4 (deferred-work.md)'
     - 'C1 pilot activation requires approved Vietnamese consent purpose/version/copy/content hash; implementation may use clearly marked development copy'
     - 'Shared development database migration for B2 is unverified because configured credentials were rejected'
     - 'Production requires JOIN_CODE_HMAC_KEYS and JOIN_CODE_HMAC_KEY_VERSION'
@@ -136,6 +147,17 @@ verification:
     - Production deployment acceptance remains unverified.
 
 story_notes:
+  epic-c2-admin-operations:
+    status: review
+    audited_against_code: '2026-10-15'
+    branch: feat/c2-admin-operations (BE and FE, from origin/main 0d497a0 / b1a6b68; committed, not pushed)
+    scope_decision: 'Owner 2026-10-15: C2 on the current foundation; CF-dependent surfaces deferred'
+    shared_supabase_migration: 'applied 2026-10-15 with owner approval; c2:preflight before/after RESULT ok; test:c2 80/80 (shared-development) and password-flow 6/6; cleanup verified; p95 from dev machine 955/2475 ms misses QR-09'
+    artifact: c2-admin-operations-implementation.md
+    remaining:
+      - 'Push and PR by the owner (BE and FE together); production migration with c2:preflight'
+      - 'R2 asset versions, SourceRegistry/ingestion, topic-pack versions after Content Foundation'
+      - 'Production upload budgets (Q-DATA-01, Q-C2-03) and per-template ranges (Q-C2-04)'
   epic-b1-teacher-operations:
     status: done
     audited_against_code: '2026-10-15'

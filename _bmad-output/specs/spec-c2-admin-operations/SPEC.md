@@ -1,6 +1,6 @@
 ---
 id: SPEC-c2-admin-operations
-status: ready-for-implementation-with-per-asset-and-content-release-gates
+status: implemented-local-review-cf-surfaces-deferred
 companions:
   - tickets.md
   - ../spec-b0-platform/SPEC.md
