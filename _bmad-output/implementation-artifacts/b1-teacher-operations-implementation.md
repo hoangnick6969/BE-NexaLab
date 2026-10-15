@@ -2,7 +2,7 @@
 
 - **Spec:** `../specs/spec-b1-teacher-operations/SPEC.md`, `tickets.md`; prerequisites `../specs/spec-b0-platform`
 - **Branch:** `feat/b1-teacher-operations` (BE + FE), from `origin/main` 46e2c92
-- **Status:** in-progress — all tickets T1–T6 review (2026-10-15, round 2). Verified on isolated local PostgreSQL; committed on the branch, not pushed; shared Supabase migrations not applied (needs owner approval); production unverified. The epic moves to done after the suites pass on shared Supabase.
+- **Status:** done (2026-10-15) — T1–T6 done; verified on isolated local PostgreSQL and on shared Supabase development (migrations applied with owner approval). Committed on the branch, not pushed; production unverified.
 - **Last updated:** 2026-10-15 (round 2)
 
 ## Ticket status (audited against code 2026-10-15)
@@ -13,12 +13,12 @@
 | B0P-T2 Allowlisted AuditLog | review | `src/audit.ts`, same-transaction write, allowlist + redaction | — |
 | B0P-T3 Real-dependency harness | in-progress | B1 harness `scripts/b1-integration.mjs` | Generic B/C harness |
 | B0P-T4 Hint provider boundary | backlog | — | LLM call still inside the transaction |
-| B1-T1 Class lifecycle | review | Create/edit/archive (confirm, reconciled counts), rotate/disable code, unique active name, uniform 403, audit, idempotency | — |
-| B1-T2 Managed enrollment | review | Expand-only migration + `b1:preflight`; provision/enroll/approve/decline/remove; Q-B1-01 rejoin; access by status; evidence kept | Drop `Enrollment.approved` mirror later (contract phase) |
-| B1-T3 Secure join code | review | Format, HMAC-only secret, shown once, collision retry (`withFreshJoinCode`), 4 limiter rules, uniform failure, dummy HMAC, idempotent join; integration covers concurrent joins, locator+IP and endpoint+IP aggregates, the account aggregate across three source IPs (127.0.0.1, ::1, LAN), timing medians 6.7–7.3 ms, API log free of secrets | — |
-| B1-T4 Teacher content library | review (fixture lane) | Filters incl. KHTN domain and outcome; `CurriculumOutcome` map with coverage per grade × domain (numerator/denominator/gaps; released and fixture maps separate); clone with new IDs; baseline/other-owner read-only; challenge variants with allowlisted parameter ranges evaluated server-side; private assets owner-only; self-review + transcript + range gates; admin-only shared library with named, independent release reviews; preview with text alternatives and readiness; attribution on preview, library and student pathway | External: CF-T5 released map/corpus, Q-C2-04 reviewed ranges, CF-T2 R2 media |
-| B1-T5 Assignment targets/lifecycle | review | `AssignmentTarget` snapshot, optional due date, duplicate rule on immutable `contentVersion` + targets + due date, update/archive, MSG-36, lab assignment identity, D3 items in `/me/progress`, **D-B1-01 implemented** | Contract phase only: stop writing/drop `studentIds` mirror |
-| B1-T6 Teacher journey verification | review | Integration 172/172 incl. outsider denial on every class/member/assignment/preview route and student-role denial; `POST /users` admin-only and audited; Playwright 8/8 at 4 widths, loading/empty/retryable-error states and the content-library journey | Shared Supabase (pilot) run after migration approval |
+| B1-T1 Class lifecycle | done | Create/edit/archive (confirm, reconciled counts), rotate/disable code, unique active name, uniform 403, audit, idempotency | — |
+| B1-T2 Managed enrollment | done | Expand-only migration + `b1:preflight`; provision/enroll/approve/decline/remove; Q-B1-01 rejoin; access by status; evidence kept | Drop `Enrollment.approved` mirror later (contract phase) |
+| B1-T3 Secure join code | done | Format, HMAC-only secret, shown once, collision retry (`withFreshJoinCode`), 4 limiter rules, uniform failure, dummy HMAC, idempotent join; integration covers concurrent joins, locator+IP and endpoint+IP aggregates, the account aggregate across three source IPs (127.0.0.1, ::1, LAN), timing medians 6.7–7.3 ms, API log free of secrets | — |
+| B1-T4 Teacher content library | done (fixture lane) | Filters incl. KHTN domain and outcome; `CurriculumOutcome` map with coverage per grade × domain (numerator/denominator/gaps; released and fixture maps separate); clone with new IDs; baseline/other-owner read-only; challenge variants with allowlisted parameter ranges evaluated server-side; private assets owner-only; self-review + transcript + range gates; admin-only shared library with named, independent release reviews; preview with text alternatives and readiness; attribution on preview, library and student pathway | External: CF-T5 released map/corpus, Q-C2-04 reviewed ranges, CF-T2 R2 media |
+| B1-T5 Assignment targets/lifecycle | done | `AssignmentTarget` snapshot, optional due date, duplicate rule on immutable `contentVersion` + targets + due date, update/archive, MSG-36, lab assignment identity, D3 items in `/me/progress`, **D-B1-01 implemented** | Contract phase only: stop writing/drop `studentIds` mirror |
+| B1-T6 Teacher journey verification | done | Integration 172/172 incl. outsider denial on every class/member/assignment/preview route and student-role denial; `POST /users` admin-only and audited; Playwright 8/8 at 4 widths, loading/empty/retryable-error states and the content-library journey | Production unverified |
 
 ## Verification (isolated local PostgreSQL, not Supabase) — 2026-10-15, round 2
 
@@ -37,6 +37,17 @@
 - `withFreshJoinCode` retries locator collisions for class create (previously missing) and rotate
 - FE `LoadError` with "Thử lại" on every read in the class workspace (no dead-end error state)
 - `integration.mjs` A3 check now targets the lesson lab step (403 `STEP_LOCKED`)
+
+## Shared Supabase development (2026-10-15, owner-approved)
+
+- `npm run b1:preflight` before: RESULT ok (7 enrollments, 5 active assignments, 0 bad rows, 0 duplicate class names)
+- `prisma migrate deploy`: `20261014120000_b1_teacher_operations`, `20261015120000_b1_content_customization`
+- `db:seed` without `SEED_RESET_FIXTURES` (synthetic outcome map); `student.temp` temporary-password expiry extended by 24 h (targeted, approved)
+- Preflight after: RESULT ok; reconciliation 7 assignment targets, 0 legacy subset targets missing, 0 enrollment mirror mismatches, 5 classes awaiting a new join code (D-B1-03)
+- API local → Supabase (~176 ms RTT): `b1-integration` 172/172 (twice), `integration` 98/98, Playwright `b1-teacher-live` 8/8
+- `a5-integration`: 48 functional checks passed, then its 500 ms p95 gate failed (986/1075 ms); the last 4 regression checks ran locally only
+- Latency on this dev link misses the pilot targets (A3 p95 1.3/1.5/3.0 s; join failures ~2.1 s); production latency unverified
+- Fix from this run: `POST /attempts` transaction timeout 20 s (an intermittent 500 when ~30 sequential queries exceeded Prisma's 5 s default)
 
 ## Round 2 changes (2026-10-15) — closing T3/T4/T5
 

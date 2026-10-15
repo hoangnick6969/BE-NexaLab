@@ -1748,7 +1748,9 @@ export class ApiController {
         pathway,
         retryGuidance: this.circuitRetryGuidance(normalizedVerdict, result),
       };
-    });
+      // Gate, evidence, projections and the pathway reconcile in one transaction; at
+      // pooled-database round-trip latency that exceeds Prisma's 5 s default.
+    }, { timeout: 20000 });
   }
   private async practicalStepLink(
     lessonStepId: string | undefined,
