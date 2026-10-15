@@ -15,6 +15,9 @@
     "test:a5:db-interruption": "node scripts/a5-database-interruption.mjs",
     "progress:check": "tsx scripts/progress-projection.ts",
     "progress:rebuild": "tsx scripts/progress-projection.ts --apply",
+    "b1:preflight": "tsx scripts/b1-preflight.ts",
+    "test:b1": "node scripts/b1-integration.mjs",
+    "test:b0": "tsx scripts/b0-integration.mjs",
     "format": "prettier --write src packages prisma scripts"
   },
   "dependencies": {

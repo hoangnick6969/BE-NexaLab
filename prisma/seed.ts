@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { hash } from "argon2";
+import { createHash } from "node:crypto";
 import { seedUrl } from "../src/database-config";
 import { materializeQuizQuestions } from "../src/pathway";
 const db = new PrismaClient({ datasourceUrl: seedUrl(process.env) });
@@ -155,6 +156,29 @@ async function main() {
       simulationModelRef: "chemistry@1.0.0",
     },
   ];
+  // Synthetic outcome map for development: it exercises coverage denominators
+  // and gap lists, and is never reported as the released curriculum map (CF-T5).
+  const fixtureOutcomes = [
+    { code: "FX8-ENERGY-01", grade: 8, domain: "ENERGY", chapter: "Điện", statement: "Lắp được mạch điện đơn giản và giải thích vai trò của điện trở bảo vệ." },
+    { code: "FX8-ENERGY-02", grade: 8, domain: "ENERGY", chapter: "Điện", statement: "Đo và so sánh cường độ dòng điện trong mạch nối tiếp." },
+    { code: "FX8-LIVING-01", grade: 8, domain: "LIVING", chapter: "Cơ thể người", statement: "Nêu được đường đi của ánh sáng qua các bộ phận của mắt." },
+    { code: "FX8-MATTER-01", grade: 8, domain: "MATTER", chapter: "Phản ứng hóa học", statement: "Dùng hệ số phương trình để xác định chất phản ứng hết và chất dư." },
+    { code: "FX8-EARTH_SKY-01", grade: 8, domain: "EARTH_SKY", chapter: "Khí hậu", statement: "Mô tả được một số tác động của biến đổi khí hậu ở địa phương." },
+    { code: "FX9-ENERGY-01", grade: 9, domain: "ENERGY", chapter: "Điện từ", statement: "Giải thích được hiện tượng cảm ứng điện từ trong ví dụ quen thuộc." },
+    { code: "FX9-MATTER-01", grade: 9, domain: "MATTER", chapter: "Kim loại", statement: "So sánh được mức độ hoạt động hóa học của một số kim loại." },
+    { code: "FX9-LIVING-01", grade: 9, domain: "LIVING", chapter: "Di truyền", statement: "Nêu được ý nghĩa của nhiễm sắc thể trong di truyền." },
+  ];
+  for (const outcome of fixtureOutcomes)
+    await db.curriculumOutcome.upsert({
+      where: { code: outcome.code },
+      create: { ...outcome, synthetic: true },
+      update: { synthetic: true },
+    });
+  const fixtureTaxonomy: Record<string, { domain: string; outcomeCodes: string[] }> = {
+    circuit: { domain: "ENERGY", outcomeCodes: ["FX8-ENERGY-01"] },
+    eye: { domain: "LIVING", outcomeCodes: ["FX8-LIVING-01"] },
+    chemistry: { domain: "MATTER", outcomeCodes: ["FX8-MATTER-01"] },
+  };
   for (const l of labs) {
     await db.lab.upsert({ where: { id: l.id }, create: l, update: {} });
     await db.challenge.upsert({
@@ -188,6 +212,10 @@ async function main() {
               : "Hệ số trong phương trình hóa học biểu thị tỉ lệ số mol. Chất giới hạn quyết định lượng sản phẩm tối đa; chất còn lại có thể dư. Sáu phản ứng trong lab là mô hình giáo dục lý tưởng; không hướng dẫn thực hành với hóa chất thật.",
         labId: l.id,
         status: "published",
+        scope: "SHARED_LIBRARY",
+        synthetic: true,
+        ...fixtureTaxonomy[l.id],
+        publishedAt: new Date(),
         questions: [
           {
             prompt:
@@ -210,7 +238,8 @@ async function main() {
           },
         ],
       },
-      update: {},
+      // Synthetic fixtures are shared demo content, never released corpus.
+      update: { scope: "SHARED_LIBRARY", synthetic: true, ...fixtureTaxonomy[l.id] },
     });
     const seededLesson = await db.lesson.findUniqueOrThrow({
       where: { id: "lesson-" + l.id },
@@ -329,7 +358,7 @@ async function main() {
     where: {
       classId_studentId: { classId: "demo-class", studentId: "student" },
     },
-    create: { classId: "demo-class", studentId: "student", approved: true },
+    create: { classId: "demo-class", studentId: "student", status: "approved", approved: true },
     update: {},
   });
   for (const [classId, studentId] of [
@@ -339,8 +368,8 @@ async function main() {
   ])
     await db.enrollment.upsert({
       where: { classId_studentId: { classId, studentId } },
-      create: { classId, studentId, approved: true },
-      update: resetFixtures ? { approved: true } : {},
+      create: { classId, studentId, status: "approved", approved: true },
+      update: resetFixtures ? { status: "approved", approved: true } : {},
     });
   await db.parentLink.upsert({
     where: { parentId_studentId: { parentId: "parent", studentId: "student" } },
@@ -383,6 +412,27 @@ async function main() {
     },
     update: {},
   });
+  // B1: assignments reach students only through their target snapshot.
+  for (const assignmentId of ["demo-assignment", "pilot-a-lesson-assignment", "pilot-a-circuit-assignment"]) {
+    const assignment = await db.assignment.findUniqueOrThrow({ where: { id: assignmentId } });
+    const members = await db.enrollment.findMany({
+      where: { classId: assignment.classId, status: "approved" },
+      select: { studentId: true },
+    });
+    for (const { studentId } of members)
+      await db.assignmentTarget.upsert({
+        where: { assignmentId_studentId: { assignmentId, studentId } },
+        create: { assignmentId, studentId },
+        update: {},
+      });
+    const targets = await db.assignmentTarget.findMany({ where: { assignmentId }, select: { studentId: true } });
+    await db.assignment.update({
+      where: { id: assignmentId },
+      data: {
+        targetHash: createHash("sha256").update(targets.map((t) => t.studentId).sort().join(",")).digest("hex"),
+      },
+    });
+  }
   console.log(
     "Seed hoàn tất. Fixture users are environment-configured; set SEED_RESET_FIXTURES=true only in non-production to reset fixture passwords.",
   );

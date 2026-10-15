@@ -27,12 +27,10 @@ import {
 import { z } from "zod";
 import * as argon from "argon2";
 import { createTransport } from "nodemailer";
-import { randomBytes } from "node:crypto";
 import { Db } from "./db";
 import { Public, Roles, publicUser, access, token, hashToken } from "./auth";
 import { simulate } from "../packages/sim";
-import { buildContext, misconceptions } from "./tutor";
-import { explain } from "./llm";
+import { misconceptions } from "./tutor";
 import {
   buildPathwaySteps,
   materializeLegacySteps,
@@ -49,10 +47,32 @@ import {
   deriveLesson,
   mergeActivityPage,
   normalizeVerdict,
+  practicalSummary,
   quizSummary,
   withDerivedCompletion,
 } from "./progress";
 import { loadLessonEvidence, projectLab, projectLesson } from "./progress-projection";
+import { applicableAssignmentWhere, assignmentQueueOrder, isOverdue, ownedClass } from "./access";
+import { temporaryPassword as issueTemporaryPassword } from "./classes";
+import { audit, changedFields } from "./audit";
+import { idempotent, readIdempotencyKey } from "./idempotency";
+import { requestHint } from "./hint";
+import {
+  CHALLENGE_PARAMETERS,
+  DOMAINS,
+  RELEASE_REVIEW_KINDS,
+  RELEASE_REVIEW_LABELS,
+  assetIds,
+  attribution,
+  challengeObjective,
+  challengeParamErrors,
+  domainSchema,
+  evaluateChallenge,
+  isStructureChange,
+  publishBlockers,
+  reviewDraftSchema,
+  variantChallengeId,
+} from "./content";
 const text = z.string().trim().min(1).max(200);
 const password = z.string().min(12).max(128);
 const email = z
@@ -88,6 +108,7 @@ const lessonSchema = z.object({
             (u) => /^https?:\/\//.test(u) || /^asset:[0-9a-f-]{36}$/.test(u),
           ),
         title: text,
+        transcript: z.string().trim().max(50000).optional(),
       }),
     )
     .max(20)
@@ -104,11 +125,19 @@ const lessonSchema = z.object({
     )
     .max(30)
     .default([]),
+  review: reviewDraftSchema.nullable().optional(),
+  domain: domainSchema.nullable().optional(),
+  outcomeCodes: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+  challengeParams: z.record(z.union([z.number(), z.string().max(60)])).nullable().optional(),
+  /** Only an admin may create shared-library content; ignored on update. */
+  scope: z.enum(["TEACHER_PRIVATE", "SHARED_LIBRARY"]).optional(),
 });
-function publishedSteps(lesson: z.infer<typeof lessonSchema>) {
+/** MSG-36: archived content for a student who has not started it. */
+const ARCHIVED_CONTENT_MESSAGE = "Nội dung này không còn được cập nhật.";
+function publishedSteps(lesson: z.infer<typeof lessonSchema>, namespace?: string) {
   if (lesson.status !== "published") return [];
   try {
-    return materializeLegacySteps(lesson);
+    return materializeLegacySteps(lesson, namespace);
   } catch {
     throw new BadRequestException({
       code: "INVALID_LESSON_PATHWAY",
@@ -123,19 +152,27 @@ export class ApiController {
   constructor(@Inject(Db) private db: Db) {}
 
   private async applicableLessonAssignment(lessonId: string, studentId: string, db: any = this.db) {
-    const candidates = await db.assignment.findMany({
-      where: {
-        contentId: lessonId,
-        contentType: "lesson",
-        status: "ACTIVE",
-        classroom: { enrollments: { some: { studentId, approved: true } } },
-      },
-      orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    return db.assignment.findFirst({
+      where: { ...applicableAssignmentWhere(studentId), contentId: lessonId, contentType: "lesson" },
+      orderBy: assignmentQueueOrder,
     });
-    return candidates.find((item: any) => {
-      const targets = item.studentIds as string[];
-      return !targets.length || targets.includes(studentId);
+  }
+  /** Standalone lab work counts toward an assignment only when one applies (D3). */
+  private async applicableLabAssignment(labId: string, studentId: string, db: any = this.db) {
+    return db.assignment.findFirst({
+      where: { ...applicableAssignmentWhere(studentId), contentId: labId, contentType: "lab" },
+      orderBy: assignmentQueueOrder,
     });
+  }
+  /** Q-B1-02: archived content stays open only to students who already started it. */
+  private async lessonStarted(lessonId: string, studentId: string, db: any = this.db) {
+    const stepIds = (await db.lessonStep.findMany({ where: { lessonId }, select: { id: true } })).map((step: any) => step.id);
+    const [progress, quiz, practical] = await Promise.all([
+      db.stepProgress.count({ where: { studentId, stepId: { in: stepIds }, status: { not: "NOT_STARTED" } } }),
+      db.quizAttempt.count({ where: { studentId, lessonId } }),
+      db.attempt.count({ where: { studentId, lessonStepId: { in: stepIds } } }),
+    ]);
+    return progress + quiz + practical > 0;
   }
   private buckets = new Map<string, { n: number; until: number }>();
   private rate(key: string, max = 10) {
@@ -169,33 +206,19 @@ export class ApiController {
     });
     return { user: publicUser(user), accessToken: access(user, session.id) };
   }
-  private async classOwner(id: string, req: any) {
-    const c = await this.db.classroom.findUnique({ where: { id } });
-    if (!c) throw new NotFoundException("Không tìm thấy lớp");
-    if (c.teacherId !== req.user.sub)
-      throw new ForbiddenException("Không phải lớp của bạn");
-    return c;
-  }
   private async applicableAssignment(id: string, studentId: string) {
     const assignment = await this.db.assignment.findFirst({
-      where: {
-        id,
-        status: "ACTIVE",
-        classroom: {
-          enrollments: { some: { studentId, approved: true } },
-        },
-      },
+      where: { id, ...applicableAssignmentWhere(studentId) },
       include: { classroom: { select: { id: true, name: true, grade: true } } },
     });
-    if (!assignment) throw new NotFoundException("Không tìm thấy bài được giao");
-    const targets = assignment.studentIds as string[];
-    if (targets.length && !targets.includes(studentId))
-      throw new NotFoundException("Không tìm thấy bài được giao");
+    if (!assignment)
+      throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
     return assignment;
   }
   private async validatePublishedResources(
     lesson: z.infer<typeof lessonSchema>,
     actor: { sub: string; role: string },
+    clonedFromId?: string | null,
   ) {
     if (lesson.status !== "published") return;
     if (lesson.labId) {
@@ -209,17 +232,21 @@ export class ApiController {
           message: "Phòng lab tham chiếu chưa được xuất bản",
         });
     }
-    const assetIds = lesson.materials
-      .map((item) => item.url.match(/^asset:([0-9a-f-]{36})$/)?.[1])
-      .filter((value): value is string => Boolean(value));
-    if (assetIds.length) {
+    const referenced = assetIds(lesson.materials);
+    if (referenced.length) {
       const assets = await this.db.assetFile.findMany({
-        where: { id: { in: assetIds } },
+        where: { id: { in: referenced } },
         select: { id: true, ownerId: true },
       });
+      // A clone intentionally reuses the asset references of its source (D7).
+      const inherited = new Set<string>();
+      if (clonedFromId) {
+        const source = await this.db.lesson.findUnique({ where: { id: clonedFromId }, select: { materials: true } });
+        for (const id of assetIds((source?.materials as any[]) ?? [])) inherited.add(id);
+      }
       if (
-        assets.length !== new Set(assetIds).size ||
-        (actor.role !== "ADMIN" && assets.some((asset) => asset.ownerId !== actor.sub))
+        assets.length !== new Set(referenced).size ||
+        (actor.role !== "ADMIN" && assets.some((asset) => asset.ownerId !== actor.sub && !inherited.has(asset.id)))
       )
         throw new BadRequestException({
           code: "INVALID_LESSON_PATHWAY",
@@ -243,7 +270,7 @@ export class ApiController {
       (await this.db.enrollment.findFirst({
         where: {
           studentId: id,
-          approved: true,
+          status: "approved",
           classroom: { teacherId: req.user.sub },
         },
       }))
@@ -410,7 +437,7 @@ export class ApiController {
     const b = z.object({ email }).parse(body);
     const u = await this.db.user.findUnique({ where: { email: b.email } });
     if (u && u.role !== "STUDENT" && u.status === "active") {
-      const temporaryPassword = this.temporaryPassword();
+      const temporaryPassword = issueTemporaryPassword();
       const expiresAt = new Date(Date.now() + 86400000);
       await createTransport({
         host: process.env.SMTP_HOST,
@@ -531,7 +558,8 @@ export class ApiController {
   @Get("labs") labs() {
     return this.db.lab.findMany({
       where: { status: "published" },
-      include: { challenges: true },
+      // Lesson-variant challenges belong to their lesson pathway, not the public lab list.
+      include: { challenges: { where: { NOT: { id: { contains: "_v-" } } } } },
     });
   }
   @Roles("ADMIN") @Put("labs/:id") labUpdate(
@@ -568,26 +596,17 @@ export class ApiController {
     let assignedLessonIds: string[] | undefined;
     if (req.user.role === "STUDENT") {
       const assignments = await this.db.assignment.findMany({
-        where: {
-          contentType: "lesson",
-          status: "ACTIVE",
-          classroom: { enrollments: { some: { studentId: req.user.sub, approved: true } } },
-        },
-        select: { contentId: true, studentIds: true },
+        where: { ...applicableAssignmentWhere(req.user.sub), contentType: "lesson" },
+        select: { contentId: true },
       });
-      assignedLessonIds = assignments
-        .filter((assignment) => {
-          const targets = assignment.studentIds as string[];
-          return !targets.length || targets.includes(req.user.sub);
-        })
-        .map((assignment) => assignment.contentId);
+      assignedLessonIds = assignments.map((assignment) => assignment.contentId);
     }
     const list = await this.db.lesson.findMany({
       where:
         req.user.role === "ADMIN"
           ? {}
           : req.user.role === "TEACHER"
-            ? { OR: [{ status: "published" }, { authorId: req.user.sub }] }
+            ? { OR: [{ status: "published", scope: "SHARED_LIBRARY" }, { authorId: req.user.sub }] }
             : {
                 status: "published",
                 ...(assignedLessonIds ? { id: { in: assignedLessonIds } } : {}),
@@ -603,26 +622,119 @@ export class ApiController {
           : l.questions,
     }));
   }
+  private assertPublishable(data: z.infer<typeof lessonSchema>, scope: string) {
+    if (data.status !== "published") return;
+    const missing = publishBlockers(data as any, scope);
+    if (missing.length)
+      throw new BadRequestException({
+        code: "PUBLISH_BLOCKED",
+        message: "Chưa thể xuất bản. Còn thiếu: " + missing.join("; "),
+        details: { missing },
+      });
+  }
+  /** D7: a published lesson with an active assignment or any evidence keeps its structure. */
+  private async structureLocked(lessonId: string, db: any = this.db) {
+    const stepIds = (await db.lessonStep.findMany({ where: { lessonId }, select: { id: true } })).map((step: any) => step.id);
+    const [assignments, progress, quiz, practical] = await Promise.all([
+      db.assignment.count({ where: { contentType: "lesson", contentId: lessonId, status: "ACTIVE" } }),
+      db.stepProgress.count({ where: { stepId: { in: stepIds } } }),
+      db.quizAttempt.count({ where: { lessonId } }),
+      db.attempt.count({ where: { lessonStepId: { in: stepIds } } }),
+    ]);
+    return assignments + progress + quiz + practical > 0;
+  }
+  private lessonAuditFields(lesson: any) {
+    return {
+      title: lesson.title,
+      status: lesson.status,
+      scope: lesson.scope,
+      grade: lesson.grade,
+      clonedFromId: lesson.clonedFromId,
+      reviewChecklist: Boolean(lesson.review),
+      domain: lesson.domain ?? null,
+      outcomeCodes: lesson.outcomeCodes ?? [],
+      challengeParams: lesson.challengeParams ?? null,
+    };
+  }
+  /** Outcome codes must exist in the map for the lesson's grade; challenge parameters must be in range. */
+  private async assertTaxonomy(data: z.infer<typeof lessonSchema>) {
+    const errors = challengeParamErrors(data.labId, data.challengeParams);
+    if (errors.length)
+      throw new BadRequestException({ code: "INVALID_CHALLENGE_PARAMS", message: errors.join("; "), details: { errors } });
+    const codes = [...new Set(data.outcomeCodes)];
+    if (codes.length !== data.outcomeCodes.length)
+      throw new BadRequestException({ code: "INVALID_OUTCOME", message: "Yêu cầu cần đạt bị trùng" });
+    if (!codes.length) return;
+    const outcomes = await this.db.curriculumOutcome.findMany({ where: { code: { in: codes } } });
+    const invalid = codes.filter((code) => {
+      const outcome = outcomes.find((item) => item.code === code);
+      return !outcome || outcome.grade !== data.grade || (data.domain && outcome.domain !== data.domain);
+    });
+    if (invalid.length)
+      throw new BadRequestException({
+        code: "INVALID_OUTCOME",
+        message: "Yêu cầu cần đạt không thuộc khối lớp hoặc mạch nội dung đã chọn: " + invalid.join(", "),
+        details: { invalid },
+      });
+  }
+  private async writeSteps(
+    tx: any,
+    lessonId: string,
+    steps: ReturnType<typeof publishedSteps>,
+    variant?: { labId?: string | null; challengeParams?: Record<string, number | string> | null },
+  ) {
+    if (steps.length && variant?.labId && variant.challengeParams) {
+      // A teacher variant gets its own challenge row; the shared model is untouched.
+      const challengeId = variantChallengeId(variant.labId, lessonId);
+      const challenge = {
+        objective: challengeObjective(variant.labId, variant.challengeParams),
+        constraints: { params: variant.challengeParams, modelRef: CHALLENGE_PARAMETERS[variant.labId].modelRef } as any,
+      };
+      await tx.challenge.upsert({ where: { id: challengeId }, create: { id: challengeId, labId: variant.labId, ...challenge }, update: challenge });
+      steps = [...steps, { type: "CHALLENGE", position: 60, required: true, config: { challengeId } }] as typeof steps;
+    }
+    const stepRows = steps.map((step) => ({
+      ...step,
+      id: `step-${lessonId}-${step.type.toLowerCase().replace("_", "-")}`,
+      lessonId,
+      config: step.config as any,
+    }));
+    if (!stepRows.length) return;
+    await tx.lessonStep.deleteMany({
+      where: { lessonId, id: { notIn: stepRows.map((step) => step.id) } },
+    });
+    for (const step of stepRows)
+      await tx.lessonStep.upsert({
+        where: { id: step.id },
+        create: step,
+        update: { type: step.type, position: step.position, required: step.required, config: step.config },
+      });
+  }
   @Roles("TEACHER", "ADMIN") @Post("lessons") async createLesson(
     @Body() b: unknown,
     @Req() req: any,
   ) {
-    const data = lessonSchema.parse(b);
+    const { scope: requestedScope, ...data } = lessonSchema.parse(b);
+    if (requestedScope === "SHARED_LIBRARY" && req.user.role !== "ADMIN")
+      throw new ForbiddenException({ code: "BASELINE_READ_ONLY", message: "Chỉ quản trị viên tạo bài cho thư viện chung" });
+    const scope = requestedScope ?? "TEACHER_PRIVATE";
+    await this.assertTaxonomy(data);
+    this.assertPublishable(data, scope);
     const steps = publishedSteps(data);
     await this.validatePublishedResources(data, req.user);
     return this.db.$transaction(async (tx) => {
       const lesson = await tx.lesson.create({
-        data: { ...data, authorId: req.user.sub },
+        data: {
+          ...data,
+          review: (data.review ?? undefined) as any,
+          challengeParams: (data.challengeParams ?? undefined) as any,
+          authorId: req.user.sub,
+          scope,
+          publishedAt: data.status === "published" ? new Date() : null,
+        },
       });
-      if (steps.length)
-        await tx.lessonStep.createMany({
-          data: steps.map((step) => ({
-            ...step,
-            id: `step-${lesson.id}-${step.type.toLowerCase().replace("_", "-")}`,
-            lessonId: lesson.id,
-            config: step.config as any,
-          })),
-        });
+      await this.writeSteps(tx, lesson.id, steps, data);
+      await audit(tx, { actor: req.user, action: "lesson.create", targetType: "Lesson", targetId: lesson.id, after: this.lessonAuditFields(lesson) });
       return lesson;
     });
   }
@@ -631,37 +743,326 @@ export class ApiController {
     @Body() b: unknown,
     @Req() req: any,
   ) {
-    const l = await this.db.lesson.findUniqueOrThrow({ where: { id } });
-    if (l.authorId !== req.user.sub && req.user.role !== "ADMIN")
-      throw new ForbiddenException();
-    const data = lessonSchema.parse(b);
-    const steps = publishedSteps(data);
-    await this.validatePublishedResources(data, req.user);
-    return this.db.$transaction(async (tx) => {
-      const lesson = await tx.lesson.update({ where: { id }, data });
-      const stepRows = steps.map((step) => ({
-        ...step,
-        id: `step-${id}-${step.type.toLowerCase().replace("_", "-")}`,
-        lessonId: id,
-        config: step.config as any,
-      }));
-      if (stepRows.length) {
-        await tx.lessonStep.deleteMany({
-          where: { lessonId: id, id: { notIn: stepRows.map((step) => step.id) } },
+    const l = await this.db.lesson.findUnique({ where: { id } });
+    if (!l || (l.authorId !== req.user.sub && req.user.role !== "ADMIN"))
+      throw new ForbiddenException({ code: "LESSON_ACCESS_DENIED", message: "Bạn chỉ sửa được bài học của mình" });
+    if (l.scope === "SHARED_LIBRARY" && req.user.role !== "ADMIN")
+      throw new ForbiddenException({
+        code: "BASELINE_READ_ONLY",
+        message: "Bài nền dùng chung không sửa trực tiếp; hãy tạo bản riêng để tùy biến",
+      });
+    const { scope: _ignoredScope, ...parsed } = lessonSchema.parse(b);
+    // Structural edits invalidate earlier shared-library release reviews.
+    const reviewsStale = l.scope === "SHARED_LIBRARY" && isStructureChange(l as any, parsed as any);
+    const data = { ...parsed, releaseReview: reviewsStale ? null : l.releaseReview };
+    await this.assertTaxonomy(parsed);
+    this.assertPublishable(data as any, l.scope);
+    const locked = l.status !== "draft" && (await this.structureLocked(id));
+    if (locked) {
+      if (isStructureChange(l as any, data as any))
+        throw new ConflictException({
+          code: "LESSON_STRUCTURE_LOCKED",
+          message: "Bài đã được giao hoặc đã có kết quả học tập; hãy tạo bản sao để thay đổi nội dung, câu hỏi hoặc phòng thực hành",
         });
-        for (const step of stepRows)
-          await tx.lessonStep.upsert({
-            where: { id: step.id },
-            create: step,
-            update: {
-              type: step.type,
-              position: step.position,
-              required: step.required,
-              config: step.config,
-            },
-          });
-      }
+      if (data.status === "draft")
+        throw new ConflictException({
+          code: "LESSON_STRUCTURE_LOCKED",
+          message: "Bài đang được dùng; chỉ có thể lưu trữ chứ không thể chuyển về bản nháp",
+        });
+    }
+    const steps = publishedSteps(parsed, l.clonedFromId ? id : undefined);
+    await this.validatePublishedResources(parsed, req.user, l.clonedFromId);
+    return this.db.$transaction(async (tx) => {
+      const lesson = await tx.lesson.update({
+        where: { id },
+        data: {
+          ...parsed,
+          review: (parsed.review ?? undefined) as any,
+          challengeParams: (parsed.challengeParams ?? null) as any,
+          releaseReview: (data.releaseReview ?? null) as any,
+          publishedAt: data.status === "published" ? (l.publishedAt ?? new Date()) : l.publishedAt,
+        },
+      });
+      // A locked structure is unchanged by definition; never rewrite its steps.
+      if (!locked) await this.writeSteps(tx, id, steps, parsed);
+      const action =
+        l.status !== data.status ? (data.status === "published" ? "lesson.publish" : data.status === "archived" ? "lesson.archive" : "lesson.unpublish") : "lesson.update";
+      const diff = changedFields(this.lessonAuditFields(l), this.lessonAuditFields(lesson));
+      await audit(tx, {
+        actor: req.user,
+        action,
+        targetType: "Lesson",
+        targetId: id,
+        before: diff.before,
+        after: { ...(diff.after ?? {}), structureLocked: locked, ...(reviewsStale && l.releaseReview ? { releaseReviewsReset: true } : {}) },
+      });
       return lesson;
+    });
+  }
+  @Roles("TEACHER", "ADMIN")
+  @Post("lessons/:id/clone")
+  @ApiOperation({ summary: "Create a private draft copy with new lesson/step/question IDs and reused asset references" })
+  async cloneLesson(@Param("id") id: string, @Req() req: any) {
+    const ctx = { actorId: req.user.sub, key: readIdempotencyKey(req), scope: "POST lessons/:id/clone", payload: { id } };
+    return idempotent(this.db, ctx, async (tx) => {
+      const source = await tx.lesson.findFirst({
+        where:
+          req.user.role === "ADMIN"
+            ? { id }
+            : { id, OR: [{ status: "published", scope: "SHARED_LIBRARY" }, { authorId: req.user.sub }] },
+      });
+      if (!source) throw new NotFoundException({ code: "LESSON_NOT_FOUND", message: "Không tìm thấy bài học" });
+      const clone = await tx.lesson.create({
+        data: {
+          subjectId: source.subjectId,
+          authorId: req.user.sub,
+          title: source.title + " (bản riêng)",
+          chapter: source.chapter,
+          grade: source.grade,
+          topic: source.topic,
+          learningObjective: source.learningObjective,
+          prerequisites: source.prerequisites,
+          curriculum: source.curriculum,
+          content: source.content,
+          labId: source.labId,
+          materials: source.materials as any,
+          questions: source.questions as any,
+          domain: source.domain,
+          outcomeCodes: source.outcomeCodes as any,
+          challengeParams: (source.challengeParams ?? undefined) as any,
+          status: "draft",
+          scope: "TEACHER_PRIVATE",
+          synthetic: source.synthetic,
+          clonedFromId: source.id,
+        },
+      });
+      await audit(tx, {
+        actor: req.user,
+        action: "lesson.clone",
+        targetType: "Lesson",
+        targetId: clone.id,
+        after: { clonedFromId: source.id, scope: "TEACHER_PRIVATE", status: "draft", title: clone.title },
+      });
+      return clone;
+    });
+  }
+  @Roles("TEACHER", "ADMIN")
+  @Get("teacher/content")
+  @ApiOperation({ summary: "Content library: shared baseline plus own content, with readiness and coverage by grade" })
+  async teacherContent(@Req() req: any, @Query() query: unknown) {
+    const q = z
+      .object({
+        grade: z.coerce.number().int().min(6).max(9).optional(),
+        subjectId: z.string().max(100).optional(),
+        chapter: z.string().max(200).optional(),
+        topic: z.string().max(200).optional(),
+        domain: domainSchema.optional(),
+        outcome: z.string().max(40).optional(),
+        q: z.string().max(200).optional(),
+        scope: z.enum(["SHARED_LIBRARY", "TEACHER_PRIVATE", "ALL"]).default("ALL"),
+        status: z.enum(["draft", "published", "archived", "ALL"]).default("ALL"),
+      })
+      .strict()
+      .parse(query);
+    const visible = { OR: [{ status: "published", scope: "SHARED_LIBRARY" }, { authorId: req.user.sub }] };
+    const rows = await this.db.lesson.findMany({
+      where: {
+        AND: [
+          visible,
+          q.grade ? { grade: q.grade } : {},
+          q.subjectId ? { subjectId: q.subjectId } : {},
+          q.chapter ? { chapter: { contains: q.chapter, mode: "insensitive" } } : {},
+          q.topic ? { topic: { contains: q.topic, mode: "insensitive" } } : {},
+          q.domain ? { domain: q.domain } : {},
+          q.outcome ? { outcomeCodes: { array_contains: [q.outcome] } } : {},
+          q.q ? { OR: [{ title: { contains: q.q, mode: "insensitive" } }, { learningObjective: { contains: q.q, mode: "insensitive" } }] } : {},
+          q.scope === "ALL" ? {} : { scope: q.scope },
+          q.status === "ALL" ? {} : { status: q.status },
+        ],
+      },
+      include: { subject: { select: { id: true, name: true } } },
+      orderBy: [{ grade: "asc" }, { chapter: "asc" }, { title: "asc" }],
+    });
+    const items: any[] = [];
+    for (const lesson of rows) {
+      const own = lesson.authorId === req.user.sub;
+      items.push({
+        id: lesson.id,
+        title: lesson.title,
+        subject: lesson.subject,
+        grade: lesson.grade,
+        chapter: lesson.chapter,
+        topic: lesson.topic,
+        learningObjective: lesson.learningObjective,
+        domain: lesson.domain,
+        outcomeCodes: lesson.outcomeCodes,
+        hasChallengeVariant: lesson.challengeParams != null,
+        attribution: attribution(lesson),
+        status: lesson.status,
+        scope: lesson.scope,
+        synthetic: lesson.synthetic,
+        own,
+        editable: own && lesson.scope === "TEACHER_PRIVATE",
+        clonedFromId: lesson.clonedFromId,
+        structureLocked: own && lesson.status !== "draft" ? await this.structureLocked(lesson.id) : false,
+        publishBlockers:
+          (own || req.user.role === "ADMIN") && lesson.status === "draft" ? publishBlockers(lesson as any, lesson.scope) : [],
+        releaseReview: lesson.scope === "SHARED_LIBRARY" ? this.releaseReviewView(lesson.releaseReview) : null,
+        updatedAt: lesson.updatedAt,
+      });
+    }
+    return { items, ...(await this.libraryCoverage(req.user.sub)), taxonomy: this.taxonomy() };
+  }
+  private taxonomy() {
+    return {
+      domains: Object.entries(DOMAINS).map(([id, label]) => ({ id, label })),
+      challengeParameters: CHALLENGE_PARAMETERS,
+    };
+  }
+  private releaseReviewView(value: unknown) {
+    const reviews = (value ?? {}) as Record<string, any>;
+    return RELEASE_REVIEW_KINDS.map((kind) => ({
+      kind,
+      label: RELEASE_REVIEW_LABELS[kind],
+      reviewerName: reviews[kind]?.reviewerName ?? null,
+      at: reviews[kind]?.at ?? null,
+    }));
+  }
+  /**
+   * Coverage per grade × domain over the outcome map. Released numbers use only
+   * the released (non-synthetic) map and released baseline lessons; when no
+   * released map exists the denominator is null and the fixture map is shown
+   * separately, so a fixture is never reported as corpus coverage (CF-T5).
+   */
+  private async libraryCoverage(teacherId: string) {
+    const [outcomes, lessons] = await Promise.all([
+      this.db.curriculumOutcome.findMany({ where: { grade: { in: [8, 9] } }, orderBy: { code: "asc" } }),
+      this.db.lesson.findMany({
+        where: { grade: { in: [8, 9] }, OR: [{ status: "published", scope: "SHARED_LIBRARY" }, { authorId: teacherId }] },
+        select: { grade: true, status: true, scope: true, synthetic: true, authorId: true, outcomeCodes: true },
+      }),
+    ]);
+    const covered = (filter: (lesson: (typeof lessons)[number]) => boolean) =>
+      new Set(lessons.filter(filter).flatMap((lesson) => (lesson.outcomeCodes as string[]) ?? []));
+    const released = covered((l) => l.scope === "SHARED_LIBRARY" && l.status === "published" && !l.synthetic);
+    const fixture = covered((l) => l.scope === "SHARED_LIBRARY" && l.status === "published");
+    const own = covered((l) => l.authorId === teacherId && l.status === "published");
+    const metric = (map: typeof outcomes, set: Set<string>) =>
+      map.length ? { covered: map.filter((o) => set.has(o.code)).length, total: map.length, gaps: map.filter((o) => !set.has(o.code)).map((o) => o.code) } : null;
+    const coverage = [8, 9].flatMap((grade) =>
+      (Object.keys(DOMAINS) as Array<keyof typeof DOMAINS>).map((domain) => {
+        const cell = outcomes.filter((o) => o.grade === grade && o.domain === domain);
+        const releasedMap = cell.filter((o) => !o.synthetic);
+        const fixtureMap = cell.filter((o) => o.synthetic);
+        const ofGrade = lessons.filter((l) => l.grade === grade);
+        return {
+          grade,
+          domain,
+          domainLabel: DOMAINS[domain],
+          releasedBaseline: metric(releasedMap, released),
+          ownPublished: metric(releasedMap, own),
+          fixture: metric(fixtureMap, fixture),
+          releasedLessons: ofGrade.filter((l) => l.scope === "SHARED_LIBRARY" && l.status === "published" && !l.synthetic).length,
+        };
+      }),
+    );
+    const releasedMapSize = outcomes.filter((o) => !o.synthetic).length;
+    return {
+      coverage,
+      outcomes: outcomes.map(({ code, grade, domain, chapter, statement, synthetic }) => ({ code, grade, domain, chapter, statement, synthetic })),
+      coverageNote: releasedMapSize
+        ? "Mỗi ô là số yêu cầu cần đạt có bài đã phát hành trên tổng số yêu cầu của mạch nội dung; danh sách còn thiếu hiển thị riêng."
+        : "Chưa có bản đồ yêu cầu cần đạt lớp 8–9 được phát hành (Content Foundation CF-T5); số liệu bản đồ mẫu chỉ phục vụ phát triển, không phải tỉ lệ bao phủ.",
+    };
+  }
+  /** Readable lesson for the library: shared published baseline or own content (admin: any). */
+  private async libraryLesson(id: string, user: { sub: string; role: string }) {
+    const lesson = await this.db.lesson.findFirst({
+      where:
+        user.role === "ADMIN" ? { id } : { id, OR: [{ status: "published", scope: "SHARED_LIBRARY" }, { authorId: user.sub }] },
+      include: { subject: { select: { id: true, name: true } } },
+    });
+    if (!lesson) throw new NotFoundException({ code: "LESSON_NOT_FOUND", message: "Không tìm thấy bài học" });
+    return lesson;
+  }
+  @Roles("TEACHER", "ADMIN")
+  @Get("teacher/content/:id/preview")
+  @ApiOperation({ summary: "Student-view preview with text alternatives for every step, attribution and readiness blockers" })
+  async previewLesson(@Param("id") id: string, @Req() req: any) {
+    const lesson = await this.libraryLesson(id, req.user);
+    let steps: any[] = [];
+    let pathwayError: string | null = null;
+    try {
+      steps = materializeLegacySteps(lesson as any);
+    } catch {
+      pathwayError = "Bài chưa đủ tài nguyên hợp lệ cho từng bước";
+    }
+    const lab = lesson.labId ? await this.db.lab.findUnique({ where: { id: lesson.labId } }) : null;
+    const params = lesson.challengeParams as Record<string, number | string> | null;
+    if (lab && params) steps.push({ type: "CHALLENGE", position: 60, required: true, config: { challengeId: variantChallengeId(lab.id, lesson.id) } });
+    const textOf = (html: string) => html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    return {
+      lesson: {
+        id: lesson.id,
+        title: lesson.title,
+        subject: lesson.subject,
+        grade: lesson.grade,
+        chapter: lesson.chapter,
+        topic: lesson.topic,
+        learningObjective: lesson.learningObjective,
+        domain: lesson.domain,
+        domainLabel: lesson.domain ? DOMAINS[lesson.domain as keyof typeof DOMAINS] ?? null : null,
+        outcomeCodes: lesson.outcomeCodes,
+        status: lesson.status,
+        scope: lesson.scope,
+      },
+      attribution: attribution(lesson),
+      readiness: { ready: !publishBlockers(lesson as any, lesson.scope).length, blockers: publishBlockers(lesson as any, lesson.scope) },
+      pathwayError,
+      steps: steps.map((step) => {
+        const config = step.config as any;
+        const textAlternative =
+          step.type === "READING"
+            ? textOf(config.html ?? "")
+            : step.type === "VIDEO"
+              ? config.transcript || config.equivalentText || null
+              : step.type === "QUIZ"
+                ? `${config.questions?.length ?? 0} câu hỏi trắc nghiệm, đọc được bằng trình đọc màn hình.`
+                : step.type === "LAB"
+                  ? `${lab?.title ?? "Phòng thực hành"}: ${lab?.learningObjective ?? ""}`
+                  : params && lab
+                    ? challengeObjective(lab.id, params)
+                    : null;
+        return {
+          type: step.type,
+          position: step.position,
+          title:
+            step.type === "VIDEO" ? config.title : step.type === "LAB" ? lab?.title ?? null : step.type === "CHALLENGE" ? "Thử thách tùy chỉnh" : null,
+          textAlternative,
+          missingAlternative: !textAlternative,
+        };
+      }),
+      materials: (lesson.materials as any[]).map(({ type, title, url, transcript }) => ({ type, title, url, hasTranscript: Boolean(transcript?.trim()) })),
+    };
+  }
+  @Roles("ADMIN")
+  @Post("lessons/:id/release-reviews")
+  @ApiOperation({ summary: "Record one named shared-library release review (editorial/subject/rights/safety/model)" })
+  async releaseReview(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
+    const b = z.object({ kind: z.enum(RELEASE_REVIEW_KINDS), note: z.string().trim().max(500).optional() }).strict().parse(body);
+    return this.db.$transaction(async (tx) => {
+      const lesson = await tx.lesson.findUnique({ where: { id } });
+      if (!lesson) throw new NotFoundException({ code: "LESSON_NOT_FOUND", message: "Không tìm thấy bài học" });
+      if (lesson.scope !== "SHARED_LIBRARY")
+        throw new BadRequestException({ code: "NOT_SHARED_LIBRARY", message: "Bài riêng của giáo viên dùng phiếu tự kiểm duyệt" });
+      if (b.kind === "model" && !lesson.labId)
+        throw new BadRequestException({ code: "NO_MODEL_TO_REVIEW", message: "Bài không có phòng thực hành để duyệt mô hình" });
+      const reviewer = await tx.user.findUniqueOrThrow({ where: { id: req.user.sub }, select: { fullName: true } });
+      const reviews = { ...((lesson.releaseReview ?? {}) as Record<string, unknown>) };
+      reviews[b.kind] = { reviewerId: req.user.sub, reviewerName: reviewer.fullName, at: new Date().toISOString(), ...(b.note ? { note: b.note } : {}) };
+      const updated = await tx.lesson.update({ where: { id }, data: { releaseReview: reviews as any } });
+      await audit(tx, { actor: req.user, action: "lesson.release_review", targetType: "Lesson", targetId: id, after: { reviewKind: b.kind, scope: lesson.scope } });
+      return { releaseReview: this.releaseReviewView(updated.releaseReview), publishBlockers: publishBlockers(updated as any, updated.scope) };
     });
   }
   @Roles("STUDENT") @Get("lessons/:id/pathway") async pathway(
@@ -672,9 +1073,9 @@ export class ApiController {
   }
   private async studentPathway(id: string, studentId: string, db: any = this.db) {
     const assignment = await this.applicableLessonAssignment(id, studentId, db);
-    if (!assignment) throw new NotFoundException("Không tìm thấy bài được giao");
+    if (!assignment) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
     const lesson = await db.lesson.findFirst({
-      where: { id, status: "published" },
+      where: { id, status: { in: ["published", "archived"] } },
       include: {
         subject: true,
         steps: {
@@ -684,6 +1085,8 @@ export class ApiController {
       },
     });
     if (!lesson) throw new NotFoundException("Nội dung không còn khả dụng");
+    if (lesson.status === "archived" && !(await this.lessonStarted(id, studentId, db)))
+      throw new NotFoundException({ code: "CONTENT_ARCHIVED", message: ARCHIVED_CONTENT_MESSAGE });
     let pathway;
     try {
       validateLessonSteps(lesson.steps as any);
@@ -704,11 +1107,13 @@ export class ApiController {
         prerequisites: lesson.prerequisites,
         curriculum: lesson.curriculum,
       },
+      attribution: attribution(lesson),
       assignment: {
         id: assignment.id,
         dueDate: assignment.dueDate,
-        overdue: assignment.dueDate < new Date(),
+        overdue: isOverdue(assignment.dueDate),
       },
+      contentArchived: lesson.status === "archived",
       ...pathway,
       updatedAt: new Date().toISOString(),
     };
@@ -736,8 +1141,22 @@ export class ApiController {
     if (!hasApplicableAssignment) return;
     throw new NotFoundException("Hoàn thành và vượt qua bài kiểm tra được giao để mở phòng thực hành");
   }
-  private circuitRetryGuidance(verdict: string, simulationResult: any): string | null {
+  /** Retry guidance for the model that produced the result (circuit, chemistry or eye). */
+  private retryGuidance(labId: string, verdict: string, simulationResult: any): string | null {
     if (verdict === "passed") return null;
+    const check = simulationResult?.challengeCheck;
+    if (check?.unmet?.includes("maxCurrentMa"))
+      return `Thử thách của giáo viên yêu cầu dòng qua mỗi nhánh LED không quá ${check.params.maxCurrentMa} mA. Hãy tăng điện trở.`;
+    if (check?.unmet?.includes("minLitLeds"))
+      return `Thử thách yêu cầu ít nhất ${check.params.minLitLeds} LED sáng. Hãy thêm LED hoặc nhánh song song an toàn.`;
+    if (check?.unmet?.includes("reactionId")) return "Thử thách yêu cầu một phản ứng khác; hãy đọc lại đề bài.";
+    if (check?.unmet?.includes("minScore")) return `Cần đạt ít nhất ${check.params.minScore}% để hoàn thành thử thách.`;
+    if (labId === "chemistry") {
+      if (!simulationResult?.extent) return "Chưa có phản ứng xảy ra. Hãy đặt lượng cả hai chất lớn hơn 0.";
+      const leftover = simulationResult.limiting === simulationResult.a ? simulationResult.b : simulationResult.a;
+      return `Còn ${leftover} dư. Dựa vào hệ số trong phương trình để chỉnh tỉ lệ số mol cho hai chất phản ứng vừa đủ.`;
+    }
+    if (labId === "eye") return "Còn bộ phận chưa đúng tên. Chuyển sang Khám phá để đọc mô tả từng bộ phận rồi thử lại.";
     if (verdict === "partial" || simulationResult?.status === "LED_OVERLOAD") {
       return "Dòng điện qua LED vượt mức an toàn (> 20 mA). Hãy tăng giá trị điện trở (R ≥ 350Ω) để bảo vệ linh kiện.";
     }
@@ -942,7 +1361,10 @@ export class ApiController {
     const step = pathway.steps.find((item: any) => item.id === stepId && (item.type === "LAB" || item.type === "CHALLENGE"));
     if (!step) throw new NotFoundException("Bước thực hành không tồn tại");
     if (step.state === "LOCKED")
-      throw new ForbiddenException(step.lockReasonCode === "QUIZ_NOT_PASSED" ? "Hoàn thành và vượt qua bài kiểm tra để mở phòng thực hành" : "Bước thực hành chưa khả dụng");
+      throw new ForbiddenException({
+        code: "STEP_LOCKED",
+        message: step.lockReasonCode === "QUIZ_NOT_PASSED" ? "Hoàn thành và vượt qua bài kiểm tra để mở phòng thực hành" : "Bước thực hành chưa khả dụng",
+      });
     const stepResource = step.resource as any;
     const challengeId = stepResource?.challengeId ?? (stepResource?.labId ? `${stepResource.labId}_001` : "circuit_001");
     const challenge = challengeId ? await this.db.challenge.findUnique({ where: { id: challengeId }, include: { lab: true } }) : null;
@@ -953,7 +1375,13 @@ export class ApiController {
       labId: challenge?.labId ?? stepResource?.labId ?? "circuit",
       title: challenge?.lab?.title ?? "Thực hành mạch điện",
       instruction: challenge?.objective ?? "Tạo mạch kín an toàn cho đèn LED",
-      targetObjective: "Giữ dòng qua mỗi LED từ 1 đến 20 mA.",
+      targetObjective: (challenge?.constraints as any)?.params
+        ? challengeObjective(challenge!.labId, (challenge!.constraints as any).params)
+        : ({
+            circuit: "Giữ dòng qua mỗi LED từ 1 đến 20 mA.",
+            chemistry: "Chọn lượng chất để hai chất phản ứng vừa đủ, không còn chất dư.",
+            eye: "Gọi đúng tên cả 8 bộ phận của mắt.",
+          } as Record<string, string>)[challenge?.labId ?? stepResource?.labId ?? "circuit"] ?? null,
       config: stepResource,
     };
   }
@@ -984,9 +1412,9 @@ export class ApiController {
     const now = new Date();
     return this.db.$transaction(async (tx) => {
       if (!(await this.applicableLessonAssignment(lessonId, studentId, tx)))
-        throw new NotFoundException("Không tìm thấy bài được giao");
+        throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
       const lesson = await tx.lesson.findFirst({
-        where: { id: lessonId, status: "published" },
+        where: { id: lessonId, status: { in: ["published", "archived"] } },
         include: {
           steps: {
             orderBy: { position: "asc" },
@@ -995,6 +1423,8 @@ export class ApiController {
         },
       });
       if (!lesson) throw new NotFoundException("Nội dung không còn khả dụng");
+      if (lesson.status === "archived" && !(await this.lessonStarted(lessonId, studentId, tx)))
+        throw new NotFoundException({ code: "CONTENT_ARCHIVED", message: ARCHIVED_CONTENT_MESSAGE });
       let currentPathway;
       try {
         currentPathway = buildPathwaySteps(lesson.steps as any);
@@ -1092,280 +1522,64 @@ export class ApiController {
       message: "Bài kiểm tra chỉ khả dụng trong lộ trình bài được giao",
     });
   }
-  @Roles("STUDENT", "TEACHER", "ADMIN") @Get("classes") async classes(
-    @Req() req: any,
-  ) {
-    const rows = await this.db.classroom.findMany({
-      where:
-        req.user.role === "TEACHER"
-          ? { teacherId: req.user.sub }
-          : req.user.role === "STUDENT"
-            ? { enrollments: { some: { studentId: req.user.sub } } }
-            : {},
-      include: {
-        _count: { select: { enrollments: true } },
-        assignments: true,
-        enrollments: {
-          where: { studentId: req.user.sub },
-          select: { approved: true },
-        },
-      },
-    });
-    return rows.map((c) =>
-      req.user.role === "STUDENT"
-        ? {
-            ...c,
-            joinCode: undefined,
-            assignments: c.enrollments[0]?.approved
-              ? c.assignments.filter(
-                  (a) =>
-                    !(a.studentIds as string[]).length ||
-                    (a.studentIds as string[]).includes(req.user.sub),
-                )
-              : [],
-          }
-        : c,
-    );
-  }
-  @Roles("TEACHER") @Post("classes") createClass(
-    @Req() req: any,
-    @Body() body: unknown,
-  ) {
-    const b = z
-      .object({ name: text, grade: z.number().int().min(6).max(9) })
-      .parse(body);
-    return this.db.classroom.create({
-      data: {
-        ...b,
-        teacherId: req.user.sub,
-        joinCode: randomBytes(5).toString("hex").toUpperCase(),
-      },
-    });
-  }
-  @Roles("STUDENT") @Post("classes/join") async join(
-    @Req() req: any,
-    @Body() body: unknown,
-  ) {
-    const { code } = z.object({ code: text }).parse(body);
-    const c = await this.db.classroom.findUnique({
-      where: { joinCode: code.toUpperCase() },
-    });
-    if (!c) throw new NotFoundException("Mã lớp không tồn tại");
-    return this.db.enrollment.upsert({
-      where: { classId_studentId: { classId: c.id, studentId: req.user.sub } },
-      create: { classId: c.id, studentId: req.user.sub },
-      update: {},
-    });
-  }
-  @Roles("TEACHER") @Get("classes/:id/students") async roster(
-    @Param("id") id: string,
-    @Req() req: any,
-  ) {
-    await this.classOwner(id, req);
-    return this.db.enrollment.findMany({
-      where: { classId: id },
-      include: {
-        student: {
-          select: {
-            id: true,
-            fullName: true,
-            username: true,
-            mustChangePassword: true,
-            progress: true,
-          },
-        },
-      },
-    });
-  }
-  @Roles("TEACHER") @Post("classes/:id/students") async provisionStudent(
-    @Param("id") id: string,
-    @Req() req: any,
-    @Body() body: unknown,
-  ) {
-    await this.classOwner(id, req);
-    const b = z
-      .object({
-        username,
-        fullName: text,
-        grade: z.number().int().min(6).max(9),
-        consent: z.literal(true),
-      })
-      .parse(body);
-    const temporaryPassword = this.temporaryPassword();
-    const user = await this.db.$transaction(async (tx) => {
-      const student = await tx.user.create({
-        data: {
-          username: b.username,
-          passwordHash: await argon.hash(temporaryPassword),
-          fullName: b.fullName,
-          role: "STUDENT",
-          grade: b.grade,
-          consentAt: new Date(),
-          mustChangePassword: true,
-          temporaryPasswordExpiresAt: new Date(Date.now() + 86400000),
-        },
-      });
-      await tx.enrollment.create({
-        data: { classId: id, studentId: student.id, approved: true },
-      });
-      return student;
-    });
-    return {
-      user: publicUser(user),
-      credentials: {
-        username: user.username,
-        temporaryPassword,
-        expiresAt: user.temporaryPasswordExpiresAt,
-      },
-    };
-  }
-  @Roles("TEACHER") @Post("classes/:id/students/:studentId/reset-password") async resetStudentPassword(
-    @Param("id") id: string,
-    @Param("studentId") studentId: string,
-    @Req() req: any,
-  ) {
-    await this.classOwner(id, req);
-    const enrollment = await this.db.enrollment.findUnique({
-      where: { classId_studentId: { classId: id, studentId } },
-      include: { student: true },
-    });
-    if (!enrollment || enrollment.student.role !== "STUDENT")
-      throw new NotFoundException("Không tìm thấy học sinh trong lớp");
-    const temporaryPassword = this.temporaryPassword();
-    const expiresAt = new Date(Date.now() + 86400000);
-    await this.db.$transaction([
-      this.db.user.update({
-        where: { id: studentId },
-        data: {
-          passwordHash: await argon.hash(temporaryPassword),
-          mustChangePassword: true,
-          temporaryPasswordExpiresAt: expiresAt,
-        },
-      }),
-      this.db.session.deleteMany({ where: { userId: studentId } }),
-    ]);
-    return {
-      credentials: {
-        username: enrollment.student.username,
-        temporaryPassword,
-        expiresAt,
-      },
-    };
-  }
-  @Roles("TEACHER") @Put("classes/:id/students/:studentId") async approve(
-    @Param("id") id: string,
-    @Param("studentId") studentId: string,
-    @Req() req: any,
-  ) {
-    await this.classOwner(id, req);
-    return this.db.enrollment.update({
-      where: { classId_studentId: { classId: id, studentId } },
-      data: { approved: true },
-    });
-  }
-  @Roles("TEACHER") @Delete("classes/:id/students/:studentId") async remove(
-    @Param("id") id: string,
-    @Param("studentId") studentId: string,
-    @Req() req: any,
-  ) {
-    await this.classOwner(id, req);
-    return this.db.enrollment.delete({
-      where: { classId_studentId: { classId: id, studentId } },
-    });
-  }
-  @Roles("TEACHER") @Post("classes/:id/assignments") async assign(
-    @Param("id") id: string,
-    @Req() req: any,
-    @Body() body: unknown,
-  ) {
-    await this.classOwner(id, req);
-    const b = z
-      .object({
-        contentId: text,
-        contentType: z.enum(["lesson", "lab"]),
-        title: text,
-        dueDate: z.string().datetime(),
-        studentIds: z.array(text).max(100).default([]),
-      })
-      .parse(body);
+  /** Availability of assigned content for one student (Q-B1-02, MSG-36). */
+  private async contentState(a: { contentType: string; contentId: string }, studentId: string) {
     const content =
-      b.contentType === "lesson"
-        ? await this.db.lesson.findFirst({
-            where: { id: b.contentId, status: "published" },
-          })
-        : await this.db.lab.findFirst({
-            where: { id: b.contentId, status: "published" },
-          });
-    if (!content) throw new BadRequestException("Nội dung chưa xuất bản");
-    if (new Set(b.studentIds).size !== b.studentIds.length)
-      throw new BadRequestException("Danh sách học sinh bị trùng");
-    if (b.studentIds.length) {
-      const n = await this.db.enrollment.count({
-        where: { classId: id, approved: true, studentId: { in: b.studentIds } },
-      });
-      if (n !== new Set(b.studentIds).size)
-        throw new BadRequestException("Nhóm có học sinh ngoài lớp");
-    }
-    return this.db.assignment.create({
-      data: {
-        ...b,
-        classId: id,
-        dueDate: new Date(b.dueDate),
-        status: "ACTIVE",
-      },
-    });
+      a.contentType === "lesson"
+        ? await this.db.lesson.findUnique({ where: { id: a.contentId }, include: { subject: true } })
+        : await this.db.lab.findUnique({ where: { id: a.contentId }, include: { subject: true } });
+    if (!content || !["published", "archived"].includes(content.status)) return { state: "UNAVAILABLE" as const, content: null };
+    if (content.status === "published") return { state: "AVAILABLE" as const, content };
+    const started =
+      a.contentType === "lesson"
+        ? await this.lessonStarted(a.contentId, studentId)
+        : (await this.db.attempt.count({ where: { studentId, challenge: { labId: a.contentId } } })) > 0;
+    return { state: started ? ("ARCHIVED_STARTED" as const) : ("ARCHIVED_NOT_STARTED" as const), content };
   }
   @Roles("STUDENT") @Get("assignments") async assignments(@Req() req: any) {
+    const now = new Date();
     const rows = await this.db.assignment.findMany({
-      where: {
-        status: "ACTIVE",
-        classroom: {
-          enrollments: { some: { studentId: req.user.sub, approved: true } },
-        },
-      },
-      include: { classroom: { select: { name: true } } },
-      orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      where: applicableAssignmentWhere(req.user.sub),
+      include: { classroom: { select: { id: true, name: true } } },
+      orderBy: assignmentQueueOrder,
     });
-    return rows
-      .filter(
-        (a) =>
-          !(a.studentIds as string[]).length ||
-          (a.studentIds as string[]).includes(req.user.sub),
-      )
-      .map((a) => ({
+    const items: any[] = [];
+    for (const a of rows) {
+      const { state } = await this.contentState(a, req.user.sub);
+      if (state === "UNAVAILABLE") continue;
+      items.push({
         id: a.id,
         title: a.title,
         contentId: a.contentId,
         contentType: a.contentType,
         dueDate: a.dueDate,
         createdAt: a.createdAt,
-        overdue: a.dueDate < new Date(),
+        overdue: isOverdue(a.dueDate, now),
         classroom: a.classroom,
-      }));
+        contentState: state,
+        canOpen: state !== "ARCHIVED_NOT_STARTED",
+        notice: state === "AVAILABLE" ? null : ARCHIVED_CONTENT_MESSAGE,
+      });
+    }
+    return items;
   }
   @Roles("STUDENT") @Get("assignments/:id") async assignment(
     @Param("id") id: string,
     @Req() req: any,
   ) {
     const a = await this.applicableAssignment(id, req.user.sub);
-    const content =
-      a.contentType === "lesson"
-        ? await this.db.lesson.findFirst({
-            where: { id: a.contentId, status: "published" },
-            include: { subject: true },
-          })
-        : await this.db.lab.findFirst({
-            where: { id: a.contentId, status: "published" },
-            include: { subject: true },
-          });
+    const { state, content } = await this.contentState(a, req.user.sub);
     if (!content) throw new NotFoundException("Nội dung không còn khả dụng");
+    if (state === "ARCHIVED_NOT_STARTED")
+      throw new NotFoundException({ code: "CONTENT_ARCHIVED", message: ARCHIVED_CONTENT_MESSAGE });
     return {
       id: a.id,
       title: a.title,
       contentType: a.contentType,
       dueDate: a.dueDate,
-      overdue: a.dueDate < new Date(),
+      overdue: isOverdue(a.dueDate),
       classroom: a.classroom,
+      contentState: state,
       content: {
         id: content.id,
         title: content.title,
@@ -1454,7 +1668,8 @@ export class ApiController {
             attemptNumber,
           },
           pathway,
-          retryGuidance: this.circuitRetryGuidance(
+          retryGuidance: this.retryGuidance(
+            c.labId,
             existing.verdict,
             existing.simulationResult,
           ),
@@ -1468,19 +1683,27 @@ export class ApiController {
     } catch (e: any) {
       throw new BadRequestException(e.message);
     }
+    // A teacher variant's reviewed parameters tighten success; the model is unchanged.
+    const variant = evaluateChallenge(c.labId, b.labState, result, (c.constraints as any)?.params);
+    if (variant.check) result = { ...result, verdict: variant.verdict, challengeCheck: variant.check };
     const normalizedVerdict =
       result.verdict === "not_passed" ? "needs_practice" : result.verdict;
 
     return this.db.$transaction(async (tx) => {
-      await this.assertPracticalGate(c.labId, req.user.sub, tx);
       // The step link and assignment are derived server-side; client-sent
       // assignmentId is ignored so evidence cannot be attributed elsewhere.
       const link = await this.practicalStepLink(b.lessonStepId, c, req.user.sub, tx);
+      // D3: a direct attempt counts toward an applicable standalone lab assignment.
+      const labAssignment = link ? null : await this.applicableLabAssignment(c.labId, req.user.sub, tx);
+      // D-B1-01: an applicable standalone lab assignment opens the lab even when a
+      // gated lesson embeds it; the attempt has no lessonStepId, so it never
+      // completes the lesson's lab step. Every other direct submission keeps the A3 gate.
+      if (!labAssignment) await this.assertPracticalGate(c.labId, req.user.sub, tx);
       const a = await tx.attempt.create({
         data: {
           studentId: req.user.sub,
           challengeId: c.id,
-          assignmentId: link?.assignmentId ?? null,
+          assignmentId: link?.assignmentId ?? labAssignment?.id ?? null,
           lessonStepId: link?.stepId ?? null,
           simulationModelVersion: "1.0.0",
           idempotencyKey: b.idempotencyKey ?? null,
@@ -1535,9 +1758,11 @@ export class ApiController {
           attemptNumber: attemptCount,
         },
         pathway,
-        retryGuidance: this.circuitRetryGuidance(normalizedVerdict, result),
+        retryGuidance: this.retryGuidance(c.labId, normalizedVerdict, result),
       };
-    });
+      // Gate, evidence, projections and the pathway reconcile in one transaction; at
+      // pooled-database round-trip latency that exceeds Prisma's 5 s default.
+    }, { timeout: 20000 });
   }
   private async practicalStepLink(
     lessonStepId: string | undefined,
@@ -1555,7 +1780,7 @@ export class ApiController {
     const pathway = await this.studentPathway(step.lessonId, studentId, db);
     const current = pathway.steps.find((item: any) => item.id === step.id);
     if (!current || current.state === "LOCKED")
-      throw new ForbiddenException("Bước thực hành chưa khả dụng");
+      throw new ForbiddenException({ code: "STEP_LOCKED", message: "Bước thực hành chưa khả dụng" });
     return { stepId: step.id as string, lessonId: step.lessonId as string, assignmentId: pathway.assignment.id as string };
   }
   @Roles("STUDENT") @Get("attempts") attempts(@Req() req: any) {
@@ -1571,56 +1796,8 @@ export class ApiController {
     @Req() req: any,
   ) {
     this.rate("hint:" + req.user.sub, 8);
-    return this.db.$transaction(
-      async (tx) => {
-        // Serialize hint progression per student, including parallel requests.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${req.user.sub}))`;
-        const a = await tx.attempt.findFirst({
-          where: { id, studentId: req.user.sub },
-          include: { challenge: true, hints: true },
-        });
-        if (!a) throw new NotFoundException();
-        if (a.hints.length) return a.hints[0];
-        const history = await tx.attempt.findMany({
-          where: { studentId: req.user.sub, challengeId: a.challengeId },
-          include: { hints: true },
-          orderBy: { createdAt: "asc" },
-        });
-        if (history.at(-1)?.id !== id)
-          throw new BadRequestException(
-            "Hãy yêu cầu gợi ý cho lần thử mới nhất",
-          );
-        const previous = history.flatMap((x) => x.hints);
-        const level = Math.min(
-          4,
-          1 + Math.max(0, ...previous.map((h) => h.level)),
-        );
-        const user = await tx.user.findUniqueOrThrow({
-          where: { id: req.user.sub },
-        });
-        const context = buildContext(user, a, history, level);
-        const explanation = await explain(context);
-        const content = explanation.content;
-        const h = await tx.hintLog.create({
-          data: {
-            attemptId: id,
-            level,
-            content,
-            contextSnapshot: {
-              ...context,
-              provider: explanation.provider,
-            } as any,
-          },
-        });
-        await projectLab(tx, req.user.sub, a.challenge.labId);
-        if (a.lessonStepId) {
-          const step = await tx.lessonStep.findUnique({ where: { id: a.lessonStepId }, select: { lessonId: true } });
-          if (step) await projectLesson(tx, req.user.sub, step.lessonId);
-        }
-        return h;
-      },
-      { timeout: 20000 },
-    );
+    // B0P-T4: provider call outside the transaction; authorization rechecked before persisting.
+    return requestHint(this.db, req.user, id);
   }
   @Roles("STUDENT") @Post("saved") async save(
     @Req() req: any,
@@ -1686,24 +1863,17 @@ export class ApiController {
   async myProgress(@Req() req: any) {
     const studentId = req.user.sub;
     const now = new Date();
-    const assignments = (
-      await this.db.assignment.findMany({
-        where: {
-          status: "ACTIVE",
-          contentType: "lesson",
-          classroom: { enrollments: { some: { studentId, approved: true } } },
-        },
-        orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-      })
-    ).filter((item) => {
-      const targets = item.studentIds as string[];
-      return !targets.length || targets.includes(studentId);
+    const applicable = await this.db.assignment.findMany({
+      where: applicableAssignmentWhere(studentId),
+      orderBy: assignmentQueueOrder,
     });
+    const assignments = applicable.filter((item) => item.contentType === "lesson");
+    const labAssignments = applicable.filter((item) => item.contentType === "lab");
     const lessonIds = [...new Set(assignments.map((item) => item.contentId))];
     // One parallel batch: each sequential round trip to the database costs the most here.
     const [lessons, stepProgress, quizEvidence, practicalEvidence, quizAttempts, practicalAttempts, passedPracticals, latestQuiz, latestPractical] = await Promise.all([
       this.db.lesson.findMany({
-        where: { id: { in: lessonIds }, status: "published" },
+        where: { id: { in: lessonIds }, status: { in: ["published", "archived"] } },
         include: { subject: true, steps: { orderBy: { position: "asc" } } },
       }),
       this.db.stepProgress.findMany({ where: { studentId, step: { lessonId: { in: lessonIds } } } }),
@@ -1739,17 +1909,22 @@ export class ApiController {
       const lesson = lessons.find((item) => item.id === assignment.contentId);
       const derived = lesson ? derivedByLesson.get(lesson.id) : null;
       if (!lesson || !derived) return [];
+      // Archived content stays visible only once the student has started it (Q-B1-02).
+      if (lesson.status === "archived" && !derived.steps.some((step) => step.evidenceId || step.stepProgress)) return [];
       const quizStep = derived.steps.find((step) => step.type === "QUIZ");
       const practicalStep = derived.steps.find((step) => step.type === "LAB") ?? derived.steps.find((step) => step.type === "CHALLENGE");
       return [{
+        kind: "LESSON" as const,
         assignmentId: assignment.id,
         lessonId: lesson.id,
+        labId: null,
         title: assignment.title,
         lessonTitle: lesson.title,
         subject: { id: lesson.subject.id, name: lesson.subject.name },
         chapter: lesson.chapter,
-        dueDate: assignment.dueDate.toISOString(),
-        overdue: assignment.dueDate < now,
+        contentArchived: lesson.status === "archived",
+        dueDate: assignment.dueDate?.toISOString() ?? null,
+        overdue: isOverdue(assignment.dueDate, now),
         completed: derived.completed,
         completedRequired: derived.completedRequired,
         totalRequired: derived.totalRequired,
@@ -1761,6 +1936,50 @@ export class ApiController {
         steps: derived.steps,
       }];
     });
+    // D3: a standalone lab assignment completes on a passed attempt carrying its assignmentId.
+    const [labs, labAttempts] = labAssignments.length
+      ? await Promise.all([
+          this.db.lab.findMany({
+            where: { id: { in: [...new Set(labAssignments.map((item) => item.contentId))] }, status: { in: ["published", "archived"] } },
+            include: { subject: true },
+          }),
+          this.db.attempt.findMany({
+            where: { studentId, assignmentId: { in: labAssignments.map((item) => item.id) } },
+            select: { id: true, challengeId: true, lessonStepId: true, assignmentId: true, verdict: true, createdAt: true },
+          }),
+        ])
+      : [[], []];
+    const labItems = labAssignments.flatMap((assignment) => {
+      const lab = labs.find((item) => item.id === assignment.contentId);
+      if (!lab) return [];
+      const attempts = labAttempts.filter((item) => item.assignmentId === assignment.id);
+      if (lab.status === "archived" && !attempts.length) return [];
+      const practical = practicalSummary(attempts.map((item) => ({ ...item, hintLevel: 0 })));
+      const completed = Boolean(practical?.passedAt);
+      return [{
+        kind: "LAB" as const,
+        assignmentId: assignment.id,
+        lessonId: null,
+        labId: lab.id,
+        title: assignment.title,
+        lessonTitle: lab.title,
+        subject: { id: lab.subject.id, name: lab.subject.name },
+        chapter: lab.topic,
+        contentArchived: lab.status === "archived",
+        dueDate: assignment.dueDate?.toISOString() ?? null,
+        overdue: isOverdue(assignment.dueDate, now),
+        completed,
+        completedRequired: completed ? 1 : 0,
+        totalRequired: 1,
+        percent: completed ? 100 : 0,
+        nextStepId: null,
+        quiz: null,
+        practical,
+        updatedAt: practical?.latest.createdAt ?? null,
+        steps: [],
+      }];
+    });
+    items.push(...(labItems as any[]));
     const timestamps = [
       ...items.map((item) => item.updatedAt),
       latestQuiz?.createdAt.toISOString(),
@@ -1997,7 +2216,7 @@ export class ApiController {
         currentMa: typeof result?.currentMa === "number" ? result.currentMa : null,
         ledState: typeof result?.ledState === "string" ? result.ledState : null,
       },
-      retryGuidance: this.circuitRetryGuidance(verdict ?? "needs_practice", result),
+      retryGuidance: this.retryGuidance(attempt.challenge.labId, verdict ?? "needs_practice", result),
       hintLevels: attempt.hints.map((hint) => hint.level),
     };
   }
@@ -2047,9 +2266,9 @@ export class ApiController {
     @Param("id") id: string,
     @Req() req: any,
   ) {
-    await this.classOwner(id, req);
+    await ownedClass(this.db, id, req.user);
     const students = await this.db.enrollment.findMany({
-      where: { classId: id, approved: true },
+      where: { classId: id, status: "approved" },
       include: {
         student: {
           include: {
@@ -2073,7 +2292,8 @@ export class ApiController {
       ),
     }));
   }
-  @Roles("TEACHER", "ADMIN") @Post("users") async createUser(
+  // Teachers provision students only through POST classes/:id/students (audited, idempotent).
+  @Roles("ADMIN") @Post("users") async createUser(
     @Req() req: any,
     @Body() body: unknown,
   ) {
@@ -2098,12 +2318,11 @@ export class ApiController {
         }),
       ])
       .parse(body);
-    if (req.user.role === "TEACHER") {
-      if (b.role !== "STUDENT" || !b.classId)
-        throw new ForbiddenException(
-          "Giáo viên chỉ tạo học sinh trong lớp của mình",
-        );
-      await this.classOwner(b.classId, req);
+    if ("classId" in b && b.classId) {
+      const target = await this.db.classroom.findUnique({ where: { id: b.classId }, select: { status: true } });
+      if (!target) throw new NotFoundException({ code: "CLASS_NOT_FOUND", message: "Không tìm thấy lớp" });
+      if (target.status === "ARCHIVED")
+        throw new ConflictException({ code: "CLASS_ARCHIVED", message: "Lớp đã lưu trữ; không thể thêm thành viên" });
     }
     return this.db.$transaction(async (tx) => {
       const u = await tx.user.create({
@@ -2122,13 +2341,17 @@ export class ApiController {
       });
       if ("classId" in b && b.classId)
         await tx.enrollment.create({
-          data: { classId: b.classId, studentId: u.id, approved: true },
+          data: { classId: b.classId, studentId: u.id, status: "approved", approved: true },
         });
+      await audit(tx, {
+        actor: req.user,
+        action: "user.create",
+        targetType: "User",
+        targetId: u.id,
+        after: { role: u.role, grade: u.grade, ...("classId" in b && b.classId ? { classId: b.classId, enrollmentStatus: "approved" } : {}) },
+      });
       return publicUser(u);
     });
-  }
-  private temporaryPassword() {
-    return `Nexa-${randomBytes(9).toString("base64url")}`;
   }
   @Roles("ADMIN") @Get("users") async users() {
     return (
@@ -2150,7 +2373,7 @@ export class ApiController {
     const user = await this.db.user.findUnique({ where: { id } });
     if (!user || user.role === "STUDENT")
       throw new NotFoundException("Không tìm thấy tài khoản người lớn");
-    const temporaryPassword = this.temporaryPassword();
+    const temporaryPassword = issueTemporaryPassword();
     const expiresAt = new Date(Date.now() + 86400000);
     await this.db.$transaction([
       this.db.user.update({

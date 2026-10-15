@@ -84,7 +84,10 @@ export class AuthGuard implements CanActivate {
         req.path.endsWith(path),
       )
     )
-      throw new ForbiddenException("Bạn cần đổi mật khẩu tạm trước khi tiếp tục");
+      throw new ForbiddenException({
+        code: "PASSWORD_CHANGE_REQUIRED",
+        message: "Bạn cần đổi mật khẩu tạm trước khi tiếp tục",
+      });
     const roles = this.reflector.getAllAndOverride<string[]>("roles", [
       ctx.getHandler(),
       ctx.getClass(),

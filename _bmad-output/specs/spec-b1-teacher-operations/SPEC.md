@@ -1,6 +1,6 @@
 ---
 id: SPEC-b1-teacher-operations
-status: ready-for-implementation-with-content-release-gates
+status: done  # 2026-10-15: T1–T6 done (T4 fixture lane); local + shared Supabase dev verified, production unverified; see implementation-artifacts/b1-teacher-operations-implementation.md
 companions:
   - tickets.md
   - ../spec-b0-platform/SPEC.md

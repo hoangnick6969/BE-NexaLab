@@ -13,6 +13,7 @@ const created = [];
 const uploaded = [];
 let classroom;
 let lesson;
+let materialLesson;
 let passed = 0;
 const changedStudentPassword = "StudentChangedPassword2026!";
 async function req(path, method = "GET", body, auth) {
@@ -236,11 +237,12 @@ try {
   const made = await req(
     "/classes",
     "POST",
-    { name: prefix, grade: 8 },
+    { name: prefix, grade: 8, requiresApproval: true },
     tokens.TEACHER,
   );
   check("teacher creates class", made.status === 201);
-  classroom = made.data;
+  classroom = made.data.class;
+  const joinCode = made.data.joinCode;
   const provisioned = await req(
     `/classes/${classroom.id}/students`,
     "POST",
@@ -282,7 +284,7 @@ try {
       await req(
         "/classes/join",
         "POST",
-        { code: classroom.joinCode },
+        { code: joinCode },
         tokens.STUDENT,
       )
     ).status === 201,
@@ -342,7 +344,7 @@ try {
   check(
     "student sees assignment",
     (await req("/assignments", "GET", undefined, tokens.STUDENT)).data.some(
-      (a) => a.id === task.data.id,
+      (a) => a.id === task.data.assignment.id,
     ),
   );
   const lessonData = {
@@ -358,6 +360,15 @@ try {
     status: "draft",
     labId: "circuit",
     materials: [],
+    // B1: teacher-private lessons publish only with the self-review checklist (D1).
+    review: {
+      sources: "Integration fixture authored for automated checks",
+      license: "ORIGINAL",
+      outcome: "KHTN8 – Ohm",
+      answerKeyChecked: true,
+      safetyChecked: true,
+      accessibilityChecked: true,
+    },
     questions: [
       {
         prompt: "Increasing resistance?",
@@ -461,7 +472,7 @@ try {
     visible && !("answer" in visible.questions[0]),
   );
   const assignmentDetail = await req(
-    "/assignments/" + lessonTask.data.id,
+    "/assignments/" + lessonTask.data.assignment.id,
     "GET",
     undefined,
     tokens.STUDENT,
@@ -727,8 +738,11 @@ try {
   const countAfterInvalid = await db.quizAttempt.count({ where: { lessonId: lesson.id } });
   const invalidAnswersRejected = partialQuiz.status === 400 && duplicateQuestion.status === 400 && extraQuestion.status === 400 && countAfterInvalid === countBeforeInvalid;
   check(`partial, duplicate, and extra quiz answers are rejected atomically ${invalidAnswersRejected ? "" : JSON.stringify({ partialStatus: partialQuiz.status, duplicateStatus: duplicateQuestion.status, extraStatus: extraQuestion.status, countBeforeInvalid, countAfterInvalid })}`, invalidAnswersRejected);
-  const deniedPractical = await req("/attempts", "POST", { challengeId: "circuit_001", labState: circuit(), durationMs: 100 }, tokens.STUDENT);
-  check("direct practical submission is rejected before a quiz pass", deniedPractical.status === 404);
+  // D-B1-01: this student also holds a standalone "circuit" lab assignment, so the
+  // A3 gate is asserted on the lesson's own lab step (b1-integration covers both paths).
+  const gatedLabStep = completedCards.data.pathway.steps.find((step) => step.type === "LAB" || step.type === "CHALLENGE");
+  const deniedPractical = await req("/attempts", "POST", { challengeId: "circuit_001", lessonStepId: gatedLabStep.id, labState: circuit(), durationMs: 100 }, tokens.STUDENT);
+  check("lesson lab step submission is rejected before a quiz pass", deniedPractical.status === 403 && deniedPractical.data?.code === "STEP_LOCKED");
   const wrongAnswers = storedQuiz.map((question) => ({
     questionId: question.id,
     optionId: question.options.find((option) => option.id !== question.answerOptionId).id,
@@ -762,7 +776,8 @@ try {
   check("100 percent is recorded correctly", perfectAttempt.status === 201 && perfectAttempt.data.attempt.score === 100 && perfectAttempt.data.attempt.passed === true);
   const history = await req(`/lessons/${lesson.id}/quiz-attempts`, "GET", undefined, tokens.STUDENT);
   check("reload history retains all immutable attempts and question evidence", history.status === 200 && history.data.attempts.length === 4 && history.data.attempts[0].latest && history.data.attempts[0].best && history.data.attempts[0].score === 100 && history.data.attempts.some((attempt) => attempt.score === 0 && attempt.results.every((result) => result.prompt && result.selectedOptionText)));
-  await req(`/lessons/${lesson.id}`, "PUT", { ...lessonData, status: "published", questions: lessonData.questions.map((question, index) => index === 0 ? { ...question, prompt: "Edited question after saved attempt" } : question) }, tokens.TEACHER);
+  const lockedEdit = await req(`/lessons/${lesson.id}`, "PUT", { ...lessonData, status: "published", questions: lessonData.questions.map((question, index) => index === 0 ? { ...question, prompt: "Edited question after saved attempt" } : question) }, tokens.TEACHER);
+  check("published quiz with evidence is structure-locked (B1 D7)", lockedEdit.status === 409 && lockedEdit.data.code === "LESSON_STRUCTURE_LOCKED");
   const historicalQuiz = await req(`/lessons/${lesson.id}/quiz-attempts`, "GET", undefined, tokens.STUDENT);
   check("attempt snapshots preserve question evidence after published content edits", historicalQuiz.status === 200 && historicalQuiz.data.attempts[0].results.some((result) => result.prompt === "Increasing resistance?"));
   const latencyQuestions = (await db.lessonStep.findFirstOrThrow({ where: { lessonId: lesson.id, type: "QUIZ" } })).config.questions;
@@ -784,7 +799,7 @@ try {
     await db.quizAttempt.deleteMany({ where: { lessonId: lesson.id, studentId: users.STUDENT.id } });
     await db.stepProgress.deleteMany({ where: { studentId: users.STUDENT.id, stepId: `step-${lesson.id}-quiz` } });
     await db.progress.deleteMany({ where: { studentId: users.STUDENT.id, contentId: lesson.id } });
-    runLiveQuizBrowser(lessonTask.data.id, users.STUDENT.username, changedStudentPassword);
+    runLiveQuizBrowser(lessonTask.data.assignment.id, users.STUDENT.username, changedStudentPassword);
   }
   const allowedPractical = await req("/attempts", "POST", { challengeId: "circuit_001", labState: circuit(), durationMs: 100 }, tokens.STUDENT);
   check("direct practical submission succeeds after the quiz pass", allowedPractical.status === 201);
@@ -852,16 +867,21 @@ try {
       })
     ).status === 403,
   );
-  await req(
-    "/lessons/" + lesson.id,
-    "PUT",
-    {
-      ...lessonData,
-      status: "published",
-      materials: [{ type: "pdf", title: "Test", url: file.url }],
-    },
-    tokens.TEACHER,
-  );
+  // The assigned lesson is structure-locked (D7), so the material is
+  // published through a separate lesson.
+  materialLesson = (
+    await req(
+      "/lessons",
+      "POST",
+      {
+        ...lessonData,
+        title: prefix + " material",
+        status: "published",
+        materials: [{ type: "pdf", title: "Test", url: file.url }],
+      },
+      tokens.TEACHER,
+    )
+  ).data;
   check(
     "published material readable",
     (
@@ -1113,9 +1133,14 @@ try {
   if (classroom?.id)
     await db.classroom.deleteMany({ where: { id: classroom.id } });
   if (lesson?.id) await db.lesson.deleteMany({ where: { id: lesson.id } });
+  if (materialLesson?.id) await db.lesson.deleteMany({ where: { id: materialLesson.id } });
+  await db.auditLog.deleteMany({ where: { actorId: { in: created } } });
+  await db.idempotencyRecord.deleteMany({ where: { actorId: { in: created } } });
   for (const id of uploaded) {
     await db.assetFile.deleteMany({ where: { id } });
-    await unlink(resolve("uploads", id));
+    await unlink(resolve(process.env.UPLOAD_DIR ?? "uploads", id)).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
   }
   await db.user.deleteMany({ where: { id: { in: created } } });
   await db.$disconnect();

@@ -53,7 +53,11 @@ function stableId(prefix: string, value: string) {
   return `${prefix}-${createHash("md5").update(value).digest("hex")}`;
 }
 
-export function materializeQuizQuestions(questions: unknown[]): QuizQuestion[] {
+/**
+ * `namespace` gives a cloned lesson its own question/option IDs (D7); lessons
+ * without one keep their historical prompt-derived IDs.
+ */
+export function materializeQuizQuestions(questions: unknown[], namespace?: string): QuizQuestion[] {
   const occurrences = new Map<string, number>();
   const promptCounts = new Map<string, number>();
   for (const question of questions as any[]) {
@@ -63,7 +67,7 @@ export function materializeQuizQuestions(questions: unknown[]): QuizQuestion[] {
     questions: questions.map((raw, questionIndex) => {
       const parsed = z.object({ prompt: z.string().trim().min(1), options: z.array(z.string().trim().min(1)).min(2).max(6), answer: z.number().int().min(0).max(5) })
         .refine((question) => question.answer < question.options.length).parse(raw);
-      const id = stableId("question", parsed.prompt);
+      const id = stableId("question", namespace ? `${namespace}:${parsed.prompt}` : parsed.prompt);
       const promptOccurrence = questions.slice(0, questionIndex).filter((prior: any) => prior?.prompt?.trim() === parsed.prompt).length;
       const options = parsed.options.map((text) => {
         const key = `${id}:${text}`;
@@ -199,10 +203,10 @@ export function reconcileVideoProgress(
 
 export function materializeLegacySteps(lesson: {
   content: string;
-  materials: Array<{ type: "video" | "pdf" | "image"; url: string; title: string }>;
+  materials: Array<{ type: "video" | "pdf" | "image"; url: string; title: string; transcript?: string }>;
   questions: unknown[];
   labId?: string | null;
-}) {
+}, namespace?: string) {
   const result: Array<{ type: StepType; position: number; required: boolean; config: unknown }> = [];
   result.push({ type: "READING", position: 10, required: true, config: { html: lesson.content } });
   const videoMaterial = lesson.materials.find((item) => item.type === "video");
@@ -215,7 +219,7 @@ export function materializeLegacySteps(lesson: {
       : { title: "Nội dung thay thế", equivalentText: lesson.content },
   });
   if (lesson.questions.length)
-    result.push({ type: "QUIZ", position: 40, required: true, config: { questions: materializeQuizQuestions(lesson.questions) } });
+    result.push({ type: "QUIZ", position: 40, required: true, config: { questions: materializeQuizQuestions(lesson.questions, namespace) } });
   if (lesson.labId)
     result.push({ type: "LAB", position: 50, required: true, config: { labId: lesson.labId } });
   return validateLessonSteps(result);
