@@ -2,7 +2,7 @@
 title: Increment B + C Implementation Plan (B1, B2, C1, C2)
 status: planning-baseline ready for Epic SPECs; explicit gates tracked below
 created: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 source:
   - ../../docs/product/prd.md
   - ../../docs/reference/srs-summary.md
@@ -107,8 +107,8 @@ B0's content track is separate from the small platform foundation and can run in
 
 | Epic | Readiness | Decision gates before implementation |
 | --- | --- | --- |
-| B0 + B1 | **Đủ điều kiện viết SPEC.** PO decisions and content/data foundation are captured below. Không chặn bởi pilot/production của A | D1-D3, D7, D13-D24; enrollment, assignment, content-pack, topic-simulation-pack, asset-scope, ingestion, release-import and R2 contracts below |
-| B2 | **SPEC ready; implement after B1 and B2-T0** | B2 SPEC defines assignment-scoped `StepProgress`, no-guess migration, qualifying activity events, and override revocation. B2-T0 is the first implementation ticket and blocks board/override work |
+| B0 + B1 | **Done 2026-10-15** (B0P-T1..T4, B1-T1..T6; B1-T4 on the fixture lane). Verified on isolated PostgreSQL and shared Supabase development; production unverified. Evidence: `../implementation-artifacts/b0-platform-implementation.md`, `../implementation-artifacts/b1-teacher-operations-implementation.md` | D1-D3, D7, D13-D24; enrollment, assignment, content-pack, topic-simulation-pack, asset-scope, ingestion, release-import and R2 contracts below |
+| B2 | **SPEC ready; B1 done — next: B2-T0** | B2 SPEC defines assignment-scoped `StepProgress`, no-guess migration, qualifying activity events, and override revocation. B2-T0 is the first implementation ticket and blocks board/override work |
 | C1 | **SPEC ready; consent copy is a release gate** | C1 SPEC defines invitation-before-link, pending→approved transition, exact read aggregation, rate limits, consent record shape, and privacy errors. Approved Vietnamese consent copy/version is required before pilot activation |
 | C2 | **SPEC ready; per-asset/per-pack release gates remain** | C2 SPEC defines hard-delete eligibility, ownership resolution, reset, consent operations, asset/source governance, simulation versioning, and audit explorer. Q-DATA-01/Q-C2-03/Q-C2-04 gate affected releases, not common platform implementation |
 

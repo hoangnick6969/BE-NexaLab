@@ -2,7 +2,7 @@
 title: NexaLab Release 1 Epic Breakdown
 status: ready-for-implementation
 created: 2026-10-12
-updated: 2026-10-14
+updated: 2026-10-15
 source: docs/product/prd.md
 architecture: architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md
 active_specs:
@@ -84,6 +84,8 @@ The teacher manages owned-class membership, permitted content, and assignments b
 **Coverage:** FR-16, FR-17.
 
 **Detailed specs:** `../specs/spec-b1-teacher-operations/SPEC.md`, with `../specs/spec-b0-platform/SPEC.md` and `../specs/spec-content-foundation/SPEC.md` as required foundation contracts. Feature implementation may use synthetic fixtures; baseline catalog release waits on the Content Foundation release gates.
+
+**Status:** done 2026-10-15 together with B0 Platform (local and shared Supabase development verified; production unverified). See `../implementation-artifacts/sprint-status.yaml`.
 
 ### B2 — A teacher acts on traceable learning evidence
 
