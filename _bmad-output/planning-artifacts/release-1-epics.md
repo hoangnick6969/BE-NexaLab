@@ -111,6 +111,8 @@ The admin manages users, subjects, content, labs, and assets through explicit au
 
 **Coverage:** FR-20.
 
+**Status:** review 2026-10-15 — implemented on the current foundation and verified on the local runtime and shared Supabase development; production unverified; Content Foundation surfaces (R2, SourceRegistry, topic packs) deferred. See `../implementation-artifacts/c2-admin-operations-implementation.md`.
+
 **Detailed spec:** `../specs/spec-c2-admin-operations/SPEC.md`. User lifecycle/ownership resolution, taxonomy/content, simulation versions, adult reset, assets/sources, and the audited admin console are specified; per-asset budgets and per-template scientific ranges remain release gates.
 
 ## Future

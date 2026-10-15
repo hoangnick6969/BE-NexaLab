@@ -122,7 +122,7 @@ const circuit = (resistance = 350) => ({
 try {
   await verifyQuizContract();
   check("OpenAPI quiz paths, success/error envelopes, and schemas match the contract fixture", true);
-  check("unauthenticated API denied", (await req("/users")).status === 401);
+  check("unauthenticated API denied", (await req("/admin/users")).status === 401);
   const admin = await req("/auth/admin/login", "POST", {
     email: "admin@nexalab.local",
     password: process.env.SEED_PASSWORD,
@@ -170,7 +170,7 @@ try {
         ? { username: `${prefix}-${role.toLowerCase()}` }
         : { email: `${prefix}-${role.toLowerCase()}@example.test` }),
     };
-    const createdUser = await req("/users", "POST", account, adminToken);
+    const createdUser = await req("/admin/users", "POST", account, adminToken);
     check("create " + role, createdUser.status === 201);
     created.push(createdUser.data.id);
     users[role] = createdUser.data;
@@ -220,7 +220,7 @@ try {
   }
   check(
     "student cannot create users",
-    (await req("/users", "POST", {}, tokens.STUDENT)).status === 403,
+    (await req("/admin/users", "POST", {}, tokens.STUDENT)).status === 403,
   );
   check(
     "self-registration cannot grant admin",
@@ -529,8 +529,8 @@ try {
     { action: "complete" },
     tokens.STUDENT,
   );
-  const readingEvidence = await db.stepProgress.findUnique({
-    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: readingStepId } },
+  const readingEvidence = await db.stepProgress.findFirst({
+    where: { studentId: users.STUDENT.id, stepId: readingStepId },
   });
   const lessonProjection = await db.progress.findUnique({
     where: { studentId_contentId: { studentId: users.STUDENT.id, contentId: lesson.id } },
@@ -555,8 +555,8 @@ try {
     { action: "complete" },
     tokens.STUDENT,
   );
-  const repeatedEvidence = await db.stepProgress.findUnique({
-    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: readingStepId } },
+  const repeatedEvidence = await db.stepProgress.findFirst({
+    where: { studentId: users.STUDENT.id, stepId: readingStepId },
   });
   const evidenceCount = await db.stepProgress.count({
     where: { studentId: users.STUDENT.id, stepId: readingStepId },
@@ -627,8 +627,8 @@ try {
     { action: "heartbeat", positionSeconds: 90, durationSeconds: 100 },
     tokens.STUDENT,
   );
-  const mediaEvidence = await db.stepProgress.findUnique({
-    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: videoStepId } },
+  const mediaEvidence = await db.stepProgress.findFirst({
+    where: { studentId: users.STUDENT.id, stepId: videoStepId },
   });
   const mediaCompletedAt = mediaEvidence?.completedAt?.toISOString();
   await req(
@@ -637,8 +637,8 @@ try {
     { action: "ended", positionSeconds: 80, durationSeconds: 100 },
     tokens.STUDENT,
   );
-  const repeatedMediaEvidence = await db.stepProgress.findUnique({
-    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: videoStepId } },
+  const repeatedMediaEvidence = await db.stepProgress.findFirst({
+    where: { studentId: users.STUDENT.id, stepId: videoStepId },
   });
   check(
     "video completes at 90 percent and ended is idempotent without downgrade",
@@ -649,8 +649,8 @@ try {
       repeatedMediaEvidence.completedAt?.toISOString() === mediaCompletedAt,
   );
 
-  await db.stepProgress.delete({
-    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: videoStepId } },
+  await db.stepProgress.deleteMany({
+    where: { studentId: users.STUDENT.id, stepId: videoStepId },
   });
   const fallbackCompletion = await req(
     `/lessons/${lesson.id}/steps/${videoStepId}/progress`,
@@ -697,8 +697,8 @@ try {
     { action: "complete", cardIndex: 1 },
     tokens.STUDENT,
   );
-  const cardEvidence = await db.stepProgress.findUnique({
-    where: { studentId_stepId: { studentId: users.STUDENT.id, stepId: cardsStepId } },
+  const cardEvidence = await db.stepProgress.findFirst({
+    where: { studentId: users.STUDENT.id, stepId: cardsStepId },
   });
   check(
     "study cards reject forged index and premature completion",
@@ -1015,42 +1015,11 @@ try {
       )
     ).status === 403,
   );
-  const code = (await req("/parent-code", "POST", {}, tokens.STUDENT)).data
-    .code;
+  // C1 (D8): students no longer issue parent codes; the class teacher does,
+  // after checking school guardian records. The full link lifecycle is C1's suite.
   check(
-    "parent links using one-time code",
-    (
-      await req(
-        "/children/link",
-        "POST",
-        { code, consent: true },
-        tokens.PARENT,
-      )
-    ).status === 201,
-  );
-  check(
-    "link code cannot be reused",
-    (
-      await req(
-        "/children/link",
-        "POST",
-        { code, consent: true },
-        tokens.PARENT,
-      )
-    ).status === 400,
-  );
-  const parentProgress = await req(
-    "/progress/" + users.STUDENT.id,
-    "GET",
-    undefined,
-    tokens.PARENT,
-  );
-  check("parent can read own child", parentProgress.status === 200);
-  check(
-    "parent cannot see tutor conversation",
-    parentProgress.data.attempts.every(
-      (a) => !("hints" in a) && !("labState" in a),
-    ),
+    "student-generated parent code route is gone",
+    (await req("/parent-code", "POST", {}, tokens.STUDENT)).status === 404,
   );
   check(
     "parent cannot read another student",
