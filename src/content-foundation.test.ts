@@ -179,6 +179,12 @@ describe("simulation pack registry (CF-T4)", () => {
       expect(result.golden.every((g) => g.ok)).toBe(true);
     }
   });
+  it("the chemistry registry declares every field its pH mode returns", () => {
+    const model = resolveModel("chemistry@1.0.0");
+    const output = model.simulate({ samples: { jar1: "acid", jar2: "neutral", jar3: "base" } });
+    expect(output).toMatchObject({ experiment: "ph", verdict: "passed" });
+    for (const key of Object.keys(output).filter((k) => k !== "version")) expect(model.outputs).toHaveProperty(key);
+  });
   it("unknown models fail closed and model/lab mismatches reject", () => {
     expect(() => resolveModel("plasma@9.9.9")).toThrow(/không nằm trong danh sách/);
     expect(

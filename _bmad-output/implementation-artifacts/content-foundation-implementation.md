@@ -110,3 +110,10 @@ Runtime acceptance: isolated local PostgreSQL 18 + real Nest API + **real Cloudf
 - **Not built:** bounded crawl, the Smithsonian/Wikimedia connectors and a staging review UI. Policy and manifest files plus the CLI are the review path, as the companion document allows.
 - **No DNS-rebinding protection.** The SSRF guard checks the URL host.
 - Pilot/production R2 buckets and tokens are not created; shared Supabase migration of CF is pending owner approval.
+
+## 2026-10-16 — merge with origin/main and pH outputs
+
+- Merged origin/main (C2 PR #15, pH demo `3f521d7`) into `feat/content-foundation`; only `sprint-status.yaml` conflicted (resolved: C2 `done` kept, CF entries kept).
+- The pH demo added a `samples` identification mode to `chemistry@1.0.0` in place. Reaction-mode outputs are unchanged, so recorded attempts still replay identically. `MODEL_REGISTRY["chemistry@1.0.0"].outputs` now declares `experiment` (string) and `samples` (array) so pack bindings can target them; a Vitest case asserts the registry covers every field the pH mode returns.
+- Open: changing model behaviour without a version bump conflicts with the CF-T4 immutable-model rule; the team should bump to `chemistry@1.1.0` for the next behavioural change.
+- Evidence: typecheck clean; Vitest 146/146.

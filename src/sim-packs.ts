@@ -47,6 +47,9 @@ export const MODEL_REGISTRY: Record<string, Model> = {
       phenomenon: "string",
       color: "string",
       verdict: "string",
+      // pH identification mode (`samples` input).
+      experiment: "string",
+      samples: "array",
     },
     requiredSemanticIds: ["reactant-a", "reactant-b", "product"],
   },
