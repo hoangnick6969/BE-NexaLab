@@ -1,0 +1,595 @@
+{
+  "note": "Development fixture: flagship packs for the three existing labs. Reviewers are synthetic; ranges stay pending under Q-C2-04, so these packs may be activated only in development/test.",
+  "items": [
+    {
+      "activity": {
+        "key": "circuit-led-protection",
+        "outcomeCodes": [
+          "FX8-ENERGY-01"
+        ],
+        "objective": "Lắp mạch có điện trở bảo vệ để LED sáng an toàn.",
+        "modality": "deterministic-simulation",
+        "sources": [
+          {
+            "title": "Ghi chú biên soạn NexaLab (minh họa)",
+            "license": "ORIGINAL"
+          }
+        ],
+        "reviews": {
+          "subject": {
+            "name": "Chuyên môn minh họa",
+            "email": "fixture.subject@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          },
+          "safety": {
+            "name": "An toàn minh họa",
+            "email": "fixture.safety@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          }
+        },
+        "materials": [
+          "Nguồn 9 V",
+          "Điện trở",
+          "LED",
+          "Dây nối"
+        ],
+        "setup": "Mạch nối tiếp nguồn – điện trở – LED.",
+        "procedure": [
+          "Chọn điện trở",
+          "Nối mạch kín",
+          "Quan sát độ sáng và dòng điện"
+        ],
+        "variables": [
+          {
+            "name": "Điện trở",
+            "unit": "Ω",
+            "role": "independent"
+          },
+          {
+            "name": "Cường độ dòng điện",
+            "unit": "mA",
+            "role": "dependent"
+          },
+          {
+            "name": "Hiệu điện thế nguồn",
+            "unit": "V",
+            "role": "controlled"
+          }
+        ],
+        "observations": [
+          "LED sáng hoặc không",
+          "Số chỉ dòng điện"
+        ],
+        "expectedResult": "Điện trở lớn hơn làm dòng điện nhỏ hơn; dòng quá 20 mA làm LED quá tải.",
+        "explanation": "I = (U − 2 V × số LED) / R trong mô hình lý tưởng.",
+        "safety": "Chỉ mô phỏng; không thử với nguồn điện lưới.",
+        "limitations": "LED có sụt áp cố định 2 V; bỏ qua điện trở trong của nguồn."
+      },
+      "pack": {
+        "key": "circuit-led-protection",
+        "labId": "circuit",
+        "modelRef": "circuit@1.0.0",
+        "template": {
+          "units": {
+            "maxCurrentMa": "mA",
+            "minLitLeds": "LED"
+          },
+          "ranges": {
+            "maxCurrentMa": {
+              "min": 5,
+              "max": 20
+            },
+            "minLitLeds": {
+              "min": 1,
+              "max": 3
+            }
+          },
+          "initialState": {
+            "nodes": [
+              {
+                "id": "b",
+                "type": "battery",
+                "value": 9
+              },
+              {
+                "id": "r",
+                "type": "resistor",
+                "value": 470
+              },
+              {
+                "id": "l",
+                "type": "led"
+              }
+            ],
+            "edges": [
+              {
+                "source": "b",
+                "target": "r"
+              },
+              {
+                "source": "r",
+                "target": "l"
+              },
+              {
+                "source": "l",
+                "target": "b"
+              }
+            ]
+          },
+          "limitations": "Mô hình một chiều, LED lý tưởng.",
+          "goldenCases": [
+            {
+              "label": "Mạch hở",
+              "state": {
+                "nodes": [
+                  {
+                    "id": "b",
+                    "type": "battery",
+                    "value": 9
+                  },
+                  {
+                    "id": "r",
+                    "type": "resistor",
+                    "value": 470
+                  },
+                  {
+                    "id": "l",
+                    "type": "led"
+                  }
+                ],
+                "edges": [
+                  {
+                    "source": "b",
+                    "target": "r"
+                  },
+                  {
+                    "source": "r",
+                    "target": "l"
+                  }
+                ]
+              },
+              "expectedVerdict": "needs_practice",
+              "expectedOutputs": {
+                "current": 0
+              }
+            },
+            {
+              "label": "9 V, 100 Ω (quá dòng)",
+              "state": {
+                "nodes": [
+                  {
+                    "id": "b",
+                    "type": "battery",
+                    "value": 9
+                  },
+                  {
+                    "id": "r",
+                    "type": "resistor",
+                    "value": 100
+                  },
+                  {
+                    "id": "l",
+                    "type": "led"
+                  }
+                ],
+                "edges": [
+                  {
+                    "source": "b",
+                    "target": "r"
+                  },
+                  {
+                    "source": "r",
+                    "target": "l"
+                  },
+                  {
+                    "source": "l",
+                    "target": "b"
+                  }
+                ]
+              },
+              "expectedVerdict": "partial",
+              "expectedOutputs": {
+                "current": 0.07
+              }
+            },
+            {
+              "label": "9 V, 470 Ω (≈15 mA)",
+              "state": {
+                "nodes": [
+                  {
+                    "id": "b",
+                    "type": "battery",
+                    "value": 9
+                  },
+                  {
+                    "id": "r",
+                    "type": "resistor",
+                    "value": 470
+                  },
+                  {
+                    "id": "l",
+                    "type": "led"
+                  }
+                ],
+                "edges": [
+                  {
+                    "source": "b",
+                    "target": "r"
+                  },
+                  {
+                    "source": "r",
+                    "target": "l"
+                  },
+                  {
+                    "source": "l",
+                    "target": "b"
+                  }
+                ]
+              },
+              "expectedVerdict": "passed",
+              "expectedOutputs": {
+                "current": 0.014893617021276596
+              },
+              "tolerance": 0.000001
+            }
+          ]
+        },
+        "visualAssetVersionId": null,
+        "semanticMap": {
+          "battery": "battery",
+          "resistor": "resistor",
+          "led": "led"
+        },
+        "bindings": [
+          {
+            "when": {
+              "output": "ledState",
+              "op": "eq",
+              "value": "ON"
+            },
+            "target": "led",
+            "effect": {
+              "type": "emissive",
+              "value": 2
+            }
+          },
+          {
+            "when": {
+              "output": "ledState",
+              "op": "eq",
+              "value": "OVERLOAD"
+            },
+            "target": "led",
+            "effect": {
+              "type": "color",
+              "value": "#d64545"
+            }
+          }
+        ],
+        "challengeTemplates": [
+          {
+            "id": "gioi-han-dong",
+            "objective": "Giữ dòng qua LED không vượt quá giới hạn đã chọn.",
+            "params": {
+              "maxCurrentMa": {
+                "min": 10,
+                "max": 20
+              }
+            },
+            "difficulty": "intermediate"
+          }
+        ],
+        "reviews": {
+          "subject": {
+            "name": "Chuyên môn minh họa",
+            "email": "fixture.subject@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          },
+          "model": {
+            "name": "Mô hình minh họa",
+            "email": "fixture.model@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          }
+        },
+        "reason": "Đăng ký gói flagship mạch điện (dữ liệu minh họa phát triển)"
+      }
+    },
+    {
+      "activity": {
+        "key": "chemistry-limiting-reagent",
+        "outcomeCodes": [
+          "FX8-MATTER-01"
+        ],
+        "objective": "Xác định chất giới hạn khi trộn hai chất theo số mol.",
+        "modality": "deterministic-simulation",
+        "sources": [
+          {
+            "title": "Ghi chú biên soạn NexaLab (minh họa)",
+            "license": "ORIGINAL"
+          }
+        ],
+        "reviews": {
+          "subject": {
+            "name": "Chuyên môn minh họa",
+            "email": "fixture.subject@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          },
+          "safety": {
+            "name": "An toàn minh họa",
+            "email": "fixture.safety@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          }
+        },
+        "materials": [
+          "Mô hình phản ứng lý tưởng"
+        ],
+        "setup": "Chọn phản ứng và lượng mol hai chất.",
+        "procedure": [
+          "Chọn phản ứng",
+          "Nhập số mol",
+          "So sánh với tỉ lệ hệ số"
+        ],
+        "variables": [
+          {
+            "name": "Số mol chất A",
+            "unit": "mol",
+            "role": "independent"
+          },
+          {
+            "name": "Lượng sản phẩm",
+            "unit": "mol",
+            "role": "dependent"
+          },
+          {
+            "name": "Phương trình",
+            "unit": "",
+            "role": "controlled"
+          }
+        ],
+        "observations": [
+          "Chất còn dư",
+          "Lượng sản phẩm"
+        ],
+        "expectedResult": "Chất giới hạn quyết định lượng sản phẩm tối đa.",
+        "explanation": "Hệ số phương trình là tỉ lệ số mol.",
+        "safety": "Chỉ mô phỏng; không hướng dẫn thao tác hóa chất thật.",
+        "limitations": "Phản ứng hoàn toàn, lý tưởng."
+      },
+      "pack": {
+        "key": "chemistry-limiting-reagent",
+        "labId": "chemistry",
+        "modelRef": "chemistry@1.0.0",
+        "template": {
+          "units": {},
+          "ranges": {},
+          "initialState": {
+            "reactionId": "mg-hcl",
+            "molesA": 0.1,
+            "molesB": 0.2
+          },
+          "limitations": "Phản ứng xảy ra hoàn toàn theo tỉ lệ hệ số.",
+          "goldenCases": [
+            {
+              "label": "Mg + HCl vừa đủ (0,1 : 0,2 mol)",
+              "state": {
+                "reactionId": "mg-hcl",
+                "molesA": 0.1,
+                "molesB": 0.2
+              },
+              "expectedVerdict": "passed",
+              "expectedOutputs": {
+                "limiting": "balanced"
+              }
+            },
+            {
+              "label": "Mg + HCl còn dư (0,1 : 0,1 mol)",
+              "state": {
+                "reactionId": "mg-hcl",
+                "molesA": 0.1,
+                "molesB": 0.1
+              },
+              "expectedVerdict": "partial"
+            }
+          ]
+        },
+        "visualAssetVersionId": null,
+        "semanticMap": {
+          "reactant-a": "beaker-a",
+          "reactant-b": "beaker-b",
+          "product": "product"
+        },
+        "bindings": [
+          {
+            "when": {
+              "output": "limiting",
+              "op": "eq",
+              "value": "balanced"
+            },
+            "target": "product",
+            "effect": {
+              "type": "label",
+              "value": "Phản ứng vừa đủ"
+            }
+          }
+        ],
+        "challengeTemplates": [],
+        "reviews": {
+          "subject": {
+            "name": "Chuyên môn minh họa",
+            "email": "fixture.subject@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          },
+          "model": {
+            "name": "Mô hình minh họa",
+            "email": "fixture.model@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          }
+        },
+        "reason": "Đăng ký gói flagship hóa học (dữ liệu minh họa phát triển)"
+      }
+    },
+    {
+      "activity": {
+        "key": "eye-anatomy-labels",
+        "outcomeCodes": [
+          "FX8-LIVING-01"
+        ],
+        "objective": "Gọi đúng tên các bộ phận của mắt và đường đi của ánh sáng.",
+        "modality": "interactive-3d",
+        "sources": [
+          {
+            "title": "Ghi chú biên soạn NexaLab (minh họa)",
+            "license": "ORIGINAL"
+          }
+        ],
+        "reviews": {
+          "subject": {
+            "name": "Chuyên môn minh họa",
+            "email": "fixture.subject@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          },
+          "safety": {
+            "name": "An toàn minh họa",
+            "email": "fixture.safety@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          }
+        },
+        "materials": [
+          "Mô hình mắt"
+        ],
+        "setup": "Mở mô hình mắt.",
+        "procedure": [
+          "Chọn từng bộ phận",
+          "Nhập tên",
+          "Kiểm tra"
+        ],
+        "variables": [
+          {
+            "name": "Bộ phận được gọi tên",
+            "unit": "",
+            "role": "independent"
+          },
+          {
+            "name": "Điểm",
+            "unit": "%",
+            "role": "dependent"
+          },
+          {
+            "name": "Danh sách bộ phận",
+            "unit": "",
+            "role": "controlled"
+          }
+        ],
+        "observations": [
+          "Số bộ phận đúng"
+        ],
+        "expectedResult": "Gọi đúng 8 bộ phận chính.",
+        "explanation": "Ánh sáng đi qua giác mạc, thủy dịch, đồng tử, thể thủy tinh, dịch kính tới võng mạc.",
+        "safety": "Không có rủi ro thao tác.",
+        "limitations": "Mô hình đơn giản hóa, không đúng tỉ lệ giải phẫu."
+      },
+      "pack": {
+        "key": "eye-anatomy-labels",
+        "labId": "eye",
+        "modelRef": "eye@1.0.0",
+        "template": {
+          "units": {
+            "minScore": "%"
+          },
+          "ranges": {
+            "minScore": {
+              "min": 50,
+              "max": 100
+            }
+          },
+          "initialState": {
+            "answers": {}
+          },
+          "limitations": "Chấm theo tên gọi, không theo vị trí.",
+          "goldenCases": [
+            {
+              "label": "Chưa gọi tên bộ phận nào",
+              "state": {
+                "answers": {}
+              },
+              "expectedVerdict": "needs_practice",
+              "expectedOutputs": {
+                "score": 0
+              }
+            },
+            {
+              "label": "Gọi đúng tất cả",
+              "state": {
+                "answers": {
+                  "cornea": "Giác mạc",
+                  "aqueous": "Thủy dịch",
+                  "pupil": "Đồng tử",
+                  "lens": "Thể thủy tinh",
+                  "vitreous": "Dịch kính",
+                  "retina": "Võng mạc",
+                  "nerve": "Dây thần kinh thị giác",
+                  "sclera": "Củng mạc"
+                }
+              },
+              "expectedVerdict": "passed",
+              "expectedOutputs": {
+                "score": 100
+              }
+            }
+          ]
+        },
+        "visualAssetVersionId": null,
+        "semanticMap": {
+          "cornea": "cornea",
+          "aqueous": "aqueous",
+          "pupil": "pupil",
+          "lens": "lens",
+          "vitreous": "vitreous",
+          "retina": "retina",
+          "nerve": "nerve",
+          "sclera": "sclera"
+        },
+        "bindings": [
+          {
+            "when": {
+              "output": "correct",
+              "op": "includes",
+              "value": "retina"
+            },
+            "target": "retina",
+            "effect": {
+              "type": "emissive",
+              "value": 1
+            }
+          }
+        ],
+        "challengeTemplates": [
+          {
+            "id": "diem-toi-thieu",
+            "objective": "Đạt điểm tối thiểu khi gọi tên bộ phận.",
+            "params": {
+              "minScore": {
+                "min": 70,
+                "max": 100
+              }
+            },
+            "difficulty": "basic"
+          }
+        ],
+        "reviews": {
+          "subject": {
+            "name": "Chuyên môn minh họa",
+            "email": "fixture.subject@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          },
+          "model": {
+            "name": "Mô hình minh họa",
+            "email": "fixture.model@example.test",
+            "at": "2026-10-16T08:00:00.000Z"
+          }
+        },
+        "reason": "Đăng ký gói flagship giải phẫu mắt (dữ liệu minh họa phát triển)"
+      }
+    }
+  ]
+}

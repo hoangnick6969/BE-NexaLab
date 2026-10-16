@@ -110,6 +110,6 @@ Dependencies named by the suites: API `http://127.0.0.1:4100/api`, PostgreSQL `1
 
 - Production: not migrated or verified. Run `npm run c2:preflight`, then `prisma migrate deploy`, then `c2:preflight` again.
 - Pilot/production latency and deployment remain unverified.
-- Content Foundation dependencies are deferred (see `deferred-work.md`): R2 object storage, `AssetVersion`, `SourceRegistry`, ingestion runs/items, dry-run/release receipts, and full topic-pack versions.
+- ~~Content Foundation dependencies deferred~~ **Delivered 2026-10-16 on `feat/content-foundation`** (see `content-foundation-implementation.md`): R2 object storage with immutable `AssetVersion`, `SourceRegistry` with ingestion runs/items, dry-run/release receipts with retire, and topic simulation pack versions pinned on attempts. Admin asset operations now act on `Asset`/`AssetVersion`; `test:c2` passes 80/80 with R2-backed assets.
 - Release gates still apply: Q-DATA-01 / Q-C2-03 (production upload budgets; current type limits are development values), Q-C2-04 (per-template parameter ranges), and C1 consent copy.
 - Admin identity is never recorded as a scientific or rights review. The B1 named-review route stays as is: reviewer = acting account, and subject ≠ rights.

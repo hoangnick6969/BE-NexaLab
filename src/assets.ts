@@ -33,7 +33,7 @@ export const assetVersionIds = (urls: string[]) =>
 const UPLOAD_WINDOW_MS = 24 * 3600 * 1000;
 const MAX_PENDING_PER_USER = 20;
 
-const initSchema = z
+export const initSchema = z
   .object({
     fileName: z.string().trim().min(1).max(200),
     mime: z.string().trim().max(100),
@@ -98,7 +98,11 @@ export async function finalizeVersion(db: any, versionId: string, actor: { sub: 
         after: { kind: v.asset.kind, mime: v.mime, bytes: v.declaredBytes },
       }),
     );
-    throw new UnprocessableEntityException({ code: "ASSET_VALIDATION_FAILED", message: "Tệp không hợp lệ: " + problems.join("; "), details: { problems, validation: failed.validation } });
+    throw new UnprocessableEntityException({
+      code: "ASSET_VALIDATION_FAILED",
+      message: "Tệp không hợp lệ: " + problems.join("; "),
+      details: { problems, validation: failed.validation },
+    });
   };
   if (v.expiresAt && v.expiresAt < new Date()) await fail(["hết hạn tải lên"], {});
   const head = await s.head(v.stagingKey);
@@ -141,7 +145,17 @@ export async function finalizeVersion(db: any, versionId: string, actor: { sub: 
   return db.$transaction(async (tx: any) => {
     const ready = await tx.assetVersion.update({
       where: { id: v.id },
-      data: { status: "READY", objectKey: releasedKey, stagingKey: null, uploadId: null, bytes: head.bytes, sha256, etag: head.etag, validation, readyAt: new Date() },
+      data: {
+        status: "READY",
+        objectKey: releasedKey,
+        stagingKey: null,
+        uploadId: null,
+        bytes: head.bytes,
+        sha256,
+        etag: head.etag,
+        validation,
+        readyAt: new Date(),
+      },
       include: { asset: true },
     });
     await audit(tx, {
@@ -187,6 +201,75 @@ export async function assetReferences(db: any, ids: { versionIds: string[]; lega
   return { lessons: unique(lessons), labs: unique(labs) };
 }
 
+/** Validates an upload request and creates the asset (or its next version) in PENDING state. */
+export async function startVersion(db: any, user: { sub: string; role: string }, b: z.infer<typeof initSchema>) {
+  const gate = uploadsEnabled();
+  if (!gate.enabled) throw new ServiceUnavailableException({ code: "UPLOADS_NOT_CONFIGURED", message: gate.reason });
+  const type = mediaTypeFor(b.fileName, b.mime);
+  if (!type)
+    throw new BadRequestException({ code: "ASSET_TYPE_REJECTED", message: "Chỉ nhận PDF, PNG, JPEG, MP4, WebVTT hoặc GLB đúng đuôi tệp" });
+  if (b.bytes > type.maxBytes)
+    throw new BadRequestException({
+      code: "ASSET_TOO_LARGE",
+      message: `Tệp ${type.kind} tối đa ${Math.round(type.maxBytes / 1048576)} MB`,
+    });
+  if (type.kind === "model" && user.role !== "ADMIN")
+    throw new ForbiddenException({ code: "MODEL_ADMIN_ONLY", message: "Chỉ admin quản lý asset 3D" });
+  if (b.scope === "SHARED_LIBRARY" && (user.role !== "ADMIN" || !b.license || !b.source))
+    throw new ForbiddenException({
+      code: "SHARED_ASSET_REQUIRES_ADMIN_RIGHTS",
+      message: "Tệp thư viện chung do admin tải lên kèm giấy phép và nguồn",
+    });
+  await cleanupExpiredUploads(db);
+  if ((await db.assetVersion.count({ where: { createdById: user.sub, status: "PENDING" } })) >= MAX_PENDING_PER_USER)
+    throw new ConflictException({ code: "TOO_MANY_PENDING_UPLOADS", message: "Có quá nhiều tệp đang tải dở; hãy hoàn tất hoặc huỷ trước" });
+  const s = storage();
+  const { asset, version } = await db.$transaction(async (tx: any) => {
+    let asset = b.assetId ? await tx.asset.findUnique({ where: { id: b.assetId } }) : null;
+    if (b.assetId) {
+      if (!asset) throw new NotFoundException({ code: "ASSET_NOT_FOUND", message: "Không tìm thấy tệp" });
+      if (asset.ownerId !== user.sub && user.role !== "ADMIN")
+        throw new ForbiddenException({ code: "ASSET_ACCESS_DENIED", message: "Bạn không quản lý tệp này" });
+      if (asset.status !== "ACTIVE") throw new ConflictException({ code: "ASSET_NOT_ACTIVE", message: "Tệp đang bị cách ly hoặc lưu trữ" });
+      if (asset.kind !== type.kind)
+        throw new BadRequestException({ code: "ASSET_KIND_MISMATCH", message: "Phiên bản mới phải cùng loại tệp" });
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:asset:" + asset.id}))`;
+    } else
+      asset = await tx.asset.create({
+        data: {
+          scope: b.scope,
+          ownerId: user.sub,
+          title: b.title ?? b.fileName,
+          kind: type.kind,
+          license: b.license ?? null,
+          source: b.source ?? null,
+        },
+      });
+    const last = await tx.assetVersion.findFirst({
+      where: { assetId: asset!.id },
+      orderBy: { version: "desc" },
+      select: { version: true },
+    });
+    const version = await tx.assetVersion.create({
+      data: {
+        assetId: asset!.id,
+        version: (last?.version ?? 0) + 1,
+        storage: s.kind,
+        bucket: s.bucket,
+        fileName: b.fileName,
+        mime: type.mime,
+        declaredBytes: b.bytes,
+        expectedSha256: b.expectedSha256 ?? null,
+        multipart: b.bytes > SINGLE_PUT_LIMIT,
+        expiresAt: new Date(Date.now() + UPLOAD_WINDOW_MS),
+        createdById: user.sub,
+      },
+    });
+    return { asset: asset!, version };
+  });
+  return { asset, version, type };
+}
+
 @ApiTags("Assets")
 @ApiBearerAuth()
 @Controller("assets")
@@ -197,57 +280,9 @@ export class AssetsController {
   @Post("uploads")
   @ApiOperation({ summary: "Start an upload: presigned PUT (small) or multipart (large) to a private staging key" })
   async init(@Req() req: any, @Body() body: unknown) {
-    const gate = uploadsEnabled();
-    if (!gate.enabled) throw new ServiceUnavailableException({ code: "UPLOADS_NOT_CONFIGURED", message: gate.reason });
     const b = initSchema.parse(body);
-    const type = mediaTypeFor(b.fileName, b.mime);
-    if (!type) throw new BadRequestException({ code: "ASSET_TYPE_REJECTED", message: "Chỉ nhận PDF, PNG, JPEG, MP4, WebVTT hoặc GLB đúng đuôi tệp" });
-    if (b.bytes > type.maxBytes)
-      throw new BadRequestException({ code: "ASSET_TOO_LARGE", message: `Tệp ${type.kind} tối đa ${Math.round(type.maxBytes / 1048576)} MB` });
-    if (type.kind === "model" && req.user.role !== "ADMIN") throw new ForbiddenException({ code: "MODEL_ADMIN_ONLY", message: "Chỉ admin quản lý asset 3D" });
-    if (b.scope === "SHARED_LIBRARY" && (req.user.role !== "ADMIN" || !b.license || !b.source))
-      throw new ForbiddenException({ code: "SHARED_ASSET_REQUIRES_ADMIN_RIGHTS", message: "Tệp thư viện chung do admin tải lên kèm giấy phép và nguồn" });
-    await cleanupExpiredUploads(this.db);
-    if ((await this.db.assetVersion.count({ where: { createdById: req.user.sub, status: "PENDING" } })) >= MAX_PENDING_PER_USER)
-      throw new ConflictException({ code: "TOO_MANY_PENDING_UPLOADS", message: "Có quá nhiều tệp đang tải dở; hãy hoàn tất hoặc huỷ trước" });
+    const { asset, version, type } = await startVersion(this.db, req.user, b);
     const s = storage();
-    const { asset, version } = await this.db.$transaction(async (tx) => {
-      let asset = b.assetId ? await tx.asset.findUnique({ where: { id: b.assetId } }) : null;
-      if (b.assetId) {
-        if (!asset) throw new NotFoundException({ code: "ASSET_NOT_FOUND", message: "Không tìm thấy tệp" });
-        if (asset.ownerId !== req.user.sub && req.user.role !== "ADMIN") throw new ForbiddenException({ code: "ASSET_ACCESS_DENIED", message: "Bạn không quản lý tệp này" });
-        if (asset.status !== "ACTIVE") throw new ConflictException({ code: "ASSET_NOT_ACTIVE", message: "Tệp đang bị cách ly hoặc lưu trữ" });
-        if (asset.kind !== type.kind) throw new BadRequestException({ code: "ASSET_KIND_MISMATCH", message: "Phiên bản mới phải cùng loại tệp" });
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:asset:" + asset.id}))`;
-      } else
-        asset = await tx.asset.create({
-          data: {
-            scope: b.scope,
-            ownerId: req.user.sub,
-            title: b.title ?? b.fileName,
-            kind: type.kind,
-            license: b.license ?? null,
-            source: b.source ?? null,
-          },
-        });
-      const last = await tx.assetVersion.findFirst({ where: { assetId: asset!.id }, orderBy: { version: "desc" }, select: { version: true } });
-      const version = await tx.assetVersion.create({
-        data: {
-          assetId: asset!.id,
-          version: (last?.version ?? 0) + 1,
-          storage: s.kind,
-          bucket: s.bucket,
-          fileName: b.fileName,
-          mime: type.mime,
-          declaredBytes: b.bytes,
-          expectedSha256: b.expectedSha256 ?? null,
-          multipart: b.bytes > SINGLE_PUT_LIMIT,
-          expiresAt: new Date(Date.now() + UPLOAD_WINDOW_MS),
-          createdById: req.user.sub,
-        },
-      });
-      return { asset: asset!, version };
-    });
     const stagingKey = objectKeys(asset.id, version.id, b.fileName, asset.scope).staging;
     if (version.multipart) {
       const uploadId = await s.createMultipart(stagingKey, type.mime);
@@ -275,7 +310,8 @@ export class AssetsController {
 
   private async pendingOwned(id: string, user: any) {
     const v = await this.db.assetVersion.findUnique({ where: { id } });
-    if (!v || (v.createdById !== user.sub && user.role !== "ADMIN")) throw new NotFoundException({ code: "ASSET_VERSION_NOT_FOUND", message: "Không tìm thấy phiên bản tệp" });
+    if (!v || (v.createdById !== user.sub && user.role !== "ADMIN"))
+      throw new NotFoundException({ code: "ASSET_VERSION_NOT_FOUND", message: "Không tìm thấy phiên bản tệp" });
     return v;
   }
 
@@ -294,7 +330,12 @@ export class AssetsController {
     if (b.partNumbers.some((n) => n > maxPart)) throw new BadRequestException({ code: "INVALID_PART", message: `Chỉ có ${maxPart} phần` });
     const s = storage();
     return {
-      parts: await Promise.all(b.partNumbers.map(async (partNumber) => ({ partNumber, url: await s.presignPart(v.stagingKey!, v.uploadId!, partNumber, uploadTtl()) }))),
+      parts: await Promise.all(
+        b.partNumbers.map(async (partNumber) => ({
+          partNumber,
+          url: await s.presignPart(v.stagingKey!, v.uploadId!, partNumber, uploadTtl()),
+        })),
+      ),
     };
   }
 
@@ -303,29 +344,47 @@ export class AssetsController {
   @ApiOperation({ summary: "Finish the upload and validate; READY only after size, signature, SHA-256 and type checks pass" })
   async complete(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
     const b = z
-      .object({ parts: z.array(z.object({ partNumber: z.number().int().min(1), etag: z.string().min(1).max(200) }).strict()).max(10000).optional() })
+      .object({
+        parts: z
+          .array(z.object({ partNumber: z.number().int().min(1), etag: z.string().min(1).max(200) }).strict())
+          .max(10000)
+          .optional(),
+      })
       .strict()
       .parse(body ?? {});
     const v = await this.pendingOwned(id, req.user);
     if (v.status === "PENDING" && v.multipart) {
       const expected = Math.ceil(v.declaredBytes / PART_SIZE);
-      if (!b.parts || b.parts.length !== expected) throw new BadRequestException({ code: "PARTS_REQUIRED", message: `Cần đủ ${expected} phần kèm ETag` });
+      if (!b.parts || b.parts.length !== expected)
+        throw new BadRequestException({ code: "PARTS_REQUIRED", message: `Cần đủ ${expected} phần kèm ETag` });
       await storage().completeMultipart(v.stagingKey!, v.uploadId!, b.parts);
       await this.db.assetVersion.update({ where: { id }, data: { uploadId: null } });
     }
     const ready = await finalizeVersion(this.db, id, req.user);
-    return { assetId: ready.assetId, versionId: ready.id, version: ready.version, status: ready.status, sha256: ready.sha256, bytes: ready.bytes, url: "assetv:" + ready.id };
+    return {
+      assetId: ready.assetId,
+      versionId: ready.id,
+      version: ready.version,
+      status: ready.status,
+      sha256: ready.sha256,
+      bytes: ready.bytes,
+      url: "assetv:" + ready.id,
+    };
   }
 
   @Roles("TEACHER", "ADMIN")
   @Post("uploads/:id/abort")
   async abort(@Param("id") id: string, @Req() req: any) {
     const v = await this.pendingOwned(id, req.user);
-    if (v.status !== "PENDING") throw new ConflictException({ code: "ASSET_VERSION_NOT_PENDING", message: "Phiên bản không còn đang tải lên" });
+    if (v.status !== "PENDING")
+      throw new ConflictException({ code: "ASSET_VERSION_NOT_PENDING", message: "Phiên bản không còn đang tải lên" });
     const s = storage();
     if (v.multipart && v.uploadId) await s.abortMultipart(v.stagingKey!, v.uploadId);
     if (v.stagingKey) await s.delete(v.stagingKey).catch(() => undefined);
-    await this.db.assetVersion.update({ where: { id }, data: { status: "FAILED", failureReason: "aborted by uploader", stagingKey: null, uploadId: null } });
+    await this.db.assetVersion.update({
+      where: { id },
+      data: { status: "FAILED", failureReason: "aborted by uploader", stagingKey: null, uploadId: null },
+    });
     return { aborted: true };
   }
 
@@ -358,7 +417,10 @@ export class AssetsController {
       orderBy: { createdAt: "desc" },
       take: 200,
     });
-    return assets.map(({ versions, ...a }) => ({ ...a, versions: versions.map((v) => ({ id: v.id, version: v.version, fileName: v.fileName, bytes: v.bytes, url: "assetv:" + v.id })) }));
+    return assets.map(({ versions, ...a }) => ({
+      ...a,
+      versions: versions.map((v) => ({ id: v.id, version: v.version, fileName: v.fileName, bytes: v.bytes, url: "assetv:" + v.id })),
+    }));
   }
 }
 
@@ -370,7 +432,8 @@ export class LocalStorageController {
   async put(@Param("token") token: string, @Req() req: any, @Res({ passthrough: true }) res: any) {
     const grant = verifyLocalGrant(token);
     const local = localStorage();
-    if (!local || !grant || !["put", "part"].includes(grant.op)) throw new ForbiddenException({ code: "SIGNATURE_INVALID", message: "Liên kết tải lên không hợp lệ hoặc đã hết hạn" });
+    if (!local || !grant || !["put", "part"].includes(grant.op))
+      throw new ForbiddenException({ code: "SIGNATURE_INVALID", message: "Liên kết tải lên không hợp lệ hoặc đã hết hạn" });
     if (grant.op === "part") {
       await local.writePart(grant.uploadId!, grant.part!, req);
       res.setHeader("ETag", `"local-${grant.part}"`);
@@ -384,7 +447,8 @@ export class LocalStorageController {
   async get(@Param("token") token: string, @Res() res: any) {
     const grant = verifyLocalGrant(token);
     const local = localStorage();
-    if (!local || !grant || grant.op !== "get") return res.status(403).json({ statusCode: 403, code: "SIGNATURE_INVALID", message: "Liên kết đã hết hạn" });
+    if (!local || !grant || grant.op !== "get")
+      return res.status(403).json({ statusCode: 403, code: "SIGNATURE_INVALID", message: "Liên kết đã hết hạn" });
     const head = await local.head(grant.key);
     if (!head) return res.status(404).end();
     res.setHeader("Content-Type", grant.ct ?? "application/octet-stream");

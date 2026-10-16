@@ -14,6 +14,21 @@ import { PrismaClient } from "@prisma/client";
 import * as argon from "argon2";
 import { evidenceTier } from "./lib/harness.mjs";
 
+
+/** Removes uploaded asset versions (rows and stored objects) created by this run. */
+async function removeUploadedAssets(db, where) {
+  const assets = await db.asset.findMany({ where, include: { versions: true } });
+  let store = null;
+  try {
+    store = (await import("../src/storage.ts")).storage();
+  } catch {
+    console.log("     (run with tsx to also delete stored objects)");
+  }
+  for (const a of assets) for (const v of a.versions) for (const key of [v.objectKey, v.stagingKey]) if (key && store) await store.delete(key).catch(() => undefined);
+  await db.assetVersion.deleteMany({ where: { assetId: { in: assets.map((a) => a.id) } } });
+  await db.asset.deleteMany({ where: { id: { in: assets.map((a) => a.id) } } });
+}
+
 const db = new PrismaClient();
 const origin = process.env.TEST_API ?? "http://127.0.0.1:4000/api";
 const prefix = "b1-" + Date.now().toString(36);
@@ -973,7 +988,7 @@ try {
       data: await r.json(),
     }),
   );
-  check("teacher uploads a private asset", uploaded.status === 201 && uploaded.data.url === "asset:" + uploaded.data.id);
+  check("teacher uploads a private asset", uploaded.status === 201 && uploaded.data.url === "assetv:" + uploaded.data.id);
   const readAsset = (token) =>
     fetch(`${origin}/files/${uploaded.data.id}`, { headers: { authorization: "Bearer " + token } }).then((r) => r.status);
   check(
@@ -1555,6 +1570,7 @@ try {
     },
   });
   await db.assetFile.deleteMany({ where: { ownerId: { in: createdUsers } } });
+  await removeUploadedAssets(db, { ownerId: { in: createdUsers } });
   await db.user.deleteMany({ where: { id: { in: createdUsers } } });
   // Variant challenges outlive their lesson rows until the attempts (cascaded with users) are gone.
   if (lessons.length) await db.challenge.deleteMany({ where: { OR: lessons.map((l) => ({ id: { endsWith: "_v-" + l.id } })) } });

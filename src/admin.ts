@@ -21,6 +21,12 @@ import { randomBytes } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Db } from "./db";
+import { assetReferences } from "./assets";
+import { storage, storageEnv } from "./storage";
+import { preFetchProblems, runIngestion, sourcePolicySchema } from "./ingestion";
+import { coverageReport } from "./content-pack";
+import { MODEL_REGISTRY, activityDigest, activitySpecSchema, packInputSchema, packValidation, resolveModel } from "./sim-packs";
+import { planRelease, retireRelease } from "./content-release";
 import { Roles, publicUser } from "./auth";
 import { audit, auditDiff, changedFields } from "./audit";
 import { temporaryPassword } from "./classes";
@@ -115,7 +121,7 @@ export class AdminController {
     const [users, lessons, assets, versions, audit24h, denied24h] = await Promise.all([
       this.db.user.groupBy({ by: ["role", "status"], _count: { _all: true } }),
       this.db.lesson.groupBy({ by: ["scope", "status"], _count: { _all: true } }),
-      this.db.assetFile.groupBy({ by: ["status", "scope"], _count: { _all: true } }),
+      this.db.asset.groupBy({ by: ["status", "scope"], _count: { _all: true } }),
       this.db.simulationConfigVersion.groupBy({ by: ["status"], _count: { _all: true } }),
       this.db.auditLog.count({ where: { createdAt: { gte: since } } }),
       this.db.auditLog.count({ where: { createdAt: { gte: since }, outcome: "denied" } }),
@@ -390,14 +396,14 @@ export class AdminController {
       applied.push({ kind: "lesson", ...r });
     }
     for (const r of resolutions.assets) {
-      await tx.assetFile.update({
+      await tx.asset.update({
         where: { id: r.id },
         data: r.action === "reassign" ? { ownerId: r.newOwnerId } : { status: "QUARANTINED", quarantinedAt: now, quarantineReason: why },
       });
       await audit(tx, {
         actor,
         action: `asset.${r.action}`,
-        targetType: "AssetFile",
+        targetType: "Asset",
         targetId: r.id,
         reason: why,
         before: { ownerId: fromId },
@@ -815,8 +821,10 @@ export class AdminController {
         releaseReview: lesson.releaseReview,
         activeAssignments: active.find((a) => a.contentId === lesson.id)?._count._all ?? 0,
         // Shared releases need named reviews; an admin can see but never fill these gaps by role.
+        // Pack lessons passed the content-release gates (CF-T1) instead of the B1 review route.
+        packVersionId: lesson.packVersionId,
         releaseBlockers:
-          lesson.scope === "SHARED_LIBRARY" ? publishBlockers({ ...lesson, status: "published" } as any, "SHARED_LIBRARY") : [],
+          lesson.scope === "SHARED_LIBRARY" && !lesson.packVersionId ? publishBlockers({ ...lesson, status: "published" } as any, "SHARED_LIBRARY") : [],
         createdAt: lesson.createdAt,
       })),
       nextCursor: result.nextCursor,
@@ -1058,28 +1066,135 @@ export class AdminController {
       challengeId: attempt.challengeId,
       engineVersion: attempt.simulationModelVersion,
       configVersion: version ? { id: version.id, version: version.version, status: version.status } : null,
+      packVersionId: attempt.packVersionId,
       originalVerdict: attempt.verdict,
       reproducedVerdict: reproduced,
       matches: reproduced === attempt.verdict,
     };
   }
 
-  // ───────────────────────── C2-T5 assets ─────────────────────────
-  /** Lessons, steps and labs whose stored JSON references the asset. */
-  private async assetReferences(db: any, id: string) {
-    const needle = `%asset:${id}%`;
-    const [lessons, labs] = await Promise.all([
-      db.$queryRaw`SELECT DISTINCT l.id, l.title, l.status FROM "Lesson" l LEFT JOIN "LessonStep" s ON s."lessonId" = l.id
-        WHERE l.materials::text LIKE ${needle} OR s.config::text LIKE ${needle}`,
-      db.$queryRaw`SELECT id, title, status FROM "Lab" WHERE assets::text LIKE ${needle}`,
-    ]);
-    return { lessons: lessons as any[], labs: labs as any[] };
+  // ───────────────────────── C2-T3 practical activities and simulation packs (CF-T4) ─────────────────────────
+  @Get("practicals")
+  async practicals() {
+    return this.db.practicalActivityVersion.findMany({ orderBy: [{ key: "asc" }, { version: "desc" }] });
   }
+  @Post("practicals")
+  @ApiOperation({ summary: "Store an immutable reviewed practical activity version (same content → same version)" })
+  async createPractical(@Req() req: any, @Body() body: unknown) {
+    const spec = activitySpecSchema.parse(body);
+    const digest = activityDigest(spec);
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:practical:" + spec.key}))`;
+      const same = await tx.practicalActivityVersion.findUnique({ where: { key_digest: { key: spec.key, digest } } });
+      if (same) return { ...same, unchanged: true };
+      const outcomes = await tx.curriculumOutcome.findMany({ where: { code: { in: spec.outcomeCodes } } });
+      if (outcomes.length !== spec.outcomeCodes.length)
+        throw new BadRequestException({ code: "INVALID_OUTCOME", message: "Hoạt động gắn yêu cầu cần đạt không có trong bản đồ chương trình" });
+      const last = await tx.practicalActivityVersion.findFirst({ where: { key: spec.key }, orderBy: { version: "desc" }, select: { version: true } });
+      const { reviews, ...rest } = spec;
+      const created = await tx.practicalActivityVersion.create({
+        data: { key: spec.key, version: (last?.version ?? 0) + 1, digest, spec: rest as any, reviews: reviews as any, createdById: req.user.sub },
+      });
+      await audit(tx, { actor: req.user, action: "practical.version.create", targetType: "PracticalActivityVersion", targetId: created.id, after: { version: created.version } });
+      return created;
+    });
+  }
+  @Get("labs/:id/packs")
+  async labPacks(@Param("id") labId: string) {
+    const [lab, packs] = await Promise.all([
+      this.db.lab.findUnique({ where: { id: labId }, select: { id: true, title: true, simulationModelRef: true } }),
+      this.db.simulationPackVersion.findMany({ where: { labId }, orderBy: [{ key: "asc" }, { version: "desc" }] }),
+    ]);
+    if (!lab) throw notFound("phòng thực hành");
+    const pinned = await this.db.attempt.groupBy({ by: ["packVersionId"], where: { packVersionId: { in: packs.map((p) => p.id) } }, _count: { _all: true } });
+    return {
+      lab,
+      model: MODEL_REGISTRY[lab.simulationModelRef] ? { modelRef: lab.simulationModelRef, ...MODEL_REGISTRY[lab.simulationModelRef], simulate: undefined } : null,
+      packs: packs.map((p) => ({ ...p, attempts: pinned.find((x) => x.packVersionId === p.id)?._count._all ?? 0 })),
+    };
+  }
+  @Post("sim-packs")
+  @ApiOperation({ summary: "Validate and store a draft topic simulation pack version; golden cases run before any visual check" })
+  async createSimPack(@Req() req: any, @Body() body: unknown) {
+    const input = packInputSchema.parse(body);
+    const [lab, activity, visual] = await Promise.all([
+      this.db.lab.findUnique({ where: { id: input.labId } }),
+      this.db.practicalActivityVersion.findUnique({ where: { id: input.activityVersionId } }),
+      input.visualAssetVersionId ? this.db.assetVersion.findUnique({ where: { id: input.visualAssetVersionId }, include: { asset: true } }) : null,
+    ]);
+    if (!lab) throw notFound("phòng thực hành");
+    const glb = (visual?.validation as any)?.glb ?? null;
+    const visualReady = Boolean(visual && visual.status === "READY" && visual.asset.kind === "model" && visual.asset.status === "ACTIVE" && glb?.ok);
+    const { errors, golden } = packValidation(input, { labModelRef: lab.simulationModelRef, activity: activity ? { spec: activity.spec } : null, glb, visualReady });
+    if (errors.length) throw new UnprocessableEntityException({ code: "SIM_PACK_INVALID", message: errors.join("; "), details: { errors, golden } });
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-pack:" + input.key}))`;
+      const last = await tx.simulationPackVersion.findFirst({ where: { key: input.key }, orderBy: { version: "desc" }, select: { version: true } });
+      const model = resolveModel(input.modelRef);
+      const created = await tx.simulationPackVersion.create({
+        data: {
+          key: input.key,
+          version: (last?.version ?? 0) + 1,
+          labId: input.labId,
+          modelRef: input.modelRef,
+          engineVersion: model.engineVersion,
+          activityVersionId: input.activityVersionId,
+          template: input.template as any,
+          visualAssetVersionId: input.visualAssetVersionId,
+          semanticMap: input.semanticMap,
+          bindings: input.bindings as any,
+          challengeTemplates: input.challengeTemplates as any,
+          reviews: { ...input.reviews, ...(input.rangeApproval ? { rangeApproval: input.rangeApproval } : {}) } as any,
+          validation: { golden, glbNodes: glb?.nodes ?? null } as any,
+          reason: input.reason,
+          createdById: req.user.sub,
+        },
+      });
+      await audit(tx, {
+        actor: req.user,
+        action: "simulation.pack.create",
+        targetType: "SimulationPackVersion",
+        targetId: created.id,
+        reason: input.reason,
+        after: { labId: input.labId, version: created.version, modelRef: input.modelRef, goldenCases: golden.length, status: "draft" },
+      });
+      return { ...created, golden };
+    });
+  }
+  @Post("sim-packs/:id/activate")
+  @ApiOperation({ summary: "Activate a draft pack for future attempts; the previous active pack retires, never rewritten" })
+  async activateSimPack(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
+    const b = z.object({ reason }).strict().parse(body ?? {});
+    return this.db.$transaction(async (tx) => {
+      const pack = await tx.simulationPackVersion.findUnique({ where: { id } });
+      if (!pack) throw notFound("gói mô phỏng");
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-pack-lab:" + pack.labId}))`;
+      if (pack.status !== "draft") throw new ConflictException({ code: "PACK_NOT_DRAFT", message: "Chỉ kích hoạt được gói ở trạng thái nháp; gói đã dùng là bất biến" });
+      if (["pilot", "production"].includes(storageEnv()) && !(pack.reviews as any)?.rangeApproval)
+        throw new ConflictException({ code: "RANGE_APPROVAL_REQUIRED", message: "Khoảng tham số của mô hình chưa được duyệt (Q-C2-04)" });
+      const previous = await tx.simulationPackVersion.findFirst({ where: { labId: pack.labId, status: "active" } });
+      const now = new Date();
+      if (previous) await tx.simulationPackVersion.update({ where: { id: previous.id }, data: { status: "retired", retiredAt: now } });
+      const active = await tx.simulationPackVersion.update({ where: { id }, data: { status: "active", activatedAt: now } });
+      await audit(tx, {
+        actor: req.user,
+        action: "simulation.pack.activate",
+        targetType: "SimulationPackVersion",
+        targetId: id,
+        reason: b.reason,
+        before: { version: previous?.version ?? null },
+        after: { labId: pack.labId, version: pack.version, status: "active" },
+      });
+      return active;
+    });
+  }
+
+  // ───────────────────────── C2-T5 assets (CF-T2 versions in object storage) ─────────────────────────
   @Get("assets")
   async assets(@Query() query: unknown) {
     const q = z
       .object({
-        status: z.enum(["READY", "QUARANTINED"]).optional(),
+        status: z.enum(["ACTIVE", "QUARANTINED", "ARCHIVED"]).optional(),
         scope: z.enum(["TEACHER_PRIVATE", "SHARED_LIBRARY"]).optional(),
         ownerId: z.string().max(100).optional(),
         cursor: z.string().max(200).optional(),
@@ -1087,36 +1202,45 @@ export class AdminController {
       })
       .strict()
       .parse(query ?? {});
-    const rows = await this.db.assetFile.findMany({
+    const rows = await this.db.asset.findMany({
       where: {
-        AND: [
-          q.status ? { status: q.status } : {},
-          q.scope ? { scope: q.scope } : {},
-          q.ownerId ? { ownerId: q.ownerId } : {},
-          cursorWhere(q.cursor),
-        ],
+        AND: [q.status ? { status: q.status } : {}, q.scope ? { scope: q.scope } : {}, q.ownerId ? { ownerId: q.ownerId } : {}, cursorWhere(q.cursor)],
       },
+      include: { versions: { orderBy: { version: "desc" } } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: q.limit + 1,
     });
     const result = page(rows, q.limit);
     const owners = await this.db.user.findMany({
-      where: { id: { in: [...new Set(result.items.map((a) => a.ownerId))] } },
+      where: { id: { in: [...new Set(result.items.map((a) => a.ownerId).filter((id): id is string => Boolean(id)))] } },
       select: { id: true, fullName: true, role: true, status: true },
     });
     return {
       items: await Promise.all(
-        result.items.map(async (asset) => ({
+        result.items.map(async ({ versions, ...asset }) => ({
           ...asset,
           owner: owners.find((o) => o.id === asset.ownerId) ?? null,
-          references: await this.assetReferences(this.db, asset.id),
+          versions: versions.map((v) => ({
+            id: v.id,
+            version: v.version,
+            status: v.status,
+            storage: v.storage,
+            fileName: v.fileName,
+            mime: v.mime,
+            bytes: v.bytes ?? v.declaredBytes,
+            sha256: v.sha256,
+            failureReason: v.failureReason,
+            createdAt: v.createdAt,
+            readyAt: v.readyAt,
+          })),
+          references: await assetReferences(this.db, { versionIds: versions.map((v) => v.id), legacyFileId: asset.legacyFileId }),
         })),
       ),
       nextCursor: result.nextCursor,
     };
   }
   @Post("assets/:id/operations")
-  @ApiOperation({ summary: "Quarantine, release, reassign or share an asset with a reason" })
+  @ApiOperation({ summary: "Quarantine, release, reassign or share an asset with a reason; versions stay immutable" })
   async assetOperation(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
     const b = z
       .discriminatedUnion("action", [
@@ -1128,7 +1252,7 @@ export class AdminController {
       ])
       .parse(body);
     return this.db.$transaction(async (tx) => {
-      const asset = await tx.assetFile.findUnique({ where: { id } });
+      const asset = await tx.asset.findUnique({ where: { id }, include: { versions: { where: { status: "READY" } } } });
       if (!asset) throw notFound("tệp");
       let data: Record<string, unknown>;
       if (b.action === "quarantine") {
@@ -1136,29 +1260,23 @@ export class AdminController {
         data = { status: "QUARANTINED", quarantinedAt: new Date(), quarantineReason: b.reason };
       } else if (b.action === "release") {
         if (asset.status !== "QUARANTINED") throw new ConflictException({ code: "NOT_QUARANTINED", message: "Tệp không bị cách ly" });
-        data = { status: "READY", quarantinedAt: null, quarantineReason: null };
+        data = { status: "ACTIVE", quarantinedAt: null, quarantineReason: null };
       } else if (b.action === "reassign") {
         const owner = await tx.user.findUnique({ where: { id: b.newOwnerId } });
         if (!owner || owner.status !== "active" || !["TEACHER", "ADMIN"].includes(owner.role) || owner.id === asset.ownerId)
-          throw new BadRequestException({
-            code: "INVALID_NEW_OWNER",
-            message: "Chủ sở hữu mới phải là giáo viên hoặc quản trị viên đang hoạt động",
-          });
+          throw new BadRequestException({ code: "INVALID_NEW_OWNER", message: "Chủ sở hữu mới phải là giáo viên hoặc quản trị viên đang hoạt động" });
         data = { ownerId: owner.id };
       } else {
-        if (asset.status !== "READY") throw new ConflictException({ code: "ASSET_QUARANTINED", message: "Tệp đang bị cách ly" });
-        if (!asset.sha256)
-          throw new ConflictException({
-            code: "ASSET_CHECKSUM_MISSING",
-            message: "Tệp cũ chưa có checksum; hãy tải lên lại trước khi đưa vào thư viện chung",
-          });
-        data = { scope: "SHARED_LIBRARY", license: b.license, source: b.source };
+        if (asset.status !== "ACTIVE") throw new ConflictException({ code: "ASSET_QUARANTINED", message: "Tệp đang bị cách ly hoặc lưu trữ" });
+        if (!asset.versions.some((v) => v.sha256))
+          throw new ConflictException({ code: "ASSET_NOT_READY", message: "Tệp chưa có phiên bản sẵn sàng đã kiểm checksum" });
+        data = { scope: "SHARED_LIBRARY", license: b.license, source: b.source, attribution: b.source };
       }
-      const updated = await tx.assetFile.update({ where: { id }, data });
+      const updated = await tx.asset.update({ where: { id }, data });
       await audit(tx, {
         actor: req.user,
         action: `asset.${b.action}`,
-        targetType: "AssetFile",
+        targetType: "Asset",
         targetId: id,
         reason: b.reason,
         before: { status: asset.status, scope: asset.scope, ownerId: asset.ownerId },
@@ -1168,36 +1286,187 @@ export class AdminController {
     });
   }
   @Delete("assets/:id")
-  @ApiOperation({ summary: "Delete an asset only when no lesson, step or lab references it" })
+  @ApiOperation({ summary: "Delete an asset and its stored versions only when no lesson, step or lab references any version" })
   async deleteAsset(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
     const b = z
       .object({ reason, confirm: z.literal(true) })
       .strict()
       .parse(body ?? {});
     const deleted = await this.db.$transaction(async (tx) => {
-      const asset = await tx.assetFile.findUnique({ where: { id } });
+      const asset = await tx.asset.findUnique({ where: { id }, include: { versions: true } });
       if (!asset) throw notFound("tệp");
-      const references = await this.assetReferences(tx, id);
+      const references = await assetReferences(tx, { versionIds: asset.versions.map((v) => v.id), legacyFileId: asset.legacyFileId });
       if (references.lessons.length || references.labs.length)
         throw new ConflictException({
           code: "ASSET_REFERENCED",
           message: "Tệp đang được bài học hoặc phòng thực hành tham chiếu; không thể xóa",
           details: references,
         });
-      await tx.assetFile.delete({ where: { id } });
+      await tx.assetVersion.deleteMany({ where: { assetId: id } });
+      await tx.asset.delete({ where: { id } });
       await audit(tx, {
         actor: req.user,
         action: "asset.delete",
-        targetType: "AssetFile",
+        targetType: "Asset",
         targetId: id,
         reason: b.reason,
-        before: { status: asset.status, scope: asset.scope },
+        before: { status: asset.status, scope: asset.scope, version: asset.versions.length },
       });
       return asset;
     });
-    // The row is gone first; a leftover file is unreachable, never a broken reference.
-    await unlink(resolve(uploadRoot, deleted.id)).catch(() => undefined);
+    // Rows go first; a leftover object is unreachable, never a broken reference.
+    const s = storage();
+    for (const v of deleted.versions) for (const key of [v.objectKey, v.stagingKey]) if (key) await s.delete(key).catch(() => undefined);
     return { deleted: true, id };
+  }
+
+  // ───────────────────────── C2-T5 sources and ingestion (CF-T3) ─────────────────────────
+  @Get("sources")
+  @ApiOperation({ summary: "Source policy registry with current policy, enabled state, preflight problems and recent runs" })
+  async sources() {
+    const rows = await this.db.sourcePolicy.findMany({ include: { versions: { orderBy: { version: "desc" } } }, orderBy: { key: "asc" } });
+    const runs = await this.db.ingestionRun.findMany({ orderBy: { startedAt: "desc" }, take: 50 });
+    return rows.map(({ versions, ...source }) => {
+      const current = versions.find((v) => v.version === source.currentVersion) ?? versions[0];
+      const policy = sourcePolicySchema.safeParse(current?.policy);
+      return {
+        ...source,
+        policy: current?.policy ?? null,
+        versions: versions.map((v) => ({ id: v.id, version: v.version, reason: v.reason, createdAt: v.createdAt })),
+        problems: policy.success ? preFetchProblems(policy.data, source.enabled) : ["chính sách không hợp lệ"],
+        runs: runs.filter((r) => r.sourceKey === source.key).slice(0, 5),
+      };
+    });
+  }
+  @Post("sources")
+  async createSource(@Req() req: any, @Body() body: unknown) {
+    const b = z
+      .object({ key: z.string().regex(/^[a-z0-9][a-z0-9-]{1,59}$/), title: text, policy: sourcePolicySchema, reason })
+      .strict()
+      .parse(body);
+    return this.db.$transaction(async (tx) => {
+      if (await tx.sourcePolicy.findUnique({ where: { key: b.key } })) throw new ConflictException({ code: "SOURCE_EXISTS", message: `Nguồn "${b.key}" đã tồn tại` });
+      // New sources start disabled: enabling is a separate, audited decision.
+      await tx.sourcePolicy.create({ data: { key: b.key, title: b.title, enabled: false, currentVersion: 1 } });
+      await tx.sourcePolicyVersion.create({ data: { key: b.key, version: 1, policy: b.policy, reason: b.reason, createdById: req.user.sub } });
+      await audit(tx, { actor: req.user, action: "source.create", targetType: "SourcePolicy", targetId: b.key, reason: b.reason, after: { version: 1, status: "disabled" } });
+      return { key: b.key, version: 1, enabled: false };
+    });
+  }
+  @Put("sources/:key")
+  @ApiOperation({ summary: "New policy version; affects only later ingestion runs" })
+  async updateSource(@Param("key") key: string, @Req() req: any, @Body() body: unknown) {
+    const b = z.object({ policy: sourcePolicySchema, reason }).strict().parse(body);
+    return this.db.$transaction(async (tx) => {
+      const source = await tx.sourcePolicy.findUnique({ where: { key } });
+      if (!source) throw notFound("nguồn");
+      const version = source.currentVersion + 1;
+      await tx.sourcePolicyVersion.create({ data: { key, version, policy: b.policy, reason: b.reason, createdById: req.user.sub } });
+      await tx.sourcePolicy.update({ where: { key }, data: { currentVersion: version } });
+      await audit(tx, { actor: req.user, action: "source.update", targetType: "SourcePolicy", targetId: key, reason: b.reason, before: { version: source.currentVersion }, after: { version } });
+      return { key, version };
+    });
+  }
+  @Post("sources/:key/enable")
+  enableSource(@Param("key") key: string, @Req() req: any, @Body() body: unknown) {
+    return this.toggleSource(key, "enable", req, body);
+  }
+  @Post("sources/:key/disable")
+  disableSource(@Param("key") key: string, @Req() req: any, @Body() body: unknown) {
+    return this.toggleSource(key, "disable", req, body);
+  }
+  private async toggleSource(key: string, state: "enable" | "disable", req: any, body: unknown) {
+    const b = z.object({ reason }).strict().parse(body ?? {});
+    return this.db.$transaction(async (tx) => {
+      const source = await tx.sourcePolicy.findUnique({ where: { key }, include: { versions: { orderBy: { version: "desc" }, take: 1 } } });
+      if (!source) throw notFound("nguồn");
+      if (state === "enable") {
+        const policy = sourcePolicySchema.parse(source.versions[0].policy);
+        const problems = preFetchProblems(policy, true);
+        if (problems.length) throw new ConflictException({ code: "SOURCE_NOT_READY", message: "Chưa thể bật nguồn: " + problems.join("; "), details: { problems } });
+      }
+      const updated = await tx.sourcePolicy.update({ where: { key }, data: { enabled: state === "enable" } });
+      await audit(tx, { actor: req.user, action: `source.${state}`, targetType: "SourcePolicy", targetId: key, reason: b.reason, before: { active: source.enabled }, after: { active: updated.enabled } });
+      return updated;
+    });
+  }
+  @Post("sources/:key/runs")
+  @ApiOperation({ summary: "Run a bounded ingestion pass; candidates are staged, never published" })
+  async runSource(@Param("key") key: string, @Req() req: any, @Body() body: unknown) {
+    const b = z
+      .object({
+        reason,
+        items: z
+          .array(z.object({ externalId: z.string().trim().min(1).max(200), url: z.string().url().max(500).optional(), locator: z.string().max(300).optional() }).strict())
+          .min(1)
+          .max(20),
+      })
+      .strict()
+      .parse(body);
+    const source = await this.db.sourcePolicy.findUnique({ where: { key }, include: { versions: { orderBy: { version: "desc" }, take: 1 } } });
+    if (!source) throw notFound("nguồn");
+    const run = await runIngestion(this.db, source, source.versions[0], { items: b.items }, req.user);
+    await this.db.$transaction((tx) =>
+      audit(tx, { actor: req.user, action: "source.ingest", targetType: "IngestionRun", targetId: run.id, reason: b.reason, after: { status: run.status, references: run.items.length } }),
+    );
+    return run;
+  }
+  @Get("ingestion/runs/:id")
+  async ingestionRun(@Param("id") id: string) {
+    const run = await this.db.ingestionRun.findUnique({ where: { id }, include: { items: { orderBy: { createdAt: "asc" } } } });
+    if (!run) throw notFound("lượt nhập liệu");
+    return run;
+  }
+
+  // ───────────────────────── content packs, coverage and releases (CF-T1/T3/T5) ─────────────────────────
+  @Get("content/packs")
+  async packs() {
+    const packs = await this.db.contentPack.findMany({
+      include: { versions: { orderBy: { version: "desc" }, select: { id: true, version: true, status: true, digest: true, lessonId: true, releaseId: true, releasedAt: true, retiredAt: true, synthetic: true, outcomeCodes: true } } },
+      orderBy: { key: "asc" },
+    });
+    return packs;
+  }
+  @Get("content/coverage")
+  @ApiOperation({ summary: "Five separate coverage dimensions per grade × domain; synthetic fixtures reported apart" })
+  async coverage() {
+    const [outcomes, versions, labs] = await Promise.all([
+      this.db.curriculumOutcome.findMany(),
+      this.db.contentPackVersion.findMany({ where: { status: "released" } }),
+      this.db.lab.findMany({ where: { status: "published" }, select: { id: true } }),
+    ]);
+    return {
+      note: "Mẫu số của bản đồ chính thức để trống cho tới khi danh mục yêu cầu cần đạt lớp 8–9 được duyệt (CF-T5).",
+      rows: coverageReport(
+        outcomes,
+        versions.map((v) => ({ manifest: v.manifest as any, synthetic: v.synthetic })),
+        new Set(labs.map((l) => l.id)),
+      ),
+    };
+  }
+  @Get("releases")
+  async releases() {
+    return this.db.contentRelease.findMany({ include: { items: true }, orderBy: { createdAt: "desc" }, take: 50 });
+  }
+  @Post("releases/plan")
+  @ApiOperation({ summary: "Dry run of a release manifest: exact changes and every blocking gate; writes nothing" })
+  async planManifest(@Req() req: any, @Body() body: unknown) {
+    const b = z.object({ manifest: z.unknown() }).strict().parse(body);
+    const plan = await planRelease(this.db, b.manifest, storageEnv());
+    await this.db.$transaction((tx) => audit(tx, { actor: req.user, action: "content.release.plan", targetType: "ContentRelease", reason: plan.name, after: { status: plan.blocked ? "blocked" : "ok" } }));
+    return plan;
+  }
+  @Post("releases/:id/retire")
+  @ApiOperation({ summary: "Retire a release: its lessons archive (evidence kept) and superseded versions return" })
+  async retire(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
+    const b = z.object({ reason, confirm: z.literal(true) }).strict().parse(body ?? {});
+    try {
+      return await retireRelease(this.db, id, req.user, b.reason);
+    } catch (error: any) {
+      if (error?.message === "RELEASE_NOT_FOUND") throw notFound("đợt phát hành");
+      if (error?.message === "RELEASE_NOT_APPLIED") throw new ConflictException({ code: "RELEASE_NOT_APPLIED", message: "Đợt phát hành đã được gỡ" });
+      throw error;
+    }
   }
 
   // ───────────────────────── C2-T6 audit explorer ─────────────────────────

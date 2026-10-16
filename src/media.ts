@@ -20,7 +20,13 @@ const envMb = (name: string, fallback: number) => {
   return Number.isFinite(value) && value > 0 ? value * MB : fallback * MB;
 };
 export const mediaTypes = (): MediaType[] => [
-  { kind: "pdf", mime: "application/pdf", extensions: [".pdf"], maxBytes: envMb("ASSET_MAX_PDF_MB", 20), signature: (b) => b.subarray(0, 5).toString() === "%PDF-" },
+  {
+    kind: "pdf",
+    mime: "application/pdf",
+    extensions: [".pdf"],
+    maxBytes: envMb("ASSET_MAX_PDF_MB", 20),
+    signature: (b) => b.subarray(0, 5).toString() === "%PDF-",
+  },
   {
     kind: "image",
     mime: "image/png",
@@ -35,7 +41,13 @@ export const mediaTypes = (): MediaType[] => [
     maxBytes: envMb("ASSET_MAX_IMAGE_MB", 10),
     signature: (b) => b[0] === 255 && b[1] === 216 && b[2] === 255,
   },
-  { kind: "video", mime: "video/mp4", extensions: [".mp4"], maxBytes: envMb("ASSET_MAX_VIDEO_MB", 300), signature: (b) => b.subarray(4, 8).toString() === "ftyp" },
+  {
+    kind: "video",
+    mime: "video/mp4",
+    extensions: [".mp4"],
+    maxBytes: envMb("ASSET_MAX_VIDEO_MB", 300),
+    signature: (b) => b.subarray(4, 8).toString() === "ftyp",
+  },
   {
     kind: "caption",
     mime: "text/vtt",
@@ -43,7 +55,13 @@ export const mediaTypes = (): MediaType[] => [
     maxBytes: envMb("ASSET_MAX_CAPTION_MB", 1),
     signature: (b) => b.toString("utf8").replace(/^﻿/, "").startsWith("WEBVTT"),
   },
-  { kind: "model", mime: "model/gltf-binary", extensions: [".glb"], maxBytes: envMb("ASSET_MAX_MODEL_MB", 50), signature: (b) => b.subarray(0, 4).toString() === "glTF" },
+  {
+    kind: "model",
+    mime: "model/gltf-binary",
+    extensions: [".glb"],
+    maxBytes: envMb("ASSET_MAX_MODEL_MB", 50),
+    signature: (b) => b.subarray(0, 4).toString() === "glTF",
+  },
 ];
 /** Largest multipart part we hand out; R2 needs ≥5 MiB for every part but the last. */
 export const PART_SIZE = 16 * MB;
@@ -67,17 +85,21 @@ export function uploadsEnabled(env = process.env) {
  */
 export function scanStatus(env = process.env) {
   if (env.MALWARE_SCANNER_URL) return "pending-external";
-  return ["pilot", "production"].includes((env.APP_ENV ?? "development").toLowerCase()) ? "required-not-configured" : "not-configured-development";
+  return ["pilot", "production"].includes((env.APP_ENV ?? "development").toLowerCase())
+    ? "required-not-configured"
+    : "not-configured-development";
 }
 
 /** Reads the GLB JSON chunk: node/mesh/material inventory and any external or script reference. */
 export function inspectGlb(head: Buffer) {
-  if (head.length < 20 || head.subarray(0, 4).toString() !== "glTF") return { ok: false, problems: ["không phải tệp GLB"], nodes: [] as string[] };
+  if (head.length < 20 || head.subarray(0, 4).toString() !== "glTF")
+    return { ok: false, problems: ["không phải tệp GLB"], nodes: [] as string[] };
   const version = head.readUInt32LE(4);
   const jsonLength = head.readUInt32LE(12);
   const chunkType = head.subarray(16, 20).toString();
   if (version !== 2 || chunkType !== "JSON") return { ok: false, problems: ["GLB phải là glTF 2.0 với chunk JSON đầu tiên"], nodes: [] };
-  if (head.length < 20 + jsonLength) return { ok: false, problems: ["chunk JSON vượt quá phần đã đọc"], nodes: [], needBytes: 20 + jsonLength };
+  if (head.length < 20 + jsonLength)
+    return { ok: false, problems: ["chunk JSON vượt quá phần đã đọc"], nodes: [], needBytes: 20 + jsonLength };
   let json: any;
   try {
     json = JSON.parse(head.subarray(20, 20 + jsonLength).toString("utf8"));

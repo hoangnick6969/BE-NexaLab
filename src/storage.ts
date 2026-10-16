@@ -69,7 +69,12 @@ export const objectKeys = (assetId: string, versionId: string, fileName: string,
 class R2Storage implements ObjectStorage {
   readonly kind = "r2" as const;
   private client: S3Client;
-  constructor(readonly bucket: string, endpoint: string, accessKeyId: string, secretAccessKey: string) {
+  constructor(
+    readonly bucket: string,
+    endpoint: string,
+    accessKeyId: string,
+    secretAccessKey: string,
+  ) {
     this.client = new S3Client({
       region: "auto",
       endpoint,
@@ -80,7 +85,9 @@ class R2Storage implements ObjectStorage {
     });
   }
   presignPut(key: string, contentType: string, ttlSeconds: number) {
-    return getSignedUrl(this.client, new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }), { expiresIn: ttlSeconds });
+    return getSignedUrl(this.client, new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }), {
+      expiresIn: ttlSeconds,
+    });
   }
   async createMultipart(key: string, contentType: string) {
     const out = await this.client.send(new CreateMultipartUploadCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }));
@@ -126,7 +133,13 @@ class R2Storage implements ObjectStorage {
     await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: body, ContentType: contentType }));
   }
   async copy(from: string, to: string) {
-    await this.client.send(new CopyObjectCommand({ Bucket: this.bucket, Key: to, CopySource: `${this.bucket}/${encodeURIComponent(from).replace(/%2F/g, "/")}` }));
+    await this.client.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        Key: to,
+        CopySource: `${this.bucket}/${encodeURIComponent(from).replace(/%2F/g, "/")}`,
+      }),
+    );
   }
   async delete(key: string) {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
@@ -147,7 +160,10 @@ class R2Storage implements ObjectStorage {
 
 // ───────────────────────── local (development/test) ─────────────────────────
 type LocalGrant = { op: "put" | "get" | "part"; key: string; exp: number; ct?: string; uploadId?: string; part?: number; name?: string };
-const localSecret = () => createHmac("sha256", process.env.JWT_SECRET ?? "dev").update("nexalab:local-storage").digest();
+const localSecret = () =>
+  createHmac("sha256", process.env.JWT_SECRET ?? "dev")
+    .update("nexalab:local-storage")
+    .digest();
 export function signLocalGrant(grant: LocalGrant) {
   const body = Buffer.from(JSON.stringify(grant)).toString("base64url");
   return body + "." + createHmac("sha256", localSecret()).update(body).digest("base64url");
@@ -180,7 +196,12 @@ class LocalStorage implements ObjectStorage {
     return this.url({ op: "put", key, ct: contentType, exp: Date.now() + ttlSeconds * 1000 });
   }
   async createMultipart(key: string) {
-    const uploadId = "local-" + createHmac("sha256", localSecret()).update(key + Date.now()).digest("hex").slice(0, 24);
+    const uploadId =
+      "local-" +
+      createHmac("sha256", localSecret())
+        .update(key + Date.now())
+        .digest("hex")
+        .slice(0, 24);
     await mkdir(this.path(`.multipart/${uploadId}`), { recursive: true });
     return uploadId;
   }
@@ -261,7 +282,12 @@ export function storage(): ObjectStorage {
     const required = ["R2_BUCKET", "R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"] as const;
     const missing = required.filter((name) => !process.env[name] || process.env[name]!.includes("<"));
     if (missing.length) throw new Error("R2 storage is not configured: missing " + missing.join(", "));
-    cached = new R2Storage(process.env.R2_BUCKET!, process.env.R2_ENDPOINT!, process.env.R2_ACCESS_KEY_ID!, process.env.R2_SECRET_ACCESS_KEY!);
+    cached = new R2Storage(
+      process.env.R2_BUCKET!,
+      process.env.R2_ENDPOINT!,
+      process.env.R2_ACCESS_KEY_ID!,
+      process.env.R2_SECRET_ACCESS_KEY!,
+    );
   } else {
     const root = resolve(process.env.UPLOAD_DIR ?? "uploads", "objects");
     const base = (process.env.API_PUBLIC_URL ?? `http://127.0.0.1:${process.env.PORT ?? 4000}/api`).replace(/\/$/, "");
