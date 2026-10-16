@@ -278,3 +278,7 @@ export const isStructureChange = (before: Parameters<typeof structureFingerprint
 /** Asset IDs referenced by `asset:<uuid>` materials. */
 export const assetIds = (materials: Array<{ url: string }>) =>
   materials.map((item) => item.url.match(/^asset:([0-9a-f-]{36})$/)?.[1]).filter((value): value is string => Boolean(value));
+
+/** Immutable asset version IDs pinned by `assetv:<versionId>` materials (CF-T2). */
+export const materialVersionIds = (materials: Array<{ url: string }>) =>
+  materials.map((item) => item.url.match(/^assetv:([a-z0-9]{20,40})$/)?.[1]).filter((value): value is string => Boolean(value));

@@ -11,6 +11,20 @@ const origin = process.env.TEST_API ?? "http://127.0.0.1:4000/api";
 const prefix = "it-" + Date.now();
 const created = [];
 const uploaded = [];
+/** Removes uploaded asset versions (rows and stored objects) created by this run. */
+async function removeUploadedAssets(db, where) {
+  const assets = await db.asset.findMany({ where, include: { versions: true } });
+  let store = null;
+  try {
+    store = (await import("../src/storage.ts")).storage();
+  } catch {
+    console.log("     (run with tsx to also delete stored objects)");
+  }
+  for (const a of assets) for (const v of a.versions) for (const key of [v.objectKey, v.stagingKey]) if (key && store) await store.delete(key).catch(() => undefined);
+  await db.assetVersion.deleteMany({ where: { assetId: { in: assets.map((a) => a.id) } } });
+  await db.asset.deleteMany({ where: { id: { in: assets.map((a) => a.id) } } });
+}
+
 let classroom;
 let lesson;
 let materialLesson;
@@ -857,7 +871,7 @@ try {
   if (file.id) uploaded.push(file.id);
   check(
     "teacher uploads material",
-    up.status === 201 && file.url.startsWith("asset:"),
+    up.status === 201 && file.url === "assetv:" + file.id,
   );
   check(
     "unpublished file denied to student",
@@ -1105,12 +1119,7 @@ try {
   if (materialLesson?.id) await db.lesson.deleteMany({ where: { id: materialLesson.id } });
   await db.auditLog.deleteMany({ where: { actorId: { in: created } } });
   await db.idempotencyRecord.deleteMany({ where: { actorId: { in: created } } });
-  for (const id of uploaded) {
-    await db.assetFile.deleteMany({ where: { id } });
-    await unlink(resolve(process.env.UPLOAD_DIR ?? "uploads", id)).catch((error) => {
-      if (error.code !== "ENOENT") throw error;
-    });
-  }
+  await removeUploadedAssets(db, { versions: { some: { id: { in: uploaded } } } });
   await db.user.deleteMany({ where: { id: { in: created } } });
   await db.$disconnect();
 }

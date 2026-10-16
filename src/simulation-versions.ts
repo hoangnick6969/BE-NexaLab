@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, eyeParts, simulate } from "../packages/sim";
+import { VERSION as ENGINE_VERSION, eyeParts } from "../packages/sim";
+import { modelRefForLab, resolveModel } from "./sim-packs";
 import { CHALLENGE_PARAMETERS, type ChallengeParams, challengeParamErrors, evaluateChallenge } from "./content";
 
 /**
@@ -36,8 +37,11 @@ export const versionInputSchema = z
 export type VersionInput = z.infer<typeof versionInputSchema>;
 
 /** Server-side evaluation shared by attempts, golden cases and reproduction. */
-export function evaluate(labId: string, labState: unknown, params: ChallengeParams | null | undefined) {
-  let result: any = simulate(labId, labState);
+export function evaluate(labId: string, labState: unknown, params: ChallengeParams | null | undefined, modelRef?: string | null) {
+  // CF-T4: allowlisted model resolution; a lab without a registered model fails closed.
+  const ref = modelRef ?? modelRefForLab(labId);
+  if (!ref) throw new Error("Lab không tồn tại");
+  let result: any = resolveModel(ref).simulate(labState);
   const variant = evaluateChallenge(labId, labState, result, params ?? null);
   if (variant.check) result = { ...result, verdict: variant.verdict, challengeCheck: variant.check };
   return { result, verdict: normalizeVerdict(result.verdict) };

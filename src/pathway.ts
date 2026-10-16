@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createHash } from "node:crypto";
 
 const url = z.string().refine((value) =>
-  /^https?:\/\//.test(value) || /^asset:[0-9a-f-]{36}$/.test(value),
+  /^https?:\/\//.test(value) || /^asset:[0-9a-f-]{36}$/.test(value) || /^assetv:[a-z0-9]{20,40}$/.test(value),
 );
 const reading = z.object({ html: z.string().trim().min(1) });
 const video = z.object({

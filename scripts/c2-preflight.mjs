@@ -52,6 +52,21 @@ try {
       attemptsPinnedToVersion: pinned[0].n,
     });
   }
+  // Content Foundation (CF-T1..T4) state, when its migrations are applied.
+  const cf = ["20261016090000_cf_asset_versions", "20261016100000_cf_sources_packs_releases", "20261016110000_cf_simulation_packs"];
+  report.contentFoundation = Object.fromEntries(cf.map((m) => [m, applied.includes(m)]));
+  if (applied.includes(cf[0])) {
+    const [legacy, pending] = await Promise.all([
+      db.$queryRaw`SELECT count(*)::int AS n FROM "AssetFile" f WHERE NOT EXISTS (SELECT 1 FROM "Asset" a WHERE a."legacyFileId" = f.id)`,
+      db.$queryRaw`SELECT count(*)::int AS n FROM "AssetVersion" WHERE status IN ('PENDING','VALIDATING')`,
+    ]);
+    report.legacyFilesToMigrate = legacy[0].n;
+    report.pendingUploads = pending[0].n;
+  }
+  if (applied.includes(cf[2])) {
+    const active = await db.$queryRaw`SELECT "labId", count(*)::int AS n FROM "SimulationPackVersion" WHERE status = 'active' GROUP BY "labId" HAVING count(*) > 1`;
+    if (active.length) problems.push(`more than one active simulation pack for: ${active.map((a) => a.labId).join(", ")}`);
+  }
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
   problems.push("preflight query failed: " + (error?.code ?? error?.message ?? "unknown"));

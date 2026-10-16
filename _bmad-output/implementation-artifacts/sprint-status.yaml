@@ -4,19 +4,19 @@
 project: NexaLab
 project_key: nexalab-release-1
 tracking_system: file-system
-story_location: _bmad-output/specs/spec-c2-admin-operations
-scope: Release 1 / Epic C2 Admin Operations (C1 merged 2026-10-15; C2 on the current foundation, Content Foundation surfaces deferred)
-last_updated: '2026-10-15'
+story_location: _bmad-output/specs/spec-content-foundation
+scope: Release 1 / Content Foundation CF-T1..T4 platform (completes the C2-T3/C2-T5 surfaces; CF-T5 corpus remains a staffed workstream)
+last_updated: '2026-10-16'
 tracking_timezone: Asia/Saigon
 repositories:
-  backend: 'BE-NexaLab (origin/main, HEAD 8de28c0)'
-  frontend: 'FE-NexaLab (origin/main; C2 merged)'
+  backend: 'BE-NexaLab (branch feat/content-foundation, merged with origin/main incl. C2 PR #15 and pH demo 3f521d7)'
+  frontend: 'FE-NexaLab (branch feat/content-foundation; C2 merged on origin/main)'
 sources:
   plan: ../planning-artifacts/increment-b-c-plan.md
-  acceptance_criteria: ../specs/spec-c2-admin-operations/tickets.md
-  spec: ../specs/spec-c2-admin-operations/SPEC.md
+  acceptance_criteria: ../specs/spec-content-foundation/tickets.md
+  spec: ../specs/spec-content-foundation/SPEC.md
   platform_spec: ../specs/spec-b0-platform/SPEC.md
-  implementation_record: c2-admin-operations-implementation.md
+  implementation_record: content-foundation-implementation.md
 
 # Status values: backlog | ready-for-dev | in-progress | review | done.
 # review = implemented and verified on the isolated local runtime, awaiting commit/PR, shared Supabase migration and PO decisions.
@@ -55,8 +55,12 @@ development_status:
   b0p-t2-allowlisted-auditlog: done
   b0p-t3-real-dependency-harness: done
   b0p-t4-hint-provider-transaction-boundary: done
-  epic-content-foundation: backlog
-  cf-t1-to-t5: backlog
+  epic-content-foundation: in-progress
+  cf-t1-versioned-content-pack: review
+  cf-t2-private-r2-asset-versions: review
+  cf-t3-source-registry-ingestion-importer: review
+  cf-t4-practical-simulation-pack-registry: review
+  cf-t5-grade-8-9-open-baseline-corpus: backlog
   epic-b1-teacher-operations: done
   b1-t1-class-lifecycle: done
   b1-t2-managed-enrollment: done
@@ -86,20 +90,26 @@ development_status:
   c2-t6-admin-console-audit-journey: done
 
 execution:
-  current_story: null
-  next_story: 'Content Foundation CF-T1..T5 (separate epic; unlocks deferred R2/AssetVersion/SourceRegistry/ingestion/topic-pack surfaces)'
+  current_story: cf-t4-practical-simulation-pack-registry
+  next_story: 'Owner PR for Content Foundation (BE and FE); shared Supabase CF migration with approval; CF-T5 needs named content capacity (Q-DATA-02/03/04)'
   selection_reason: >
+    2026-10-16 (Content Foundation): CF-T1..T4 platform implemented on feat/content-foundation and verified against the real
+    Cloudflare R2 development bucket (r2:check 9/9, test:cf 60/60, Playwright browser→R2 CORS upload 1/1, Vitest 144/144).
+    This completes the R2/AssetVersion/SourceRegistry/ingestion/topic-pack surfaces C2 had deferred. CF-T5 corpus stays backlog: it is a staffed editorial delivery.
+    Branch merged with origin/main (C2 PR #15, pH demo); the pH demo extended chemistry@1.0.0 in place, so the model registry should declare its new outputs.
     2026-10-15 (C2): all six C2 tickets implemented on the approved current-foundation scope and merged to origin/main (BE 8de28c0; FE C2 merged).
     BE lint/build and Vitest 123/123 pass; FE lint/build pass; shared-development test:c2 80 passed + 1 justified SKIP and c2:preflight RESULT ok after cleanup.
     Latest Supabase dev p95 read 1261 ms / mutation 2902 ms misses QR-09 (500/1000 ms); production and pilot latency are not claimed.
-    Owner chose "C2 on the current foundation": R2, AssetVersion, SourceRegistry/ingestion and full topic packs remain deferred to Content Foundation. The requested C2 scope is complete; deferred capability work is not silently included.
+    Owner chose "C2 on the current foundation": R2, AssetVersion, SourceRegistry/ingestion and full topic packs were deferred to Content Foundation (now delivered there, in review).
     2026-10-15: C1 link lifecycle, sanitized parent read model, responsive parent UI, unlink flow, and negative access handling completed; backend/frontend build and lint passed, and backend unit tests passed 107/107.
     Fresh migration/seed and B2 integration evidence remain recorded below; C2 development migration and runtime acceptance are verified. C1 and C2 are complete for their recorded scopes; production release gates remain open.
   one_story_per_task: true
   next_epic_unlocked: true
   implementation_readiness: complete
   blockers:
-    - 'Deferred C2 extensions (R2/AssetVersion/SourceRegistry/ingestion and full topic-pack versions) await Content Foundation CF-T1..T5 (deferred-work.md); these are outside the accepted current-foundation C2 scope'
+    - 'Content Foundation migrations (cf_asset_versions, cf_sources_packs_releases, cf_simulation_packs) are not yet applied to shared Supabase; approval required'
+    - 'Production media needs approved budgets (ASSET_BUDGETS_APPROVED) and a malware scanner; pilot/production R2 buckets are not created'
+    - 'CF-T5 corpus needs the official Grade 8-9 outcome inventory and named editorial/subject/rights capacity (Q-DATA-02/03/04)'
     - 'C1 pilot activation requires approved Vietnamese consent purpose/version/copy/content hash; implementation may use clearly marked development copy'
     - 'Shared development database migration for B2 is unverified because configured credentials were rejected'
     - 'Production requires JOIN_CODE_HMAC_KEYS and JOIN_CODE_HMAC_KEY_VERSION'
@@ -147,6 +157,24 @@ verification:
     - Production deployment acceptance remains unverified.
 
 story_notes:
+  epic-content-foundation:
+    status: in-progress
+    audited_against_code: '2026-10-16'
+    branch: feat/content-foundation (BE and FE, stacked on feat/c2-admin-operations; uncommitted)
+    artifact: content-foundation-implementation.md
+    object_storage: 'Cloudflare R2 development bucket nexalab-dev (owner-provided credentials in .env, never read by the agent); r2:check 9/9'
+    verification: 'Vitest 144/144; test:cf 60/60; Playwright cf-storage-live 1/1 and c2-admin-live 1/1; regression B0 9, B1 172, B2 13, A1-A3 95, A5 53, C2 80, password-flow 6 (local runtime, R2-backed uploads)'
+    tickets:
+      cf-t1-versioned-content-pack: review
+      cf-t2-private-r2-asset-versions: review
+      cf-t3-source-registry-ingestion-importer: review
+      cf-t4-practical-simulation-pack-registry: review
+      cf-t5-grade-8-9-open-baseline-corpus: backlog (staffed editorial workstream; only synthetic fixtures exist)
+    remaining:
+      - 'Shared Supabase migration of the three CF migrations (approval), then cf:migrate-assets dry run/apply for any legacy files'
+      - 'Pilot/production R2 buckets and tokens; ASSET_BUDGETS_APPROVED after Q-DATA-01/Q-C2-03; malware scanner'
+      - 'Per-pack Q-C2-04 range approvals before pilot activation'
+      - 'CF-T5 corpus and official outcome inventory'
   epic-c2-admin-operations:
     status: done
     audited_against_code: '2026-10-15'
@@ -156,7 +184,7 @@ story_notes:
     artifact: c2-admin-operations-implementation.md
     remaining:
       - 'Production deployment/migration acceptance and pilot-region latency verification; production upload budgets Q-DATA-01/Q-C2-03 and reviewed per-template ranges Q-C2-04 remain release gates'
-      - 'R2 asset versions, SourceRegistry/ingestion, and full topic-pack versions are deferred to Content Foundation, not unfinished C2 acceptance under the approved scope'
+      - 'R2 asset versions, SourceRegistry/ingestion, and full topic-pack versions were deferred to Content Foundation and are delivered on feat/content-foundation (2026-10-16, review); not unfinished C2 acceptance'
   epic-b1-teacher-operations:
     status: done
     audited_against_code: '2026-10-15'
