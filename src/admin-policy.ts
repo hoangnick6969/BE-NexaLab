@@ -58,7 +58,7 @@ export async function deletionBlockers(db: any, userId: string): Promise<Deletio
     db.teacherGateOverride.count({ where: { OR: [{ studentId: userId }, { actorId: userId }, { revokedById: userId }] } }),
     db.classroom.count({ where: { teacherId: userId } }),
     db.lesson.count({ where: { authorId: userId } }),
-    db.assetFile.count({ where: { ownerId: userId } }),
+    Promise.all([db.assetFile.count({ where: { ownerId: userId } }), db.asset.count({ where: { ownerId: userId } })]).then(([a, b]: number[]) => a + b),
     // The account's own lifecycle rows (user.create, user.update, …) are about the
     // account itself, not evidence it produced; every other actor/target row counts.
     db.auditLog.count({
@@ -101,11 +101,9 @@ export async function activeOwnership(db: any, userId: string) {
       select: { id: true, title: true, scope: true, status: true },
       orderBy: { createdAt: "asc" },
     }),
-    db.assetFile.findMany({
-      where: { ownerId: userId, status: "READY" },
-      select: { id: true, name: true, scope: true },
-      orderBy: { createdAt: "asc" },
-    }),
+    db.asset
+      .findMany({ where: { ownerId: userId, status: "ACTIVE" }, select: { id: true, title: true, scope: true }, orderBy: { createdAt: "asc" } })
+      .then((rows: any[]) => rows.map((a) => ({ id: a.id, name: a.title, scope: a.scope }))),
   ]);
   return { classes, lessons, assets } as Ownership;
 }

@@ -193,6 +193,8 @@ model Lesson {
   challengeParams Json?
   /// Named shared-library release reviews: { kind: { reviewerId, at, note? } }.
   releaseReview Json?
+  /// Released content-pack version this shared lesson materializes (CF-T1); null for authored lessons.
+  packVersionId String?
   /// Admin quarantine (C2-T2): status becomes "quarantined"; the prior status is restored on release.
   quarantinedAt DateTime?
   quarantineReason String?
@@ -386,6 +388,8 @@ model Attempt {
   simulationModelVersion String @default("1.0.0")
   /// Simulation configuration version evaluated for this attempt (C2-T3); null before C2.
   configVersionId String?
+  /// Topic simulation pack version active when the attempt was evaluated (CF-T4); null for earlier attempts.
+  packVersionId String?
   idempotencyKey String?
   createdAt DateTime @default(now())
   hints HintLog[]
@@ -567,4 +571,195 @@ model AssetVersion {
   readyAt DateTime?
   @@unique([assetId, version])
   @@index([status, expiresAt])
+}
+/// Allowlisted source policy (CF-T3). Stores policy, never lessons; every change is a new SourcePolicyVersion.
+model SourcePolicy {
+  key String @id
+  title String
+  enabled Boolean @default(false)
+  currentVersion Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  versions SourcePolicyVersion[]
+}
+model SourcePolicyVersion {
+  id String @id @default(cuid())
+  key String
+  source SourcePolicy @relation(fields: [key], references: [key])
+  version Int
+  /// accessMode, allowedHosts/paths/mime, maxBytes, licenseRule, storagePolicy, parser, rateLimitPerMinute, review dates.
+  policy Json
+  reason String
+  createdById String?
+  createdAt DateTime @default(now())
+  @@unique([key, version])
+}
+/// One bounded ingestion pass; pins the exact policy version and parser.
+model IngestionRun {
+  id String @id @default(cuid())
+  sourceKey String
+  policyVersionId String
+  connector String
+  parserVersion String
+  trigger String
+  /// RUNNING | COMPLETED | FAILED
+  status String @default("RUNNING")
+  counts Json?
+  error String?
+  startedById String?
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  items IngestionItem[]
+  @@index([sourceKey, startedAt])
+}
+/// Staging state of one candidate; never learning content and never auto-published.
+model IngestionItem {
+  id String @id @default(cuid())
+  runId String
+  run IngestionRun @relation(fields: [runId], references: [id])
+  externalId String
+  url String?
+  /// STAGED | DUPLICATE | REJECTED | NEEDS_REVIEW
+  status String
+  rejection String?
+  sha256 String?
+  artifactVersionId String?
+  createdAt DateTime @default(now())
+  @@index([runId])
+}
+model SourceArtifact {
+  id String @id @default(cuid())
+  sourceKey String
+  externalId String
+  title String?
+  createdAt DateTime @default(now())
+  versions SourceArtifactVersion[]
+  @@unique([sourceKey, externalId])
+}
+/// Snapshot of an external item: locator, checksum, license snapshot; raw bytes only when the policy allows storing them.
+model SourceArtifactVersion {
+  id String @id @default(cuid())
+  artifactId String
+  artifact SourceArtifact @relation(fields: [artifactId], references: [id])
+  version Int
+  canonicalUrl String
+  retrievedAt DateTime
+  sha256 String
+  mime String
+  bytes Int
+  licenseSnapshot Json
+  locator String?
+  parserVersion String?
+  /// METADATA_ONLY | SNAPSHOT
+  storagePolicy String
+  rawObjectKey String?
+  normalized Json?
+  /// STAGED | METADATA_VERIFIED | REJECTED
+  reviewStatus String @default("STAGED")
+  createdAt DateTime @default(now())
+  @@unique([artifactId, version])
+  @@unique([artifactId, sha256])
+}
+/// Curriculum-aligned content pack (CF-T1). `namespace` fixture packs never reach pilot/production.
+model ContentPack {
+  key String @id
+  grade Int
+  domain String
+  title String
+  /// fixture | baseline
+  namespace String
+  createdAt DateTime @default(now())
+  versions ContentPackVersion[]
+}
+/// Immutable pack version; a release materializes it as a shared-library lesson.
+model ContentPackVersion {
+  id String @id @default(cuid())
+  packKey String
+  pack ContentPack @relation(fields: [packKey], references: [key])
+  version Int
+  /// sha256 of the canonical manifest
+  digest String
+  manifest Json
+  /// released | retired
+  status String
+  synthetic Boolean @default(false)
+  outcomeCodes Json @default("[]")
+  lessonId String?
+  releaseId String?
+  createdAt DateTime @default(now())
+  releasedAt DateTime?
+  retiredAt DateTime?
+  @@unique([packKey, version])
+  @@unique([packKey, digest])
+}
+/// Deployment record of one approved content manifest in one environment.
+model ContentRelease {
+  id String @id @default(cuid())
+  environment String
+  name String
+  digest String
+  importerVersion String
+  /// APPLIED | RETIRED
+  status String
+  initiatedById String
+  approvedById String
+  summary Json
+  createdAt DateTime @default(now())
+  retiredAt DateTime?
+  items ContentReleaseItem[]
+  @@unique([environment, digest])
+}
+model ContentReleaseItem {
+  id String @id @default(cuid())
+  releaseId String
+  release ContentRelease @relation(fields: [releaseId], references: [id])
+  /// source-policy | pack-version | lesson
+  kind String
+  refId String
+  /// created | unchanged | superseded
+  action String
+  createdAt DateTime @default(now())
+  @@index([releaseId])
+}
+/// Immutable reviewed practical activity (CF-T4); a simulation pack cannot exist without one.
+model PracticalActivityVersion {
+  id String @id @default(cuid())
+  key String
+  version Int
+  digest String
+  /// objective, materials, setup, procedure, variables, observations, expectedResult, explanation, safety, limitations, modality, outcomeCodes, sources
+  spec Json
+  /// named subject/safety reviews
+  reviews Json
+  createdById String
+  createdAt DateTime @default(now())
+  @@unique([key, version])
+  @@unique([key, digest])
+}
+/// Immutable topic simulation pack version (CF-T4): pins model, template, visual asset, semantic map, bindings and challenge templates.
+model SimulationPackVersion {
+  id String @id @default(cuid())
+  key String
+  version Int
+  labId String
+  modelRef String
+  engineVersion String
+  activityVersionId String
+  /// units, ranges, initialState, limitations, goldenCases
+  template Json
+  visualAssetVersionId String?
+  semanticMap Json
+  bindings Json
+  challengeTemplates Json
+  reviews Json
+  /// draft | active | retired
+  status String @default("draft")
+  validation Json?
+  reason String
+  createdById String
+  createdAt DateTime @default(now())
+  activatedAt DateTime?
+  retiredAt DateTime?
+  @@unique([key, version])
+  @@index([labId, status])
 }

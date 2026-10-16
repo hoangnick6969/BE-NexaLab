@@ -1,0 +1,104 @@
+{
+  "name": "fixture-khtn8-energy-1",
+  "namespace": "fixture",
+  "sources": [
+    {
+      "key": "pubchem-pug-rest",
+      "title": "PubChem PUG REST (thuộc tính hợp chất theo CID)",
+      "policy": {
+        "accessMode": "API",
+        "connector": "pubchem",
+        "allowedHosts": ["pubchem.ncbi.nlm.nih.gov"],
+        "allowedPathPrefixes": ["/rest/pug/compound/cid/"],
+        "allowedMime": ["application/json"],
+        "maxBytes": 200000,
+        "license": {
+          "code": "PUBLIC_DOMAIN",
+          "url": "https://pubchem.ncbi.nlm.nih.gov/docs/downloads#section=Data-Licensing",
+          "attribution": "Dữ liệu PubChem, National Center for Biotechnology Information"
+        },
+        "storagePolicy": "METADATA_ONLY",
+        "rateLimitPerMinute": 5,
+        "termsReviewedAt": "2026-10-15",
+        "recheckAt": "2027-04-15",
+        "idAllowlist": ["962", "1004", "5793"]
+      }
+    }
+  ],
+  "packs": [
+    {
+      "key": "fixture-khtn8-dong-dien-noi-tiep",
+      "title": "Dòng điện trong mạch nối tiếp (gói minh họa)",
+      "grade": 8,
+      "domain": "ENERGY",
+      "chapter": "Điện",
+      "topic": "Mạch nối tiếp",
+      "subjectId": "physics",
+      "outcomeCodes": ["FX8-ENERGY-02"],
+      "synthetic": true,
+      "sources": [
+        {
+          "id": "nexalab-bien-soan",
+          "title": "Ghi chú biên soạn NexaLab (minh họa)",
+          "author": "NexaLab",
+          "accessedAt": "2026-10-15",
+          "license": "ORIGINAL",
+          "attribution": "NexaLab biên soạn (dữ liệu minh họa)",
+          "authoritative": false
+        },
+        {
+          "id": "giao-trinh-vat-ly-minh-hoa",
+          "title": "Tài liệu vật lý tham chiếu (minh họa)",
+          "author": "Nguồn có thẩm quyền giả lập cho kiểm thử",
+          "url": "https://example.org/fixture/vat-ly/mach-noi-tiep",
+          "accessedAt": "2026-10-15",
+          "license": "CC_BY",
+          "attribution": "Nguồn minh họa, CC BY",
+          "authoritative": true
+        }
+      ],
+      "knowledgeUnits": [
+        {
+          "id": "ku-dong-dien-noi-tiep",
+          "outcomeCodes": ["FX8-ENERGY-02"],
+          "claims": [
+            {
+              "id": "claim-cuong-do-bang-nhau",
+              "text": "Trong đoạn mạch nối tiếp, cường độ dòng điện tại mọi điểm là như nhau.",
+              "important": true,
+              "sourceIds": ["nexalab-bien-soan", "giao-trinh-vat-ly-minh-hoa"]
+            }
+          ],
+          "terms": ["mạch nối tiếp", "cường độ dòng điện"],
+          "misconceptions": ["Dòng điện bị 'tiêu hao' dần khi đi qua từng bóng đèn."]
+        }
+      ],
+      "lesson": {
+        "learningObjective": "So sánh cường độ dòng điện tại các điểm khác nhau của mạch nối tiếp.",
+        "prerequisites": "Biết đọc số chỉ của ampe kế.",
+        "content": "<p>Trong đoạn mạch nối tiếp, dòng điện chỉ có một đường đi duy nhất, vì vậy cường độ dòng điện tại mọi điểm trên mạch là như nhau. Đây là gói minh họa phục vụ kiểm thử, không phải học liệu đã phát hành.</p>",
+        "questions": [
+          {
+            "id": "q-noi-tiep-1",
+            "prompt": "Trong mạch nối tiếp, cường độ dòng điện qua hai bóng đèn như thế nào?",
+            "options": [
+              { "id": "bang-nhau", "text": "Bằng nhau" },
+              { "id": "bong-dau-lon-hon", "text": "Bóng đầu tiên lớn hơn" },
+              { "id": "bong-sau-lon-hon", "text": "Bóng sau lớn hơn" }
+            ],
+            "answerId": "bang-nhau",
+            "rationale": "Mạch nối tiếp chỉ có một đường đi nên dòng điện như nhau tại mọi điểm.",
+            "sourceIds": ["nexalab-bien-soan", "giao-trinh-vat-ly-minh-hoa"]
+          }
+        ],
+        "labId": "circuit"
+      },
+      "reviews": {
+        "editorial": { "name": "Biên tập minh họa", "email": "fixture.editor@example.test", "at": "2026-10-15T08:00:00.000Z" },
+        "subject": { "name": "Chuyên môn minh họa", "email": "fixture.subject@example.test", "at": "2026-10-15T08:00:00.000Z" },
+        "rights": { "name": "Bản quyền minh họa", "email": "fixture.rights@example.test", "at": "2026-10-15T08:00:00.000Z" },
+        "accessibility": { "name": "Tiếp cận minh họa", "email": "fixture.a11y@example.test", "at": "2026-10-15T08:00:00.000Z" }
+      }
+    }
+  ]
+}

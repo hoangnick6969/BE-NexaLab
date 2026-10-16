@@ -1,6 +1,6 @@
 ---
 id: SPEC-c2-admin-operations
-status: implemented-local-review-cf-surfaces-deferred
+status: implemented-review-cf-surfaces-delivered-on-content-foundation
 companions:
   - tickets.md
   - ../spec-b0-platform/SPEC.md

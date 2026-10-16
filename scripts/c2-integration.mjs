@@ -9,6 +9,7 @@ import * as argon from "argon2";
 import { readdir, readFile, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createHarness } from "./lib/harness.mjs";
+import { storage } from "../src/storage.ts";
 
 const h = createHarness("C2 admin operations");
 const { db, req, check, skip, envelope, key } = h;
@@ -285,9 +286,12 @@ await h.run({
 
     // ---------- C2-T1 disable with ownership resolution ----------
     const ownerAsset = await upload(owner.token, "so-do.png", png());
-    if (ownerAsset.data?.id) created.assets.push(ownerAsset.data.id);
-    const stored = ownerAsset.data?.id ? await db.assetFile.findUnique({ where: { id: ownerAsset.data.id } }) : null;
-    check("upload stores a full SHA-256 checksum", ownerAsset.status === 201 && /^[0-9a-f]{64}$/.test(stored?.sha256 ?? ""));
+    if (ownerAsset.data?.assetId) created.assets.push(ownerAsset.data.assetId);
+    const stored = ownerAsset.data?.id ? await db.assetVersion.findUnique({ where: { id: ownerAsset.data.id } }) : null;
+    check(
+      "upload stores an immutable READY version in object storage with a server SHA-256",
+      ownerAsset.status === 201 && stored?.status === "READY" && Boolean(stored.objectKey) && /^[0-9a-f]{64}$/.test(stored?.sha256 ?? ""),
+    );
     const missing = await req(`/admin/users/${owner.id}/disable`, "POST", { reason: "nghỉ việc" }, admin.token);
     check(
       "disabling an owner without resolutions → 409 OWNERSHIP_RESOLUTION_REQUIRED naming class, lesson and asset",
@@ -303,7 +307,7 @@ await h.run({
         resolutions: {
           classes: [{ id: classId, action: "reassign", newOwnerId: parent.id }],
           lessons: [{ id: lesson.id, action: "archive" }],
-          assets: [{ id: ownerAsset.data.id, action: "quarantine" }],
+          assets: [{ id: ownerAsset.data.assetId, action: "quarantine" }],
         },
       },
       admin.token,
@@ -321,7 +325,7 @@ await h.run({
           resolutions: {
             classes: [{ id: classId, action: "reassign", newOwnerId: heir.id }],
             lessons: [{ id: lesson.id, action: "reassign", newOwnerId: heir.id }],
-            assets: [{ id: ownerAsset.data.id, action: "quarantine" }],
+            assets: [{ id: ownerAsset.data.assetId, action: "quarantine" }],
           },
         },
         admin.token,
@@ -342,7 +346,7 @@ await h.run({
     const [klass, ownedLesson, asset] = await Promise.all([
       db.classroom.findUnique({ where: { id: classId } }),
       db.lesson.findUnique({ where: { id: lesson.id } }),
-      db.assetFile.findUnique({ where: { id: ownerAsset.data.id } }),
+      db.asset.findUnique({ where: { id: ownerAsset.data.assetId } }),
     ]);
     check(
       "class and lesson moved to the new owner, asset quarantined, evidence and enrollment intact",
@@ -728,7 +732,7 @@ await h.run({
     check("a quarantined asset is withheld from its owner", (await fileStatus(ownerAsset.data.id, owner.token)) === 403);
     check("…and still readable by an admin", (await fileStatus(ownerAsset.data.id, admin.token)) === 200);
     const releasedAsset = await req(
-      `/admin/assets/${ownerAsset.data.id}/operations`,
+      `/admin/assets/${ownerAsset.data.assetId}/operations`,
       "POST",
       { action: "release", reason: "đã kiểm tra" },
       admin.token,
@@ -738,13 +742,13 @@ await h.run({
     check(
       "sharing requires a license and source",
       envelope(
-        await req(`/admin/assets/${ownerAsset.data.id}/operations`, "POST", { action: "share", reason: "dùng chung" }, admin.token),
+        await req(`/admin/assets/${ownerAsset.data.assetId}/operations`, "POST", { action: "share", reason: "dùng chung" }, admin.token),
         400,
         "VALIDATION_FAILED",
       ),
     );
     const shared = await req(
-      `/admin/assets/${ownerAsset.data.id}/operations`,
+      `/admin/assets/${ownerAsset.data.assetId}/operations`,
       "POST",
       { action: "share", reason: "dùng chung", license: "CC_BY", source: "Ảnh do NexaLab vẽ" },
       admin.token,
@@ -759,7 +763,7 @@ await h.run({
       "reassigning an asset to a parent is refused",
       envelope(
         await req(
-          `/admin/assets/${ownerAsset.data.id}/operations`,
+          `/admin/assets/${ownerAsset.data.assetId}/operations`,
           "POST",
           { action: "reassign", reason: "chuyển", newOwnerId: parent.id },
           admin.token,
@@ -770,26 +774,27 @@ await h.run({
     );
     await db.lesson.update({
       where: { id: lesson.id },
-      data: { materials: [{ type: "image", url: `asset:${ownerAsset.data.id}`, title: "Sơ đồ" }] },
+      data: { materials: [{ type: "image", url: `assetv:${ownerAsset.data.id}`, title: "Sơ đồ" }] },
     });
     const assetList = await timed("read", () => req(`/admin/assets?ownerId=${owner.id}`, "GET", undefined, admin.token));
     check(
       "asset list shows owner, scope, checksum and references",
-      assetList.data?.items?.[0]?.references?.lessons?.some((l) => l.id === lesson.id) && assetList.data.items[0].sha256,
+      assetList.data?.items?.[0]?.references?.lessons?.some((l) => l.id === lesson.id) && assetList.data.items[0].versions?.[0]?.sha256,
     );
-    const blocked = await req(`/admin/assets/${ownerAsset.data.id}`, "DELETE", { reason: "dọn", confirm: true }, admin.token);
+    const blocked = await req(`/admin/assets/${ownerAsset.data.assetId}`, "DELETE", { reason: "dọn", confirm: true }, admin.token);
     check(
       "a referenced asset cannot be deleted",
-      envelope(blocked, 409, "ASSET_REFERENCED") && (await db.assetFile.count({ where: { id: ownerAsset.data.id } })) === 1,
+      envelope(blocked, 409, "ASSET_REFERENCED") && (await db.asset.count({ where: { id: ownerAsset.data.assetId } })) === 1,
     );
     const loose = await upload(heir.token, "le.png", png());
-    if (loose.data?.id) created.assets.push(loose.data.id);
-    const gone = await req(`/admin/assets/${loose.data.id}`, "DELETE", { reason: "tải nhầm", confirm: true }, admin.token);
+    if (loose.data?.assetId) created.assets.push(loose.data.assetId);
+    const gone = await req(`/admin/assets/${loose.data.assetId}`, "DELETE", { reason: "tải nhầm", confirm: true }, admin.token);
     check(
       "an unreferenced asset deletes with audit",
       gone.status === 200 &&
-        (await db.assetFile.count({ where: { id: loose.data.id } })) === 0 &&
-        (await db.auditLog.count({ where: { action: "asset.delete", targetId: loose.data.id } })) === 1,
+        (await db.asset.count({ where: { id: loose.data.assetId } })) === 0 &&
+        (await db.assetVersion.count({ where: { id: loose.data.id } })) === 0 &&
+        (await db.auditLog.count({ where: { action: "asset.delete", targetId: loose.data.assetId } })) === 1,
     );
 
     // ---------- C2-T6 audit explorer ----------
@@ -861,12 +866,13 @@ await h.run({
     await db.assignment.deleteMany({ where: { classId: { in: classes.map((c) => c.id) } } });
     await db.classroom.deleteMany({ where: { id: { in: classes.map((c) => c.id) } } });
     await db.lesson.deleteMany({ where: { OR: [{ id: { in: created.lessons } }, { authorId: { in: created.users } }] } });
-    const assets = await db.assetFile.findMany({
+    const assets = await db.asset.findMany({
       where: { OR: [{ id: { in: created.assets } }, { ownerId: { in: created.users } }] },
-      select: { id: true },
+      include: { versions: true },
     });
-    await db.assetFile.deleteMany({ where: { id: { in: assets.map((a) => a.id) } } });
-    for (const a of assets) await unlink(resolve(process.env.UPLOAD_DIR ?? "uploads", a.id)).catch(() => undefined);
+    for (const a of assets) for (const v of a.versions) for (const key of [v.objectKey, v.stagingKey]) if (key) await storage().delete(key).catch(() => undefined);
+    await db.assetVersion.deleteMany({ where: { assetId: { in: assets.map((a) => a.id) } } });
+    await db.asset.deleteMany({ where: { id: { in: assets.map((a) => a.id) } } });
     await db.curriculumTopic.deleteMany({ where: { chapterCode: { in: created.chapters } } });
     await db.curriculumChapter.deleteMany({ where: { code: { in: created.chapters } } });
     await db.curriculumOutcome.deleteMany({ where: { code: { in: created.outcomes } } });

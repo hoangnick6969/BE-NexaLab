@@ -42,7 +42,6 @@ function parentCodeHash(code: string): string {
   return createHmac("sha256", process.env.JWT_SECRET ?? "dev").update(code.toUpperCase()).digest("hex");
 }
 import { Public, Roles, publicUser, access, token, hashToken } from "./auth";
-import { simulate } from "../packages/sim";
 import { misconceptions } from "./tutor";
 import {
   buildPathwaySteps,
@@ -71,6 +70,7 @@ import { idempotent, readIdempotencyKey } from "./idempotency";
 import { requestHint } from "./hint";
 import { smtpDeliver } from "./mail";
 import { ENGINE as SIMULATION_ENGINE, evaluate, versionParams } from "./simulation-versions";
+import { resolveModel } from "./sim-packs";
 import { FORGOT_MESSAGE, completePasswordReset, requestPasswordReset } from "./password-reset";
 import {
   CHALLENGE_PARAMETERS,
@@ -78,6 +78,7 @@ import {
   RELEASE_REVIEW_KINDS,
   RELEASE_REVIEW_LABELS,
   assetIds,
+  materialVersionIds,
   attribution,
   challengeObjective,
   challengeParamErrors,
@@ -119,7 +120,7 @@ const lessonSchema = z.object({
         url: z
           .string()
           .refine(
-            (u) => /^https?:\/\//.test(u) || /^asset:[0-9a-f-]{36}$/.test(u),
+            (u) => /^https?:\/\//.test(u) || /^asset:[0-9a-f-]{36}$/.test(u) || /^assetv:[a-z0-9]{20,40}$/.test(u),
           ),
         title: text,
         transcript: z.string().trim().max(50000).optional(),
@@ -268,6 +269,28 @@ export class ApiController {
         throw new BadRequestException({
           code: "INVALID_LESSON_PATHWAY",
           message: "Tài nguyên bài học không tồn tại hoặc không thuộc quyền sử dụng",
+        });
+    }
+    // CF-T2: published content pins READY immutable versions of active assets.
+    const pinned = materialVersionIds(lesson.materials);
+    if (pinned.length) {
+      const versions = await this.db.assetVersion.findMany({ where: { id: { in: pinned } }, include: { asset: true } });
+      if (versions.some((v) => v.asset.status === "QUARANTINED" || v.status === "QUARANTINED"))
+        throw new BadRequestException({ code: "ASSET_QUARANTINED", message: "Bài học tham chiếu tệp đang bị cách ly" });
+      const inherited = new Set<string>();
+      if (clonedFromId) {
+        const source = await this.db.lesson.findUnique({ where: { id: clonedFromId }, select: { materials: true } });
+        for (const id of materialVersionIds((source?.materials as any[]) ?? [])) inherited.add(id);
+      }
+      if (
+        versions.length !== new Set(pinned).size ||
+        versions.some((v) => v.status !== "READY" || v.asset.status !== "ACTIVE") ||
+        (actor.role !== "ADMIN" &&
+          versions.some((v) => v.asset.ownerId !== actor.sub && v.asset.scope !== "SHARED_LIBRARY" && !inherited.has(v.id)))
+      )
+        throw new BadRequestException({
+          code: "INVALID_LESSON_PATHWAY",
+          message: "Tệp bài học chưa sẵn sàng, không tồn tại hoặc không thuộc quyền sử dụng",
         });
     }
   }
@@ -1524,12 +1547,15 @@ export class ApiController {
       },
     };
   }
-  @Roles("STUDENT", "TEACHER") @Post("simulate/:labId") preview(
+  @Roles("STUDENT", "TEACHER") @Post("simulate/:labId") async preview(
     @Param("labId") labId: string,
     @Body() body: any,
   ) {
+    // CF-T4: the lab's allowlisted model reference decides the engine; unknown labs fail closed.
+    const lab = await this.db.lab.findUnique({ where: { id: labId }, select: { simulationModelRef: true } });
+    if (!lab) throw new NotFoundException({ code: "LAB_NOT_FOUND", message: "Không tìm thấy phòng thực hành" });
     try {
-      return simulate(labId, body);
+      return resolveModel(lab.simulationModelRef).simulate(body);
     } catch (e: any) {
       throw new BadRequestException(e.message);
     }
@@ -1615,10 +1641,11 @@ export class ApiController {
       ? null
       : await this.db.simulationConfigVersion.findFirst({ where: { labId: c.labId, status: "active" } });
     const params = (isVariant ? null : versionParams(configVersion, c.id)) ?? (c.constraints as any)?.params;
+    const activePack = await this.db.simulationPackVersion.findFirst({ where: { labId: c.labId, status: "active" }, select: { id: true } });
     let result: any;
     let normalizedVerdict: string;
     try {
-      ({ result, verdict: normalizedVerdict } = evaluate(c.labId, b.labState, params));
+      ({ result, verdict: normalizedVerdict } = evaluate(c.labId, b.labState, params, c.lab.simulationModelRef));
     } catch (e: any) {
       throw new BadRequestException(e.message);
     }
@@ -1641,6 +1668,7 @@ export class ApiController {
           lessonStepId: link?.stepId ?? null,
           simulationModelVersion: SIMULATION_ENGINE,
           configVersionId: configVersion?.id ?? null,
+          packVersionId: activePack?.id ?? null,
           idempotencyKey: b.idempotencyKey ?? null,
           labState: b.labState as any,
           simulationResult: result,

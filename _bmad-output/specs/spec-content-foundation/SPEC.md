@@ -1,6 +1,6 @@
 ---
 id: SPEC-content-foundation
-status: ready-for-platform-implementation-with-corpus-release-gates
+status: platform-implemented-review-cf-t5-corpus-pending
 companions:
   - tickets.md
   - ../../planning-artifacts/content-data-foundation.md
