@@ -49,6 +49,7 @@ import {
 
 const text = z.string().trim().min(1).max(200);
 const reason = z.string().trim().min(3, "Cần nêu lý do (ít nhất 3 ký tự)").max(500);
+const ebookUrl = z.string().url().refine((value) => new URL(value).protocol === "https:", "Liên kết ebook phải dùng HTTPS").nullable().optional();
 const email = z
   .string()
   .email()
@@ -513,37 +514,40 @@ export class AdminController {
   }
   @Post("subjects")
   async createSubject(@Req() req: any, @Body() body: unknown) {
-    const b = z.object({ id: code, name: text, reason: reason.optional() }).strict().parse(body);
+    const b = z.object({ id: code, name: text, ebookUrl, reason: reason.optional() }).strict().parse(body);
     return this.db.$transaction(async (tx) => {
       if (await tx.subject.findUnique({ where: { id: b.id } }))
         throw new ConflictException({ code: "SUBJECT_EXISTS", message: `Mã môn "${b.id}" đã tồn tại; không ghi đè` });
-      const subject = await tx.subject.create({ data: { id: b.id, name: b.name } });
+      const subject = await tx.subject.create({ data: { id: b.id, name: b.name, ebookUrl: b.ebookUrl ?? null } });
       await audit(tx, {
         actor: req.user,
         action: "subject.create",
         targetType: "Subject",
         targetId: b.id,
         reason: b.reason,
-        after: { name: b.name },
+        after: { name: b.name, ebookUrl: b.ebookUrl ?? null },
       });
       return subject;
     });
   }
   @Put("subjects/:id")
   async updateSubject(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
-    const b = z.object({ name: text, reason: reason.optional() }).strict().parse(body);
+    const b = z.object({ name: text, ebookUrl, reason: reason.optional() }).strict().parse(body);
     return this.db.$transaction(async (tx) => {
       const before = await tx.subject.findUnique({ where: { id } });
       if (!before) throw notFound("môn học");
-      const subject = await tx.subject.update({ where: { id }, data: { name: b.name } });
+      const subject = await tx.subject.update({
+        where: { id },
+        data: { name: b.name, ...(b.ebookUrl !== undefined ? { ebookUrl: b.ebookUrl } : {}) },
+      });
       await audit(tx, {
         actor: req.user,
         action: "subject.update",
         targetType: "Subject",
         targetId: id,
         reason: b.reason,
-        before: { name: before.name },
-        after: { name: b.name },
+        before: { name: before.name, ebookUrl: before.ebookUrl },
+        after: { name: b.name, ebookUrl: b.ebookUrl ?? before.ebookUrl },
       });
       return subject;
     });

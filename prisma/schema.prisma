@@ -155,11 +155,14 @@ model Enrollment {
   @@index([studentId, status])
 }
 model Subject {
-  id String @id
-  name String
-  lessons Lesson[]
-  labs Lab[]
+  id       String   @id
+  name     String
+  /// Optional external ebook/reference URL; linking does not grant reproduction rights.
+  ebookUrl String?
+  lessons  Lesson[]
+  labs     Lab[]
 }
+
 model Lesson {
   id String @id @default(cuid())
   subjectId String
