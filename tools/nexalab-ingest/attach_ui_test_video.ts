@@ -5,8 +5,10 @@ import { buildPathwaySteps, materializeLegacySteps, validateLessonSteps } from "
 
 const apply = process.argv.includes("--apply");
 const verifyAll = process.argv.includes("--verify-all");
+const chapterCode = process.argv.find((arg) => arg.startsWith("--chapter="))?.slice(10) ?? "01";
 if (process.argv.filter((arg) => ["--apply", "--dry-run", "--verify-all"].includes(arg)).length !== 1)
   throw new Error("Pass exactly one of --dry-run, --apply, or --verify-all");
+if (!verifyAll && !/^\d{2}$/.test(chapterCode)) throw new Error("Chapter must be a two-digit number");
 if (process.env.APP_ENV !== "development")
   throw new Error("UI test video seed requires APP_ENV=development");
 
@@ -23,11 +25,11 @@ async function main() {
   const db = new PrismaClient({ datasourceUrl: seedUrl(process.env) });
   try {
     const lessons = await db.lesson.findMany({
-      where: verifyAll ? { subjectId: "khtn", status: "published" } : { id: { startsWith: "dev-khtn8-ch01-lesson-" }, subjectId: "khtn", synthetic: true, status: "published" },
+      where: verifyAll ? { subjectId: "khtn", status: "published" } : { id: { startsWith: `dev-khtn8-ch${chapterCode}-lesson-` }, subjectId: "khtn", synthetic: true, status: "published" },
       orderBy: { id: "asc" },
       select: { id: true, title: true, content: true, materials: true, questions: true, labId: true, steps: { select: { id: true, type: true, position: true, required: true, config: true } } },
     });
-    if (!lessons.length) throw new Error("No published synthetic KHTN 8 chapter-1 UI-test lessons found");
+    if (!lessons.length) throw new Error(`No published synthetic KHTN 8 chapter-${chapterCode} UI-test lessons found`);
     const assignments = await db.assignment.findMany({
       where: { contentType: "lesson", contentId: { in: lessons.map((lesson) => lesson.id) }, status: "ACTIVE" },
       select: { contentId: true, classId: true, targets: { select: { studentId: true } } },
@@ -39,7 +41,7 @@ async function main() {
       const pathway = buildPathwaySteps(validateLessonSteps(lesson.steps as any) as any);
       const generatedSteps = materializeLegacySteps({
         content: lesson.content,
-        materials: existing as Array<{ type: "video" | "pdf" | "image"; url: string; title: string; transcript?: string }>,
+        materials: materials as Array<{ type: "video" | "pdf" | "image"; url: string; title: string; transcript?: string }>,
         questions: lesson.questions as unknown[],
         labId: lesson.labId,
       });

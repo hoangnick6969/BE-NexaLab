@@ -19,6 +19,8 @@ const schema = z.object({
 }).passthrough();
 async function main() {
 const payload = schema.parse(JSON.parse(await readFile(inputPath, "utf8")));
+const chapterCode = payload.chapter.sourceChapterId.match(/^chapter-(\d{2})$/)?.[1];
+if (!chapterCode) throw new Error("UI test seed requires a chapter ID in chapter-NN format");
 for (const section of payload.chapter.sections) {
   const digest = createHash("sha256").update(section.content.text, "utf8").digest("hex").toUpperCase();
   if (digest !== section.content.sha256) throw new Error(`Content hash mismatch: ${section.sourceSectionId}`);
@@ -41,7 +43,7 @@ try {
       const chunk = await tx.textbookSourceChunk.findUnique({ where: { sourceId_sourceSectionId: { sourceId: payload.source.sourceId, sourceSectionId: section.sourceSectionId } } });
       if (!chunk || chunk.contentSha256 !== section.content.sha256 || chunk.content !== section.content.text) throw new Error(`Staging chunk missing or differs from input: ${section.sourceSectionId}`);
       await tx.textbookSourceChunk.update({ where: { id: chunk.id }, data: { reviewStatus: "DONE", ocrReviewed: true, studentFacing: true } });
-      const id = `dev-khtn8-ch01-lesson-${String(section.lessonNumber).padStart(2, "0")}`;
+      const id = `dev-khtn8-ch${chapterCode}-lesson-${String(section.lessonNumber).padStart(2, "0")}`;
       const materials = [{ type: "pdf", url: ebookUrl, title: "Sách giáo khoa KHTN 8 (PDF)" }];
       await tx.lesson.upsert({
         where: { id },
@@ -51,7 +53,7 @@ try {
       lessons.push(id);
     }
     return { reviewRowsMarkedDone: lessons.length, lessonsUpserted: lessons.length, lessonIds: lessons };
-  }, { isolationLevel: "Serializable" });
+  }, { isolationLevel: "Serializable", maxWait: 15000, timeout: 60000 });
   const savedLessons = await db.lesson.findMany({ where: { id: { in: result.lessonIds } }, select: { id: true, content: true, status: true, synthetic: true, materials: true } });
   if (savedLessons.length !== payload.chapter.sections.length || savedLessons.some((lesson) => !lesson.content || lesson.status !== "published" || !lesson.synthetic || !Array.isArray(lesson.materials) || lesson.materials[0]?.url !== ebookUrl)) throw new Error("Post-seed lesson verification failed");
   const savedChunks = await db.textbookSourceChunk.findMany({ where: { sourceId: payload.source.sourceId, chapterId: payload.chapter.sourceChapterId }, select: { reviewStatus: true, ocrReviewed: true, studentFacing: true } });

@@ -1,0 +1,201 @@
+{
+  "schema": "nexalab.textbook-source/v1",
+  "sourceId": "vn-khtn8-ket-noi-tri-thuc-reprint-3",
+  "sourceOfTruthScope": "Cấu trúc sách Khoa học tự nhiên 8 của đúng ấn bản này: mục lục, thứ tự chương/bài và số trang in. Không phải taxonomy chương trình học đã duyệt, nội dung bài đã kiểm chứng, hay căn cứ bản quyền.",
+  "book": {
+    "title": "Khoa học tự nhiên 8",
+    "series": "Kết nối tri thức với cuộc sống",
+    "publisher": "Nhà xuất bản Giáo dục Việt Nam",
+    "publicationYear": 2023,
+    "reprint": 3,
+    "isbn": "978-604-0-35039-8",
+    "language": "vi"
+  },
+  "sourceFiles": {
+    "pdf": {
+      "path": "../assets/SGK Khoa học tự nhiên 8-mau.pdf",
+      "sha256": "963A607724E0B5FBE2E10972FBF170C55D62BDD7BB6D871BD56C5ADC2FDF3FCD",
+      "bytes": 71155251,
+      "physicalPageCount": 200,
+      "textLayerAssessment": "SAMPLE_CHECKED_NO_TEXT_LAYER"
+    },
+    "extractedText": {
+      "path": "sgk.txt",
+      "sha256": "E7260FD0AB5E1959BD0040C479AF274E5C58ADA6FE789214475CB4090400849B",
+      "bytes": 415739,
+      "characters": 318503,
+      "lineCount": 7301,
+      "format": "plain text copied/extracted from PDF viewer",
+      "pageAligned": false,
+      "quality": "RAW_UNVERIFIED",
+      "knownIssues": [
+        "Không có dấu ngắt trang ổn định để ánh xạ từng đoạn text vào trang PDF.",
+        "Có lỗi nhận dạng dấu tiếng Việt, ký tự, thứ tự cột và chữ/nội dung từ hình ảnh.",
+        "Chưa đối chiếu toàn văn với ảnh trang gốc; không dùng nguyên trạng để sinh quiz hoặc trích dẫn chính xác."
+      ]
+    }
+  },
+  "pageModel": {
+    "pageNumberType": "PRINTED_PAGE_NUMBER",
+    "mappingRule": "printedPageStart lấy từ mục lục người dùng cung cấp; số còn thiếu được bổ sung từ vị trí nội dung tương ứng trong sgk.txt. Không giả định số trang PDF vật lý luôn bằng số trang in.",
+    "rangeRule": "printedPageEnd là trang ngay trước printedPageStart của mục kế tiếp trong cùng cấp; đây là khoảng suy ra từ mục lục, cần xác minh nếu dùng làm locator chính xác.",
+    "contentPageAlignmentStatus": "NOT_ESTABLISHED"
+  },
+  "frontMatter": [
+    { "id": "front-how-to-use", "title": "Hướng dẫn sử dụng sách", "printedPageStart": 2 },
+    { "id": "front-preface", "title": "Lời nói đầu", "printedPageStart": 3 }
+  ],
+  "standaloneLessons": [
+    {
+      "id": "lesson-01",
+      "lessonNumber": 1,
+      "title": "Sử dụng một số hoá chất, thiết bị cơ bản trong phòng thí nghiệm",
+      "printedPageStart": 6,
+      "placement": "BEFORE_CHAPTER_01"
+    }
+  ],
+  "chapters": [
+    {
+      "id": "chapter-01",
+      "title": "PHẢN ỨNG HOÁ HỌC",
+      "printedPageStart": 11,
+      "lessons": [
+        { "id": "lesson-02", "lessonNumber": 2, "title": "Phản ứng hoá học", "printedPageStart": 11 },
+        { "id": "lesson-03", "lessonNumber": 3, "title": "Mol và tỉ khối chất khí", "printedPageStart": 16 },
+        { "id": "lesson-04", "lessonNumber": 4, "title": "Dung dịch và nồng độ", "printedPageStart": 20 },
+        { "id": "lesson-05", "lessonNumber": 5, "title": "Định luật bảo toàn khối lượng và phương trình hoá học", "printedPageStart": 24 },
+        { "id": "lesson-06", "lessonNumber": 6, "title": "Tính theo phương trình hoá học", "printedPageStart": 28 },
+        { "id": "lesson-07", "lessonNumber": 7, "title": "Tốc độ phản ứng và chất xúc tác", "printedPageStart": 31 }
+      ]
+    },
+    {
+      "id": "chapter-02",
+      "title": "MỘT SỐ HỢP CHẤT THÔNG DỤNG",
+      "printedPageStart": 35,
+      "lessons": [
+        { "id": "lesson-08", "lessonNumber": 8, "title": "Acid", "printedPageStart": 35 },
+        { "id": "lesson-09", "lessonNumber": 9, "title": "Base. Thang pH", "printedPageStart": 39 },
+        { "id": "lesson-10", "lessonNumber": 10, "title": "Oxide", "printedPageStart": 44 },
+        { "id": "lesson-11", "lessonNumber": 11, "title": "Muối", "printedPageStart": 48 },
+        { "id": "lesson-12", "lessonNumber": 12, "title": "Phân bón hoá học", "printedPageStart": 53, "pageEvidence": "INFERRED_FROM_EXTRACTED_TEXT" }
+      ]
+    },
+    {
+      "id": "chapter-03",
+      "title": "KHỐI LƯỢNG RIÊNG VÀ ÁP SUẤT",
+      "printedPageStart": 56,
+      "lessons": [
+        { "id": "lesson-13", "lessonNumber": 13, "title": "Khối lượng riêng", "printedPageStart": 56 },
+        { "id": "lesson-14", "lessonNumber": 14, "title": "Thực hành xác định khối lượng riêng", "printedPageStart": 59 },
+        { "id": "lesson-15", "lessonNumber": 15, "title": "Áp suất trên một bề mặt", "printedPageStart": 64 },
+        { "id": "lesson-16", "lessonNumber": 16, "title": "Áp suất chất lỏng. Áp suất khí quyển", "printedPageStart": 67 },
+        { "id": "lesson-17", "lessonNumber": 17, "title": "Lực đẩy Archimedes", "printedPageStart": 73 }
+      ]
+    },
+    {
+      "id": "chapter-04",
+      "title": "TÁC DỤNG LÀM QUAY CỦA LỰC",
+      "printedPageStart": 76,
+      "lessons": [
+        { "id": "lesson-18", "lessonNumber": 18, "title": "Tác dụng làm quay của lực. Moment lực", "printedPageStart": 76 },
+        { "id": "lesson-19", "lessonNumber": 19, "title": "Đòn bẩy và ứng dụng", "printedPageStart": 79 }
+      ]
+    },
+    {
+      "id": "chapter-05",
+      "title": "ĐIỆN",
+      "printedPageStart": 84,
+      "lessons": [
+        { "id": "lesson-20", "lessonNumber": 20, "title": "Hiện tượng nhiễm điện do cọ xát", "printedPageStart": 84 },
+        { "id": "lesson-21", "lessonNumber": 21, "title": "Dòng điện, nguồn điện", "printedPageStart": 88 },
+        { "id": "lesson-22", "lessonNumber": 22, "title": "Mạch điện đơn giản", "printedPageStart": 91 },
+        { "id": "lesson-23", "lessonNumber": 23, "title": "Tác dụng của dòng điện", "printedPageStart": 95 },
+        { "id": "lesson-24", "lessonNumber": 24, "title": "Cường độ dòng điện và hiệu điện thế", "printedPageStart": 99 },
+        { "id": "lesson-25", "lessonNumber": 25, "title": "Thực hành đo cường độ dòng điện và hiệu điện thế", "printedPageStart": 102 }
+      ]
+    },
+    {
+      "id": "chapter-06",
+      "title": "NHIỆT",
+      "printedPageStart": 105,
+      "lessons": [
+        { "id": "lesson-26", "lessonNumber": 26, "title": "Năng lượng nhiệt và nội năng", "printedPageStart": 105 },
+        { "id": "lesson-27", "lessonNumber": 27, "title": "Thực hành đo năng lượng nhiệt bằng joulemeter", "printedPageStart": 109 },
+        { "id": "lesson-28", "lessonNumber": 28, "title": "Sự truyền nhiệt", "printedPageStart": 112, "normalizationNote": "Chuẩn hoá lỗi gõ/OCR 'truyễn' thành 'truyền'." },
+        { "id": "lesson-29", "lessonNumber": 29, "title": "Sự nở vì nhiệt", "printedPageStart": 118 }
+      ]
+    },
+    {
+      "id": "chapter-07",
+      "title": "SINH HỌC CƠ THỂ NGƯỜI",
+      "printedPageStart": 123,
+      "lessons": [
+        { "id": "lesson-30", "lessonNumber": 30, "title": "Khái quát về cơ thể người", "printedPageStart": 123 },
+        { "id": "lesson-31", "lessonNumber": 31, "title": "Hệ vận động ở người", "printedPageStart": 125 },
+        { "id": "lesson-32", "lessonNumber": 32, "title": "Dinh dưỡng và tiêu hoá ở người", "printedPageStart": 128 },
+        { "id": "lesson-33", "lessonNumber": 33, "title": "Máu và hệ tuần hoàn của cơ thể người", "printedPageStart": 135 },
+        { "id": "lesson-34", "lessonNumber": 34, "title": "Hệ hô hấp ở người", "printedPageStart": 142, "normalizationNote": "Chuẩn hoá lỗi OCR 'hồ hấp' thành 'hô hấp'." },
+        { "id": "lesson-35", "lessonNumber": 35, "title": "Hệ bài tiết ở người", "printedPageStart": 146 },
+        { "id": "lesson-36", "lessonNumber": 36, "title": "Điều hoà môi trường trong của cơ thể người", "printedPageStart": 150 },
+        { "id": "lesson-37", "lessonNumber": 37, "title": "Hệ thần kinh và các giác quan ở người", "printedPageStart": 152 },
+        { "id": "lesson-38", "lessonNumber": 38, "title": "Hệ nội tiết ở người", "printedPageStart": 157, "pageEvidence": "INFERRED_FROM_EXTRACTED_TEXT" },
+        { "id": "lesson-39", "lessonNumber": 39, "title": "Da và điều hoà thân nhiệt ở người", "printedPageStart": 160, "normalizationNote": "Loại bỏ chữ nhiễu OCR xen vào tiêu đề." },
+        { "id": "lesson-40", "lessonNumber": 40, "title": "Sinh sản ở người", "printedPageStart": 165, "normalizationNote": "Loại bỏ chữ nhiễu OCR xen vào tiêu đề." }
+      ]
+    },
+    {
+      "id": "chapter-08",
+      "title": "SINH VẬT VÀ MÔI TRƯỜNG",
+      "printedPageStart": 170,
+      "lessons": [
+        { "id": "lesson-41", "lessonNumber": 41, "title": "Môi trường và các nhân tố sinh thái", "printedPageStart": 170 },
+        { "id": "lesson-42", "lessonNumber": 42, "title": "Quần thể sinh vật", "printedPageStart": 174 },
+        { "id": "lesson-43", "lessonNumber": 43, "title": "Quần xã sinh vật", "printedPageStart": 177 },
+        { "id": "lesson-44", "lessonNumber": 44, "title": "Hệ sinh thái", "printedPageStart": 180 },
+        { "id": "lesson-45", "lessonNumber": 45, "title": "Sinh quyển", "printedPageStart": 185 },
+        { "id": "lesson-46", "lessonNumber": 46, "title": "Cân bằng tự nhiên", "printedPageStart": 188 },
+        { "id": "lesson-47", "lessonNumber": 47, "title": "Bảo vệ môi trường", "printedPageStart": 191 }
+      ]
+    }
+  ],
+  "backMatter": [
+    { "id": "back-glossary", "title": "Giải thích một số thuật ngữ dùng trong sách", "printedPageStart": 195 }
+  ],
+  "lessonContent": {
+    "path": "sgk-khtn8-lessons.jsonl",
+    "schema": "nexalab.textbook-section/v1",
+    "sha256": "9A403DB0E272B811D4EED8C0FFE97DF0B5B29287D41562DBA08407D637303986",
+    "bytes": 461871,
+    "recordCount": 48,
+    "lessonRecordCount": 47,
+    "backMatterRecordCount": 1,
+    "segmentation": "OCR heading boundaries, checked in source line order; printed page ranges copied/calculated from TOC, not independently page-verified",
+    "normalization": "Unicode NFC, LF line endings, outer whitespace trimmed; no lexical/content/OCR correction applied",
+    "contentAuthority": "OCR_TRANSCRIPTION_DRAFT_NOT_APPROVED",
+    "humanReviewRequired": true,
+    "knownBoundaryRecovery": [
+      { "recordId": "lesson-06", "sourceLine": 1025, "reason": "OCR heading damaged; lesson title and order used to recover boundary" },
+      { "recordId": "lesson-30", "sourceLine": 4261, "reason": "OCR heading damaged; visible number/title context used to recover boundary" },
+      { "recordId": "lesson-33", "sourceLine": 4792, "reason": "OCR heading letter damaged; visible lesson number used" }
+    ]
+  },
+  "counts": {
+    "chapterCount": 8,
+    "chapterLessonCount": 46,
+    "standaloneLessonCount": 1,
+    "totalLessonCount": 47
+  },
+  "normalizationPolicy": {
+    "titleSourcePriority": ["USER_PROVIDED_TOC", "EXTRACTED_TEXT_FOR_MISSING_PAGE_EVIDENCE"],
+    "textPolicy": "Không sửa nội dung sgk.txt trong manifest và không suy diễn phần bị lỗi. Chỉ chuẩn hoá tiêu đề mục lục rõ ràng; mọi nội dung bài phải được đối chiếu PDF theo trang trước khi dùng làm nội dung học tập.",
+    "taxonomyMapping": "NOT_MAPPED",
+    "videoQuizSimulationMapping": "NOT_MAPPED"
+  },
+  "normalizationNotes": [
+    "Đây là mục lục cấu trúc theo đúng sách; không thay thế taxonomy chương trình KHTN hay outcome học tập trong codebase.",
+    "Bài 1 đứng trước Chương I, không ép vào một chương.",
+    "Trang bắt đầu của Bài 12 (53) và Bài 38 (157) được bổ sung dựa trên sgk.txt vì phần mục lục người dùng gửi thiếu số trang.",
+    "Các lỗi OCR rõ trong tiêu đề đã được chuẩn hoá: 'truyễn' → 'truyền', 'hồ hấp' → 'hô hấp'; chữ rác ở Bài 39–40 được bỏ khỏi tiêu đề.",
+    "Không dùng text OCR chưa đối chiếu để tạo câu hỏi, đáp án, trích dẫn trang chính xác hoặc tự động gán video/bài học."
+  ]
+}
