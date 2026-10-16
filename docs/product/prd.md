@@ -73,7 +73,9 @@ AI, leaderboard, gamification economies, and advanced analytics are not Release 
 
 The canonical Student loop is:
 
-**Learn → Quiz → Practice/Simulation → Challenge → Retry → Progress**
+**Bài học → Bài tập (quiz → practice/lab → challenge) → Retry → Progress**
+
+Student-facing navigation separates **Bài học** (reading, video, and study cards) from **Bài tập** (assigned quizzes and practical work). The quiz remains the first exercise and the server-owned gate before lab/practice; this presentation change does not change the `Content → Assignment → Attempt → Progress` data relationships.
 
 Within a lesson, the ordered path is:
 
