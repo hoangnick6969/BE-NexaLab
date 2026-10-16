@@ -49,7 +49,7 @@ Against the real seeded API/database/browser stack, the A1 student opens the ass
 - `GET /lessons/:id/pathway` authorizes assignment applicability and returns lesson summary, ordered sanitized steps, per-step state, `nextStepId`, and lock reasons. It never returns quiz answers or hidden authoring data.
 - `PUT /lessons/:lessonId/steps/:stepId/progress` accepts a step-type-specific Zod union plus optional idempotency key. Server validates the step belongs to the lesson/student path, applies monotonic state transition, updates the `Progress` projection transactionally, and returns the full reconciled step/pathway state.
 - Reading payload: `{ action: "complete" }`. Video payload: `{ action: "heartbeat" | "ended" | "complete-fallback", positionSeconds, durationSeconds }`; fallback completion requires a published equivalent. Cards payload: `{ action: "visit" | "complete", cardIndex }` and completion requires every valid index visited.
-- Frontend route: assigned lesson detail uses pathway response as its state source; local state may make controls responsive but reconciles on mutation response and preserves unsent video/card state after recoverable failure.
+- Frontend uses the same assignment-authorized pathway response across separate student destinations: **Bài học** owns reading, video, and study cards; **Bài tập** owns quiz and practical steps. Bài tập links back to Bài học while required core steps remain incomplete. Local state may make controls responsive but reconciles on mutation response and preserves unsent video/card state after recoverable failure.
 
 Canonical pathway response:
 

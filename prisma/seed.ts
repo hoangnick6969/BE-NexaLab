@@ -356,8 +356,14 @@ async function main() {
   // It is original NexaLab content and intentionally does not copy source text.
   await db.subject.upsert({
     where: { id: "khtn" },
-    create: { id: "khtn", name: "Khoa học tự nhiên" },
-    update: {},
+    create: {
+      id: "khtn",
+      name: "Khoa học tự nhiên",
+      ebookUrl: "https://eiotlkegrejjhldsvaqp.supabase.co/storage/v1/object/public/lesson-media/sgk-khtn.pdf",
+    },
+    update: {
+      ebookUrl: "https://eiotlkegrejjhldsvaqp.supabase.co/storage/v1/object/public/lesson-media/sgk-khtn.pdf",
+    },
   });
   const demoLessonId = "lesson-khtn6-introduction";
   const demoReading =

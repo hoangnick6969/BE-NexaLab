@@ -39,6 +39,11 @@ enum ParentLinkStatus {
   approved
   revoked
 }
+enum EbookAnnotationKind {
+  HIGHLIGHT
+  UNDERLINE
+  NOTE
+}
 model User {
   id String @id @default(cuid())
   username String? @unique
@@ -70,6 +75,7 @@ model User {
   parents ParentLink[] @relation("student")
   children ParentLink[] @relation("parent")
   assignmentTargets AssignmentTarget[]
+  ebookAnnotations EbookAnnotation[]
 }
 model Session {
   id String @id @default(cuid())
@@ -155,11 +161,36 @@ model Enrollment {
   @@index([studentId, status])
 }
 model Subject {
-  id String @id
-  name String
-  lessons Lesson[]
-  labs Lab[]
+  id       String   @id
+  name     String
+  /// Optional external ebook/reference URL; linking does not grant reproduction rights.
+  ebookUrl String?
+  lessons  Lesson[]
+  labs     Lab[]
+  ebookAnnotations EbookAnnotation[]
 }
+
+model EbookAnnotation {
+  id                  String              @id @default(cuid())
+  userId              String
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectId           String
+  subject             Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  documentFingerprint String
+  pageNumber          Int
+  kind                EbookAnnotationKind
+  startOffset         Int
+  endOffset           Int
+  selectedText        String              @db.Text
+  prefix              String?             @db.Text
+  suffix              String?             @db.Text
+  noteText            String?             @db.Text
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([userId, subjectId, documentFingerprint, createdAt], map: "ebook_annotation_owner_version_idx")
+}
+
 model Lesson {
   id String @id @default(cuid())
   subjectId String

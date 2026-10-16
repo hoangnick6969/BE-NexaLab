@@ -73,7 +73,9 @@ AI, leaderboard, gamification economies, and advanced analytics are not Release 
 
 The canonical Student loop is:
 
-**Learn → Quiz → Practice/Simulation → Challenge → Retry → Progress**
+**Bài học → Bài tập (quiz → practice/lab → challenge) → Retry → Progress**
+
+Student-facing navigation separates **Bài học** (reading, video, and study cards) from **Bài tập** (assigned quizzes and practical work). The quiz remains the first exercise and the server-owned gate before lab/practice; this presentation change does not change the `Content → Assignment → Attempt → Progress` data relationships.
 
 Within a lesson, the ordered path is:
 
@@ -119,6 +121,7 @@ Lab/Practice remains visible but locked until the quiz gate is met or an authori
 
 - **FR-21:** Teacher AI may create structured drafts only; an authorized human must review and publish them.
 - **FR-22:** Student AI may provide bounded advisory hints only; it shall never calculate or override result, verdict, score, or progress.
+- **FR-23:** An admin may maintain an optional HTTPS ebook/reference link for each subject; the student subject library shall display configured links as external resources. A link does not grant rights to copy, host, or reproduce the linked content.
 
 ## 6. Quality and policy requirements
 
