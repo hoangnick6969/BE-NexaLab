@@ -51,6 +51,12 @@ export const CHALLENGE_PARAMETERS: Record<
     modelRef: "chemistry@1.0.0",
     rangeReview: "pending",
     params: {
+      experiment: {
+        kind: "choice",
+        label: "Loại thí nghiệm",
+        options: [{ value: "ph", label: "Nhận biết axit, trung tính và bazơ bằng quỳ tím" }],
+        default: "ph",
+      },
       reactionId: {
         kind: "choice",
         label: "Phản ứng cần làm",
@@ -95,6 +101,7 @@ export function challengeObjective(labId: string, params: ChallengeParams) {
   if (labId === "circuit")
     return `Lắp mạch kín để ít nhất ${params.minLitLeds ?? 1} LED sáng, dòng qua mỗi nhánh LED không vượt quá ${params.maxCurrentMa ?? 20} mA.`;
   if (labId === "chemistry") {
+    if (params.experiment === "ph") return "Nhúng quỳ tím vào ba lọ mất nhãn và ghi màu đổi được để nhận biết axit, trung tính và bazơ.";
     const reaction = reactions.find((item) => item.id === params.reactionId);
     return `Chọn lượng chất để phản ứng ${reaction?.equation ?? params.reactionId} xảy ra vừa đủ, không còn chất dư.`;
   }
@@ -118,7 +125,10 @@ export function evaluateChallenge(labId: string, labState: any, result: any, par
     if (litLeds < Number(params.minLitLeds ?? 1)) unmet.push("minLitLeds");
     if (verdict === "passed" && unmet.length) verdict = "partial";
   } else if (labId === "chemistry") {
-    if (params.reactionId && labState?.reactionId !== params.reactionId) {
+    if (params.experiment === "ph") {
+      const samples = result.samples ?? [];
+      if (samples.length !== 3 || samples.some((sample: any) => sample.color == null)) verdict = "not_passed";
+    } else if (params.reactionId && labState?.reactionId !== params.reactionId) {
       unmet.push("reactionId");
       verdict = "not_passed";
     }

@@ -1,8 +1,8 @@
 # C2 Admin Operations — Implementation Record
 
 Date: 2026-10-15
-Branch: `feat/c2-admin-operations` (BE and FE, from `origin/main` 0d497a0 / b1a6b68; committed, not pushed)
-Runtime acceptance: isolated local PostgreSQL 18 + real Nest API + dev SMTP mailbox + real Chrome/Vite UI
+Branch: merged to `origin/main` in both repositories (BE HEAD `8de28c0`)
+Runtime acceptance: isolated local PostgreSQL 18 + shared-development Supabase runtime + real Nest API + dev SMTP mailbox + Chrome/Vite UI
 Scope decision (owner, 2026-10-15): **C2 on the current foundation.** T1, T2, T4, T6 in full; T3 and T5 on the existing lab/challenge and `AssetFile` model, with Content Foundation surfaces (R2, `AssetVersion`, `SourceRegistry`, ingestion, topic packs) deferred until CF-T1..T4 exist.
 
 ## Delivered
@@ -89,6 +89,20 @@ Scope decision (owner, 2026-10-15): **C2 on the current foundation.** T1, T2, T4
 | Cleanup | 0 leftover c2 users/subjects/outcomes/lessons; no active circuit configuration version (restored) |
 | `password-flow.mjs` | 6/6 |
 | p95 from the dev machine | read 955 ms, mutation 2475 ms: **misses** QR-09 500/1000 ms (same ~176 ms pooler round-trip finding as B1); measure from the pilot region |
+
+### Latest re-acceptance (2026-10-15)
+
+| Check | Result |
+| --- | --- |
+| BE lint / build | pass |
+| BE Vitest | 123/123 pass |
+| FE lint / build | pass |
+| Shared-development `test:c2` against current API | **80 passed, 1 justified SKIP** (last-active-admin API case; unit/advisory-lock coverage retained) |
+| Post-test `c2:preflight` | `RESULT ok`; C2 migration present, one active admin, 14 published + 1 archived lesson, no leftover assets/simulation versions/pinned attempts |
+| Cleanup / worktree diff | synthetic records cleaned; `git diff --check` clean; only pre-existing user source edits remain |
+| Latest dev-network p95 (22 reads / 12 mutations) | read 1261 ms / mutation 2902 ms — **misses** QR-09 500/1000 ms; pilot/production latency unverified |
+
+This completes C2 for the approved **current-foundation** scope and the code already merged to `origin/main`. Production upload budgets (Q-DATA-01/Q-C2-03), reviewed simulation parameter ranges (Q-C2-04), production migration/release, and pilot-region performance remain release gates. R2, `AssetVersion`, `SourceRegistry`/ingestion, and full topic packs remain explicitly deferred to Content Foundation and are not represented as delivered.
 
 Dependencies named by the suites: API `http://127.0.0.1:4100/api`, PostgreSQL `127.0.0.1:55432`, SMTP mailbox `127.0.0.1:1025`, browser Vite `127.0.0.1:5173`. R2 is not used.
 

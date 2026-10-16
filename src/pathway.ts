@@ -90,7 +90,7 @@ export function sanitizeQuizConfig(config: unknown) {
   return { questions: parsed.questions.map(({ id, prompt, options }) => ({ id, prompt, options })) };
 }
 const lab = z.object({ labId: z.string().trim().min(1) });
-const challenge = z.object({ challengeId: z.string().trim().min(1) });
+const challenge = z.object({ challengeId: z.string().trim().min(1), sameAsLab: z.boolean().optional() });
 
 export const stepConfigSchemas = {
   READING: reading,

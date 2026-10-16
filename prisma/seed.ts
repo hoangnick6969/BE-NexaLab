@@ -150,9 +150,9 @@ async function main() {
     {
       id: "chemistry",
       subjectId: "chemistry",
-      title: "Những biến đổi kỳ diệu",
-      topic: "Phản ứng hóa học",
-      learningObjective: "Hiểu tỉ lệ mol và xác định chất dư",
+      title: "Phòng thí nghiệm pH",
+      topic: "Xác định pH của dung dịch giấm ăn, nước xà phòng, nước vôi trong",
+      learningObjective: "Nhận biết axit, trung tính và bazơ bằng quỳ tím",
       simulationModelRef: "chemistry@1.0.0",
     },
   ];
@@ -180,16 +180,23 @@ async function main() {
     chemistry: { domain: "MATTER", outcomeCodes: ["FX8-MATTER-01"] },
   };
   for (const l of labs) {
-    await db.lab.upsert({ where: { id: l.id }, create: l, update: {} });
+    await db.lab.upsert({
+      where: { id: l.id },
+      create: l,
+      update: l.id === "chemistry" ? { title: l.title, topic: l.topic, learningObjective: l.learningObjective } : {},
+    });
     await db.challenge.upsert({
       where: { id: l.id + "_001" },
       create: {
         id: l.id + "_001",
         labId: l.id,
         objective: l.learningObjective,
-        constraints: l.id === "circuit" ? { maxCurrentMa: 20 } : { score: 100 },
+        constraints: l.id === "circuit" ? { maxCurrentMa: 20 } : l.id === "chemistry" ? { experiment: "ph" } : { score: 100 },
       },
-      update: {},
+      update: {
+        objective: l.learningObjective,
+        constraints: (l.id === "circuit" ? { maxCurrentMa: 20 } : l.id === "chemistry" ? { experiment: "ph" } : { score: 100 }) as Prisma.InputJsonValue,
+      },
     });
     await db.lesson.upsert({
       where: { id: "lesson-" + l.id },
@@ -209,7 +216,7 @@ async function main() {
             ? "Dòng điện chỉ chạy qua đường dẫn kín. Trong mô hình này, mỗi LED có sụt áp 2 V. Dòng điện qua một nhánh nối tiếp: I = (U − 2 × số LED) / R. Điện trở giới hạn dòng để bảo vệ LED. Hãy thay đổi từng tham số và ghi lại kết quả."
             : l.id === "eye"
               ? "Ánh sáng đi qua giác mạc, thủy dịch, đồng tử, thể thủy tinh và dịch kính, rồi đến võng mạc. Võng mạc biến ánh sáng thành tín hiệu thần kinh. Dây thần kinh thị giác truyền tín hiệu đến não. Khám phá từng bộ phận trong mô hình minh họa."
-              : "Hệ số trong phương trình hóa học biểu thị tỉ lệ số mol. Chất giới hạn quyết định lượng sản phẩm tối đa; chất còn lại có thể dư. Sáu phản ứng trong lab là mô hình giáo dục lý tưởng; không hướng dẫn thực hành với hóa chất thật.",
+              : "Dùng quỳ tím nhúng lần lượt vào ba lọ mất nhãn. Lọ axit (đại diện: giấm ăn) làm quỳ tím hóa đỏ, lọ trung tính giữ màu tím và lọ bazơ (đại diện: nước xà phòng hoặc nước vôi trong) làm quỳ tím hóa xanh.",
         labId: l.id,
         status: "published",
         scope: "SHARED_LIBRARY",
@@ -223,23 +230,49 @@ async function main() {
                 ? "Khi điện áp không đổi, tăng điện trở thì dòng điện sẽ?"
                 : l.id === "eye"
                   ? "Bộ phận nào tiếp nhận ánh sáng và chuyển thành tín hiệu thần kinh?"
-                  : "Hệ số phương trình biểu thị tỉ lệ nào?",
+                  : "Dung dịch axit làm quỳ tím đổi sang màu nào?",
             options:
               l.id === "circuit"
                 ? ["Giảm", "Tăng", "Không đổi"]
                 : l.id === "eye"
                   ? ["Võng mạc", "Củng mạc", "Dây thần kinh thị giác"]
-                  : [
-                      "Số mol",
-                      "Khối lượng luôn bằng nhau",
-                      "Thể tích luôn bằng nhau",
-                    ],
+                  : ["Đỏ", "Tím", "Xanh"],
             answer: 0,
           },
         ],
       },
       // Synthetic fixtures are shared demo content, never released corpus.
-      update: { scope: "SHARED_LIBRARY", synthetic: true, ...fixtureTaxonomy[l.id] },
+      update: {
+        title: l.topic,
+        topic: l.topic,
+        learningObjective: l.learningObjective,
+        content:
+          l.id === "circuit"
+            ? "Dòng điện chỉ chạy qua đường dẫn kín. Trong mô hình này, mỗi LED có sụt áp 2 V. Dòng điện qua một nhánh nối tiếp: I = (U − 2 × số LED) / R. Điện trở giới hạn dòng để bảo vệ LED. Hãy thay đổi từng tham số và ghi lại kết quả."
+            : l.id === "eye"
+              ? "Ánh sáng đi qua giác mạc, thủy dịch, đồng tử, thể thủy tinh và dịch kính, rồi đến võng mạc. Võng mạc biến ánh sáng thành tín hiệu thần kinh. Dây thần kinh thị giác truyền tín hiệu đến não. Khám phá từng bộ phận trong mô hình minh họa."
+              : "Dùng quỳ tím nhúng lần lượt vào ba lọ mất nhãn. Lọ axit (đại diện: giấm ăn) làm quỳ tím hóa đỏ, lọ trung tính giữ màu tím và lọ bazơ (đại diện: nước xà phòng hoặc nước vôi trong) làm quỳ tím hóa xanh.",
+        questions: [
+          {
+            prompt:
+              l.id === "circuit"
+                ? "Khi điện áp không đổi, tăng điện trở thì dòng điện sẽ?"
+                : l.id === "eye"
+                  ? "Bộ phận nào tiếp nhận ánh sáng và chuyển thành tín hiệu thần kinh?"
+                  : "Dung dịch axit làm quỳ tím đổi sang màu nào?",
+            options:
+              l.id === "circuit"
+                ? ["Giảm", "Tăng", "Không đổi"]
+                : l.id === "eye"
+                  ? ["Võng mạc", "Củng mạc", "Dây thần kinh thị giác"]
+                  : ["Đỏ", "Tím", "Xanh"],
+            answer: 0,
+          },
+        ],
+        scope: "SHARED_LIBRARY",
+        synthetic: true,
+        ...fixtureTaxonomy[l.id],
+      },
     });
     const seededLesson = await db.lesson.findUniqueOrThrow({
       where: { id: "lesson-" + l.id },
@@ -258,6 +291,9 @@ async function main() {
         position: 20,
         config: {
           title: `Giải thích: ${l.topic}`,
+          ...(l.id === "chemistry"
+            ? { url: "https://eiotlkegrejjhldsvaqp.supabase.co/storage/v1/object/public/lesson-media/nexalab-ph-demo-under-50mb.mp4" }
+            : {}),
           equivalentText: seededLesson.content,
         },
       },
@@ -296,7 +332,7 @@ async function main() {
         id: `step-lesson-${l.id}-challenge`,
         type: "CHALLENGE" as const,
         position: 60,
-        config: { challengeId: `${l.id}_001` },
+        config: { challengeId: `${l.id}_001`, ...(l.id === "chemistry" ? { sameAsLab: true } : {}) },
       },
     ];
     for (const step of seededSteps)
@@ -304,17 +340,85 @@ async function main() {
         where: { id: step.id },
         create: {
           ...step,
+          required: l.id !== "chemistry" || step.type !== "CHALLENGE",
           lessonId: seededLesson.id,
           config: step.config as Prisma.InputJsonValue,
         },
         update: {
           type: step.type,
           position: step.position,
-          required: true,
+          required: l.id !== "chemistry" || step.type !== "CHALLENGE",
           config: step.config as Prisma.InputJsonValue,
         },
       });
   }
+  // Synthetic demo lesson inspired by the public Hoc10 Grade 6 KHTN catalog.
+  // It is original NexaLab content and intentionally does not copy source text.
+  await db.subject.upsert({
+    where: { id: "khtn" },
+    create: { id: "khtn", name: "Khoa học tự nhiên" },
+    update: {},
+  });
+  const demoLessonId = "lesson-khtn6-introduction";
+  const demoReading =
+    "Khoa học tự nhiên giúp chúng ta quan sát thế giới, đặt câu hỏi, đo đạc và dùng bằng chứng để giải thích hiện tượng. Một bài tìm hiểu thường bắt đầu từ câu hỏi, tiếp tục bằng quan sát hoặc thí nghiệm an toàn, rồi kết thúc bằng kết luận có thể kiểm tra lại.";
+  const demoQuestions = [
+    {
+      prompt: "Bước nào giúp kiểm tra một lời giải thích khoa học?",
+      options: ["Dựa vào bằng chứng quan sát được", "Đoán theo cảm giác", "Bỏ qua kết quả trái ý"],
+      answer: 0,
+    },
+    {
+      prompt: "Khi thực hành khoa học, điều nào cần được ưu tiên?",
+      options: ["An toàn và ghi chép trung thực", "Làm thật nhanh", "Thay đổi kết quả"],
+      answer: 0,
+    },
+  ];
+  await db.lesson.upsert({
+    where: { id: demoLessonId },
+    create: {
+      id: demoLessonId,
+      authorId: "teacher",
+      subjectId: "khtn",
+      title: "Bài 1. Giới thiệu về Khoa học tự nhiên",
+      chapter: "Khoa học tự nhiên 6",
+      grade: 6,
+      topic: "Khám phá khoa học",
+      learningObjective: "Nhận biết vai trò của quan sát, bằng chứng và an toàn trong học khoa học",
+      prerequisites: "Không yêu cầu",
+      curriculum: "GDPT 2018 – Khoa học tự nhiên lớp 6",
+      content: demoReading,
+      labId: "eye",
+      status: "archived",
+      scope: "SHARED_LIBRARY",
+      synthetic: true,
+      questions: demoQuestions,
+      materials: [],
+      publishedAt: new Date(),
+    },
+    update: {
+      title: "Bài 1. Giới thiệu về Khoa học tự nhiên",
+      status: "archived",
+      scope: "SHARED_LIBRARY",
+      synthetic: true,
+      content: demoReading,
+      questions: demoQuestions,
+      materials: [],
+      labId: "eye",
+    },
+  });
+  const demoSteps = [
+    { id: `${demoLessonId}-reading`, type: "READING" as const, position: 10, config: { html: demoReading } },
+    { id: `${demoLessonId}-video`, type: "VIDEO" as const, position: 20, config: { url: "https://www.hoc10.vn/bai-giang/khoa-hoc-tu-nhien/lop-6", title: "Video minh họa: Khoa học bắt đầu từ câu hỏi", equivalentText: demoReading } },
+    { id: `${demoLessonId}-quiz`, type: "QUIZ" as const, position: 30, config: { questions: materializeQuizQuestions(demoQuestions) } },
+    { id: `${demoLessonId}-lab`, type: "LAB" as const, position: 40, config: { labId: "eye" } },
+  ];
+  for (const step of demoSteps)
+    await db.lessonStep.upsert({
+      where: { id: step.id },
+      create: { ...step, lessonId: demoLessonId, config: step.config as Prisma.InputJsonValue },
+      update: { type: step.type, position: step.position, required: true, config: step.config as Prisma.InputJsonValue },
+    });
   await db.classroom.upsert({
     where: { id: "demo-class" },
     create: {
@@ -381,12 +485,16 @@ async function main() {
     create: {
       id: "demo-assignment",
       classId: "demo-class",
-      contentId: "circuit",
-      contentType: "lab",
-      title: "Thử thách: LED sáng an toàn",
+      contentId: "lesson-chemistry",
+      contentType: "lesson",
+      title: "Demo: Xác định pH các dung dịch quen thuộc",
       dueDate: new Date(Date.now() + 7 * 86400000),
     },
-    update: {},
+    update: {
+      contentId: "lesson-chemistry",
+      contentType: "lesson",
+      title: "Demo: Xác định pH các dung dịch quen thuộc",
+    },
   });
   await db.assignment.upsert({
     where: { id: "pilot-a-lesson-assignment" },
@@ -412,8 +520,26 @@ async function main() {
     },
     update: {},
   });
+  await db.assignment.upsert({
+    where: { id: "demo-khtn6-assignment" },
+    create: {
+      id: "demo-khtn6-assignment",
+      classId: "demo-class",
+      contentId: "lesson-chemistry",
+      contentType: "lesson",
+      title: "Demo: Xác định pH các dung dịch quen thuộc",
+      dueDate: new Date("2027-06-30T00:00:00.000Z"),
+    },
+    update: {
+      classId: "demo-class",
+      contentId: "lesson-chemistry",
+      contentType: "lesson",
+      title: "Demo: Xác định pH các dung dịch quen thuộc",
+      status: "ARCHIVED",
+    },
+  });
   // B1: assignments reach students only through their target snapshot.
-  for (const assignmentId of ["demo-assignment", "pilot-a-lesson-assignment", "pilot-a-circuit-assignment"]) {
+  for (const assignmentId of ["demo-assignment", "pilot-a-lesson-assignment", "pilot-a-circuit-assignment", "demo-khtn6-assignment"]) {
     const assignment = await db.assignment.findUniqueOrThrow({ where: { id: assignmentId } });
     const members = await db.enrollment.findMany({
       where: { classId: assignment.classId, status: "approved" },

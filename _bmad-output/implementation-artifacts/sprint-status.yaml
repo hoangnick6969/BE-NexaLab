@@ -6,11 +6,11 @@ project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
 scope: Release 1 / Content Foundation CF-T1..T4 platform (completes the C2-T3/C2-T5 surfaces; CF-T5 corpus remains a staffed workstream)
-last_updated: '2026-10-15'
+last_updated: '2026-10-16'
 tracking_timezone: Asia/Saigon
 repositories:
-  backend: 'BE-NexaLab (branch feat/content-foundation, stacked on feat/c2-admin-operations)'
-  frontend: 'FE-NexaLab (branch feat/content-foundation, stacked on feat/c2-admin-operations)'
+  backend: 'BE-NexaLab (branch feat/content-foundation, merged with origin/main incl. C2 PR #15 and pH demo 3f521d7)'
+  frontend: 'FE-NexaLab (branch feat/content-foundation; C2 merged on origin/main)'
 sources:
   plan: ../planning-artifacts/increment-b-c-plan.md
   acceptance_criteria: ../specs/spec-content-foundation/tickets.md
@@ -81,27 +81,28 @@ development_status:
   c1-t2-parent-read-model: done
   c1-t3-parent-ui: done
   c1-t4-parent-journey-negative: done
-  epic-c2-admin-operations: review
-  c2-t1-user-lifecycle-ownership: review
-  c2-t2-taxonomy-shared-content: review
-  c2-t3-simulation-versions: review
-  c2-t4-adult-reset-admin-login: review
-  c2-t5-asset-source-operations: review
-  c2-t6-admin-console-audit-journey: review
+  epic-c2-admin-operations: done
+  c2-t1-user-lifecycle-ownership: done
+  c2-t2-taxonomy-shared-content: done
+  c2-t3-simulation-versions: done
+  c2-t4-adult-reset-admin-login: done
+  c2-t5-asset-source-operations: done
+  c2-t6-admin-console-audit-journey: done
 
 execution:
   current_story: cf-t4-practical-simulation-pack-registry
-  next_story: 'Owner push/PR (C2 then Content Foundation); shared Supabase CF migration with approval; CF-T5 needs named content capacity (Q-DATA-02/03/04)'
+  next_story: 'Owner PR for Content Foundation (BE and FE); shared Supabase CF migration with approval; CF-T5 needs named content capacity (Q-DATA-02/03/04)'
   selection_reason: >
     2026-10-16 (Content Foundation): CF-T1..T4 platform implemented on feat/content-foundation and verified against the real
     Cloudflare R2 development bucket (r2:check 9/9, test:cf 60/60, Playwright browser→R2 CORS upload 1/1, Vitest 144/144).
-    This completes the C2-T3/C2-T5 surfaces C2 had deferred. CF-T5 corpus stays backlog: it is a staffed editorial delivery.
-    2026-10-15 (C2): all six C2 tickets implemented on feat/c2-admin-operations and verified on the isolated local runtime
-    (Vitest 122/122, test:c2 80/80 + 1 justified SKIP, regressions B0/B1/B2/A1-A3/A5 green, Playwright c2-admin-live 1/1 at 390 px).
-    Owner chose "C2 on the current foundation": R2, AssetVersion, SourceRegistry/ingestion and full topic packs wait for Content Foundation.
-    Shared Supabase dev migrated with approval; test:c2 80/80 there. Status stays review until the owner pushes and merges the PRs.
+    This completes the R2/AssetVersion/SourceRegistry/ingestion/topic-pack surfaces C2 had deferred. CF-T5 corpus stays backlog: it is a staffed editorial delivery.
+    Branch merged with origin/main (C2 PR #15, pH demo); the pH demo extended chemistry@1.0.0 in place, so the model registry should declare its new outputs.
+    2026-10-15 (C2): all six C2 tickets implemented on the approved current-foundation scope and merged to origin/main (BE 8de28c0; FE C2 merged).
+    BE lint/build and Vitest 123/123 pass; FE lint/build pass; shared-development test:c2 80 passed + 1 justified SKIP and c2:preflight RESULT ok after cleanup.
+    Latest Supabase dev p95 read 1261 ms / mutation 2902 ms misses QR-09 (500/1000 ms); production and pilot latency are not claimed.
+    Owner chose "C2 on the current foundation": R2, AssetVersion, SourceRegistry/ingestion and full topic packs were deferred to Content Foundation (now delivered there, in review).
     2026-10-15: C1 link lifecycle, sanitized parent read model, responsive parent UI, unlink flow, and negative access handling completed; backend/frontend build and lint passed, and backend unit tests passed 107/107.
-    Fresh migration/seed and B2 integration evidence remain recorded below; shared development credentials were rejected, so shared migration is not claimed. C1 is complete; C2 is next.
+    Fresh migration/seed and B2 integration evidence remain recorded below; C2 development migration and runtime acceptance are verified. C1 and C2 are complete for their recorded scopes; production release gates remain open.
   one_story_per_task: true
   next_epic_unlocked: true
   implementation_readiness: complete
@@ -140,7 +141,7 @@ execution:
 verification:
   source: verified
   automated: verified
-  runtime: verified-isolated-local-postgresql
+  runtime: verified-isolated-local-and-shared-development
   production: unverified
   historical_results:
     - 'A2-T1: 61/61 integration assertions passed live on Supabase (2026-10-13)'
@@ -175,16 +176,15 @@ story_notes:
       - 'Per-pack Q-C2-04 range approvals before pilot activation'
       - 'CF-T5 corpus and official outcome inventory'
   epic-c2-admin-operations:
-    status: review
+    status: done
     audited_against_code: '2026-10-15'
-    branch: feat/c2-admin-operations (BE and FE, from origin/main 0d497a0 / b1a6b68; committed, not pushed)
+    branch: origin/main (BE HEAD 8de28c0; C2 changes merged in both repositories)
     scope_decision: 'Owner 2026-10-15: C2 on the current foundation; CF-dependent surfaces deferred'
-    shared_supabase_migration: 'applied 2026-10-15 with owner approval; c2:preflight before/after RESULT ok; test:c2 80/80 (shared-development) and password-flow 6/6; cleanup verified; p95 from dev machine 955/2475 ms misses QR-09'
+    shared_supabase_migration: 'applied 2026-10-15 with owner approval; latest c2:preflight RESULT ok after test:c2; test:c2 80 passed + 1 justified SKIP (shared-development), cleanup verified; latest dev-machine p95 1261/2902 ms misses QR-09'
     artifact: c2-admin-operations-implementation.md
     remaining:
-      - 'Push and PR by the owner (BE and FE together); production migration with c2:preflight'
-      - 'Deferred C2-T3/C2-T5 surfaces delivered by Content Foundation on feat/content-foundation (2026-10-16)'
-      - 'Production upload budgets (Q-DATA-01, Q-C2-03) and per-template ranges (Q-C2-04)'
+      - 'Production deployment/migration acceptance and pilot-region latency verification; production upload budgets Q-DATA-01/Q-C2-03 and reviewed per-template ranges Q-C2-04 remain release gates'
+      - 'R2 asset versions, SourceRegistry/ingestion, and full topic-pack versions were deferred to Content Foundation and are delivered on feat/content-foundation (2026-10-16, review); not unfinished C2 acceptance'
   epic-b1-teacher-operations:
     status: done
     audited_against_code: '2026-10-15'
