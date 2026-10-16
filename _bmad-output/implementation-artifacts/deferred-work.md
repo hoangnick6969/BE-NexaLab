@@ -19,3 +19,10 @@
 - source_spec: `../specs/spec-c2-admin-operations/SPEC.md` (C2, 2026-10-15)
   summary: `prisma migrate diff` shows pre-existing schema/database drift from the B2 migrations (TeacherGateOverride foreign keys present in SQL but not in schema.prisma; StepProgress index name; updatedAt defaults on Assignment/User).
   evidence: Not introduced by C2 and deliberately left out of `20261015160000_c2_admin_operations`; needs a B2 owner to decide whether schema.prisma or the database is authoritative before the contract migration.
+- source_spec: none
+  summary: Verify and deploy the lesson and ebook UI against production after the user explicitly reselects that scope.
+  evidence: The user narrowed this request to the lesson detail view and ebook reader, deferring production testing and deployment.
+
+- source_spec: `C:\Users\FPT\.codex\worktrees\lesson-detail-ebook-reader-be\nexalab-be\_bmad-output\implementation-artifacts\spec-lesson-detail-and-ebook-reader.md`
+  summary: Add API integration coverage for ebook annotation owner isolation and owner CRUD.
+  evidence: The review searched both repositories and found no tests for EbookAnnotation ownership or CRUD; these behaviors are implemented and type-checked but have no regression test evidence.

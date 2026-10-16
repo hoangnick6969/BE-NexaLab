@@ -1,0 +1,333 @@
+{
+  "schema": "nexalab.textbook-content-seed/v1",
+  "purpose": "development-ingest-and-staging-test-only",
+  "developmentOnly": true,
+  "studentFacing": false,
+  "releaseEligible": false,
+  "source": {
+    "sourceId": "vn-khtn8-ket-noi-tri-thuc-reprint-3",
+    "book": {
+      "title": "Khoa học tự nhiên 8",
+      "series": "Kết nối tri thức với cuộc sống",
+      "publisher": "Nhà xuất bản Giáo dục Việt Nam",
+      "publicationYear": 2023,
+      "reprint": 3,
+      "isbn": "978-604-0-35039-8",
+      "language": "vi"
+    },
+    "pdfSha256": "963A607724E0B5FBE2E10972FBF170C55D62BDD7BB6D871BD56C5ADC2FDF3FCD",
+    "sourceMapSchema": "nexalab.textbook-source-map/v2",
+    "sourceMapStatus": "COMPLETE_BOOK_CONTENT_MAPPED_BY_SECTION_NEEDS_HUMAN_REVIEW",
+    "sourceMapPath": "sgk-khtn8-source-map-complete.json",
+    "sectionFile": "sgk-khtn8-lessons.jsonl",
+    "sourceTextSha256": "E7260FD0AB5E1959BD0040C479AF274E5C58ADA6FE789214475CB4090400849B",
+    "pageAlignment": "NOT_PROVIDED",
+    "rightsStatus": "UNRESOLVED"
+  },
+  "chapter": {
+    "sourceChapterId": "chapter-01",
+    "title": "PHẢN ỨNG HOÁ HỌC",
+    "grade": 8,
+    "subjectIdCandidate": "khtn",
+    "printedPageStart": 11,
+    "taxonomyMapping": null,
+    "reviewStatus": "NEEDS_HUMAN_REVIEW",
+    "sections": [
+      {
+        "sourceSectionId": "lesson-02",
+        "lessonNumber": 2,
+        "title": "Phản ứng hoá học",
+        "printedPageRange": {
+          "start": 11,
+          "end": 15,
+          "basis": "VISUALLY_VERIFIED_AGAINST_SOURCE_PDF"
+        },
+        "sourceText": {
+          "file": "sgk.txt",
+          "lineStart": 407,
+          "lineEnd": 581,
+          "physicalPdfPage": null,
+          "alignment": "VISUALLY_CONFIRMED_ON_RENDERED_PDF_PAGES_11_TO_15",
+          "physicalPdfPageRange": {
+            "start": 11,
+            "end": 15
+          }
+        },
+        "textSha256": "35CB187DB0640E047FFA53E2EB36965C5D90561A2A20CF91BE9B81D7AD082FC4",
+        "contentIncluded": false,
+        "review": {
+          "status": "PARTIALLY_HUMAN_VERIFIED",
+          "ocrReviewed": false,
+          "needsHumanReview": true,
+          "verifiedScope": "Lesson/chapter heading, displayed printed page numbers, section start/end, and matching physical PDF pages only; OCR body not transcribed, corrected, or approved."
+        },
+        "warnings": [
+          "Visual review verifies section identity and page locator only; OCR body remains unverified.",
+          "Do not use extracted text as approved lesson content, quiz/answer, or exact quotation."
+        ],
+        "content": {
+          "kind": "EXTRACTED_OCR_TEXT",
+          "text": null,
+          "contentIncluded": false,
+          "sha256": "35CB187DB0640E047FFA53E2EB36965C5D90561A2A20CF91BE9B81D7AD082FC4",
+          "reviewStatus": "NEEDS_HUMAN_REVIEW",
+          "editorialCorrectionsApplied": false,
+          "studentFacing": false
+        }
+      },
+      {
+        "sourceSectionId": "lesson-03",
+        "lessonNumber": 3,
+        "title": "Mol và tỉ khối chất khí",
+        "printedPageRange": {
+          "start": 16,
+          "end": 19,
+          "basis": "VISUALLY_VERIFIED_AGAINST_SOURCE_PDF"
+        },
+        "sourceText": {
+          "file": "sgk.txt",
+          "lineStart": 582,
+          "lineEnd": 728,
+          "physicalPdfPage": null,
+          "alignment": "VISUALLY_CONFIRMED_ON_RENDERED_PDF_PAGES_16_TO_19",
+          "physicalPdfPageRange": {
+            "start": 16,
+            "end": 19
+          }
+        },
+        "textSha256": "F31AFDA8152F0A269DB004B99BFDD6FFBE603D73202CF8E7D07446C44D4477AC",
+        "contentIncluded": false,
+        "review": {
+          "status": "PARTIALLY_HUMAN_VERIFIED",
+          "ocrReviewed": false,
+          "needsHumanReview": true,
+          "verifiedScope": "Lesson/chapter heading, displayed printed page numbers, section start/end, and matching physical PDF pages only; OCR body not transcribed, corrected, or approved."
+        },
+        "warnings": [
+          "Visual review verifies section identity and page locator only; OCR body remains unverified.",
+          "Do not use extracted text as approved lesson content, quiz/answer, or exact quotation."
+        ],
+        "content": {
+          "kind": "EXTRACTED_OCR_TEXT",
+          "text": null,
+          "contentIncluded": false,
+          "sha256": "F31AFDA8152F0A269DB004B99BFDD6FFBE603D73202CF8E7D07446C44D4477AC",
+          "reviewStatus": "NEEDS_HUMAN_REVIEW",
+          "editorialCorrectionsApplied": false,
+          "studentFacing": false
+        }
+      },
+      {
+        "sourceSectionId": "lesson-04",
+        "lessonNumber": 4,
+        "title": "Dung dịch và nồng độ",
+        "printedPageRange": {
+          "start": 20,
+          "end": 23,
+          "basis": "VISUALLY_VERIFIED_AGAINST_SOURCE_PDF"
+        },
+        "sourceText": {
+          "file": "sgk.txt",
+          "lineStart": 729,
+          "lineEnd": 887,
+          "physicalPdfPage": null,
+          "alignment": "VISUALLY_CONFIRMED_ON_RENDERED_PDF_PAGES_20_TO_23",
+          "physicalPdfPageRange": {
+            "start": 20,
+            "end": 23
+          }
+        },
+        "textSha256": "BCDD676615908C556C889B65FDB0D112DE6D1627EF5C109BB77DA4366457D71D",
+        "contentIncluded": false,
+        "review": {
+          "status": "PARTIALLY_HUMAN_VERIFIED",
+          "ocrReviewed": false,
+          "needsHumanReview": true,
+          "verifiedScope": "Lesson/chapter heading, displayed printed page numbers, section start/end, and matching physical PDF pages only; OCR body not transcribed, corrected, or approved."
+        },
+        "warnings": [
+          "Visual review verifies section identity and page locator only; OCR body remains unverified.",
+          "Do not use extracted text as approved lesson content, quiz/answer, or exact quotation."
+        ],
+        "content": {
+          "kind": "EXTRACTED_OCR_TEXT",
+          "text": null,
+          "contentIncluded": false,
+          "sha256": "BCDD676615908C556C889B65FDB0D112DE6D1627EF5C109BB77DA4366457D71D",
+          "reviewStatus": "NEEDS_HUMAN_REVIEW",
+          "editorialCorrectionsApplied": false,
+          "studentFacing": false
+        }
+      },
+      {
+        "sourceSectionId": "lesson-05",
+        "lessonNumber": 5,
+        "title": "Định luật bảo toàn khối lượng và phương trình hoá học",
+        "printedPageRange": {
+          "start": 24,
+          "end": 27,
+          "basis": "VISUALLY_VERIFIED_AGAINST_SOURCE_PDF"
+        },
+        "sourceText": {
+          "file": "sgk.txt",
+          "lineStart": 888,
+          "lineEnd": 1024,
+          "physicalPdfPage": null,
+          "alignment": "VISUALLY_CONFIRMED_ON_RENDERED_PDF_PAGES_24_TO_27",
+          "physicalPdfPageRange": {
+            "start": 24,
+            "end": 27
+          }
+        },
+        "textSha256": "CA89548F8DE5C22B2E1DD2F38AF757A2D11B84A217027565B5BB0DCDFEA67330",
+        "contentIncluded": false,
+        "review": {
+          "status": "PARTIALLY_HUMAN_VERIFIED",
+          "ocrReviewed": false,
+          "needsHumanReview": true,
+          "verifiedScope": "Lesson/chapter heading, displayed printed page numbers, section start/end, and matching physical PDF pages only; OCR body not transcribed, corrected, or approved."
+        },
+        "warnings": [
+          "Visual review verifies section identity and page locator only; OCR body remains unverified.",
+          "Do not use extracted text as approved lesson content, quiz/answer, or exact quotation."
+        ],
+        "content": {
+          "kind": "EXTRACTED_OCR_TEXT",
+          "text": null,
+          "contentIncluded": false,
+          "sha256": "CA89548F8DE5C22B2E1DD2F38AF757A2D11B84A217027565B5BB0DCDFEA67330",
+          "reviewStatus": "NEEDS_HUMAN_REVIEW",
+          "editorialCorrectionsApplied": false,
+          "studentFacing": false
+        }
+      },
+      {
+        "sourceSectionId": "lesson-06",
+        "lessonNumber": 6,
+        "title": "Tính theo phương trình hoá học",
+        "printedPageRange": {
+          "start": 28,
+          "end": 30,
+          "basis": "VISUALLY_VERIFIED_AGAINST_SOURCE_PDF"
+        },
+        "sourceText": {
+          "file": "sgk.txt",
+          "lineStart": 1025,
+          "lineEnd": 1152,
+          "physicalPdfPage": null,
+          "alignment": "VISUALLY_CONFIRMED_ON_RENDERED_PDF_PAGES_28_TO_30",
+          "physicalPdfPageRange": {
+            "start": 28,
+            "end": 30
+          }
+        },
+        "textSha256": "2FA32187907E606C2AA732323EA28D6C6B0855E6AA14279E61A0239C7122D8F6",
+        "contentIncluded": false,
+        "review": {
+          "status": "PARTIALLY_HUMAN_VERIFIED",
+          "ocrReviewed": false,
+          "needsHumanReview": true,
+          "verifiedScope": "Lesson/chapter heading, displayed printed page numbers, section start/end, and matching physical PDF pages only; OCR body not transcribed, corrected, or approved."
+        },
+        "warnings": [
+          "Visual review verifies section identity and page locator only; OCR body remains unverified.",
+          "Do not use extracted text as approved lesson content, quiz/answer, or exact quotation."
+        ],
+        "content": {
+          "kind": "EXTRACTED_OCR_TEXT",
+          "text": null,
+          "contentIncluded": false,
+          "sha256": "2FA32187907E606C2AA732323EA28D6C6B0855E6AA14279E61A0239C7122D8F6",
+          "reviewStatus": "NEEDS_HUMAN_REVIEW",
+          "editorialCorrectionsApplied": false,
+          "studentFacing": false
+        }
+      },
+      {
+        "sourceSectionId": "lesson-07",
+        "lessonNumber": 7,
+        "title": "Tốc độ phản ứng và chất xúc tác",
+        "printedPageRange": {
+          "start": 31,
+          "end": 34,
+          "basis": "VISUALLY_VERIFIED_AGAINST_SOURCE_PDF"
+        },
+        "sourceText": {
+          "file": "sgk.txt",
+          "lineStart": 1153,
+          "lineEnd": 1288,
+          "physicalPdfPage": null,
+          "alignment": "VISUALLY_CONFIRMED_ON_RENDERED_PDF_PAGES_31_TO_34",
+          "physicalPdfPageRange": {
+            "start": 31,
+            "end": 34
+          }
+        },
+        "textSha256": "889F59F6CE414A93149AB214B058B4532499A18B991F235B1D333A5E5F65321F",
+        "contentIncluded": false,
+        "review": {
+          "status": "PARTIALLY_HUMAN_VERIFIED",
+          "ocrReviewed": false,
+          "needsHumanReview": true,
+          "verifiedScope": "Lesson/chapter heading, displayed printed page numbers, section start/end, and matching physical PDF pages only; OCR body not transcribed, corrected, or approved."
+        },
+        "warnings": [
+          "Visual review verifies section identity and page locator only; OCR body remains unverified.",
+          "Do not use extracted text as approved lesson content, quiz/answer, or exact quotation."
+        ],
+        "content": {
+          "kind": "EXTRACTED_OCR_TEXT",
+          "text": null,
+          "contentIncluded": false,
+          "sha256": "889F59F6CE414A93149AB214B058B4532499A18B991F235B1D333A5E5F65321F",
+          "reviewStatus": "NEEDS_HUMAN_REVIEW",
+          "editorialCorrectionsApplied": false,
+          "studentFacing": false
+        }
+      }
+    ]
+  },
+  "reviewEvidence": {
+    "method": "Manual visual inspection of rendered source PDF page images",
+    "pagesChecked": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34
+    ],
+    "checkedSectionIds": [
+      "lesson-02",
+      "lesson-03",
+      "lesson-04",
+      "lesson-05",
+      "lesson-06",
+      "lesson-07"
+    ],
+    "scope": "Chapter and lesson headings, printed page numbers, section start/end and physical PDF page alignment. No full OCR transcription/correction, scientific review, rights review, or outcome mapping."
+  },
+  "seedGate": {
+    "status": "SOURCE_INDEX_FIXTURE_ONLY",
+    "note": "Same envelope/section/content structure as the content seed. Text is intentionally null in this committed fixture to avoid copying the textbook OCR into source control."
+  },
+  "importableToStaging": false
+}
