@@ -120,19 +120,35 @@ Use one ordered `VIDEO` step per selected video and map it to the target lesson/
 
 For 3D/virtual labs, link from the learning outcome through a reviewed activity and scientific model to the simulation pack. A GLB/video is a visual asset, not the scientific rules or scoring authority. Do not attach a simulation just because a chapter has a video.
 
-## 7. What exists today vs. what is still target architecture
+## 7. Admin entry, PRD fit, and selected direction
 
-**Present in the current Prisma/runtime:** `Lesson`, `LessonStep`, `CurriculumOutcome`, `QuizAttempt`, `StepProgress`, and a legacy `AssetFile`; `Lesson` has free-text chapter/topic fields and JSON `materials`/`questions`; the `domain` comment represents a KHTN strand. The step configs are validated in `src/pathway.ts`.
+**Code inspection date:** 2026-10-16. This is source evidence, not a live admin-session verification.
 
-**Not present as versioned Prisma entities yet:** `ContentPackVersion`, `KnowledgeUnitVersion`, `SourceArtifactVersion`, `AssetVersion`, `ContentAsset`, and `ContentRelease`. These are target contracts in the Content Foundation documents. The source map/JSON files are local evidence/data manifests, not rows automatically managed by the current database.
+The PRD's FR-09 expects student content to be organized by subject, grade, chapter, topic, and curriculum reference; FR-20 gives Admin management of content and subjects. C2-T2 further calls for Subject/Domain, Chapter, Topic, Outcome mapping, and reviewed shared-content lifecycle. The current Admin taxonomy screen and `/admin/*` APIs provide part of this workflow:
 
-**Seed boundary:** `npm run db:seed` is for guarded development/test fixtures, not the release corpus. The planned content importer/release lane is specified under CF-T1/CF-T3 but is not the same as today's generic seed. Do not write the full SGK OCR into `Lesson.content` or production tables as a shortcut.
+- Admin can manually add subjects, chapters, topics, and outcomes. Duplicate codes are rejected; mutations are audited. Chapters and outcomes can be archived/restored in the UI. The chapter API can rename a chapter, but the current UI does not expose rename. Topic update/archive exists in the API, but the current UI only lists and creates topics.
+- Admin can manage shared lesson/content operations. Teachers can author private lessons in the lesson library. These are manual editor paths; there is no JSON/CSV source-map importer or Admin bulk-import/dry-run screen.
+- Admin can create an outcome using code, grade, domain, chapter label, and statement, but the current form/API does not capture the official curriculum artifact ID/version or a document/page locator. `CurriculumOutcome.synthetic` defaults to false, so manually entered unverified outcomes can look like authoritative outcomes in coverage. Do not enter guessed outcomes as production taxonomy.
+- Shared-lesson review records reviewer identity and review kind, and requires different identities for subject and rights review. The current review API is Admin-only, while the publish gate checks that reviewer fields exist; there is no reviewer-capability/qualification model or claim-level evidence. C2 explicitly says Admin identity is not itself scientific or rights approval, so this boundary needs implementation before treating the gate as a verified expert review.
+- C2-T5 specifies SourceRegistry, ingestion run/item status, dry-run, and release receipt. Those surfaces and a content-release importer are not present in the current source code. The existing crawler writes local staging artifacts and is not a database importer.
 
-## 8. Cleanup and current readiness
+**Selected direction 1:** start with a small, controlled Admin-managed batch: load only outcome/chapter/topic information checked against a named official curriculum document, then author original NexaLab lesson content and questions mapped to those outcomes. Keep the SGK OCR as source/navigation evidence; do not bulk-copy it into student lessons. Before entering authoritative outcomes through the current UI, add source artifact/version/locator provenance and validate it, so the database does not label unverified manual entries as non-synthetic authority. After that, implement a validated import preview/dry-run for repeatable larger batches.
+
+This is aligned with the PRD's taxonomy and Admin-management intent, but the current Admin implementation is only a manual first slice. It does not satisfy the source-ingestion and provenance portions of Content Foundation or C2-T5.
+
+## 8. What exists today vs. what is still target architecture
+
+**Present in the current Prisma/runtime:** `Lesson`, `LessonStep`, `CurriculumOutcome`, `CurriculumChapter`, `CurriculumTopic`, `QuizAttempt`, `StepProgress`, `Asset`, `AssetVersion`, and legacy `AssetFile`. `Lesson` still has free-text chapter/topic fields and JSON `materials`/`questions`; lesson content does not yet have a dedicated immutable `ContentPackVersion` relation. Step configs are validated in `src/pathway.ts`; asset versions have a separate upload/finalize lifecycle.
+
+**Not present as versioned Prisma entities or importer workflow yet:** `ContentPackVersion`, `KnowledgeUnitVersion`, `SourceArtifactVersion`, `ContentAsset`, `ContentRelease`, and `SourceRegistry`. Source-map/JSON files remain local evidence/data manifests, not rows automatically managed by the database. Current `Asset`/`AssetVersion` implementation exists, but its ticket acceptance/runtime status must be reconciled with the sprint tracker, which still describes these surfaces as deferred.
+
+**Seed boundary:** `npm run db:seed` is for guarded development/test fixtures, not the release corpus. The planned content-pack importer/release lane under CF-T1/CF-T3 is separate from today's generic seed. Do not write the full SGK OCR into `Lesson.content` or production tables as a shortcut.
+
+## 9. Cleanup and current readiness
 
 - Canonical local source package for this work: `tools/nexalab-ingest/out/nxbgd-khtn8-20261015/extracted/sgk-khtn8-source-map-complete.json`.
 - Keep `sgk.txt`, original PDF/page images, manifest, normalized page output and Docling/RapidOCR pilot results as evidence until a reviewed extraction is accepted. The empty `extracted/docling/` folder and the superseded temporary draft from the previous turn were removed; no source or OCR pilot data was deleted.
-- The KHTN8 taxonomy spec remains `draft-for-outcome-mapping`. The Content Foundation epic is backlog; CF-T1 through CF-T5 are not complete. Required decisions include official outcome source/version, first content-pack scope, named editor/subject/rights reviewers, and measurable acceptance/coverage thresholds (Q-DATA-02..04).
+- The KHTN8 taxonomy spec remains `draft-for-outcome-mapping`. The tracker and current code are not fully reconciled: Asset/AssetVersion and media upload/finalize code exist, while the versioned content pack, source registry/importer, and corpus workflow remain absent. Required decisions include official outcome source/version, first content-pack scope, named editor/subject/rights reviewers, and measurable acceptance/coverage thresholds (Q-DATA-02..04).
 - Before a real seed plan: (1) decide the rights-safe use of this SGK transcription; (2) import/review the official outcome map; (3) approve the pack schema/IDs; (4) decide which video refs are display-only vs. reusable assets; (5) name reviewers and acceptance thresholds; (6) only then plan a development dry-run and later release-import path.
 
 ## References
