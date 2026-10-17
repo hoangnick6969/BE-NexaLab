@@ -15,6 +15,8 @@ sources:
 
 # B1 — Teacher Operates an Owned Class and Assigns Learning
 
+> **Open Curriculum precedence (2026-10-17):** B1's completed assignment and class-ownership rules remain valid. The original B1 scope has no assignment-independent Class Space resource channel; future class sharing must be membership-scoped and separate from assignment. Teacher-created decks/study quizzes are unscored practice; explicitly assigned tests are scored work. Teachers may author, enter/import source data, or create advanced lesson-grounded AI drafts that require teacher review before publication. Custom Labs belong to Class Space and must link to their class lesson and stable subject/grade/chapter/topic context. Follow the PRD and `spec-open-learning-catalog` for the new product contract; these completed tickets are historical acceptance.
+
 ## Why
 
 Teachers need to manage their own classes, enrollments, assignments, and teacher-specific learning variants while the platform supplies reviewed Grade 8–9 KHTN baseline content.

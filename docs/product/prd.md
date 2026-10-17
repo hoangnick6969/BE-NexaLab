@@ -23,7 +23,7 @@ Student-first means the first detailed delivery increment is usable by students.
 
 | Role | Release 1 outcome | Access boundary |
 | --- | --- | --- |
-| Student | Complete assigned learning and review own evidence | Own assignments, attempts, and progress only |
+| Student | Explore released Open Curriculum; use their Class Spaces and complete explicitly assigned work | Own course progress, class-resource access, assignments, attempts, and evidence only |
 | Teacher | Operate owned classes and act on student evidence | Owned classes and enrolled students only |
 | Parent | Understand a linked child's progress | Read-only access to explicitly linked children |
 | Admin | Operate users, content, labs, and assets | Administrative capability without bypassing audit or ownership rules |
@@ -38,7 +38,7 @@ Release 1 uses one shared architecture and is delivered in increments:
 
 - Role-aware identity and session lifecycle.
 - Server-side RBAC and resource ownership.
-- Shared domain relationships for `Teacher → Class → Student` and `Content → Assignment → Attempt → Progress`.
+- Separate relationships for `Official Curriculum → Student Progress`, `Class → Class Resource → Enrolled Student`, and `Assignment → Target → Attempt → Assignment Evidence`.
 - Deterministic simulation and official progress boundaries.
 - API, validation, error, testing, and evidence conventions shared by both repositories.
 
@@ -47,16 +47,17 @@ Release 1 uses one shared architecture and is delivered in increments:
 The detailed planning scope for this cycle:
 
 - student login with a provisioned account and mandatory temporary-password change when applicable;
-- assigned learning;
-- lesson content, video, and study cards;
-- scored quiz and explicit learning-step gates;
-- at least one representative lab/challenge;
+- open catalog for released official curriculum, lesson content/video/basic exercises, and foundational Labs when present;
+- subject/grade/chapter/topic/lesson navigation and course progress;
+- class-private resources, with teacher-created study decks/unscored study quizzes and explicitly assigned scored tests in Class Space;
+- optional foundational Labs and teacher-created class Labs linked to their class lesson and curriculum context;
+- explicitly assigned scored work, retry, and attempt history, with teacher authoring/data entry or import and reviewed AI drafts for advanced lesson-grounded class study content;
 - retry, official progress, and attempt history;
 - only the operations needed to seed or manage a student, class, content item, and assignment for the student flow.
 
 ### Increment B — Teacher Operations
 
-Full teacher UX for owned-class management, content and assignment operations, and evidence review. The MVP content catalog targets Grade 8–9 Natural Science. The initial pilot sample can remain Grade 8-only and does not narrow the product content target. Baseline/shared learning materials use NexaLab-authored or item-level openly reusable sources and pass the shared-content review gates. Teachers may publish class-private authored materials under the separate private-content policy in Section 10. Increment A may expose a minimal operator path but must not silently expand into the complete Teacher experience.
+Full teacher UX for owned-class management, content and assignment operations, and evidence review. Include teacher authoring/import and reviewed AI drafting of advanced Class Space study content grounded in the linked lesson. The MVP content catalog targets Grade 8–9 Natural Science. The initial pilot sample can remain Grade 8-only and does not narrow the product content target. Baseline/shared learning materials use NexaLab-authored or item-level openly reusable sources and pass the shared-content review gates. Teachers may publish class-private authored materials under the separate private-content policy in Section 10. Increment A may expose a minimal operator path but must not silently expand into the complete Teacher experience.
 
 ### Increment C — Parent and Admin
 
@@ -64,24 +65,20 @@ Read-only linked-child progress for parents and complete administrative operatio
 
 ### Future
 
-- Teacher AI Content Assistant with structured drafts, review, approval, publication, and audit.
+- General-purpose Teacher AI Content Assistant with broad draft, analytics, and workflow capabilities beyond the bounded class study-content authoring above.
 - Student AI Tutor with bounded progressive hints.
 
 AI, leaderboard, gamification economies, and advanced analytics are not Release 1 Increment A.
 
 ## 4. Student learning outcome
 
-The canonical Student loop is:
+The open-curriculum journey is:
 
-**Bài học → Bài tập (quiz → practice/lab → challenge) → Retry → Progress**
+**Chọn môn → Chọn khối → Mục lục chương/chủ đề → Chọn bài → Nội dung bài → Video → Bài tập cơ bản → Lab nền tảng (nếu có)**
 
-Student-facing navigation separates **Bài học** (reading, video, and study cards) from **Bài tập** (assigned quizzes and practical work). The quiz remains the first exercise and the server-owned gate before lab/practice; this presentation change does not change the `Content → Assignment → Attempt → Progress` data relationships.
+All released shared-curriculum resources are available without class enrollment, assignment, or progress prerequisites. The course progress view records learning evidence; it never locks or unlocks shared content.
 
-Within a lesson, the ordered path is:
-
-**Reading → Video → Study cards → Quiz → Lab/Practice → Challenge**
-
-Lab/Practice remains visible but locked until the quiz gate is met or an authorized server-side override exists. Challenge remains visible but locked until the required practical step is complete. The server, not hidden client UI, decides access and official completion.
+**Class Space** is a separate destination for members of an approved class. Teachers may post class resources and create class-linked study-card decks, unscored study quizzes, scored tests, and custom Labs. None appears in the open-curriculum lesson flow. Decks/study quizzes are practice without grades; scored tests are assignments only when explicitly assigned. Teachers may author study content directly, enter or import source data, or ask AI for advanced extensions based on the linked lesson; AI output remains draft until reviewed and published by the teacher. Custom Labs link to the class, lesson, subject, grade, chapter, and topic context. Sharing a resource does not by itself create an assignment. Only explicitly assigned/scored work uses assignment targets, due dates, and assignment evidence. The backend remains authoritative for access, results, and progress.
 
 ## 5. Functional requirements
 
@@ -97,14 +94,14 @@ Lab/Practice remains visible but locked until the quiz gate is met or an authori
 
 - **FR-06:** An authorized operator shall be able to provision or seed the minimum student, class, published content, and assignment data required for the student journey.
 - **FR-07:** A provisioned student shall log in with username and password and shall change a valid temporary password before entering protected learning routes.
-- **FR-08:** A student shall see only assignments applicable to their approved enrollment and student targeting.
-- **FR-09:** A student shall open assigned published content organized by subject, grade, chapter, and topic, with curriculum reference, learning objective, and prerequisites. The MVP content catalog targets Grade 8–9 Khoa học tự nhiên and reports coverage by grade and outcome.
-- **FR-10:** A lesson shall support reading content, video or equivalent material with a recoverable unavailable state, and study cards.
-- **FR-11:** A student shall complete a scored quiz; the server shall determine quiz outcome and the next unlocked learning step.
-- **FR-12:** The UI shall show the complete ordered pathway, keep locked steps visible, and direct the primary action to the next unlocked step.
-- **FR-13:** At least one representative lab/challenge shall let a student configure state, submit an attempt, receive the server-derived result and verdict, and retry without AI authority.
+- **FR-08:** A student shall see only assignments applicable to their approved enrollment and student targeting; assignment access is separate from shared-curriculum access.
+- **FR-09:** An authenticated student shall browse released shared curriculum across available subjects and grades without an assignment. `/lessons` shall navigate subject → available grades in ascending order → ordered chapter/topic table of contents → ordered lessons → lesson detail. Only released content is represented as available; curriculum coverage gaps are shown separately. Each lesson includes curriculum reference, learning objective, and prerequisites.
+- **FR-10:** A shared lesson shall support lesson content, video or an approved equivalent, and lesson-level basic exercises when present, with recoverable unavailable states. Shared lessons do not contain Quizlet decks or scored-quiz gates.
+- **FR-11:** Only a teacher may create study-card decks and unscored study quizzes in Class Space for approved class members. Teachers may author content directly, enter or import source data, or request AI-generated advanced extensions grounded in the linked lesson; AI output remains a teacher-reviewed draft until published. Decks and study quizzes are unscored practice. A scored test requires an explicit assignment and follows server scoring, answer-key privacy, retry, and target authorization rules.
+- **FR-12:** The UI shall keep Open Curriculum, Class Space, and Assignments as distinct destinations. Class resources are visible to active, approved members without assignment; assignment-only activities are visible only to eligible targets. No quiz completion gates shared content or foundational Labs.
+- **FR-13:** A student may explore a released foundational Lab tied to the official subject/grade/chapter/topic/outcome taxonomy without enrollment, assignment, or quiz pass. A teacher-created custom Lab belongs to a class and is linked to its class lesson and subject/grade/chapter/topic context; class sharing and scored assignment targeting remain distinct.
 - **FR-14:** Each practical attempt shall retain student, challenge, submitted state, simulation result, verdict, duration, and timestamp.
-- **FR-15:** A student shall review official progress and attempt history, and every score, count, or status shown shall drill into source content or attempts.
+- **FR-15:** A student shall review foundational subject progress and attempt history, with every score, count, or status linked to its evidence. Foundational progress covers lesson content, video, basic exercises, and foundational Labs required by the fixed official-course version. Assigned work is shown separately and does not change that denominator. The subject summary may show “Đạt mức cơ bản” when foundational requirements are complete, but remains “Chưa đạt” while any assignment targeted to the student, linked to that subject, and still actionable under the assignment lifecycle is unsubmitted, in progress, or not yet accepted under that item's existing evaluator. Preserve evidence for closed/archived assignments; they stop holding the current summary unmet once no longer actionable for that student. Show the contributing signals separately; none gates access to open content.
 
 ### Increment B — Teacher Operations capability envelope
 
@@ -122,6 +119,7 @@ Lab/Practice remains visible but locked until the quiz gate is met or an authori
 - **FR-21:** Teacher AI may create structured drafts only; an authorized human must review and publish them.
 - **FR-22:** Student AI may provide bounded advisory hints only; it shall never calculate or override result, verdict, score, or progress.
 - **FR-23:** An admin may maintain an optional HTTPS ebook/reference link for each subject; the student subject library shall display configured links as external resources. A link does not grant rights to copy, host, or reproduce the linked content.
+- **FR-24:** A teacher shall be able to post a custom Lab in a Class Space with stable links to the relevant subject, grade, chapter/topic, and class lesson. Approved active class members may discover it as a class resource; submission, scoring, and due dates apply only when the teacher explicitly creates an assignment for it.
 
 ## 6. Quality and policy requirements
 
@@ -168,7 +166,7 @@ The pilot gate is measured with one school, up to two Grade 8 classes and at mos
 
 1. **Curriculum/content:** Increment A's representative pilot set is NexaLab-authored Grade 8 Natural Science mapped to the official subject-specific KHTN curriculum. The MVP content target for B/C is Grade 8–9 KHTN; this expands the Grade 8-only content scope recorded on 2026-10-12. Every lesson records subject, grade, curriculum outcome/reference, learning objective, prerequisites, source evidence, and review state. The baseline/shared catalog uses NexaLab-authored or item-level openly reusable sources; free-to-view textbook content is not ingested or reproduced without explicit reuse rights.
 2. **Enrollment:** Increment A uses teacher/school provisioning only. Student join-code enrollment is not exposed in Student P0 and does not count as an accepted A1 path.
-3. **Quiz gate:** a server-calculated score of at least 50% unlocks the representative practical step. Students may retry. Teacher override is deferred to Increment B and cannot be simulated by the client in Increment A.
+3. **Quiz scope:** the former Increment A 50% quiz gate is superseded for Open Curriculum. No shared-curriculum quiz or Quizlet/card step gates public content or foundational Labs. Teacher-created decks/study quizzes belong in Class Space and are unscored practice. Tests are scored only when explicitly assigned and use server-calculated scoring, retry, answer-key privacy, and eligible-target rules. No default quiz prerequisite applies to a Lab.
 4. **Representative practical:** the Grade 8 circuit lab and its existing deterministic circuit model are the A4 representative lab/challenge.
 5. **Video completion:** a required video completes at 90% watched or on the media `ended` event, whichever happens first. Seeking cannot reduce the recorded high-water mark. When video is unavailable, the published transcript/equivalent text is the required fallback and has an explicit completion action. Video never autoplays.
 6. **Retention:** refresh sessions keep their configured expiry and are revocable. Learning attempts, quiz attempts, step evidence, progress, assignment evidence, and authorization audit records are retained for 12 months after the student's last activity in the pilot. Deletion/export policy beyond the pilot remains a launch/legal review item and cannot be inferred from this technical retention default.
@@ -180,7 +178,9 @@ The pilot gate is measured with one school, up to two Grade 8 classes and at mos
 12. **Content scope and review:** shared/baseline catalog content must pass editorial, scientific-accuracy, and rights review. Teacher-private authored content can be self-reviewed and published only to the teacher's owned classes; it cannot enter the shared library or bypass source/rights declarations, child-safety checks, or the approved scientific-model gate for scored labs. Admin may quarantine/reassign content or assets for operations with reason and audit, but cannot attest scientific correctness or force-release an item.
 13. **Parent ID privacy:** on parent child-progress detail routes, any student ID not linked to the authenticated parent returns the same 403 response and audited denial, whether the ID exists or not. This overrides the conflicting generic SRS CR-11 not-found wording for this route to prevent student-existence enumeration.
 14. **Parent-link lifecycle:** the relationship status is `pending` or `approved`; only `approved` links grant progress access. The responsible teacher verifies the guardian relationship against school-held records before issuing a single-use, seven-day code. Parent email verification proves mailbox control, not parentage; required consent and email-verification prerequisites must be complete before activation. The C1 SPEC defines the exact `pending → approved` transition and invitation persistence.
+15. **Open Curriculum and Class Space:** Open Curriculum includes only released shared lessons, videos, lesson-level basic exercises, references, and foundational Labs when present. The student catalog navigates subject → available grades (ascending) → ordered chapter/topic table of contents → ordered lessons. Quizlet/cards and quizzes are teacher-created Class Space activities; none is in the public lesson flow. Foundational Labs are shared across students and tied to official curriculum taxonomy. Teacher-created Labs are class-private and must link to the class lesson and its subject/grade/chapter/topic context; they enter scored assignment workflow only when explicitly assigned. These rules supersede decision 3's public quiz gate and the previous public-card assumptions.
+16. **Progress and Class Space authoring:** Foundational subject progress covers lesson content, video, basic exercises, and foundational Lab activity when required by the fixed official course version. It is distinct from assigned-work status. An assignment target linked to the subject keeps the summary “Chưa đạt” until accepted by its evaluator while it remains actionable to the student, including while unsubmitted or in progress; preserve closed/archived evidence and stop holding the current rollup unmet only when it is no longer actionable for that student. Class Space decks and study quizzes are unscored practice; tests are scored only when explicitly assigned. Teachers may author content directly, enter or import source data, or ask AI to draft advanced extensions grounded in a linked lesson; AI output requires teacher review and publication.
 
 ## 11. Current implementation evidence note
 
-Source inspection on 2026-10-12 found implementations or scaffolds for role identities, student username login, refresh-cookie sessions, temporary-password gating, class ownership, student provisioning, assignments, published lessons, multiple-choice quiz scoring, simulations, attempts, progress, parent links, and admin routes. The current schema and UI do not by themselves prove the full Increment A pathway, study-card model, server-enforced learning gates, evidence drill-down, responsive UX, or real integration behavior. Those remain work to verify or implement in later turns.
+Source inspection on 2026-10-12 found implementations or scaffolds for role identities, student username login, refresh-cookie sessions, temporary-password gating, class ownership, student provisioning, assignments, published lessons, multiple-choice quiz scoring, simulations, attempts, progress, parent links, and admin routes. The current schema and UI do not by themselves prove the full Increment A pathway, Class Space resources, the Open Curriculum catalog/progress, evidence drill-down, responsive UX, or real integration behavior. The 2026-10-17 Open Curriculum and Class Space contract is product direction; it is not evidence that the corresponding changes are implemented or runtime-verified.

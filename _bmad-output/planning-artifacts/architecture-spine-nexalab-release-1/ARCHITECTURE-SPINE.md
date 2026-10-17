@@ -5,10 +5,10 @@ purpose: build-substrate
 altitude: initiative
 paradigm: layered server-authoritative domain with a contract-driven client
 scope: Shared Foundation and Release 1 Increments A, B, and C across nexalab-be and nexalab-fe
-status: final
+status: draft
 created: 2026-10-12
-updated: 2026-10-14
-binds: [FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20]
+updated: 2026-10-17
+binds: [FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-24]
 sources:
   - docs/product/prd.md
   - ../nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md
@@ -47,23 +47,27 @@ flowchart LR
 
 ### AD-3 — RBAC plus resource ownership [ADOPTED]
 
-- **Binds:** FR-02, FR-03, FR-08, FR-16, FR-17, FR-18, FR-19, FR-20
+- **Binds:** FR-02, FR-03, FR-08, FR-16, FR-17, FR-18, FR-19, FR-20, FR-24
 - **Prevents:** hidden-UI authorization and cross-class or cross-child data access
 - **Rule:** every protected route enforces both role and resource relationship. Teacher access is derived from class ownership and approved enrollment; parent access from an explicit parent link; student evidence from the authenticated student identity; admin capability remains explicit rather than implicit bypass.
 
-### AD-4 — Shared identity and learning relationships
+### AD-4 — Separate curriculum, class-resource, and assignment relationships
 
-- **Binds:** FR-03, FR-04, FR-06, FR-08, FR-14, FR-15
-- **Prevents:** role-specific duplicate models and progress without traceable evidence
-- **Rule:** preserve `Teacher → Class → Student` through teacher ownership and enrollment. Preserve `Content → Assignment → Attempt → Progress` with stable identifiers and source links; when a stage does not produce an attempt, its completion evidence must still identify the student, assigned content, step, and time.
+- **Binds:** FR-03, FR-04, FR-06, FR-08, FR-14, FR-15, FR-24
+- **Prevents:** role-specific duplicate models, class resources being forced into assignments, and course progress being conflated with class evidence
+- **Rule:** preserve `Teacher → Class → Enrollment → Student`; model released official curriculum and foundational student-progress evidence independently of class membership; model `Class → ClassResource → Lesson/AssetVersion/StudyDeck/StudyQuiz/ClassLab`; model `Class → Assignment → Target → ScoredTest/Exercise/Lab → Attempt/EvaluatedEvidence` only for explicitly assigned work. Study decks and study quizzes are unscored practice. Every evidence record retains stable source/version identifiers and actor/time.
 
 ```mermaid
 flowchart LR
   Teacher --> Class --> Enrollment --> Student
-  Content --> Assignment --> Student
-  Student --> Attempt --> Progress
-  Assignment --> Content
-  Attempt --> Content
+  Curriculum --> Student --> CourseProgress
+  Teacher --> Class --> Enrollment --> Student
+  Class --> ClassResource --> Lesson
+  ClassResource --> StudyDeck
+  ClassResource --> ClassLab
+  ClassLab --> CurriculumContext
+  Class --> Assignment --> Target --> ScoredActivity
+  Student --> Attempt --> AssignmentEvidence
 ```
 
 ### AD-5 — API boundary conventions [ADOPTED]
@@ -72,11 +76,11 @@ flowchart LR
 - **Prevents:** divergent validation, ambiguous errors, and UI assumptions that bypass the server
 - **Rule:** validate request bodies with Zod at backend routes; use authenticated actor identity rather than client-supplied ownership; return stable JSON success payloads and recoverable error responses; use ISO-8601 UTC timestamps and opaque string IDs. Contract changes must update backend tests and frontend consumers in the same vertical ticket.
 
-### AD-6 — Server-authoritative learning gates and progress
+### AD-6 — Server-authoritative access and progress
 
-- **Binds:** FR-08, FR-11, FR-12, FR-15
-- **Prevents:** unlocking content or awarding progress through client state alone
-- **Rule:** the backend determines assignment applicability, quiz outcome, unlocked step, and official progress. The client may render optimistic or preview state only when it is visibly provisional and reconciles with the next server response.
+- **Binds:** FR-08, FR-09, FR-11, FR-12, FR-15
+- **Prevents:** unlocking shared content or awarding progress through client state alone, and applying assignment gates to Open Curriculum
+- **Rule:** the backend serves released shared curriculum independently of enrollment, assignment, and progress; enforces active, approved membership on Class Space resources; enforces assignment targets on scored submissions; and calculates official foundational progress from the required items in the fixed course version and determines test outcomes. Keep the official-course denominator fixed. An applicable assigned exercise/test/Lab not achieved keeps the subject achievement summary at “chưa đạt,” while its assignment evidence stays separate from foundational progress. Neither status gates shared content or foundational Labs. The client may render optimistic or preview state only when visibly provisional and reconciled with the next server response.
 
 ### AD-7 — Simulation and verdict authority [ADOPTED]
 
@@ -113,11 +117,11 @@ flowchart LR
 6. Smoke-check TLS connection, migration version, seed idempotency, API health, one authorized read/write transaction, connection count/pool behavior, and a deliberate dependency failure. Redact all connection strings from output.
 7. Before pilot, confirm the plan's backup capability, run a restore rehearsal into an isolated target, define monitoring/alerts for connection exhaustion, CPU/memory/disk, slow queries and API failure rate, then record actual RPO/RTO. Do not infer backup or production readiness from the dashboard alone.
 
-### AD-11 — Explicit learning-step and evidence model [ADOPTED]
+### AD-11 — Explicit curriculum and class-activity evidence model
 
 - **Binds:** FR-04, FR-10, FR-11, FR-12, FR-14, FR-15
-- **Prevents:** progress inferred from page visits, overwritten quiz history, and gates that exist only in the client
-- **Rule:** a published lesson owns ordered `LessonStep` records of validated types `READING`, `VIDEO`, `STUDY_CARDS`, `QUIZ`, `LAB`, or `CHALLENGE`. `StepProgress` records per-student step evidence and high-water progress; every quiz submission creates immutable `QuizAttempt` evidence; every practical submission creates immutable `Attempt` evidence. Aggregate `Progress` is a rebuildable projection updated atomically from these source records, never the sole evidence source.
+- **Prevents:** progress inferred from page visits, overwritten quiz history, public lessons inheriting class-only activities, and gates that exist only in the client
+- **Rule:** the released Open Curriculum path contains lesson content, video, lesson-level basic exercises, and an optional foundational Lab when the curriculum version provides one; it contains no Quizlet/study-card or quiz step. Teacher-created study decks and study quizzes are unscored Class Space practice. Scored tests and custom Labs belong to Class Space assignment flow only when explicitly assigned and remain separate from the official curriculum denominator. Reuse immutable attempt/result evidence for scored work. Any legacy step types remain readable for historical assignment evidence but do not automatically place cards/quizzes in the public pathway.
 
 ### AD-12 — Cross-repository contracts and resilient interaction [ADOPTED]
 
@@ -159,6 +163,7 @@ flowchart LR
 | Identity and sessions | `nexalab-be/src/auth.ts`, auth routes, `nexalab-fe/src/api.ts` and auth UI | AD-2, AD-3, AD-5 |
 | Classes and assignments | Prisma domain and backend routes; frontend operator/student views | AD-3, AD-4, AD-5 |
 | Student learning path | Backend content/progress APIs and frontend Student routes/pages | AD-4, AD-5, AD-6 |
+| Open Curriculum and Class Space | Released curriculum catalog/progress; membership-scoped class resources; class lessons/decks/custom Labs; assignment-target-scoped scored work | AD-3, AD-4, AD-5, AD-6, AD-11, AD-12, AD-13, AD-14 |
 | Labs and attempts | `packages/sim`, allowlisted model registry, versioned topic simulation packs, backend attempt routes, frontend labs | AD-7, AD-8, AD-9, AD-14 |
 | Parent/Admin envelopes | Backend ownership/admin routes; deferred dedicated UX | AD-2, AD-3, AD-4 |
 | Supabase/Prisma operations | Supabase project configuration, Prisma schema/migrations/seed, deployment secret store | AD-9, AD-10 |
@@ -171,4 +176,4 @@ flowchart LR
 - Paid Supabase plan, final region, production RPO/RTO, and backup/PITR policy must be selected before pilot launch and verified by restore rehearsal.
 - Teacher, Parent, and Admin screen architecture waits for their increments; shared identity and ownership invariants do not.
 - Exact R2 bucket names, signed-URL TTLs, media size limits, connector schedules, and source-specific parsers are epic/spec configuration under AD-13 rather than initiative-level architecture decisions.
-- AI provider and prompt architecture wait for Future scope; no Release 1 contract depends on them.
+- The bounded teacher capability to draft advanced Class Space study content from a linked lesson is in product scope; provider, prompt/output schema, safety/evaluation, and failure/fallback behavior need a detailed contract before implementation stories. AI output is never published without teacher review and is never authoritative for grades, scores, or progress. The general-purpose AI assistant and student tutor remain future capabilities.

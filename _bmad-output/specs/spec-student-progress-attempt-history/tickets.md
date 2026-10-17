@@ -1,5 +1,7 @@
 # Epic A5 Vertical Tickets
 
+> Historical accepted-flow tickets. Assignment progress and attempt history remain class-assessment evidence; Open Curriculum course progress is separate and follows the PRD/spec, excluding Class Space decks, quizzes, custom Labs, and assignment evidence from its denominator.
+
 ## A5-T1 — Return a self-scoped evidence-backed progress overview
 
 **Acceptance criteria**

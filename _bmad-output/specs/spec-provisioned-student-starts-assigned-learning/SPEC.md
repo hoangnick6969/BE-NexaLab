@@ -11,7 +11,9 @@ sources:
   - ../../../docs/product/open-questions.md
 ---
 
-> **Canonical contract.** This SPEC and the files in `companions:` define Epic A1. Source files remain traceability inputs; this spec does not authorize implementation during the current planning turn.
+> **Historical accepted contract.** This SPEC and its companions define the original provisioned/assigned-learning Epic A1. For amended product behavior, the 2026-10-17 PRD and Open Curriculum spec take precedence. A1 remains the prior accepted baseline; this change has not been decomposed into stories.
+
+> **Open Curriculum precedence (2026-10-17):** A1 records the completed provisioned/assigned-learning journey. It remains valid for explicitly assigned work, but assignment is no longer the only/default route into released shared curriculum. Open Curriculum access follows the PRD and `spec-open-learning-catalog`; treat this epic's tickets as historical acceptance, not new implementation work.
 
 # Epic A1 — A Provisioned Student Starts Assigned Learning
 

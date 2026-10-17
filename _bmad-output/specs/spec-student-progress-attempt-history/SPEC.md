@@ -10,7 +10,9 @@ sources:
   - ../spec-student-verified-lab-challenge-retry/SPEC.md
 ---
 
-> **Canonical contract.** This SPEC and its companions define Epic A5. Implement after A4 runtime acceptance.
+> **Historical accepted contract.** This SPEC and its companions define the original assigned-progress Epic A5. For amended product behavior, the 2026-10-17 PRD and Open Curriculum spec take precedence. A5 remains the prior accepted baseline; this change has not been decomposed into stories.
+
+> **Open Curriculum precedence (2026-10-17):** A5's assignment summaries and attempt history remain valid for class-assessed work. Assignment evidence is not part of the fixed official-course denominator. New subject achievement summary overlays that foundational progress: it remains “Chưa đạt” while a subject-linked assignment target is actionable and unsubmitted, in progress, or not accepted under its evaluator. New Class Space decks/study quizzes are unscored and custom Labs/assignments remain separately attributable; new behavior follows the PRD and `spec-open-learning-catalog`.
 
 # Epic A5 — A Student Understands Official Progress and History
 

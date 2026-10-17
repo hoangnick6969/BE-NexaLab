@@ -11,13 +11,13 @@ Owner-defined MVP direction:
 - Teacher class and student management, lesson management, assignment, outcome review/grading, progress monitoring and learning-evidence inspection.
 - Read-only parent progress tracking and admin management of users, content, labs and assets.
 
-The Release 1 student loop is **Learn → Quiz → Practice/Simulation → Challenge → Retry → Progress**. Teacher AI Content Assistant comes before Student AI Hint, which is post-Release 1 scope. Existing code implements parts of these flows, not their complete scope.
+The open-curriculum loop is **Content → Video → Basic practice → Optional foundational Lab → Progress**; it has no Quiz or study-card step. Class Space separately provides teacher-created flashcards/study decks and unscored study quizzes. Scored tests are teacher-assigned. Teachers may create advanced lesson-grounded study content directly, from entered/imported source data, or with AI drafts that require teacher review. Foundational subject progress remains distinct from assigned-work status; the subject achievement summary stays “chưa đạt” while applicable assigned work is not achieved. Existing code implements parts of these flows, not their complete scope.
 
 ## AI ASSISTANCE
 
 Teacher assistance direction:
 
-- Draft quizzes/tests, flashcards/study cards and questions from a lesson or topic.
+- Draft advanced Class Space study cards/quizzes and questions from the linked lesson; study quizzes are unscored and tests are separate scored assignments.
 - Draft learning materials and assist with analysis of learning evidence.
 - Teacher review, edit, approval and publication before any generated content is used.
 

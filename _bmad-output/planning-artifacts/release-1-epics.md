@@ -1,8 +1,8 @@
 ---
 title: NexaLab Release 1 Epic Breakdown
-status: ready-for-implementation
+status: baseline; 2026-10-17 scope amendment pending decomposition
 created: 2026-10-12
-updated: 2026-10-15
+updated: 2026-10-17
 source: docs/product/prd.md
 architecture: architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md
 active_specs:
@@ -22,6 +22,8 @@ active_specs:
 # NexaLab Release 1 Epic Breakdown
 
 Epics are grouped by user outcome. Shared Foundation decisions bind every epic; they are not a separate database/backend/frontend phase.
+
+> **Scope amendment (2026-10-17):** This file records the original A1–C2 epic breakdown and its completed tickets, not the newly confirmed Open Curriculum/Class Space scope. The updated PRD and sprint-change proposal supersede affected A2/A3/A5/B1 assumptions. The change has not yet been decomposed into delivery epics or stories; existing `sprint-status.yaml` statuses remain evidence for the original scope only.
 
 ## Shared Foundation
 
