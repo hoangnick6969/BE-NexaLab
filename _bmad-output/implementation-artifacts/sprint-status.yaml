@@ -13,6 +13,8 @@ repositories:
   frontend: 'FE-NexaLab (branch feat/content-foundation; C2 merged on origin/main)'
 sources:
   plan: ../planning-artifacts/increment-b-c-plan.md
+  next_plan: ../planning-artifacts/next-development-plan.md  # draft 2026-10-17, awaiting PO/team review
+  open_learning_assessment: ../planning-artifacts/open-learning-prd-assessment.md
   acceptance_criteria: ../specs/spec-content-foundation/tickets.md
   spec: ../specs/spec-content-foundation/SPEC.md
   platform_spec: ../specs/spec-b0-platform/SPEC.md
