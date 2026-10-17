@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
-import { seedUrl } from "../../src/database-config";
-import { buildPathwaySteps, materializeLegacySteps, validateLessonSteps } from "../../src/pathway";
+import { seedUrl } from "../../src/infra/database-config";
+import { buildPathwaySteps, materializeLegacySteps, validateLessonSteps } from "../../src/lessons/pathway";
 
 const apply = process.argv.includes("--apply");
 const verifyAll = process.argv.includes("--verify-all");

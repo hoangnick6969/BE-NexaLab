@@ -1,25 +1,12 @@
 import "reflect-metadata";
 import "dotenv/config";
-import { Module } from "@nestjs/common";
-import { NestFactory, APP_GUARD } from "@nestjs/core";
+import { NestFactory } from "@nestjs/core";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-import { Db } from "./db";
-import { AuthGuard } from "./auth";
-import { ApiController } from "./routes";
-import { FilesController } from "./files";
-import { ClassesController } from "./classes";
-import { B2Controller } from "./b2";
-import { AdminController } from "./admin";
-import { AssetsController, LocalStorageController } from "./assets";
-import { Errors } from "./errors";
-import { quizOpenApiSchemas } from "./quiz-contract";
-@Module({
-  controllers: [ApiController, ClassesController, B2Controller, AdminController, AssetsController, LocalStorageController, FilesController],
-  providers: [Db, { provide: APP_GUARD, useClass: AuthGuard }],
-})
-class AppModule {}
+import { AppModule } from "./app.module";
+import { Errors } from "./common/errors";
+import { quizOpenApiSchemas } from "./learning/quiz-contract";
 async function bootstrap() {
   if (
     !process.env.JWT_SECRET ||
