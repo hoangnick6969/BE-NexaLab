@@ -10,13 +10,15 @@ sources:
   - ../spec-provisioned-student-starts-assigned-learning/SPEC.md
 ---
 
-> **Canonical contract.** This SPEC and its companions define Epic A2. Implement only after A1 runtime acceptance; source scaffolds and mockups are not completion evidence.
+> **Historical accepted contract.** This SPEC and its companions define the original assigned-learning Epic A2. For amended product behavior, the 2026-10-17 PRD and Open Curriculum spec take precedence. A2 remains the prior accepted baseline; this change has not been decomposed into stories.
+
+> **Open Curriculum precedence (2026-10-17):** A2's completed reading/video evidence rules remain applicable. Its study-card step and transition to Quiz describe the old assigned pathway only; public lessons contain no cards or quiz. Study-card decks are teacher-created Class Space resources. For new Open Curriculum behavior, follow the PRD and `spec-open-learning-catalog`; existing A2 tickets are historical acceptance.
 
 # Epic A2 — A Student Learns from Complete Core Materials
 
 ## Why
 
-NexaLab must be a complete learning path before it differentiates with simulation. A student who opens an assigned lesson needs a stable ordered path through reading, video or equivalent text, and study cards, with progress that survives reloads and does not falsely unlock later work.
+NexaLab must provide complete core materials before it differentiates with simulation. In the historical assigned pathway, a student opens reading, video or equivalent text, and study cards in order, with progress that survives reloads and does not falsely unlock later assigned work. New Open Curriculum lessons omit the card step; new study decks are teacher-created Class Space resources.
 
 ## Capabilities
 

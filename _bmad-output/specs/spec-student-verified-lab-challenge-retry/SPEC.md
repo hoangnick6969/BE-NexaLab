@@ -10,13 +10,15 @@ sources:
   - ../spec-student-quiz-learning-gates/SPEC.md
 ---
 
-> **Canonical contract.** This SPEC and its companions define Epic A4. Implement after A3 runtime acceptance.
+> **Historical accepted contract.** This SPEC and its companions define the original assigned-Lab Epic A4. For amended product behavior, the 2026-10-17 PRD and Open Curriculum spec take precedence. A4 remains the prior accepted baseline; this change has not been decomposed into stories.
+
+> **Open Curriculum precedence (2026-10-17):** A4's server-recomputed result, verdict, and retry integrity remain applicable. Its assignment and quiz-pass gate describe the historical assigned circuit path; they do not apply to released foundational Labs. Teacher-created Labs are class-private and linked to the related Class Space lesson and subject/grade/chapter/topic; a quiz prerequisite is not enabled by default. New behavior follows the PRD and `spec-open-learning-catalog`.
 
 # Epic A4 — A Student Practices, Receives a Verified Verdict, and Retries
 
 ## Why
 
-The representative circuit lab proves NexaLab's differentiator: a student changes model state, submits it, receives a deterministic server verdict, and learns through retry. Current attempt persistence is useful evidence but is not yet linked to the assigned lesson step or protected by the A3 gate.
+The historical assigned circuit lab proves NexaLab's differentiator: a student changes model state, submits it, receives a deterministic server verdict, and learns through retry. Current attempt persistence is useful evidence but is not yet linked to the assigned lesson step or protected by its explicitly configured A3 assignment gate. This is not the access model for released foundational Labs or future class-shared custom Labs.
 
 ## Capabilities
 
@@ -45,8 +47,8 @@ The A3-passed student opens the assigned circuit step, submits a valid state aga
 ## Implementation contract
 
 - Extend `Attempt` with `assignmentId`, `lessonStepId`, `simulationModelVersion`, and `idempotencyKey`; add unique `(studentId, idempotencyKey)` and indexes for student/step/time. Existing rows are retained with nullable trace fields and explicitly classified legacy.
-- `GET /lessons/:lessonId/steps/:stepId/lab` returns sanitized circuit config/challenge only after applicability + quiz gate.
-- `POST /attempts` accepts `{ lessonStepId, challengeId, labState, durationMs, idempotencyKey }`; actor and assignment derive server-side; challenge/step/lab relationship and gate are validated; server ignores any client result/verdict.
+- For the historical assigned circuit step, `GET /lessons/:lessonId/steps/:stepId/lab` returns sanitized config/challenge only after assignment applicability and its configured quiz gate.
+- For that historical assigned path, `POST /attempts` accepts `{ lessonStepId, challengeId, labState, durationMs, idempotencyKey }`; actor and assignment derive server-side; challenge/step/lab relationship and configured gate are validated; server ignores any client result/verdict. Foundational Labs use open released-curriculum authorization; custom Class Space Labs use class membership for viewing and assignment targets only for scored submission.
 - Response returns immutable attempt, official result/verdict, attempt number, reconciled pathway/progress, and safe retry guidance. Stable errors distinguish validation, gate, ownership, conflict, rate limit, and dependency/system failure.
 - A challenge step completes only on `passed`; `partial` and `needs_practice` remain in progress. Every retry creates new evidence unless it is the same idempotent delivery.
 

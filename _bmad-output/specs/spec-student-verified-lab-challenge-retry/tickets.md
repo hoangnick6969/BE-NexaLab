@@ -1,5 +1,7 @@
 # Epic A4 Vertical Tickets
 
+> Historical accepted-flow tickets. The quiz-gated assigned circuit path remains historical evidence; foundational Labs are open after release, and teacher-created Labs are class-linked to lesson/curriculum context with no default quiz prerequisite. New behavior follows the Open Curriculum PRD/spec.
+
 ## A4-T1 — Open only the unlocked circuit workspace
 
 **Acceptance criteria**

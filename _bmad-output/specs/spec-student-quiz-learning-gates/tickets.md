@@ -1,5 +1,7 @@
 # Epic A3 Vertical Tickets
 
+> Historical accepted-flow tickets. Server scoring, privacy, retries, and immutable attempts remain applicable to teacher-created Class Space quizzes; there is no baseline public quiz or default quiz gate for open content/Labs. New behavior follows the Open Curriculum PRD/spec.
+
 ## A3-T1 — Deliver a gate-protected sanitized quiz
 
 **Acceptance criteria**

@@ -1,5 +1,7 @@
 # B1 — Ordered Vertical Tickets
 
+> Historical accepted-flow tickets cover assignments, not the new assignment-independent Class Space resource channel. Future class resources are membership-scoped; custom Labs link to the class lesson and stable subject/grade/chapter/topic context. Follow the Open Curriculum PRD/spec for new behavior.
+
 ## B1-T1 — Owned class lifecycle
 
 - Create/list/update classes with grade, unique owner-scoped name, join-enabled and approval settings; archive and rotate/disable join codes.

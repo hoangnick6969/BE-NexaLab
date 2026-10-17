@@ -1,5 +1,7 @@
 # Epic A1 Vertical Tickets
 
+> Historical accepted-flow tickets. Explicit assignments remain supported, but these tickets do not make assignment the default/only route to released shared curriculum; new access follows the Open Curriculum PRD/spec.
+
 Tickets are ordered so each can be completed using only earlier tickets. Every ticket spans the backend and frontend portions required for a demonstrable user or operator outcome; none is a frontend-only, backend-only, or database-only phase.
 
 ## A1-T0 — Establish the Supabase-backed MVP data path

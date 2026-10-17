@@ -1,5 +1,7 @@
 # Epic A2 Vertical Tickets
 
+> Historical accepted-flow tickets. Reading/video evidence remains applicable; public study-card and Quiz steps are superseded. Cards now belong to teacher-created Class Space decks; new behavior follows the Open Curriculum PRD/spec.
+
 Build in order. Each ticket updates backend schema/API/tests and the frontend experience needed to demonstrate its outcome.
 
 ## A2-T1 — Return an authoritative ordered lesson pathway
