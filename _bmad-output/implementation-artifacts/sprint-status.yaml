@@ -6,13 +6,15 @@ project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
 scope: Release 1 / Content Foundation CF-T1..T4 platform (completes the C2-T3/C2-T5 surfaces; CF-T5 corpus remains a staffed workstream)
-last_updated: '2026-10-16'
+last_updated: '2026-10-17'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'BE-NexaLab (branch feat/content-foundation, merged with origin/main incl. C2 PR #15 and pH demo 3f521d7)'
   frontend: 'FE-NexaLab (branch feat/content-foundation; C2 merged on origin/main)'
 sources:
   plan: ../planning-artifacts/increment-b-c-plan.md
+  next_plan: ../planning-artifacts/next-development-plan.md  # draft 2026-10-17, awaiting PO/team review
+  open_learning_assessment: ../planning-artifacts/open-learning-prd-assessment.md
   acceptance_criteria: ../specs/spec-content-foundation/tickets.md
   spec: ../specs/spec-content-foundation/SPEC.md
   platform_spec: ../specs/spec-b0-platform/SPEC.md
@@ -61,6 +63,7 @@ development_status:
   cf-t3-source-registry-ingestion-importer: review
   cf-t4-practical-simulation-pack-registry: review
   cf-t5-grade-8-9-open-baseline-corpus: backlog
+  project-structure-refactor: review
   epic-b1-teacher-operations: done
   b1-t1-class-lifecycle: done
   b1-t2-managed-enrollment: done
@@ -157,6 +160,17 @@ verification:
     - Production deployment acceptance remains unverified.
 
 story_notes:
+  project-structure-refactor:
+    status: review
+    audited_against_code: '2026-10-17'
+    branch: refactor/project-structure (BE from main 5446e68, FE from main 3ed54cb; uncommitted)
+    artifact: project-structure-refactor.md
+    structure: ../../docs/architecture/project-structure.md
+    verification: 'pass 2 (one Nest module per domain, admin/classes controllers split by domain): handler bodies unchanged (line-multiset diff), route manifest 140/140 identical, API boots with 24 controllers/140 routes/140 Swagger ops; tsc, lint, build, Vitest 145/145; B0, B2, C2 80, CF 60, password flow 6 pass; B1 and test:integration fail at the same pre-existing checks as main; no file import cycles'
+    remaining:
+      - 'Introduce services per domain (controllers still query Prisma via Db), starting with classes, users, progress'
+      - 'Split FE Admin/classes/Lessons pages inside their feature folders'
+      - 'Rebase the stashed textbook-lesson-extract work onto this branch (tool imports move to src/infra/database-config and src/infra/storage)'
   epic-content-foundation:
     status: in-progress
     audited_against_code: '2026-10-16'

@@ -6,7 +6,7 @@
 // HINT_PROVIDER_TEST_DELAY_MS=3000; without it they are reported as SKIP.
 import * as argon from "argon2";
 import { createHarness } from "./lib/harness.mjs";
-import { audit } from "../src/audit.ts";
+import { audit } from "../src/common/audit.ts";
 
 const h = createHarness("B0 platform");
 const { db, req, check, skip, envelope, key } = h;

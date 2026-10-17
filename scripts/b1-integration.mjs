@@ -20,7 +20,7 @@ async function removeUploadedAssets(db, where) {
   const assets = await db.asset.findMany({ where, include: { versions: true } });
   let store = null;
   try {
-    store = (await import("../src/storage.ts")).storage();
+    store = (await import("../src/assets/storage.ts")).storage();
   } catch {
     console.log("     (run with tsx to also delete stored objects)");
   }

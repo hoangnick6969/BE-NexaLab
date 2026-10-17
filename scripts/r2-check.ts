@@ -4,7 +4,7 @@
 //   npm run r2:check
 import "dotenv/config";
 import { createHash, randomBytes } from "node:crypto";
-import { storage, storageEnv } from "../src/storage";
+import { storage, storageEnv } from "../src/infra/storage";
 
 const s = storage();
 const prefix = `${storageEnv()}/staging/r2-check-${Date.now().toString(36)}`;
