@@ -9,8 +9,8 @@ import { PrismaClient } from "@prisma/client";
 import { createHash } from "node:crypto";
 import { readFile, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
-import { audit } from "../src/audit";
-import { objectKeys, storage } from "../src/storage";
+import { audit } from "../src/common/audit";
+import { objectKeys, storage } from "../src/infra/storage";
 
 const apply = process.argv.includes("--apply");
 const deleteLocal = process.argv.includes("--delete-local");

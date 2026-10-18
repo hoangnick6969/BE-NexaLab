@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { basicExerciseAttemptRequestSchema, evaluateBasicExercise, sanitizeBasicExerciseConfig } from "./pathway";
+import { basicExerciseAttemptRequestSchema, evaluateBasicExercise, sanitizeBasicExerciseConfig } from "./lessons/pathway";
 
 const config = {
   passThreshold: 80,

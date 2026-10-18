@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
-import { seedUrl } from "../../src/database-config";
+import { seedUrl } from "../../src/infra/database-config";
 
 const inputPath = path.resolve(process.argv.find((arg) => arg.startsWith("--input="))?.slice(8) ?? "tools/nexalab-ingest/out/nxbgd-khtn8-20261015/extracted/sgk-khtn8-chapter-01.content-seed.dev.json");
 const apply = process.argv.includes("--apply");

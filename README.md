@@ -150,13 +150,17 @@ Bản MVP đã được kiểm tra với 19 unit tests mô phỏng, 46 assertion
 ## Cấu trúc thư mục
 
 ```text
-src/                  API, auth, học liệu, context và Tutor
+src/<domain>/         Mỗi thư mục là một Nest module: auth, users, curriculum, lessons,
+                      classes, progress, learning, labs, parents, reports, assets,
+                      content, admin; infra và common là module global
 packages/sim/         Engine mô phỏng dùng chung và unit tests
 prisma/               Schema, migrations và dữ liệu mẫu
 scripts/              Test tích hợp, mailbox và tiện ích Windows
 docs/                 Giả định và giới hạn mô hình khoa học
 .github/workflows/    CI lint, test và build
 ```
+
+Chi tiết và quy ước: [docs/architecture/project-structure.md](docs/architecture/project-structure.md).
 
 ### Đồng bộ engine sang frontend
 

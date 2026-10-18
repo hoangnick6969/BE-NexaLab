@@ -5,7 +5,7 @@
 import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
-import { applyRelease, planRelease, retireRelease } from "../src/content-release";
+import { applyRelease, planRelease, retireRelease } from "../src/content/content-release";
 
 const arg = (name: string) => {
   const i = process.argv.indexOf("--" + name);
