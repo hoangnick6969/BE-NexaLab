@@ -1,6 +1,6 @@
 import { ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { access } from "../auth/auth";
-import { applicableAssignmentWhere, assignmentQueueOrder, isOverdue } from "../classes/class-access";
+import { applicableAssignmentWhere, applicableLessonAssignmentWhere, assignmentQueueOrder, isOverdue } from "../classes/class-access";
 import { Db } from "../infra/db";
 import { buildPathwaySteps, validateLessonSteps } from "../lessons/pathway";
 import { attribution } from "../lessons/lesson-content";
@@ -13,9 +13,9 @@ import { withDerivedCompletion } from "./progress";
 export class StudentAccessService {
   constructor(@Inject(Db) private db: Db) {}
 
-  async applicableLessonAssignment(lessonId: string, studentId: string, db: any = this.db) {
+  async applicableLessonAssignment(lessonId: string, studentId: string, db: any = this.db, assignmentId?: string) {
     return db.assignment.findFirst({
-      where: { ...applicableAssignmentWhere(studentId), contentId: lessonId, contentType: "lesson" },
+      where: applicableLessonAssignmentWhere(studentId, lessonId, assignmentId),
       orderBy: assignmentQueueOrder,
     });
   }
@@ -29,8 +29,8 @@ export class StudentAccessService {
     ]);
     return progress + quiz + practical > 0;
   }
-  async studentPathway(id: string, studentId: string, db: any = this.db) {
-    const assignment = await this.applicableLessonAssignment(id, studentId, db);
+  async studentPathway(id: string, studentId: string, db: any = this.db, assignmentId?: string) {
+    const assignment = await this.applicableLessonAssignment(id, studentId, db, assignmentId);
     if (!assignment) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
     const lesson = await db.lesson.findFirst({
       where: { id, status: { in: ["published", "archived"] } },

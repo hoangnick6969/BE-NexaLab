@@ -59,10 +59,13 @@ export class LabsController {
   @Roles("STUDENT", "TEACHER") @Post("simulate/:labId") async preview(
     @Param("labId") labId: string,
     @Body() body: any,
+    @Req() req: any,
   ) {
     // CF-T4: the lab's allowlisted model reference decides the engine; unknown labs fail closed.
-    const lab = await this.db.lab.findUnique({ where: { id: labId }, select: { simulationModelRef: true } });
+    const lab = await this.db.lab.findUnique({ where: { id: labId }, select: { simulationModelRef: true, status: true, scope: true, releaseCleared: true, synthetic: true, topicCode: true } });
     if (!lab) throw new NotFoundException({ code: "LAB_NOT_FOUND", message: "Không tìm thấy phòng thực hành" });
+    if (req.user.role === "STUDENT" && !(lab.status === "published" && lab.scope === "SHARED_LIBRARY" && lab.releaseCleared && !lab.synthetic && lab.topicCode))
+      throw new NotFoundException({ code: "LAB_NOT_FOUND", message: "Không tìm thấy phòng thực hành" });
     try {
       return resolveModel(lab.simulationModelRef).simulate(body);
     } catch (e: any) {
@@ -89,6 +92,11 @@ export class LabsController {
       include: { lab: true },
     });
     if (!c || c.lab.status !== "published") throw new NotFoundException();
+    if (!b.lessonStepId) {
+      const applicableStandaloneLab = await this.applicableLabAssignment(c.labId, req.user.sub);
+      if (!applicableStandaloneLab && !(c.lab.scope === "SHARED_LIBRARY" && c.lab.releaseCleared && !c.lab.synthetic && c.lab.topicCode))
+        throw new NotFoundException({ code: "LAB_NOT_FOUND", message: "Không tìm thấy phòng thực hành" });
+    }
 
     // Idempotency fast-path
     if (b.idempotencyKey) {

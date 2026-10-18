@@ -1,10 +1,10 @@
-import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Put, Req } from "@nestjs/common";
+import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Put, Query, Req } from "@nestjs/common";
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { access } from "../auth/auth";
 import { Roles } from "../common/decorators";
 import { applicableAssignmentWhere, assignmentQueueOrder, isOverdue } from "../classes/class-access";
 import { Db } from "../infra/db";
-import { buildPathwaySteps, quizAttemptRequestSchema, quizConfigSchema, reconcileCardProgress, reconcileVideoProgress, stepProgressActionSchema } from "../lessons/pathway";
+import { basicExerciseAttemptRequestSchema, buildPathwaySteps, evaluateBasicExercise, quizAttemptRequestSchema, quizConfigSchema, reconcileCardProgress, reconcileVideoProgress, sanitizeBasicExerciseConfig, stepProgressActionSchema } from "../lessons/pathway";
 import { StudentAccessService } from "../progress/student-access.service";
 import { challengeObjective } from "../lessons/lesson-content";
 import { ARCHIVED_CONTENT_MESSAGE } from "../lessons/lesson-schema";
@@ -26,9 +26,128 @@ export class LearningController {
   }
   @Roles("STUDENT") @Get("lessons/:id/pathway") async pathway(
     @Param("id") id: string,
+    @Query("assignmentId") assignmentId: string | undefined,
     @Req() req: any,
   ) {
-    return this.access.studentPathway(id, req.user.sub);
+    return this.access.studentPathway(id, req.user.sub, this.db, assignmentId);
+  }
+  @Roles("STUDENT") @Get("open-curriculum/lessons/:id") async openCurriculumLesson(@Param("id") id: string, @Req() req: any) {
+    const lesson = await this.db.lesson.findFirst({
+      where: { id, status: "published", scope: "SHARED_LIBRARY", synthetic: false, packVersion: { status: "released", synthetic: false } },
+      include: {
+        subject: { select: { id: true, name: true, ebookUrl: true } },
+        steps: { where: { type: { in: ["READING", "VIDEO", "BASIC_EXERCISE"] } }, orderBy: { position: "asc" }, include: { progress: { where: { studentId: req.user.sub, assignmentId: null } }, basicExerciseAttempts: { where: { studentId: req.user.sub }, orderBy: { createdAt: "desc" }, take: 1 } } },
+        ebookLocators: { include: { edition: true } },
+      },
+    });
+    if (!lesson) throw new NotFoundException({ code: "CURRICULUM_LESSON_NOT_FOUND", message: "Không tìm thấy bài học" });
+    const ebookEditions = lesson.ebookLocators
+      .filter((item: any) => item.edition.subjectId === lesson.subjectId && item.edition.isCurrent && item.edition.url.startsWith("https://"))
+      .map((item: any) => ({
+        url: item.edition.url,
+        version: item.edition.version,
+        fallbackPhysicalPage: item.edition.fallbackPhysicalPage,
+        locator: item.verificationStatus === "verified" ? {
+          physicalPageIndex: item.physicalPageIndex,
+          printedPageLabel: item.printedPageLabel,
+          provenance: item.provenance,
+          sourceMapVersion: item.sourceMapVersion,
+        } : null,
+      }));
+    return {
+      id: lesson.id,
+      subjectId: lesson.subjectId,
+      subject: lesson.subject,
+      title: lesson.title,
+      chapter: lesson.chapter,
+      grade: lesson.grade,
+      topic: lesson.topic,
+      learningObjective: lesson.learningObjective,
+      prerequisites: lesson.prerequisites,
+      curriculum: lesson.curriculum,
+      content: lesson.content,
+      materials: lesson.materials,
+      steps: lesson.steps.map((step: any) => {
+        const progress = step.progress[0];
+        const config = step.config as any;
+        return {
+          id: step.id, type: step.type, position: step.position, required: step.required,
+          state: progress?.status === "COMPLETED" || step.basicExerciseAttempts?.[0]?.passed ? "COMPLETED" : progress?.status === "IN_PROGRESS" || step.basicExerciseAttempts?.length ? "IN_PROGRESS" : "IN_PROGRESS",
+          progressValue: progress?.progressValue ?? 0,
+          lastPosition: progress?.lastPosition ?? null,
+          resource: step.type === "READING" ? { html: config.html } : step.type === "BASIC_EXERCISE" ? sanitizeBasicExerciseConfig(config) : config,
+          exercise: step.basicExerciseAttempts?.[0] ? { score: step.basicExerciseAttempts[0].score, passThreshold: step.basicExerciseAttempts[0].passThreshold, passed: step.basicExerciseAttempts[0].passed, createdAt: step.basicExerciseAttempts[0].createdAt.toISOString() } : null,
+        };
+      }),
+      ebookEditions,
+    };
+  }
+  @Roles("STUDENT")
+  @Post("open-curriculum/lessons/:lessonId/exercises/:stepId/attempts")
+  @ApiOperation({ summary: "Submit and score an assignment-free foundational exercise attempt" })
+  @ApiBody({ schema: { type: "object", required: ["answers", "idempotencyKey"], properties: { answers: { type: "array", items: { type: "object", required: ["questionId", "optionId"], properties: { questionId: { type: "string" }, optionId: { type: "string" } } } }, idempotencyKey: { type: "string", format: "uuid" } } } })
+  async submitBasicExercise(
+    @Param("lessonId") lessonId: string,
+    @Param("stepId") stepId: string,
+    @Body() body: unknown,
+    @Req() req: any,
+  ) {
+    const request = basicExerciseAttemptRequestSchema.parse(body);
+    const prior = await this.db.basicExerciseAttempt.findUnique({ where: { studentId_idempotencyKey: { studentId: req.user.sub, idempotencyKey: request.idempotencyKey } } });
+    if (prior) return { id: prior.id, score: prior.score, passThreshold: prior.passThreshold, passed: prior.passed, createdAt: prior.createdAt.toISOString() };
+    const step = await this.db.lessonStep.findFirst({
+      where: { id: stepId, lessonId, type: "BASIC_EXERCISE", lesson: { status: "published", scope: "SHARED_LIBRARY", synthetic: false, packVersion: { status: "released", synthetic: false } } },
+    });
+    if (!step) throw new NotFoundException({ code: "CURRICULUM_EXERCISE_NOT_FOUND", message: "Không tìm thấy bài tập" });
+    let result;
+    try { result = evaluateBasicExercise(step.config, request); }
+    catch { throw new BadRequestException({ code: "EXERCISE_ANSWERS_INVALID", message: "Câu trả lời chưa hợp lệ" }); }
+    try {
+      const attempt = await this.db.basicExerciseAttempt.create({ data: { studentId: req.user.sub, lessonId, stepId, answers: request.answers as any, idempotencyKey: request.idempotencyKey, ...result } });
+      return { id: attempt.id, score: attempt.score, passThreshold: attempt.passThreshold, passed: attempt.passed, createdAt: attempt.createdAt.toISOString() };
+    } catch (error: any) {
+      if (error?.code !== "P2002") throw error;
+      const attempt = await this.db.basicExerciseAttempt.findUniqueOrThrow({ where: { studentId_idempotencyKey: { studentId: req.user.sub, idempotencyKey: request.idempotencyKey } } });
+      return { id: attempt.id, score: attempt.score, passThreshold: attempt.passThreshold, passed: attempt.passed, createdAt: attempt.createdAt.toISOString() };
+    }
+  }
+  @Roles("STUDENT")
+  @Put("open-curriculum/lessons/:lessonId/steps/:stepId/progress")
+  @ApiOperation({ summary: "Persist reading or video evidence for released curriculum outside assignments" })
+  @ApiBody({ schema: { oneOf: [{ type: "object", required: ["action"], properties: { action: { type: "string", enum: ["complete"] } } }, { type: "object", required: ["action", "positionSeconds", "durationSeconds"], properties: { action: { type: "string", enum: ["heartbeat", "ended"] }, positionSeconds: { type: "integer" }, durationSeconds: { type: "integer" } } }] } })
+  async updateOpenCurriculumProgress(
+    @Param("lessonId") lessonId: string,
+    @Param("stepId") stepId: string,
+    @Body() body: unknown,
+    @Req() req: any,
+  ) {
+    const action = stepProgressActionSchema.parse(body);
+    const studentId = req.user.sub;
+    return this.db.$transaction(async (tx) => {
+      const step = await tx.lessonStep.findFirst({
+        where: { id: stepId, lessonId, type: { in: ["READING", "VIDEO"] }, lesson: { status: "published", scope: "SHARED_LIBRARY", synthetic: false, packVersion: { status: "released", synthetic: false } } },
+      });
+      if (!step) throw new NotFoundException({ code: "CURRICULUM_STEP_NOT_FOUND", message: "Không tìm thấy bước học" });
+      const saved = await tx.stepProgress.findFirst({ where: { studentId, stepId, assignmentId: null } });
+      const now = new Date();
+      let evidence: any;
+      if (step.type === "READING" && action.action === "complete") {
+        evidence = { status: "COMPLETED", progressValue: 100, startedAt: saved?.startedAt ?? now, completedAt: saved?.completedAt ?? now };
+      } else if (step.type === "VIDEO" && ["heartbeat", "ended", "complete-fallback"].includes(action.action)) {
+        try { evidence = reconcileVideoProgress(step.config, saved ?? undefined, action as any, now); }
+        catch { throw new BadRequestException({ code: "VIDEO_EVIDENCE_INVALID", message: "Không thể xác nhận tiến độ video" }); }
+      } else {
+        throw new BadRequestException({ code: "STEP_ACTION_INVALID", message: "Thao tác này không áp dụng cho bước học" });
+      }
+      if (saved) await tx.stepProgress.update({ where: { id: saved.id }, data: evidence });
+      else {
+        await tx.stepProgress.createMany({ data: [{ studentId, stepId, assignmentId: null, ...evidence }], skipDuplicates: true });
+        const current = await tx.stepProgress.findFirst({ where: { studentId, stepId, assignmentId: null } });
+        if (current && current.updatedAt < now) await tx.stepProgress.update({ where: { id: current.id }, data: evidence });
+      }
+      const current = await tx.stepProgress.findFirstOrThrow({ where: { studentId, stepId, assignmentId: null } });
+      return { step: { id: stepId, state: current.status, progressValue: current.progressValue, lastPosition: current.lastPosition, completedAt: current.completedAt?.toISOString() ?? null } };
+    });
   }
   @Roles("STUDENT")
   @Get("lessons/:lessonId/quiz")

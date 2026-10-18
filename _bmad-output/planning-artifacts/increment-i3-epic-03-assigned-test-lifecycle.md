@@ -25,6 +25,10 @@ I3 starts after I2 defines and publishes the test-resource contract. Implement t
 Teachers can assign test content with a due date and resolve late submissions by rejecting them with zero or revising the same assignment deadline for its full target group. Students, teachers, and linked/approved parents see consistent server-derived states; attempts remain auditable and the latest submitted file/attempt is current.
 **FRs covered:** FR-02, FR-04, FR-05, FR-08, FR-12 (Assignments), FR-15 (assignment-status input), FR-17 (assignment/late-decision portion), FR-18 (pending status slice), FR-19 (overdue notice slice only), FR-25.
 
+### Student lesson hub integration boundary
+
+The student `/lessons` hub displays I1-released shared lessons plus eligible assigned lesson content, with assigned items prominent and filterable; overlap is one card classified as assigned. Its action must open the eligible `/assignments/:id` flow. Lesson pathway reads from that flow must carry the selected assignment ID so duplicate assignments of one lesson retain assignment-specific progress/evidence. Do not duplicate assignment due/status/submission controls in Open Curriculum or create a shared lesson route for assignment-only content. A scored test remains in Assignments only when explicitly assigned; class-resource sharing alone is not assignment creation. Preserve server-side assignment authorization.
+
 ### Story 3.1: Assign a Test with a Due Date and Fixed Recipient Set
 
 As a teacher,
