@@ -4,6 +4,7 @@ import { NestFactory } from "@nestjs/core";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import express from "express";
 import { AppModule } from "./app.module";
 import { Errors } from "./common/errors";
 import { quizOpenApiSchemas } from "./learning/quiz-contract";
@@ -14,7 +15,10 @@ async function bootstrap() {
     process.env.JWT_SECRET.startsWith("replace-")
   )
     throw new Error("Cần JWT_SECRET ngẫu nhiên ít nhất 32 ký tự");
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  // Structured class-resource CSV is transported as JSON and capped by its route contract at 1 MB.
+  app.use(express.json({ limit: "3mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "100kb" }));
   app.use(helmet());
   app.use(cookieParser());
   const configuredOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:5173")

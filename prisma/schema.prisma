@@ -30,6 +30,16 @@ enum EnrollmentStatus {
   approved
   removed
 }
+enum ClassResourceKind {
+  DECK
+  STUDY_QUIZ
+  TEST
+}
+enum ClassResourceStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
 enum StepProgressStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -147,7 +157,41 @@ model Classroom {
   updatedAt DateTime @default(now()) @updatedAt
   enrollments Enrollment[]
   assignments Assignment[]
+    resources ClassResource[]
   @@index([teacherId, status])
+}
+/// Immutable class-owned authoring unit. Published records are never edited in place.
+model ClassResource {
+  id String @id @default(cuid())
+  classId String
+  classroom Classroom @relation(fields: [classId], references: [id], onDelete: Cascade)
+  kind ClassResourceKind
+  title String
+  lessonId String?
+  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  version Int @default(1)
+  status ClassResourceStatus @default(DRAFT)
+  content Json
+  createdById String
+  createdAt DateTime @default(now())
+  publishedAt DateTime?
+  archivedAt DateTime?
+  practice ClassResourcePractice[]
+  @@unique([classId, kind, title, version])
+  @@index([classId, status, kind, createdAt])
+  @@index([lessonId])
+}
+/// Latest unscored practice state; deliberately contains no grade or verdict fields.
+model ClassResourcePractice {
+  id String @id @default(cuid())
+  resourceId String
+  resource ClassResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  studentId String
+  state Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([resourceId, studentId])
+  @@index([studentId, updatedAt])
 }
 model Enrollment {
   classId String
@@ -231,6 +275,7 @@ model Lesson {
   /// Released content-pack version this shared lesson materializes (CF-T1); null for authored lessons.
   packVersionId String?
   packVersion ContentPackVersion? @relation(fields: [packVersionId], references: [id], onDelete: Restrict)
+  classResources ClassResource[]
   curriculumChapterCode String?
   curriculumChapter CurriculumChapter? @relation(fields: [curriculumChapterCode], references: [code], onDelete: Restrict)
   curriculumTopicCode String?

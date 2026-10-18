@@ -1,7 +1,7 @@
 ---
 increment: I2
 epic: 02
-status: draft
+status: review
 stories: 2.1–2.4
 ---
 
@@ -24,9 +24,19 @@ The student sidebar exposes `/classes` as the separate Class Space destination; 
 
 I2 can run alongside I1 after the class-resource and authorization contracts are frozen. Stories 2.1–2.3 can run in parallel with clear file ownership; 2.4 follows the resource schemas from 2.1/2.2. I3 depends on the published test-resource contract from this increment.
 
-**Readiness gates:** Freeze supported import formats/templates, size/row/time limits, duplicate handling, and field schema before Story 2.4. Resolve practice persistence and resource edit/version/archive behavior before implementing Stories 2.1–2.3. Lab builders and AI authoring are excluded; preserve only their access/integration boundaries.
+Implementation gates are closed by the frozen contract below. Lab builders and AI authoring remain excluded; preserve only their access/integration boundaries.
 
 Teachers can create and publish class-scoped decks, study quizzes, and test content directly or from validated structured files, while students discover only resources allowed by active approved class membership. Preserve class-Lab access and taxonomy contracts without delivering a Lab builder.
+
+## Frozen implementation contract for this increment
+
+- A resource is linked to one lesson and belongs to one Class Space. Only its owning teacher can author, revise, publish, or archive it. The server checks active class ownership and approved student membership on every list/detail/practice request.
+- Drafts are editable. Publishing freezes that version. “Create new version” clones the published resource into the next draft version; archive hides the version from student access and retains its practice evidence.
+- Unscored deck/quiz practice stores only the student's latest interaction state per resource; it has no grade, verdict, assignment, or teacher analytics. A test resource keeps its answer key server-side and is not playable or scored before a later explicit assignment.
+- Import MVP accepts UTF-8 CSV only, at most 1 MB. Decks allow up to 200 data rows; study quizzes and tests allow up to 100. Headers are exact and ordered: deck `front,back`; study quiz `prompt,optionA,optionB,optionC,optionD,explanation`; test adds `correctOption` before `explanation`. Blank optional options/explanations are ignored. Duplicate normalized rows reject the entire file. Preview is non-persistent; confirmation validates the entire file again and creates one idempotent draft or nothing. XLSX and Lab/3D imports are out of scope.
+- Each imported/directly authored item must be linked to an available lesson. Deck/quiz/test payloads are schema-validated; the test key must reference an existing option and is stripped from all student resource responses.
+
+These choices close the I2 implementation gates for import format/limits, unscored practice persistence, and published-resource version/archive behavior. They do not implement I3 assignment, scoring, late decisions, or notifications.
 **FRs covered:** FR-02, FR-03, FR-04, FR-05, FR-11, FR-12 (Class Space), FR-13 (custom-Lab access boundary only), FR-16 (reuse existing class management), FR-17 (author/import portion), FR-24 (integration/access boundary only).
 
 ### Story 2.1: Create and Publish Class Study Decks and Unscored Study Quizzes
@@ -99,4 +109,4 @@ So that I can prepare class materials efficiently and correct errors before publ
 **Given** any row is invalid or the file violates configured size/row/type limits, **when** the teacher confirms import, **then** no partial resource is created and actionable errors are returned.
 **Given** the preview is valid and current, **when** the teacher confirms, **then** one idempotent draft is created and requires teacher review before publication.
 **Given** the upload contains macros/formulas, an untrusted MIME/name, or a Lab/3D asset payload, **when** import validation runs, **then** executable content is never run and the file is rejected as an unsupported Lab-import path.
-**Decision gate before implementation:** Freeze allowlisted format(s), per-resource templates, size/row/time limits, duplicate behavior, and supported question/card field schema in story refinement.
+**Implementation status:** Stories 2.1–2.4 are implemented in the current branch and verified locally. Shared database migration and product acceptance remain release review items.

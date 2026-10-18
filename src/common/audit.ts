@@ -79,6 +79,10 @@ export const AUDIT_FIELDS = new Set([
   "bytes",
   "references",
   "migrated",
+  "resourceKind",
+  "resourceVersion",
+  "sourceName",
+  "itemCount",
 ]);
 
 const credentialLike = [
