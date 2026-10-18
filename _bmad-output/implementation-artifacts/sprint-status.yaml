@@ -1,18 +1,19 @@
-# Release 1 execution tracking across backend and frontend. Increment A (A1-A5) is accepted history;
-# Increment B/C follows _bmad-output/planning-artifacts/increment-b-c-plan.md.
+# Release 1 execution tracking across backend and frontend. A (A1-A5) is accepted history;
+# B/C and I2 have separate plans under _bmad-output/planning-artifacts/.
 # Prior chat summaries are not acceptance proof. Update this file at the end of every implementation session.
 project: NexaLab
 project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
-scope: Release 1 / Content Foundation CF-T1..T4 platform (completes the C2-T3/C2-T5 surfaces; CF-T5 corpus remains a staffed workstream)
-last_updated: '2026-10-17'
+scope: Release 1 / Content Foundation CF-T1..T4 plus I2 Class Space resources; CF-T5 corpus remains a staffed workstream
+last_updated: '2026-10-18'
 tracking_timezone: Asia/Saigon
 repositories:
-  backend: 'BE-NexaLab (branch feat/content-foundation, merged with origin/main incl. C2 PR #15 and pH demo 3f521d7)'
-  frontend: 'FE-NexaLab (branch feat/content-foundation; C2 merged on origin/main)'
+  backend: 'BE-NexaLab (codex/i2-i3-lessons-class-space, fast-forwarded to origin/main 2026-10-18)'
+  frontend: 'FE-NexaLab (codex/i2-i3-lessons-class-space, fast-forwarded to origin/main 2026-10-18)'
 sources:
   plan: ../planning-artifacts/increment-b-c-plan.md
+  active_increment: ../planning-artifacts/increment-i2-epic-02-class-space-resources.md
   next_plan: ../planning-artifacts/next-development-plan.md  # draft 2026-10-17, awaiting PO/team review
   open_learning_assessment: ../planning-artifacts/open-learning-prd-assessment.md
   acceptance_criteria: ../specs/spec-content-foundation/tickets.md
@@ -91,15 +92,32 @@ development_status:
   c2-t4-adult-reset-admin-login: done
   c2-t5-asset-source-operations: done
   c2-t6-admin-console-audit-journey: done
+  epic-i2-class-space-resources: review
+  i2-2-1-create-publish-study-resources: review
+  i2-2-2-create-test-content: review
+  i2-2-3-share-membership-scoped-resources: review
+  i2-2-4-import-structured-resources: review
+
+increment_i2_tracking:
+  plan: ../planning-artifacts/increment-i2-epic-02-class-space-resources.md
+  status: review
+  date: '2026-10-18'
+  scope: 'I2 / Epic 02: class-scoped decks, unscored study quizzes, unpublished-to-assignment tests, membership-scoped sharing, CSV import, and teacher/student Class Space UI.'
+  verification: 'Backend contract tests 154/154, Prisma validation, backend lint/build, and FE lint/build passed. A prior isolated API/DB Playwright run passed before this main sync; this turn could not safely repeat it because the configured API targets shared Supabase and fixture login returned 401.'
+  remaining:
+    - 'Repeat API/DB Playwright acceptance against an isolated local database with matching seeded fixtures.'
+    - 'Apply the migration to shared development only after the normal approval/review step.'
+    - 'Run product acceptance on the integrated branch before marking done.'
 
 execution:
-  current_story: cf-t4-practical-simulation-pack-registry
-  next_story: 'Owner PR for Content Foundation (BE and FE); shared Supabase CF migration with approval; CF-T5 needs named content capacity (Q-DATA-02/03/04)'
+  current_story: epic-i2-class-space-resources
+  next_story: 'Repeat isolated local API/DB Playwright acceptance; product review; shared development migration approval.'
   selection_reason: >
     2026-10-16 (Content Foundation): CF-T1..T4 platform implemented on feat/content-foundation and verified against the real
     Cloudflare R2 development bucket (r2:check 9/9, test:cf 60/60, Playwright browser→R2 CORS upload 1/1, Vitest 144/144).
     This completes the R2/AssetVersion/SourceRegistry/ingestion/topic-pack surfaces C2 had deferred. CF-T5 corpus stays backlog: it is a staffed editorial delivery.
     Branch merged with origin/main (C2 PR #15, pH demo); the pH demo extended chemistry@1.0.0 in place, so the model registry should declare its new outputs.
+    2026-10-18 (I2): implementation synced to origin/main. Backend contract tests 154/154, schema validation, BE lint/build and FE lint/build pass; API/DB rerun is pending an isolated database because the configured .env points to shared Supabase.
     2026-10-15 (C2): all six C2 tickets implemented on the approved current-foundation scope and merged to origin/main (BE 8de28c0; FE C2 merged).
     BE lint/build and Vitest 123/123 pass; FE lint/build pass; shared-development test:c2 80 passed + 1 justified SKIP and c2:preflight RESULT ok after cleanup.
     Latest Supabase dev p95 read 1261 ms / mutation 2902 ms misses QR-09 (500/1000 ms); production and pilot latency are not claimed.
@@ -110,6 +128,7 @@ execution:
   next_epic_unlocked: true
   implementation_readiness: complete
   blockers:
+    - 'I2 API/DB Playwright acceptance must be repeated on an isolated local database; current .env targets shared Supabase and the configured fixture login returned 401, so no shared-database mutation was attempted'
     - 'Content Foundation migrations (cf_asset_versions, cf_sources_packs_releases, cf_simulation_packs) are not yet applied to shared Supabase; approval required'
     - 'Production media needs approved budgets (ASSET_BUDGETS_APPROVED) and a malware scanner; pilot/production R2 buckets are not created'
     - 'CF-T5 corpus needs the official Grade 8-9 outcome inventory and named editorial/subject/rights capacity (Q-DATA-02/03/04)'
