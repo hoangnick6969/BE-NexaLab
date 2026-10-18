@@ -23,7 +23,7 @@ active_specs:
 
 Epics are grouped by user outcome. Shared Foundation decisions bind every epic; they are not a separate database/backend/frontend phase.
 
-> **Scope amendment (2026-10-17/18):** This file records the original A1–C2 epic breakdown and its completed tickets, not the new Open Curriculum/Class Space scope. The current change adds direct teacher authoring/file import, due-dated test late decisions with class-wide reset or zero, and membership-only custom-Lab execution; AI is deferred to a later sprint. The updated PRD and technical companion supersede affected prior assumptions. No new epic/story decomposition exists yet; `sprint-status.yaml` remains evidence for the original scope only.
+> **Scope amendment (2026-10-17/18):** This file records the original A1–C2 epic breakdown and its completed tickets, not the new Open Curriculum/Class Space scope. The current change adds direct teacher authoring and structured-file import for decks/study quizzes/tests, due-dated test late decisions with same-assignment deadline revision or explicit rejection-to-zero, Student/Teacher/Parent status and notice surfaces, and membership-only custom-Lab access; generic file import does not create 3D Labs, and AI is deferred. The updated PRD and technical companion supersede affected prior assumptions. No new epic/story decomposition exists yet; `sprint-status.yaml` remains evidence for the original scope only.
 
 ## Shared Foundation
 

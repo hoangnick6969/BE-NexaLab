@@ -40,7 +40,9 @@ Direct-ID, detail, attempt, submission, and media routes enforce the same decisi
 - Reuse applicable server-side A2 rules for official lesson content/video/basic exercises; preserve explicit content completion and the existing video high-water rule. Study cards and quizzes do not contribute to open-course progress because they are teacher-created Class Space activities.
 - Only foundational Labs included in the official curriculum belong in the shared Lab taxonomy/catalog and course denominator. A teacher-created Lab must belong to a specific Class Space, link to its class lesson and stable subject/grade/chapter/topic IDs, and remain outside the global catalog and official course progress.
 - Assignment status and attempts are separate from foundational course progress and its fixed denominator. The subject summary may show “Đạt mức cơ bản” when foundational requirements are complete, but remains “Chưa đạt” while an active assignment linked to the subject is targeted to the student and unsubmitted, in progress, or not accepted by its evaluator. Archived assignments retain history but leave the current unmet rollup. Show status with a drill-down to source assignment/evidence; neither it nor foundational progress changes access to shared curriculum.
-- Teacher-created decks and study quizzes are unscored Class Space practice. Scored tests require explicit assignment. Teachers may create class study content directly or import a supported file. AI generation is deferred to a later sprint; imported content stays a draft until reviewed and published.
+- Teacher-created decks and study quizzes are unscored Class Space practice. Scored tests require explicit assignment. Teachers may create decks, study quizzes, and tests directly or import supported structured files; generic import does not create 3D Labs. AI generation is deferred to a later sprint; imported content stays a draft until reviewed and published.
+- Assigned tests have due dates. Late submission requires a student reason and teacher decision. Teacher approval revises the due date on the same assignment for all its assigned recipients in that Class Space; rejection records zero for that late submission. Expiry without submission never auto-scores zero. Student due-soon notices, teacher upcoming/overdue and pending-review surfaces, and parent overdue notices for explicitly linked/approved children must use consistent server-derived status. Parent view is read-only.
+- Teacher-created 3D Labs require a separate model/asset/configuration and publication workflow; class-only access rules are independent of how a Lab is authored.
 - Preserve old assignment-linked `StepProgress`, `QuizAttempt`, and simulation attempts as assignment evidence. Do not merge them into open-course progress without a documented, reconciled migration rule.
 
 ## 4. Lab catalog and contextual synchronization
@@ -95,9 +97,10 @@ Direct-ID, detail, attempt, submission, and media routes enforce the same decisi
 - [ ] Core lesson step is labeled “Nội dung bài” and its section may be titled “Kiến thức” without changing internal IDs absent a justified migration.
 - [ ] Active chapter/topic automatically surfaces matching Labs and provides direct navigation.
 - [ ] Lab catalog and contextual results resolve through the same stable curriculum IDs.
-- [ ] Teacher-created Lab is linked to its Class Space, class lesson, subject/grade/chapter/topic context, and approved model version.
+- [ ] Teacher-created Lab is linked to its Class Space, class lesson, subject/grade/chapter/topic context, and approved model version; generic file import cannot create a Lab.
 - [ ] Only foundational official-course Labs appear in the shared catalog/taxonomy and affect official course progress; custom class Labs remain inside Class Space.
 - [ ] Current video URLs/seeds are unchanged; later per-lesson URL seed remains representable.
 - [ ] Existing assignment evidence remains traceable and content-release gates remain enforced.
 
-- [ ] A late assigned-test attempt includes a student reason; teacher approval resets the whole original target set in a new round, while rejection records zero and preserves history.
+- [ ] A late assigned-test attempt includes a student reason; teacher approval revises the same assignment's due date for all recipients in its Class Space, while rejection records zero for that late submission and preserves history.
+- [ ] Expiry without submission does not automatically record zero; student, teacher, and explicitly linked/approved parent screens show consistent, role-authorized status and notices.
