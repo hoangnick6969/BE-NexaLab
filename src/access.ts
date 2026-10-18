@@ -17,6 +17,13 @@ export const applicableAssignmentWhere = (studentId: string) => ({
   targets: { some: { studentId } },
 });
 
+export const applicableLessonAssignmentWhere = (studentId: string, lessonId: string, assignmentId?: string) => ({
+  ...applicableAssignmentWhere(studentId),
+  ...(assignmentId ? { id: assignmentId } : {}),
+  contentId: lessonId,
+  contentType: "lesson",
+});
+
 /** Ordering of a student's queue: due work first, undated work last. */
 export const assignmentQueueOrder = [
   { dueDate: { sort: "asc" as const, nulls: "last" as const } },

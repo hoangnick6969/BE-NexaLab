@@ -18,6 +18,10 @@ Delegate one story per task. Use `$bmad-build` and implement only that story as 
 > Use `$bmad-build` to implement only Story **[ID and title]** from `increment-i2-epic-02-class-space-resources.md` . Read this file and the source documents above first. Check the story dependencies and readiness gates. Preserve its acceptance criteria and existing product decisions; do not extend into another story or guess unresolved rules. Implement the smallest complete vertical slice in the assigned files. Run relevant checks and report changed files, behavior/API/schema/UI, checks and results, and any blocker. Do not commit or push unless requested.
 ## Increment order
 
+### Student hub integration boundary
+
+The student sidebar exposes `/classes` as the separate Class Space destination; the existing student membership screen owns membership states, and this increment adds membership-authorized resource discovery there. `/lessons` combines I1-released shared lessons with eligible lesson assignments while keeping class resources out of the public catalog. A class resource remains available to active, approved members without creating an assignment; scored tests appear in Assignments only when explicitly assigned. Follow the I2 class/resource authorization contract; the student-hub navigation change does not invent a resource API.
+
 I2 can run alongside I1 after the class-resource and authorization contracts are frozen. Stories 2.1–2.3 can run in parallel with clear file ownership; 2.4 follows the resource schemas from 2.1/2.2. I3 depends on the published test-resource contract from this increment.
 
 **Readiness gates:** Freeze supported import formats/templates, size/row/time limits, duplicate handling, and field schema before Story 2.4. Resolve practice persistence and resource edit/version/archive behavior before implementing Stories 2.1–2.3. Lab builders and AI authoring are excluded; preserve only their access/integration boundaries.
@@ -76,6 +80,8 @@ So that all approved members can access class materials without creating assignm
 **Given** the teacher shares but does not assign a resource, **when** the student views Assignments/progress, **then** no due date, scored attempt, or assignment record is created.
 **Given** a student is pending, removed, in another class, or has only a stale URL/ID, **when** they request class resources, **then** every list/detail/download/launch route denies access server-side.
 **Given** a class-linked custom Lab resource already exists, **when** membership and lesson-context checks are performed, **then** it is class-only and linked by stable IDs; scored actions additionally require an assignment target. This is an access/integration boundary only, not a builder deliverable.
+
+**Student UI integration:** keep the student entry at `/classes` as the separate Class Space destination; extend its existing membership screen with resource discovery rather than adding class resources to `/lessons`. Show pending/removed membership state without resource actions; list/open resources only through the server-authorized class resource routes for active, approved members. Resource sharing remains unscored and must not create assignment rows or progress evidence.
 
 ### Story 2.4: Import Structured Files for Decks, Study Quizzes, and Tests
 

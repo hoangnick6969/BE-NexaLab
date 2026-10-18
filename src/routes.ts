@@ -67,7 +67,7 @@ import {
   withDerivedCompletion,
 } from "./progress";
 import { loadLessonEvidence, projectLab, projectLesson } from "./progress-projection";
-import { applicableAssignmentWhere, assignmentQueueOrder, isOverdue, ownedClass } from "./access";
+import { applicableAssignmentWhere, applicableLessonAssignmentWhere, assignmentQueueOrder, isOverdue, ownedClass } from "./access";
 import { audit, changedFields } from "./audit";
 import { idempotent, readIdempotencyKey } from "./idempotency";
 import { requestHint } from "./hint";
@@ -169,9 +169,9 @@ function publishedSteps(lesson: z.infer<typeof lessonSchema>, namespace?: string
 export class ApiController {
   constructor(@Inject(Db) private db: Db) {}
 
-  private async applicableLessonAssignment(lessonId: string, studentId: string, db: any = this.db) {
+  private async applicableLessonAssignment(lessonId: string, studentId: string, db: any = this.db, assignmentId?: string) {
     return db.assignment.findFirst({
-      where: { ...applicableAssignmentWhere(studentId), contentId: lessonId, contentType: "lesson" },
+      where: applicableLessonAssignmentWhere(studentId, lessonId, assignmentId),
       orderBy: assignmentQueueOrder,
     });
   }
@@ -1221,12 +1221,13 @@ export class ApiController {
   }
   @Roles("STUDENT") @Get("lessons/:id/pathway") async pathway(
     @Param("id") id: string,
+    @Query("assignmentId") assignmentId: string | undefined,
     @Req() req: any,
   ) {
-    return this.studentPathway(id, req.user.sub);
+    return this.studentPathway(id, req.user.sub, this.db, assignmentId);
   }
-  private async studentPathway(id: string, studentId: string, db: any = this.db) {
-    const assignment = await this.applicableLessonAssignment(id, studentId, db);
+  private async studentPathway(id: string, studentId: string, db: any = this.db, assignmentId?: string) {
+    const assignment = await this.applicableLessonAssignment(id, studentId, db, assignmentId);
     if (!assignment) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
     const lesson = await db.lesson.findFirst({
       where: { id, status: { in: ["published", "archived"] } },
