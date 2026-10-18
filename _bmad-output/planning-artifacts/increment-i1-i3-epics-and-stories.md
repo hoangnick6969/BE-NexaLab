@@ -16,185 +16,23 @@ inputDocuments:
   - docs/product/open-questions.md
 ---
 
-# NexaLab — Epic Breakdown
+# NexaLab — Increment I1–I3 Epic and Story Plan
 
-## Overview
+## Purpose
 
-This planning artifact captures the requirements and approved epic structure for the current Open Curriculum and Class Space change. Existing Release 1 foundation and historical A1–C2 scope are included for traceability, but must not be re-planned as new work unless the change proposal explicitly identifies impact. Full curriculum and teacher-custom Lab builders are separate R&D and excluded from this sprint; only their integration and access boundaries are in scope.
+This is the single execution breakdown for the Open Curriculum and Class Space change. The PRD and linked specs remain the product/technical source of truth; use each story's FR links, dependencies, and acceptance criteria to scope implementation. Stories with unresolved gates remain `Not Ready`.
 
-## Requirements Inventory
+## Agent implementation guide
 
-### Functional Requirements
+Read in this order before coding: `docs/product/prd.md` → `_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-16.md` → `_bmad-output/planning-artifacts/architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md` → the linked Open Learning/Class Space and Teacher specs → `../nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md`. Check `docs/product/open-questions.md` and this plan's readiness gates before implementing a gated story. If requirements disagree, stop and report the conflict; do not invent a new product rule.
 
-FR-01: Represent Student, Teacher, Parent, and Admin identities with role-specific login and account lifecycle rules. (Shared foundation; preserve existing behavior.)
+**Delegate one story per agent/task.** Implement only the requested story, including its vertical BE/FE/API/schema work. Keep NestJS/Zod/OpenAPI and FE types/UI aligned; enforce access in the backend. Do not split implementation across agents until the shared contract is frozen and file ownership is explicit. I1 and I2 may run in parallel after that; I3 starts after the I2 test-resource contract. Follow the dependencies in the story. Do not add public cards/quizzes, AI generation, or either Lab builder to this sprint.
 
-FR-02: Enforce role and resource ownership on every protected server operation. (Shared foundation; applies to all new catalog, Class Space, assignment, file, and notification routes.)
+**Copy/paste task prompt:**
 
-FR-03: Teachers own classes; classes contain approved student enrollments; assignments target a class or an approved subset of that class.
+> Use `$bmad-build` to implement Story **[ID and title]** from `increment-i1-i3-epics-and-stories.md` only. First read the implementation guide and its linked source docs, then check the story's readiness gates and dependencies. Preserve its acceptance criteria and existing product decisions. Make the smallest complete vertical change in the explicitly assigned files; do not change another story's scope or resolve product decisions by assumption. Run only the checks relevant to this story and report changed files, API/schema/UI behavior, checks and results, and any remaining blocker. Do not commit or push unless separately requested.
 
-FR-04: Keep stable relationships among content, assignments, attempts, and progress so every displayed learning state traces to source evidence.
-
-FR-05: Validate request bodies at API boundaries and use consistent, recoverable errors.
-
-FR-06: Allow an authorized operator to provision/seed the minimum student, class, released content, and assignment data needed for the student journey. (Existing baseline.)
-
-FR-07: Require a provisioned student to log in with username/password and change a valid temporary password before protected learning routes. (Existing baseline.)
-
-FR-08: Show only assignments applicable to approved enrollment and the target snapshot. Assigned tests have due dates; late submissions require a reason and teacher decision; rejection records zero; expiry without submission does not auto-score zero. A teacher-approved extension revises the due date on the same assignment for its entire assigned recipient set, and every recipient may submit again, including those who already submitted. Preserve attempts and deadline/decision history. The latest submitted file/attempt is current; late work awaiting review remains pending.
-
-FR-09: Allow authenticated students to browse released shared curriculum across available subjects/grades without assignment; `/lessons` follows subject → ascending available grades → ordered chapter/topic table of contents → ordered lessons → lesson detail. Show release gaps separately and include curriculum reference, objective, and prerequisites.
-
-FR-10: Support shared lesson content, video or approved equivalent, and basic lesson exercises where present, with recoverable unavailable states. Public lessons contain no Quizlet decks or scored-quiz gate.
-
-FR-11: Allow teachers to create study-card decks, unscored study quizzes, and tests in Class Space; direct authoring and supported structured-file import apply to decks, study quizzes, and test content only. Imported resources remain drafts until teacher review/publication. Generic file import does not create Labs. AI generation is deferred. Decks/study quizzes remain unscored; scored tests require explicit assignment and server-authoritative scoring, private answer keys, retry history, and target authorization.
-
-FR-12: Keep Open Curriculum, Class Space, and Assignments distinct. Active approved class members can access class resources without assignment; assignment activities are target-scoped. No quiz completion gates shared content or foundational Labs.
-
-FR-13: Make released foundational Labs available without enrollment, assignment, or quiz pass and link them to official subject/grade/chapter/topic/outcomes. Teacher-custom Labs belong to one class and link to its lesson and curriculum context; only active approved members may discover/run them, while scored submissions require assignment-target eligibility. This sprint excludes both Lab builders.
-
-FR-14: Retain student, challenge, submitted state, simulation result, verdict, duration, and timestamp for each practical attempt. New Lab work must respect the existing server-authoritative, immutable-version boundaries.
-
-FR-15: Show foundational subject progress and attempt history with evidence traceability. The fixed official course version defines the foundational denominator (lesson content, video, basic exercises, and required foundational Labs). Assigned work is separate and keeps the subject summary unmet while actionable and unsubmitted, in progress, awaiting late review, or not accepted; closed/archived work remains in history but no longer holds the current rollup unmet once not actionable.
-
-FR-16: Allow teachers to manage their own classes and approved student membership. (Existing baseline; preserve ownership boundaries.)
-
-FR-17: Allow teachers to author/import permitted study/test content, assign tests to an owned class or selected enrolled students with a due date, decide late requests, and revise the same assignment deadline for the full assigned recipient set while preserving attempts/deadline history. Teacher views show upcoming/overdue work and pending late reasons.
-
-FR-18: Allow teachers to inspect student/class evidence only within their owned classes and students. (Existing evidence capability; integrate where assignment status changes.)
-
-FR-19: Give parents read-only progress access for explicitly linked children. (Current change adds due-status visibility only as stated by FR-25.)
-
-FR-20: Allow admins to manage users/content/subjects/Labs/assets within authorization and audit boundaries. Administrative quarantine/archive/reassignment requires a reason and audit and cannot bypass scientific, rights, or publication gates. (Preserve; no new full Lab builder scope.)
-
-FR-21: In a later sprint, allow Teacher AI to create structured drafts only; an authorized human reviews and publishes. Outside this sprint.
-
-FR-22: Keep Student AI hints advisory; AI never computes or overrides results, verdicts, scores, or progress. Outside this sprint.
-
-FR-23: Allow admins to maintain optional HTTPS ebook/reference links per subject and show them as external resources without implying content rights. Existing curriculum/navigation context; preserve.
-
-FR-24: Define the future teacher-custom Lab capability as a Class Space resource linked by stable subject/grade/chapter/topic/lesson identifiers, discoverable/runnable only by active approved class members, with scored submissions limited to assignment targets. Builder authoring is explicitly outside this sprint.
-
-FR-25: Provide server-derived assignment status across Student, Teacher, and Parent roles. Students see due-soon/current-deadline and late-review status; Teachers see upcoming/overdue assignments and pending reasons; linked/approved Parents may see read-only in-app overdue notices. Expiry alone never records zero; explicit teacher rejection does.
-
-### NonFunctional Requirements
-
-NFR-01 / QR-01 Scientific authority: backend recomputes simulations; only deterministic simulation/evaluator logic produces official results/verdicts.
-
-NFR-02 / QR-02 Progress authority: official progress is read/written through authorized backend operations; client preview is never official.
-
-NFR-03 / QR-03 Privacy and ownership: parent access is read-only; teachers are restricted to owned classes; students see only their evidence and applicable assignments.
-
-NFR-04 / QR-04 Accessibility: keyboard and touch support, minimum 44×44 px targets, WCAG AA rendered color pairs, reduced-motion support.
-
-NFR-05 / QR-05 Responsive use: verify Increment A Student flow at 390, 768, 1024, and 1440 px without horizontal overflow or obscured primary actions.
-
-NFR-06 / QR-06 Honest learning UX: one primary next action per learning screen; no fabricated metrics, peer ranking, shaming copy, or score without evidence drill-down.
-
-NFR-07 / QR-07 Resilience: every async learning surface has loading, empty, and recoverable-error states; failed writes are never shown as saved.
-
-NFR-08 / QR-08 Content governance and scientific accuracy: released shared content requires traceable source/rights evidence and named subject-matter approval. Important scientific claims, formulas, answer keys, and models use at least two independent references, including an appropriate authoritative scientific/educational source. Tests do not substitute for subject review. Scored Labs require approved models and golden cases.
-
-NFR-09 / QR-09 Interaction performance: acknowledge supported Student input within 100 ms; keep primary actions usable during recoverable failures; pilot p95 API targets are 500 ms for reads and 1,000 ms for mutations, excluding file/video transfer and simulation rendering.
-
-NFR-10 / QR-10 Runtime reliability: seeded A1–A5 journey targets ≥95% completion without unrecoverable error and ≥99% crash-free pilot sessions; these are measured pilot gates, not current-code claims.
-
-### Additional Requirements
-
-- Backend NestJS/Zod and generated OpenAPI are canonical for HTTP contracts. Every contract-changing vertical story updates BE route/schema, OpenAPI/contract tests, FE types/fixtures, and recoverable UI errors together.
-- Enforce authorization server-side on collection, direct lookup, read, launch, mutation, attempt/result, and signed-file URL issuance. Class Lab access additionally checks active approved membership on each operation; scoring additionally checks immutable assignment target snapshots.
-- Keep released curriculum, Class Space resources, and assignments as distinct domain/access/progress boundaries. Class sharing must not create assignment records; assignment targeting must not grant general class-resource access.
-- Same-assignment deadline revision applies to its full assigned recipient set. Every recipient, including previously submitted students, may submit again. Link each attempt to the deadline revision that governed it; retain immutable attempts, scores, reasons, decisions, and deadline events. Use idempotency for retryable submissions and deadline changes.
-- Late submissions require a student reason and remain pending until teacher action. Expiry without a submission does not auto-score zero. Explicit teacher rejection yields zero. Latest submitted file/attempt is current, subject to the pending/rejection rules above.
-- Keep student due-soon, student overdue/late-review, teacher upcoming/overdue/pending-reason, and parent overdue surfaces consistent with backend state. Parent requires an explicitly linked/approved relationship and has read-only access.
-- Import applies only to deck/study-quiz/test content. Preview and validate the complete structured file before persistence; invalid rows prevent partial creation; imported content remains a draft. Template/format and limits are still story-level decisions. Never execute uploaded formulas/macros; treat client MIME and filenames as untrusted.
-- AI authoring is deferred. Both Lab builder tracks are deferred to separate R&D (first curriculum research target KHTN Grade 8). This sprint preserves taxonomy/ownership/access/version/runtime boundaries and must not assume a shared editor design.
-- Existing scored simulation authority remains deterministic on the server, backed by allowlisted reviewed model/pack versions and immutable attempt version references. Do not treat Lab builder UI or a GLB as scientific logic.
-- Use Prisma/PostgreSQL for schema/migrations; schema migrations must be reviewed and migration/backfill/rollback behavior considered before implementation. Do not use direct browser DB access or Supabase RLS as the authorization boundary.
-- Private binary learning assets use Cloudflare R2; the backend authorizes access and issues temporary URLs. Published content pins immutable asset versions; validate uploads and provenance.
-- Keep test/dev/staging/pilot/production environments isolated. Migrations deploy through reviewed `prisma migrate deploy`; guarded seed is non-production only. Do not claim current production readiness from planning or local checks.
-- Cross-repository work should be vertically sliced around stable API contracts and explicit dependencies. The change touches backend/API/schema, frontend Student/Teacher/Parent surfaces, migrations, and role/authorization/release acceptance evidence.
-
-### UX Design Requirements
-
-UX-DR-01: `/lessons` must use the hierarchy subject → available grades sorted ascending → ordered chapter/topic table of contents → ordered lessons; retain breadcrumbs and lesson context on return navigation.
-
-UX-DR-02: Distinguish unpublished/coverage gaps from learner progress; only released resources appear available and empty states must not imply that the student needs assignment access.
-
-UX-DR-03: Keep the public lesson path as content → video → basic lesson exercise → optional foundational Lab. Do not place cards, Quizlet, scored Quiz, or a default quiz gate in the public flow.
-
-UX-DR-04: Separate Open Curriculum, Class Space, and Assignments in navigation and page hierarchy. Display decks/study quizzes only in the relevant Class Space; show tests in Assignments only when explicitly assigned.
-
-UX-DR-05: Student progress screens must distinguish foundational course progress from actionable assignment status and link all scores/statuses to source evidence. Closed/archived assignments stay in history.
-
-UX-DR-06: Student assignment UI shows due date and server-derived due-soon, overdue/unsubmitted, late-review, rejection-zero, and resubmission-history states. After deadline extension, show the same assignment and new deadline to every recipient; permit another submission even if the student had previously submitted; display latest-submission current result while retaining earlier attempts.
-
-UX-DR-07: Teacher assignment surfaces distinguish upcoming/overdue work and pending late reasons, expose the reason for decision, and communicate class-wide deadline revision on the same assignment.
-
-UX-DR-08: Parent surfaces show only linked/approved child's read-only overdue/status information; no answers, submission action, or teacher decision controls.
-
-UX-DR-09: Class resources must distinguish “share to class” from “assign to targets”; share-only creates no due date, score, or assignment evidence.
-
-UX-DR-10: Teacher direct authoring/import for decks, study quizzes, and tests has draft, preview/validation errors, review, and publish states. Import errors identify row/field and do not suggest Lab import. Do not design either Lab builder as part of the current sprint.
-
-UX-DR-11: All new Student/Teacher/Parent states provide loading, populated, empty, unavailable, and recoverable-error handling. Failed writes preserve recoverable input and never signal success before server confirmation.
-
-UX-DR-12: Student dashboard/profile show the same server-derived foundational progress and assigned-work status; due work and recent attempts have evidence-linked drill-downs.
-
-UX-DR-13: Core Student interactions work with keyboard and touch, minimum 44×44 px targets, visible focus, WCAG AA contrast, reduced motion, and supported widths 390/768/1024/1440 px without horizontal overflow.
-
-UX-DR-14: Use subject color only for subject context, never as score/due-date/verdict; avoid shaming red/error treatment for late or incorrect student work, fabricated metrics, ranking, and unsupported success indicators.
-
-UX-DR-15: Preserve visible and server-derived distinctions between open foundational Labs and membership-restricted custom Class Space Labs; neither is locked behind a default Quiz gate. The current sprint covers only existing/integration-boundary UX, not authoring-builder UX.
-
-## FR Coverage Map
-
-FR-01: Existing Shared Foundation/A1 — identity and lifecycle; no new change story.
-FR-02: E1/E2/E3 — server authorization for catalog, class resource, assignment, file, and notice operations.
-FR-03: Existing Shared Foundation/B1 — class ownership, enrollment, and assignment targets; reused by E2/E3.
-FR-04: E1/E2/E3 — traceable course, class resource, assignment, attempt, and progress evidence.
-FR-05: E1/E2/E3 — validated backend contracts and recoverable errors.
-FR-06: Existing A1 — seed/operator setup; unchanged.
-FR-07: Existing A1 — student login and temporary password; unchanged.
-FR-08: E3 — due date, late reason/decision, class-wide same-assignment revision, resubmission, latest-file result, no expiry auto-zero.
-FR-09: E1 — open subject/grade/chapter/topic/lesson hierarchy and released-resource access.
-FR-10: E1 — lesson content, video/equivalent, basic exercises, and recoverable states without public cards/quiz.
-FR-11: E2 — direct authoring/import and sharing of decks, unscored study quizzes, and test content; no Lab import.
-FR-12: E1/E2/E3 — separate Open Curriculum, Class Space resources, and target-scoped Assignments.
-FR-13: E1 — released foundational Lab discovery; E2 — class-only custom Lab access/context guard only, without either builder.
-FR-14: Existing A4 — practical attempt evidence; no new simulation engine/builder story in this change.
-FR-15: E1 — foundational progress denominator/evidence; E3 supplies separate assignment status inputs.
-FR-16: Existing B1 — teacher class/member management; reused, not rebuilt.
-FR-17: E2 — teacher content creation/import; E3 — test assignment, late decision, same-assignment revision, teacher status view.
-FR-18: Existing B2 — teacher evidence access; E3 adds the pending late-reason/current assignment status slice.
-FR-19: Existing C1 — linked-parent read-only progress; E3 adds only assignment overdue notice/status from FR-25.
-FR-20: Existing C2 — admin operations; no new story unless required by a changed resource contract.
-FR-21: Future AI sprint — explicitly excluded.
-FR-22: Future AI tutor capability — explicitly excluded.
-FR-23: E1 — subject external ebook/reference display and verified lesson locator behavior where configured.
-FR-24: E2 — stable custom-Lab class/lesson/taxonomy linkage and class-only access contract; builder excluded.
-FR-25: E3 — server-derived Student/Teacher/Parent assignment states and role-appropriate notices.
-
-## Epic List
-
-### Epic 1: Browse Open Curriculum and Track Foundational Progress
-Students can navigate released subject learning in curriculum order, use lesson resources and optional foundational Labs, and see evidence-based foundational progress separately from assignment status.
-**FRs covered:** FR-02, FR-04, FR-05, FR-09, FR-10, FR-12 (Open Curriculum), FR-13 (foundational Lab discovery only), FR-15, FR-23.
-**Increment:** I1 — Open Curriculum.
-**Dependencies:** Existing identity/session, published curriculum/taxonomy, and progress evidence foundations. Can run in parallel with Epic 2 after shared API/taxonomy contracts are agreed.
-
-### Epic 2: Create and Share Class Learning Resources
-Teachers can create and publish class-scoped decks, study quizzes, and test content directly or from validated structured files, while students discover only resources allowed by their active approved class membership. Preserve class-Lab access and taxonomy contracts without delivering a Lab builder.
-**FRs covered:** FR-02, FR-03, FR-04, FR-05, FR-11, FR-12 (Class Space), FR-13 (custom-Lab access boundary only), FR-16 (reuse existing class management), FR-17 (author/import portion), FR-24 (integration/access boundary only).
-**Increment:** I2 — Class Space resources.
-**Dependencies:** Existing class ownership/enrollment foundation. Can run in parallel with Epic 1 after resource and authorization contracts are agreed.
-
-### Epic 3: Assign Tests and Coordinate Due Dates Across Roles
-Teachers can assign test content with a due date and resolve late submissions by rejecting them with zero or revising the same assignment deadline for its full target group. Students, teachers, and linked/approved parents see consistent server-derived states; attempts remain auditable and the latest submitted file/attempt is current.
-**FRs covered:** FR-02, FR-04, FR-05, FR-08, FR-12 (Assignments), FR-15 (assignment-status input), FR-17 (assignment/late-decision portion), FR-18 (pending status slice), FR-19 (overdue notice slice only), FR-25.
-**Increment:** I3 — Assigned test lifecycle.
-**Dependencies:** Uses Epic 2's test-content and Class Space contracts. After the assignment API contract is frozen, backend state transitions and the Student/Teacher/Parent presentation work can proceed as parallel vertical slices and integrate against the shared contract.
-
-**Separate from current sprint:** Lab builder R&D for curriculum and teacher-custom tracks (initial research focus KHTN Grade 8) and AI authoring. FR-13/FR-24 are limited here to catalog/access/integration boundaries; no builder stories are part of I1–I3.
+After implementation, review the story against every acceptance criterion, test authorization and error/empty states relevant to the touched flow, and report evidence separately for backend, frontend, migration, and browser/runtime checks. A planning document or static check is not evidence that the app works.
 
 ## Execution Plan: Increments, Dependencies, and Parallel Work
 
