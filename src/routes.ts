@@ -53,6 +53,9 @@ import {
   quizAttemptRequestSchema,
   quizConfigSchema,
   sanitizeQuizConfig,
+  basicExerciseAttemptRequestSchema,
+  evaluateBasicExercise,
+  sanitizeBasicExerciseConfig,
 } from "./pathway";
 import {
   decodeCursor,
@@ -556,9 +559,174 @@ export class ApiController {
   @Get("subjects") subjects() {
     return this.db.subject.findMany();
   }
-  @Get("labs") labs() {
+  /** I1: released shared curriculum only; assignment membership is intentionally irrelevant. */
+  @Roles("STUDENT") @Get("open-curriculum") async openCurriculum() {
+    const lessons = await this.db.lesson.findMany({
+      where: {
+        status: "published", scope: "SHARED_LIBRARY", synthetic: false,
+        packVersion: { status: "released", synthetic: false },
+      },
+      select: { id: true, subjectId: true, grade: true, chapter: true, topic: true, title: true, curriculumChapterCode: true, curriculumTopicCode: true, curriculumOrder: true, publishedAt: true },
+    });
+    if (!lessons.length) return { subjects: [] };
+    const [subjects, chapters] = await Promise.all([
+      this.db.subject.findMany({ where: { id: { in: [...new Set(lessons.map((l: any) => l.subjectId))] } }, select: { id: true, name: true, ebookUrl: true } }),
+      this.db.curriculumChapter.findMany({
+        where: { status: "active", synthetic: false, OR: [...new Map(lessons.map((l: any) => [`${l.subjectId}:${l.grade}`, { subjectId: l.subjectId, grade: l.grade }])).values()] },
+        include: { topics: { where: { status: "active" }, orderBy: [{ officialOrder: "asc" }, { code: "asc" }] } }, orderBy: [{ officialOrder: "asc" }, { code: "asc" }],
+      }),
+    ]);
+    const subjectData = subjects.map((subject: any) => {
+      const grades = [...new Set(lessons.filter((l: any) => l.subjectId === subject.id).map((l: any) => l.grade))].sort((a: number, b: number) => a - b);
+      return {
+        ...subject,
+        grades: grades.map((grade) => ({
+          grade,
+          chapters: chapters
+            .filter((chapter: any) => chapter.subjectId === subject.id && chapter.grade === grade)
+            .map((chapter: any) => {
+              const chapterLessons = lessons.filter((l: any) => l.subjectId === subject.id && l.grade === grade && l.curriculumChapterCode === chapter.code).sort((a: any, b: any) => (a.curriculumOrder ?? Number.MAX_SAFE_INTEGER) - (b.curriculumOrder ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id));
+              return {
+                id: chapter.code,
+                title: chapter.title,
+                officialOrder: chapter.officialOrder,
+                lessonCount: chapterLessons.length,
+                topics: chapter.topics
+                  .map((topic: any) => ({ id: topic.code, title: topic.title, officialOrder: topic.officialOrder, lessons: chapterLessons.filter((l: any) => l.curriculumTopicCode === topic.code) }))
+                  .filter((topic: any) => topic.lessons.length),
+                lessons: chapterLessons.filter((l: any) => !l.curriculumTopicCode),
+              };
+            })
+            .filter((chapter: any) => chapter.lessonCount > 0),
+        })),
+      };
+    });
+    return { subjects: subjectData.filter((subject: any) => subject.grades.length) };
+  }
+  @Roles("STUDENT") @Get("open-curriculum/lessons/:id") async openCurriculumLesson(@Param("id") id: string, @Req() req: any) {
+    const lesson = await this.db.lesson.findFirst({
+      where: { id, status: "published", scope: "SHARED_LIBRARY", synthetic: false, packVersion: { status: "released", synthetic: false } },
+      include: {
+        subject: { select: { id: true, name: true, ebookUrl: true } },
+        steps: { where: { type: { in: ["READING", "VIDEO", "BASIC_EXERCISE"] } }, orderBy: { position: "asc" }, include: { progress: { where: { studentId: req.user.sub, assignmentId: null } }, basicExerciseAttempts: { where: { studentId: req.user.sub }, orderBy: { createdAt: "desc" }, take: 1 } } },
+        ebookLocators: { include: { edition: true } },
+      },
+    });
+    if (!lesson) throw new NotFoundException({ code: "CURRICULUM_LESSON_NOT_FOUND", message: "Không tìm thấy bài học" });
+    const ebookEditions = lesson.ebookLocators
+      .filter((item: any) => item.edition.subjectId === lesson.subjectId && item.edition.isCurrent && item.edition.url.startsWith("https://"))
+      .map((item: any) => ({
+        url: item.edition.url,
+        version: item.edition.version,
+        fallbackPhysicalPage: item.edition.fallbackPhysicalPage,
+        locator: item.verificationStatus === "verified" ? {
+          physicalPageIndex: item.physicalPageIndex,
+          printedPageLabel: item.printedPageLabel,
+          provenance: item.provenance,
+          sourceMapVersion: item.sourceMapVersion,
+        } : null,
+      }));
+    return {
+      id: lesson.id,
+      subjectId: lesson.subjectId,
+      subject: lesson.subject,
+      title: lesson.title,
+      chapter: lesson.chapter,
+      grade: lesson.grade,
+      topic: lesson.topic,
+      learningObjective: lesson.learningObjective,
+      prerequisites: lesson.prerequisites,
+      curriculum: lesson.curriculum,
+      content: lesson.content,
+      materials: lesson.materials,
+      steps: lesson.steps.map((step: any) => {
+        const progress = step.progress[0];
+        const config = step.config as any;
+        return {
+          id: step.id, type: step.type, position: step.position, required: step.required,
+          state: progress?.status === "COMPLETED" || step.basicExerciseAttempts?.[0]?.passed ? "COMPLETED" : progress?.status === "IN_PROGRESS" || step.basicExerciseAttempts?.length ? "IN_PROGRESS" : "IN_PROGRESS",
+          progressValue: progress?.progressValue ?? 0,
+          lastPosition: progress?.lastPosition ?? null,
+          resource: step.type === "READING" ? { html: config.html } : step.type === "BASIC_EXERCISE" ? sanitizeBasicExerciseConfig(config) : config,
+          exercise: step.basicExerciseAttempts?.[0] ? { score: step.basicExerciseAttempts[0].score, passThreshold: step.basicExerciseAttempts[0].passThreshold, passed: step.basicExerciseAttempts[0].passed, createdAt: step.basicExerciseAttempts[0].createdAt.toISOString() } : null,
+        };
+      }),
+      ebookEditions,
+    };
+  }
+  @Roles("STUDENT")
+  @Post("open-curriculum/lessons/:lessonId/exercises/:stepId/attempts")
+  @ApiOperation({ summary: "Submit and score an assignment-free foundational exercise attempt" })
+  @ApiBody({ schema: { type: "object", required: ["answers", "idempotencyKey"], properties: { answers: { type: "array", items: { type: "object", required: ["questionId", "optionId"], properties: { questionId: { type: "string" }, optionId: { type: "string" } } } }, idempotencyKey: { type: "string", format: "uuid" } } } })
+  async submitBasicExercise(
+    @Param("lessonId") lessonId: string,
+    @Param("stepId") stepId: string,
+    @Body() body: unknown,
+    @Req() req: any,
+  ) {
+    const request = basicExerciseAttemptRequestSchema.parse(body);
+    const prior = await this.db.basicExerciseAttempt.findUnique({ where: { studentId_idempotencyKey: { studentId: req.user.sub, idempotencyKey: request.idempotencyKey } } });
+    if (prior) return { id: prior.id, score: prior.score, passThreshold: prior.passThreshold, passed: prior.passed, createdAt: prior.createdAt.toISOString() };
+    const step = await this.db.lessonStep.findFirst({
+      where: { id: stepId, lessonId, type: "BASIC_EXERCISE", lesson: { status: "published", scope: "SHARED_LIBRARY", synthetic: false, packVersion: { status: "released", synthetic: false } } },
+    });
+    if (!step) throw new NotFoundException({ code: "CURRICULUM_EXERCISE_NOT_FOUND", message: "Không tìm thấy bài tập" });
+    let result;
+    try { result = evaluateBasicExercise(step.config, request); }
+    catch { throw new BadRequestException({ code: "EXERCISE_ANSWERS_INVALID", message: "Câu trả lời chưa hợp lệ" }); }
+    try {
+      const attempt = await this.db.basicExerciseAttempt.create({ data: { studentId: req.user.sub, lessonId, stepId, answers: request.answers as any, idempotencyKey: request.idempotencyKey, ...result } });
+      return { id: attempt.id, score: attempt.score, passThreshold: attempt.passThreshold, passed: attempt.passed, createdAt: attempt.createdAt.toISOString() };
+    } catch (error: any) {
+      if (error?.code !== "P2002") throw error;
+      const attempt = await this.db.basicExerciseAttempt.findUniqueOrThrow({ where: { studentId_idempotencyKey: { studentId: req.user.sub, idempotencyKey: request.idempotencyKey } } });
+      return { id: attempt.id, score: attempt.score, passThreshold: attempt.passThreshold, passed: attempt.passed, createdAt: attempt.createdAt.toISOString() };
+    }
+  }
+  @Roles("STUDENT")
+  @Put("open-curriculum/lessons/:lessonId/steps/:stepId/progress")
+  @ApiOperation({ summary: "Persist reading or video evidence for released curriculum outside assignments" })
+  @ApiBody({ schema: { oneOf: [{ type: "object", required: ["action"], properties: { action: { type: "string", enum: ["complete"] } } }, { type: "object", required: ["action", "positionSeconds", "durationSeconds"], properties: { action: { type: "string", enum: ["heartbeat", "ended"] }, positionSeconds: { type: "integer" }, durationSeconds: { type: "integer" } } }] } })
+  async updateOpenCurriculumProgress(
+    @Param("lessonId") lessonId: string,
+    @Param("stepId") stepId: string,
+    @Body() body: unknown,
+    @Req() req: any,
+  ) {
+    const action = stepProgressActionSchema.parse(body);
+    const studentId = req.user.sub;
+    return this.db.$transaction(async (tx) => {
+      const step = await tx.lessonStep.findFirst({
+        where: { id: stepId, lessonId, type: { in: ["READING", "VIDEO"] }, lesson: { status: "published", scope: "SHARED_LIBRARY", synthetic: false, packVersion: { status: "released", synthetic: false } } },
+      });
+      if (!step) throw new NotFoundException({ code: "CURRICULUM_STEP_NOT_FOUND", message: "Không tìm thấy bước học" });
+      const saved = await tx.stepProgress.findFirst({ where: { studentId, stepId, assignmentId: null } });
+      const now = new Date();
+      let evidence: any;
+      if (step.type === "READING" && action.action === "complete") {
+        evidence = { status: "COMPLETED", progressValue: 100, startedAt: saved?.startedAt ?? now, completedAt: saved?.completedAt ?? now };
+      } else if (step.type === "VIDEO" && ["heartbeat", "ended", "complete-fallback"].includes(action.action)) {
+        try { evidence = reconcileVideoProgress(step.config, saved ?? undefined, action as any, now); }
+        catch { throw new BadRequestException({ code: "VIDEO_EVIDENCE_INVALID", message: "Không thể xác nhận tiến độ video" }); }
+      } else {
+        throw new BadRequestException({ code: "STEP_ACTION_INVALID", message: "Thao tác này không áp dụng cho bước học" });
+      }
+      if (saved) await tx.stepProgress.update({ where: { id: saved.id }, data: evidence });
+      else {
+        await tx.stepProgress.createMany({ data: [{ studentId, stepId, assignmentId: null, ...evidence }], skipDuplicates: true });
+        const current = await tx.stepProgress.findFirst({ where: { studentId, stepId, assignmentId: null } });
+        if (current && current.updatedAt < now) await tx.stepProgress.update({ where: { id: current.id }, data: evidence });
+      }
+      const current = await tx.stepProgress.findFirstOrThrow({ where: { studentId, stepId, assignmentId: null } });
+      return { step: { id: stepId, state: current.status, progressValue: current.progressValue, lastPosition: current.lastPosition, completedAt: current.completedAt?.toISOString() ?? null } };
+    });
+  }
+  @Get("labs") labs(@Req() req: any) {
     return this.db.lab.findMany({
-      where: { status: "published" },
+      where: {
+        status: "published",
+        ...(req.user.role === "STUDENT" ? { scope: "SHARED_LIBRARY", releaseCleared: true, synthetic: false, topicCode: { not: null } } : {}),
+      },
       // Lesson-variant challenges belong to their lesson pathway, not the public lab list.
       include: { challenges: { where: { NOT: { id: { contains: "_v-" } } } } },
     });
@@ -1604,10 +1772,13 @@ export class ApiController {
   @Roles("STUDENT", "TEACHER") @Post("simulate/:labId") async preview(
     @Param("labId") labId: string,
     @Body() body: any,
+    @Req() req: any,
   ) {
     // CF-T4: the lab's allowlisted model reference decides the engine; unknown labs fail closed.
-    const lab = await this.db.lab.findUnique({ where: { id: labId }, select: { simulationModelRef: true } });
+    const lab = await this.db.lab.findUnique({ where: { id: labId }, select: { simulationModelRef: true, status: true, scope: true, releaseCleared: true, synthetic: true, topicCode: true } });
     if (!lab) throw new NotFoundException({ code: "LAB_NOT_FOUND", message: "Không tìm thấy phòng thực hành" });
+    if (req.user.role === "STUDENT" && !(lab.status === "published" && lab.scope === "SHARED_LIBRARY" && lab.releaseCleared && !lab.synthetic && lab.topicCode))
+      throw new NotFoundException({ code: "LAB_NOT_FOUND", message: "Không tìm thấy phòng thực hành" });
     try {
       return resolveModel(lab.simulationModelRef).simulate(body);
     } catch (e: any) {
@@ -1634,6 +1805,11 @@ export class ApiController {
       include: { lab: true },
     });
     if (!c || c.lab.status !== "published") throw new NotFoundException();
+    if (!b.lessonStepId) {
+      const applicableStandaloneLab = await this.applicableLabAssignment(c.labId, req.user.sub);
+      if (!applicableStandaloneLab && !(c.lab.scope === "SHARED_LIBRARY" && c.lab.releaseCleared && !c.lab.synthetic && c.lab.topicCode))
+        throw new NotFoundException({ code: "LAB_NOT_FOUND", message: "Không tìm thấy phòng thực hành" });
+    }
 
     // Idempotency fast-path
     if (b.idempotencyKey) {
@@ -1875,6 +2051,77 @@ export class ApiController {
     ]);
     return { progress, attempts };
   }
+  @Roles("STUDENT")
+  @Get("me/foundational-progress")
+  @ApiOperation({ summary: "Foundational evidence against released official-course versions, separate from assignments" })
+  async myFoundationalProgress(@Req() req: any) {
+    const versions = await this.db.foundationalCourseVersion.findMany({
+      where: { grade: req.user.grade, status: "active" },
+      include: {
+        subject: { select: { id: true, name: true } },
+        lessons: {
+          orderBy: { officialOrder: "asc" },
+          where: { lesson: { status: "published", scope: "SHARED_LIBRARY", synthetic: false, packVersion: { status: "released", synthetic: false } } },
+          include: {
+            lesson: {
+              include: {
+                steps: {
+                  where: { type: { in: ["READING", "VIDEO", "BASIC_EXERCISE"] }, required: true },
+                  orderBy: { position: "asc" },
+                  include: { basicExerciseAttempts: { where: { studentId: req.user.sub }, orderBy: { createdAt: "desc" }, take: 1 } },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ subjectId: "asc" }, { version: "desc" }],
+    });
+    const stepIds = versions.flatMap((version: any) => version.lessons.flatMap((item: any) => item.lesson.steps.map((step: any) => step.id)));
+    const evidence = stepIds.length ? await this.db.stepProgress.findMany({ where: { studentId: req.user.sub, assignmentId: null, stepId: { in: stepIds } } }) : [];
+    const attempts: string[] = versions.flatMap((version: any) => version.lessons.map((item: any) => item.foundationalLabId).filter((id: unknown): id is string => typeof id === "string"));
+    const labEvidence = attempts.length ? await this.db.attempt.findMany({
+      where: { studentId: req.user.sub, assignmentId: null, lessonStepId: null, challenge: { labId: { in: [...new Set(attempts)] } } },
+      select: { id: true, challenge: { select: { labId: true } }, verdict: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    }) : [];
+    const courses = versions.map((version: any) => {
+      const lessons = version.lessons.map((item: any) => ({
+        id: item.lesson.id,
+        title: item.lesson.title,
+        officialOrder: item.officialOrder,
+        evidence: item.lesson.steps.map((step: any) => {
+          const saved = evidence.find((row: any) => row.stepId === step.id);
+          const exercise = step.basicExerciseAttempts?.[0];
+          return {
+            stepId: step.id,
+            kind: step.type === "READING" ? "content" : step.type === "VIDEO" ? "video" : "basicExercise",
+            state: exercise?.passed ? "COMPLETED" : exercise ? "IN_PROGRESS" : saved?.status ?? "NOT_STARTED",
+            progressValue: exercise?.score ?? saved?.progressValue ?? 0,
+            score: exercise?.score ?? null,
+            passThreshold: exercise?.passThreshold ?? null,
+            passed: exercise?.passed ?? null,
+            sourceId: exercise?.id ?? saved?.id ?? null,
+            updatedAt: exercise?.createdAt?.toISOString() ?? saved?.updatedAt?.toISOString() ?? null,
+          };
+        }),
+        requiredLabId: item.foundationalLabId,
+        labEvidence: item.foundationalLabId ? labEvidence.filter((row: any) => row.challenge.labId === item.foundationalLabId).map((row: any) => ({ id: row.id, verdict: row.verdict, createdAt: row.createdAt.toISOString() })) : [],
+      }));
+      const items = lessons.flatMap((lesson: any) => lesson.evidence);
+      const requiredLabs = lessons.filter((lesson: any) => lesson.requiredLabId);
+      const completedLabs = requiredLabs.filter((lesson: any) => lesson.labEvidence.some((attempt: any) => attempt.verdict === "passed"));
+      const totalEvidenceItems = items.length + requiredLabs.length;
+      const completedEvidenceItems = items.filter((item: any) => item.state === "COMPLETED").length + completedLabs.length;
+      return {
+        id: version.id, version: version.version, sourceVersion: version.sourceVersion,
+        subject: version.subject, grade: version.grade, lessons,
+        summary: { totalEvidenceItems, completedEvidenceItems, content: items.filter((item: any) => item.kind === "content" && item.state === "COMPLETED").length, video: items.filter((item: any) => item.kind === "video" && item.state === "COMPLETED").length, basicExercise: items.filter((item: any) => item.kind === "basicExercise" && item.state === "COMPLETED").length, requiredLabs: completedLabs.length, percent: totalEvidenceItems ? Math.floor(completedEvidenceItems * 100 / totalEvidenceItems) : null },
+      };
+    });
+    return { courses, generatedAt: new Date().toISOString(), courseVersionConfigured: courses.length > 0 };
+  }
+
   @Roles("STUDENT")
   @Get("me/progress")
   @ApiOperation({ summary: "Official progress for the authenticated student, derived from source evidence" })

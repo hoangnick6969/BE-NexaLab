@@ -19,6 +19,7 @@ enum LessonStepType {
   QUIZ
   LAB
   CHALLENGE
+  BASIC_EXERCISE
 }
 enum ClassroomStatus {
   ACTIVE
@@ -71,6 +72,7 @@ model User {
   progress Progress[]
   stepProgress StepProgress[]
   quizAttempts QuizAttempt[]
+  basicExerciseAttempts BasicExerciseAttempt[]
   saved SavedExperiment[]
   parents ParentLink[] @relation("student")
   children ParentLink[] @relation("parent")
@@ -168,6 +170,8 @@ model Subject {
   lessons  Lesson[]
   labs     Lab[]
   ebookAnnotations EbookAnnotation[]
+  ebookEditions EbookEdition[]
+  foundationalCourseVersions FoundationalCourseVersion[]
 }
 
 model EbookAnnotation {
@@ -226,6 +230,12 @@ model Lesson {
   releaseReview Json?
   /// Released content-pack version this shared lesson materializes (CF-T1); null for authored lessons.
   packVersionId String?
+  packVersion ContentPackVersion? @relation(fields: [packVersionId], references: [id], onDelete: Restrict)
+  curriculumChapterCode String?
+  curriculumChapter CurriculumChapter? @relation(fields: [curriculumChapterCode], references: [code], onDelete: Restrict)
+  curriculumTopicCode String?
+  curriculumTopic CurriculumTopic? @relation(fields: [curriculumTopicCode], references: [code], onDelete: Restrict)
+  curriculumOrder Int?
   /// Admin quarantine (C2-T2): status becomes "quarantined"; the prior status is restored on release.
   quarantinedAt DateTime?
   quarantineReason String?
@@ -234,6 +244,8 @@ model Lesson {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
   steps LessonStep[]
+  ebookLocators LessonEbookLocator[]
+  foundationalCourseLessons FoundationalCourseLesson[]
   @@index([scope, status, grade])
   @@index([authorId, status])
 }
@@ -264,6 +276,8 @@ model CurriculumChapter {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
   topics CurriculumTopic[]
+  lessons Lesson[]
+  officialOrder Int @default(0)
   @@index([grade, domain])
 }
 /// Topic inside a chapter, mapped to the outcomes it teaches.
@@ -271,6 +285,8 @@ model CurriculumTopic {
   code String @id
   chapterCode String
   chapter CurriculumChapter @relation(fields: [chapterCode], references: [code])
+  lessons Lesson[]
+  officialOrder Int @default(0)
   title String
   outcomeCodes Json @default("[]")
   /// active | archived
@@ -290,6 +306,7 @@ model LessonStep {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   progress StepProgress[]
+  basicExerciseAttempts BasicExerciseAttempt[]
   @@unique([lessonId, position])
   @@index([lessonId, type])
 }
@@ -333,6 +350,23 @@ model QuizAttempt {
   @@index([lessonId, stepId, passed])
   @@index([studentId, createdAt, id])
 }
+model BasicExerciseAttempt {
+  id String @id @default(cuid())
+  studentId String
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId String
+  stepId String
+  step LessonStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  answers Json
+  score Int
+  passThreshold Int
+  passed Boolean
+  idempotencyKey String
+  createdAt DateTime @default(now())
+  @@unique([studentId, idempotencyKey])
+  @@index([studentId, lessonId, stepId, createdAt])
+  @@index([lessonId, stepId, passed])
+}
 model Lab {
   id String @id
   subjectId String
@@ -342,10 +376,65 @@ model Lab {
   topic String
   learningObjective String
   status String @default("published")
+  /// Public discovery is opt-in after foundational release review.
+  scope String @default("CLASS_PRIVATE")
+  releaseCleared Boolean @default(false)
+  topicCode String?
+  synthetic Boolean @default(false)
   simulationModelRef String
   config Json @default("{}")
   assets Json @default("[]")
   challenges Challenge[]
+}
+model FoundationalCourseVersion {
+  id String @id
+  subjectId String
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  grade Int
+  version String
+  status String @default("draft")
+  sourceVersion String
+  lessons FoundationalCourseLesson[]
+  createdAt DateTime @default(now())
+  @@unique([subjectId, grade, version])
+  @@index([grade, status])
+}
+model FoundationalCourseLesson {
+  courseVersionId String
+  courseVersion FoundationalCourseVersion @relation(fields: [courseVersionId], references: [id], onDelete: Cascade)
+  lessonId String
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Restrict)
+  officialOrder Int
+  foundationalLabId String?
+  @@id([courseVersionId, lessonId])
+  @@unique([courseVersionId, officialOrder])
+}
+model EbookEdition {
+  id String @id
+  subjectId String
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  url String
+  version String
+  fallbackPhysicalPage Int @default(1)
+  isCurrent Boolean @default(false)
+  locators LessonEbookLocator[]
+  createdAt DateTime @default(now())
+  @@unique([subjectId, version])
+}
+model LessonEbookLocator {
+  id String @id @default(cuid())
+  lessonId String
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  editionId String
+  edition EbookEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  printedPageLabel String?
+  physicalPageIndex Int
+  verificationStatus String @default("unverified")
+  provenance String
+  sourceMapVersion String
+  updatedAt DateTime @updatedAt
+  @@unique([lessonId, editionId])
+  @@index([editionId, verificationStatus])
 }
 model Challenge {
   id String @id
@@ -720,6 +809,7 @@ model ContentPackVersion {
   createdAt DateTime @default(now())
   releasedAt DateTime?
   retiredAt DateTime?
+  materializedLessons Lesson[]
   @@unique([packKey, version])
   @@unique([packKey, digest])
 }

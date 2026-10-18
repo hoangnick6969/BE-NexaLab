@@ -46,6 +46,36 @@ export const quizAttemptRequestSchema = z.object({
   new Set(request.answers.map((answer) => answer.questionId)).size === request.answers.length,
   { message: "Duplicate question answers" },
 );
+const basicExerciseQuestion = z.object({
+  id: z.string().min(1).max(80),
+  prompt: z.string().trim().min(1),
+  options: z.array(z.object({ id: z.string().min(1).max(80), text: z.string().trim().min(1) }).strict()).min(2).max(6),
+  correctOptionId: z.string().min(1).max(80),
+}).strict().refine((question) =>
+  new Set([question.id, ...question.options.map((option) => option.id)]).size === question.options.length + 1 &&
+  question.options.some((option) => option.id === question.correctOptionId),
+);
+export const basicExerciseConfigSchema = z.object({
+  questions: z.array(basicExerciseQuestion).min(1).max(30)
+    .refine((questions) => new Set(questions.map((question) => question.id)).size === questions.length),
+  passThreshold: z.number().int().min(1).max(100),
+}).strict();
+export const basicExerciseAttemptRequestSchema = z.object({
+  answers: z.array(z.object({ questionId: z.string().min(1).max(80), optionId: z.string().min(1).max(80) }).strict()).min(1).max(30),
+  idempotencyKey: z.string().uuid(),
+}).strict().refine((request) => new Set(request.answers.map((answer) => answer.questionId)).size === request.answers.length);
+export function evaluateBasicExercise(config: unknown, request: z.infer<typeof basicExerciseAttemptRequestSchema>) {
+  const parsed = basicExerciseConfigSchema.parse(config);
+  if (request.answers.length !== parsed.questions.length || request.answers.some((answer) => !parsed.questions.some((question) => question.id === answer.questionId && question.options.some((option) => option.id === answer.optionId))))
+    throw new Error("EXERCISE_ANSWERS_INVALID");
+  const correct = request.answers.filter((answer) => parsed.questions.some((question) => question.id === answer.questionId && question.correctOptionId === answer.optionId)).length;
+  const score = Math.floor(correct * 100 / parsed.questions.length);
+  return { score, passThreshold: parsed.passThreshold, passed: score >= parsed.passThreshold };
+}
+export function sanitizeBasicExerciseConfig(config: unknown) {
+  const parsed = basicExerciseConfigSchema.parse(config);
+  return { passThreshold: parsed.passThreshold, questions: parsed.questions.map(({ id, prompt, options }) => ({ id, prompt, options })) };
+}
 export type QuizQuestion = z.infer<typeof quizQuestion>;
 export type QuizAttemptRequest = z.infer<typeof quizAttemptRequestSchema>;
 
@@ -97,6 +127,7 @@ export const stepConfigSchemas = {
   VIDEO: video,
   STUDY_CARDS: cards,
   QUIZ: quizConfigSchema,
+  BASIC_EXERCISE: basicExerciseConfigSchema,
   LAB: lab,
   CHALLENGE: challenge,
 } as const;
