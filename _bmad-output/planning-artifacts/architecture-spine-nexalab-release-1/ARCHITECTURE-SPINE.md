@@ -7,12 +7,13 @@ paradigm: layered server-authoritative domain with a contract-driven client
 scope: Shared Foundation and Release 1 Increments A, B, and C across nexalab-be and nexalab-fe
 status: draft
 created: 2026-10-12
-updated: 2026-10-17
+updated: 2026-10-18
 binds: [FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-24]
 sources:
   - docs/product/prd.md
   - ../nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md
-companions: []
+companions:
+  - ../../specs/spec-open-learning-catalog/class-space-assignment-contract.md
 ---
 
 # Architecture Spine — NexaLab Release 1
@@ -80,7 +81,7 @@ flowchart LR
 
 - **Binds:** FR-08, FR-09, FR-11, FR-12, FR-15
 - **Prevents:** unlocking shared content or awarding progress through client state alone, and applying assignment gates to Open Curriculum
-- **Rule:** the backend serves released shared curriculum independently of enrollment, assignment, and progress; enforces active, approved membership on Class Space resources; enforces assignment targets on scored submissions; and calculates official foundational progress from the required items in the fixed course version and determines test outcomes. Keep the official-course denominator fixed. An applicable assigned exercise/test/Lab not achieved keeps the subject achievement summary at “chưa đạt,” while its assignment evidence stays separate from foundational progress. Neither status gates shared content or foundational Labs. The client may render optimistic or preview state only when visibly provisional and reconciled with the next server response.
+- **Rule:** the backend serves released shared curriculum independently of enrollment, assignment, and progress; enforces active, approved membership on Class Space resources; enforces active, approved membership for every Class Space Lab read/launch/write and assignment targets on scored submissions; and calculates official foundational progress from the required items in the fixed course version and determines test outcomes. Keep the official-course denominator fixed. An applicable assigned exercise/test/Lab not achieved keeps the subject achievement summary at “chưa đạt,” while its assignment evidence stays separate from foundational progress. Neither status gates shared content or foundational Labs. The client may render optimistic or preview state only when visibly provisional and reconciled with the next server response.
 
 ### AD-7 — Simulation and verdict authority [ADOPTED]
 
@@ -177,3 +178,10 @@ flowchart LR
 - Teacher, Parent, and Admin screen architecture waits for their increments; shared identity and ownership invariants do not.
 - Exact R2 bucket names, signed-URL TTLs, media size limits, connector schedules, and source-specific parsers are epic/spec configuration under AD-13 rather than initiative-level architecture decisions.
 - The bounded teacher capability to draft advanced Class Space study content from a linked lesson is in product scope; provider, prompt/output schema, safety/evaluation, and failure/fallback behavior need a detailed contract before implementation stories. AI output is never published without teacher review and is never authoritative for grades, scores, or progress. The general-purpose AI assistant and student tutor remain future capabilities.
+
+
+### AD-14 — Class Space authoring, late-test rounds, and class-only Labs
+
+- **Binds:** FR-11, FR-13, FR-17, FR-24
+- **Prevents:** partial/unvalidated imports, mutable attempt history, class-wide resets that silently change recipients, and custom-Lab access through guessed IDs or stale links.
+- **Rule:** direct authoring and validated structured-file import create teacher-owned drafts; import confirmation persists atomically. Assigned-test deadlines and late decisions are server-authoritative. A rejected late submission records zero; an approved resubmission creates a new round for the assignment's original target snapshot, preserves prior evidence, and requires a new due date. Every custom-Lab operation checks active, approved membership in the owning class; scored writes additionally check the immutable target snapshot. Details live in `../../specs/spec-open-learning-catalog/class-space-assignment-contract.md`. AI generation is excluded from this delivery.

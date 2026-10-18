@@ -40,7 +40,7 @@ Direct-ID, detail, attempt, submission, and media routes enforce the same decisi
 - Reuse applicable server-side A2 rules for official lesson content/video/basic exercises; preserve explicit content completion and the existing video high-water rule. Study cards and quizzes do not contribute to open-course progress because they are teacher-created Class Space activities.
 - Only foundational Labs included in the official curriculum belong in the shared Lab taxonomy/catalog and course denominator. A teacher-created Lab must belong to a specific Class Space, link to its class lesson and stable subject/grade/chapter/topic IDs, and remain outside the global catalog and official course progress.
 - Assignment status and attempts are separate from foundational course progress and its fixed denominator. The subject summary may show “Đạt mức cơ bản” when foundational requirements are complete, but remains “Chưa đạt” while an active assignment linked to the subject is targeted to the student and unsubmitted, in progress, or not accepted by its evaluator. Archived assignments retain history but leave the current unmet rollup. Show status with a drill-down to source assignment/evidence; neither it nor foundational progress changes access to shared curriculum.
-- Teacher-created decks and study quizzes are unscored Class Space practice. Scored tests require explicit assignment. Teachers may create content directly, enter or import source data, or generate an advanced lesson-grounded AI draft; AI drafts require teacher review before publication.
+- Teacher-created decks and study quizzes are unscored Class Space practice. Scored tests require explicit assignment. Teachers may create class study content directly or import a supported file. AI generation is deferred to a later sprint; imported content stays a draft until reviewed and published.
 - Preserve old assignment-linked `StepProgress`, `QuizAttempt`, and simulation attempts as assignment evidence. Do not merge them into open-course progress without a documented, reconciled migration rule.
 
 ## 4. Lab catalog and contextual synchronization
@@ -87,7 +87,7 @@ Direct-ID, detail, attempt, submission, and media routes enforce the same decisi
 - [ ] `/lessons` navigates subject → available grades ascending → ordered chapter/topic table of contents → ordered lessons → detail.
 - [ ] Reading/video/basic-exercise status does not block shared content or either Lab type.
 - [ ] Profile displays subject/grade course status and chapter/topic/lesson progress independently of assignment queue.
-- [ ] Student outside the class is denied private teacher resources through list and direct-ID operations; only eligible assignment targets may submit explicitly assigned/scored work.
+- [ ] Student outside the class is denied private teacher resources and custom-Lab discovery/run through list, direct-ID, launch, and result-write operations; only eligible assignment targets may submit scored work.
 - [ ] Student subject Lab tab supports complete shared catalog, search, and curriculum filters.
 - [ ] No cards or quiz appear in the Open Curriculum flow; teacher-created Class Space decks/study quizzes are unscored and available only to active, approved class members; scored tests require explicit assignment and eligible targets.
 - [ ] Course progress uses a fixed official curriculum version; teacher supplementary assignments do not alter its denominator, and unreleased required curriculum prevents full-course completion.
@@ -99,3 +99,5 @@ Direct-ID, detail, attempt, submission, and media routes enforce the same decisi
 - [ ] Only foundational official-course Labs appear in the shared catalog/taxonomy and affect official course progress; custom class Labs remain inside Class Space.
 - [ ] Current video URLs/seeds are unchanged; later per-lesson URL seed remains representable.
 - [ ] Existing assignment evidence remains traceable and content-release gates remain enforced.
+
+- [ ] A late assigned-test attempt includes a student reason; teacher approval resets the whole original target set in a new round, while rejection records zero and preserves history.

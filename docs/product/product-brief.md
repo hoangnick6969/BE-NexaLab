@@ -27,12 +27,12 @@ Open-curriculum lesson practice and Class Space study quizzes are unscored learn
 
 - The simulation engine is the scientific source of truth. AI explains and guides; it never calculates or overrides a scientific result.
 - Student AI is limited to the relevant curriculum, lesson, lab, challenge and verified attempt context. It must avoid revealing answers too early.
-- AI may explain, ask Socratic questions, offer progressive hints, assist teachers with draft content, and help analyse learning evidence.
-- For Class Space study materials, teachers may author directly, enter or import source data, or request AI-generated advanced extensions grounded in a linked lesson. Teachers review and publish every AI draft; AI does not make the final content decision. Scored tests require explicit assignment.
+- In later sprints, AI may explain, ask Socratic questions, offer progressive hints, assist teachers with draft content, and help analyse learning evidence.
+- For current Class Space study materials, teachers author directly or import a supported file; AI-generated extensions are deferred to the following sprint. Scored tests require explicit assignment and have due dates, late-reason review, and teacher-controlled whole-recipient reset or zero outcomes.
 
 ## Future AI direction
 
-General-purpose Teacher AI Content Assistant and Student AI Tutor capabilities remain beyond the current bounded class study-content authoring scope. Any AI-generated class material remains a teacher-reviewed draft before publication.
+General-purpose Teacher AI Content Assistant and Student AI Tutor capabilities remain beyond the current bounded class study-content authoring scope. AI-generated class material is deferred to a later sprint and remains subject to teacher review before publication when introduced.
 
 Teacher AI Content Assistant and Student AI Tutor are Future capabilities. Student tutoring, when approved, uses increasing support: **Question → Concept Hint → Action Hint → Explanation**. It combines lesson/lab/challenge context, student actions, deterministic results, attempts and hint history. It remains advisory and does not automatically grade a student.
 

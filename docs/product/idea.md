@@ -1,6 +1,6 @@
 # NexaLab product idea
 
-The product idea is still under discovery. This records the current direction and codebase evidence; it is not a PRD or a final MVP decision.
+This file records exploratory ideas and codebase evidence. Confirmed Open Curriculum and Class Space requirements live in `docs/product/prd.md`; this file does not override them.
 
 ## CORE — MVP
 
@@ -11,11 +11,11 @@ Owner-defined MVP direction:
 - Teacher class and student management, lesson management, assignment, outcome review/grading, progress monitoring and learning-evidence inspection.
 - Read-only parent progress tracking and admin management of users, content, labs and assets.
 
-The open-curriculum loop is **Content → Video → Basic practice → Optional foundational Lab → Progress**; it has no Quiz or study-card step. Class Space separately provides teacher-created flashcards/study decks and unscored study quizzes. Scored tests are teacher-assigned. Teachers may create advanced lesson-grounded study content directly, from entered/imported source data, or with AI drafts that require teacher review. Foundational subject progress remains distinct from assigned-work status; the subject achievement summary stays “chưa đạt” while applicable assigned work is not achieved. Existing code implements parts of these flows, not their complete scope.
+The open-curriculum loop is **Content → Video → Basic practice → Optional foundational Lab → Progress**; it has no Quiz or study-card step. Class Space separately provides teacher-created flashcards/study decks and unscored study quizzes. Scored tests are teacher-assigned. For the current delivery, teachers create Class Space study content directly or import a supported file. AI-generated lesson-grounded content is deferred to a later sprint. Foundational subject progress remains distinct from assigned-work status; the subject achievement summary stays “chưa đạt” while applicable assigned work is not achieved. Existing code implements parts of these flows, not their complete scope.
 
-## AI ASSISTANCE
+## AI ASSISTANCE — FUTURE
 
-Teacher assistance direction:
+Future teacher-assistance direction (not current sprint scope):
 
 - Draft advanced Class Space study cards/quizzes and questions from the linked lesson; study quizzes are unscored and tests are separate scored assignments.
 - Draft learning materials and assist with analysis of learning evidence.
