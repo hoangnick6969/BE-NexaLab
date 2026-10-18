@@ -1,8 +1,8 @@
 ---
 title: NexaLab Release 1 Epic Breakdown
-status: baseline; 2026-10-17 scope amendment pending decomposition
+status: baseline; 2026-10-17/18 scope amendments pending decomposition
 created: 2026-10-12
-updated: 2026-10-17
+updated: 2026-10-18
 source: docs/product/prd.md
 architecture: architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md
 active_specs:
@@ -23,7 +23,7 @@ active_specs:
 
 Epics are grouped by user outcome. Shared Foundation decisions bind every epic; they are not a separate database/backend/frontend phase.
 
-> **Scope amendment (2026-10-17):** This file records the original A1–C2 epic breakdown and its completed tickets, not the newly confirmed Open Curriculum/Class Space scope. The updated PRD and sprint-change proposal supersede affected A2/A3/A5/B1 assumptions. The change has not yet been decomposed into delivery epics or stories; existing `sprint-status.yaml` statuses remain evidence for the original scope only.
+> **Scope amendment (2026-10-17/18):** This file records the original A1–C2 epic breakdown and its completed tickets, not the new Open Curriculum/Class Space scope. The current change adds direct teacher authoring and structured-file import for decks/study quizzes/tests, due-dated test late decisions with same-assignment deadline revision or explicit rejection-to-zero, Student/Teacher/Parent status and notice surfaces, and membership-only custom-Lab access; generic file import does not create 3D Labs, and AI is deferred. The updated PRD and technical companion supersede affected prior assumptions. No new epic/story decomposition exists yet; `sprint-status.yaml` remains evidence for the original scope only.
 
 ## Shared Foundation
 
@@ -121,7 +121,7 @@ The admin manages users, subjects, content, labs, and assets through explicit au
 
 ### F1 — A teacher creates reviewed AI-assisted content drafts
 
-Structured Teacher AI drafts, human review, publication controls, audit, and safe provider failure.
+Deferred until after the current direct-authoring/import, late-test, and class-Lab scope. Then define structured Teacher AI drafts, human review, publication controls, audit, and safe provider failure.
 
 **Coverage:** FR-21.
 

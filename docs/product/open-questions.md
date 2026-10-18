@@ -1,25 +1,23 @@
 # Product and implementation questions
 
-**Status:** The 2026-10-17 product direction is recorded in `docs/product/prd.md` and the Open Curriculum spec. The prior Increment A–C epics remain the accepted baseline for their original scope, but they do not decompose this change. Do not start story breakdown until the product and implementation contracts below are resolved and reflected in the affected specs.
+**Status:** Product direction for Open Curriculum and Class Space is recorded in the PRD and Open Learning spec. The latest clarification narrows file import to decks/study quizzes/tests, gives late submissions a teacher decision with same-assignment due-date revision, prohibits automatic zero at expiry, adds Student/Teacher/Parent assignment-status surfaces and parent overdue notices, and treats 3D Lab authoring as a distinct workflow. AI generation is deferred. Existing A1–A5 and B1–C2 epics cover earlier scope; the new change still needs technical stories.
 
-## Product scope decisions still needed
+## Contracts to finalize before story breakdown
 
-- **Increment boundary:** Confirm whether the next increment includes only student consumption plus minimal teacher authoring for Class Space resources, or the full authoring paths (direct authoring, data entry/import, and AI-generated advanced extensions). The PRD describes the capability envelope but does not assign each path to a delivery increment.
-- **Teacher-created resource lifecycle:** Define supported import formats, validation/partial-import behavior, and how study decks, unscored study quizzes, tests, and custom Labs are reviewed, published, edited, archived, or withdrawn. AI output must remain a teacher-reviewed draft; provider, source/version attribution, validation, safety, and recoverable failure behavior remain architecture decisions.
-- **Study practice behavior:** Confirm whether unscored study quiz/card interactions need persistence, answer feedback, retry state, or teacher-visible reporting. They must never affect grades or subject achievement.
+- **Import contract:** Select the CSV/XLSX allowlist and per-resource templates for decks, unscored study quizzes, and test content only. Define file/row limits, field validation, all-or-nothing versus partial import, duplicate handling, preview/confirm, and safe error reporting. Lab creation is not supported through generic file import.
+- **Deadline-revision scoring (decided):** When the due date is revised on the same assignment for the whole assigned group, every recipient may submit again, including students who already submitted. The latest submitted file/attempt determines the current result. A late submission awaiting review remains pending; explicit rejection records zero. Previous attempts and deadline revisions remain immutable and visible. Expiry without submission stays unscored.
+- **Late decision lifecycle:** Define the permitted submission/decision window and assignment-close behavior. While a late reason is pending, the student sees pending review, the teacher sees it in their owned-class queue, and the linked/approved parent sees only permitted status. Pending remains unachieved in the subject rollup.
+- **Notification policy:** Confirm due-soon reminder timing/cadence and whether the in-app channel is sufficient for MVP. After expiry without submission, notify explicitly linked/approved parents; parent visibility remains read-only and does not imply automatic zero.
+- **3D Lab R&D (separate task):** Research two builder tracks: open curriculum Labs aligned to chapter/topic/lesson and teacher-custom Labs linked to a Class Space lesson. Start with Grade 8 Natural Science; evaluate scientific/editorial review, simulation runtime/model boundaries, assets and parameters, curriculum mapping, validation, preview, immutable versioning, publication, and how both builders integrate with course/Class Space authorization. Full builders are excluded from this sprint; current increment must avoid schema/API/UI assumptions that block the later designs. Do not treat Lab as a Quizlet/test file-import type.
+- **Study-practice evidence:** Confirm whether unscored card/study-quiz interactions need persistence, answer feedback, retry state, or teacher-visible reporting. They must never affect grades or subject achievement.
+- **Resource lifecycle:** Define edit/version, publish, archive, and withdrawal behavior for class decks, study quizzes, tests, and custom Labs. Published versions with attempts must remain immutable.
+- **Curriculum links and migration:** Define stable IDs and behavior when a linked class lesson or taxonomy is revised/archived, and specify schema migration/backfill for existing progress and assignment evidence.
+- **API and acceptance matrix:** Normalize author/import draft, class resource, assignment deadline revision, late reason/decision, immutable attempt, scored submission, role notification, parent-link authorization, and custom-Lab membership authorization across BE/FE. Cover member/nonmember, target/non-target, before/after due date, pending/approved/rejected/revision, retry/idempotency, and audit behavior.
+- **Catalog empty states:** Define copy/navigation for a subject with no released grades and for coverage gaps inside an available curriculum.
 
-## Implementation contracts needed before story breakdown
+## Deferred
 
-- **Assignment achievement:** Map each assignment type to its existing evaluator and define the accepted terminal state used by the subject summary. Confirm whether scheduled/not-yet-open work is actionable and how due, excused, canceled, archived, or class-removed work changes actionability. Preserve closed evidence without keeping the current rollup unmet after the student can no longer act.
-- **Course progress denominator:** The fixed official course version determines required foundational evidence. A foundational Lab contributes when that version marks the Lab as required; optional catalog Labs remain open and do not block course completion. Confirm the versioned data representation and migration/backfill for existing progress.
-- **Class resource access:** Active approved members may discover and use class-shared resources. For a custom Lab shared to the class but scored only for explicit targets, define whether non-target members may launch an unscored attempt and which attempt data is retained.
-- **Curriculum links and versioning:** Define stable IDs and change behavior for a teacher Lab linked to a specific class lesson and its subject, grade, chapter, and topic. Define what happens when taxonomy or the source lesson is revised or archived.
-- **API, schema, and lifecycle mapping:** Normalize resource types, audience, publication/review states, assignment targets, attempt types, authorization, rollup evaluation, and UI states across BE and FE. Specify migration/backfill and an acceptance matrix for member/outsider, target/non-target, open/assigned, actionable/closed, and scored/unscored cases.
-- **Catalog empty states:** Available grades are the released grades in ascending order. Define the copy and navigation behavior for a subject with no released grades and for gaps inside an available curriculum.
-
-## Deliberately deferred
-
+- AI-generated Class Space content, including provider, prompting, lesson/version attribution, safety/evaluation, and recoverable AI failures; revisit in the following sprint.
 - Legal/launch policy for export and deletion after the 12-month pilot retention window.
-- Teacher override workflow and audit UX, detailed Admin UX, and remaining Teacher/Parent implementation interaction details.
+- Teacher override workflow and audit UX, detailed Admin UX, and Teacher/Parent interaction details outside assignment status and overdue notices.
 - Production scale tier, final hosting region, disaster-recovery RPO/RTO, and paid Supabase backup/PITR options before pilot launch.
-- The general-purpose Teacher AI Content Assistant and Student AI Tutor remain future scope; the narrower lesson-grounded Class Space drafting capability is in the product direction above.
