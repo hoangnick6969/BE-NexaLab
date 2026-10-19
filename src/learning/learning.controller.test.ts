@@ -69,6 +69,14 @@ describe("LearningController assignment catalog summaries", () => {
         id: "test-assignment", title: "Bài kiểm tra", contentId: "test-1", contentType: "test",
         classId: "class-1", dueDate: dueAt, createdAt: new Date("2026-10-19T00:00:00Z"), classroom: { id: "class-1", name: "8A" },
       },
+      {
+        id: "test-no-link", title: "Bài kiểm tra chưa xếp môn", contentId: "test-no-link", contentType: "test",
+        classId: "class-1", dueDate: dueAt, createdAt: new Date("2026-10-19T00:00:00Z"), classroom: { id: "class-1", name: "8A" },
+      },
+      {
+        id: "test-wrong-class", title: "Bài kiểm tra lớp khác", contentId: "test-wrong-class", contentType: "test",
+        classId: "class-1", dueDate: dueAt, createdAt: new Date("2026-10-19T00:00:00Z"), classroom: { id: "class-1", name: "8A" },
+      },
     ];
     const lesson = {
       id: "lesson-1", status: "published", title: "Mạch điện", subject: { id: "physics", name: "Vật lý" },
@@ -79,7 +87,11 @@ describe("LearningController assignment catalog summaries", () => {
       assignment: { findMany: vi.fn().mockResolvedValue(assignmentRows) },
       lesson: { findMany: vi.fn().mockResolvedValue([lesson]), findUnique: vi.fn() },
       lab: { findMany: vi.fn().mockResolvedValue([]), findUnique: vi.fn() },
-      classResource: { findFirst: vi.fn().mockResolvedValue({ id: "test-1" }) },
+      classResource: { findMany: vi.fn().mockResolvedValue([
+        { id: "test-1", classId: "class-1", lessonId: "lesson-1" },
+        { id: "test-no-link", classId: "class-1", lessonId: null },
+        { id: "test-wrong-class", classId: "class-2", lessonId: "lesson-1" },
+      ]) },
       assignmentDeadlineRevision: { findMany: vi.fn().mockResolvedValue([{ id: "deadline-1", assignmentId: "test-assignment", revision: 1, dueAt }]) },
       assignmentSubmission: { findMany: vi.fn().mockResolvedValue([]) },
     };
@@ -87,11 +99,19 @@ describe("LearningController assignment catalog summaries", () => {
 
     const result = await controller.assignments({ user: { sub: "student-1" } });
 
-    expect(result).toHaveLength(2);
+    expect(result).toHaveLength(3);
     expect(result[0]).toMatchObject({ subject: { id: "physics", name: "Vật lý" }, grade: 8, chapterOrder: 3 });
-    expect(result[1]).toMatchObject({ id: "test-assignment", testStatus: { status: "UPCOMING", revision: 1 } });
-    expect(result[1]).not.toHaveProperty("subject");
+    expect(result[1]).toMatchObject({
+      id: "test-assignment", contentType: "test", subject: { id: "physics", name: "Vật lý" }, grade: 8,
+      chapter: "Điện học", chapterOrder: 3, testStatus: { status: "UPCOMING", revision: 1 },
+    });
+    expect(result[2]).toMatchObject({ id: "test-no-link", contentType: "test", contentState: "AVAILABLE", canOpen: true });
+    expect(result[2]).not.toHaveProperty("subject");
+    expect(result.some((item: any) => item.id === "test-wrong-class")).toBe(false);
     expect(db.lesson.findMany).toHaveBeenCalledTimes(1);
+    expect(db.classResource.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: { in: ["test-1", "test-no-link", "test-wrong-class"] }, kind: "TEST", status: { not: "DRAFT" } },
+    }));
     expect(db.assignmentDeadlineRevision.findMany).toHaveBeenCalledTimes(1);
     expect(db.assignmentSubmission.findMany).toHaveBeenCalledTimes(1);
   });

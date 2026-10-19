@@ -46,8 +46,8 @@ context:
 - `../nexalab-fe/src/features/ebook/ebook.tsx` and `src/progress/student-access.service.ts` -- open assigned lesson content on the lesson detail route and reuse the authorized assignment pathway response for content/progress.
 - `../nexalab-fe/src/components/SubjectGradeChapterBrowser.tsx` -- URL-backed subject/grade/chapter screens shared by Lessons, Class Space, and Assignments.
 - `../nexalab-fe/src/features/classes/classes.tsx` -- keep teacher UI intact; move student class cards to links and render student class hierarchy on dedicated routes.
-- `../nexalab-fe/src/features/learning/StudentAssignments.tsx` -- replace per-item detail reads with the enriched list read and route-level assignment catalog screens.
-- `../nexalab-fe/src/components/SubjectGradeChapterBrowser.tsx` -- remove the in-memory browser and replace it with reusable route-card/TOC presentation primitives, or delete it if no longer referenced.
+- `../nexalab-fe/src/features/assignments/StudentAssignments.tsx` -- use the enriched list for lessons, labs, and assigned tests while retaining I3 status and direct detail routes.
+- `../nexalab-fe/src/components/SubjectGradeChapterBrowser.tsx` -- provide the URL-backed shared grade/subject/chapter hierarchy and destination-specific item count labels.
 - `../nexalab-fe/src/styles.css` -- remove obsolete directory/browser rules and add responsive catalog, TOC, skeleton, focus, and reduced-motion states using existing Student tokens.
 
 ## Tasks & Acceptance
@@ -67,6 +67,8 @@ context:
 - Given a student has N actionable assignments, when Assignments or Class Space loads, then the client does not issue N `/assignments/:id` requests.
 - Given an assigned lesson is shown in Lessons, when the student chooses “Học nội dung”, then the reading/video detail opens without redirecting to the assignment; “Làm bài tập” remains a separate explicit action.
 - Given a 375px viewport or keyboard-only navigation, when the hierarchy is used, then cards do not overflow, targets remain at least 44px, focus is visible, and back/breadcrumb navigation remains operable.
+- Given an actionable I3 test assignment linked to a ClassResource lesson, when the student opens `/assignments`, then it appears under that lesson's subject, grade, and chapter with its I3 status still visible.
+- Given a legacy actionable test with no usable lesson link, when the student opens `/assignments`, then its direct detail link remains available in an explicitly ungrouped section rather than disappearing.
 
 ## Implementation Notes
 
@@ -76,6 +78,8 @@ context:
 - Assignment list summaries are batch-loaded for lesson/lab content and retain the previous student authorization and availability checks. Lessons and Class Space no longer issue per-assignment detail reads to build their catalogs.
 - Assigned lesson rows now expose separate “Học nội dung” and “Làm bài tập” links. The content route carries the selected `assignmentId`; student pathway returns published lesson content/materials so the detail page can load reading/video and assignment progress in one request, while task-taking remains on `/assignments/:id`.
 - The lesson detail route lazy-loads the PDF.js runtime only when the ebook reader is opened. FE production build output placed the lesson-detail module at 77.98 KB (26.72 KB gzip) and PDF.js in a separate 483.14 KB (144.26 KB gzip) chunk; this is a bundle split observation, not an API latency claim.
+- I3 test assignments now receive hierarchy metadata through one bounded ClassResource batch plus the shared lesson summary batch; the batch also replaces per-test availability lookups. Tests use their linked lesson's existing subject/grade/chapter metadata and stay within the student's already-authorized assignment list.
+- `/assignments` now displays actionable lesson, practical, and test assignments through the same grade → subject → chapter routes. Test state and due-soon reminders remain visible; legacy tests without a usable lesson mapping stay directly reachable in an explicit fallback section.
 
 ## Spec Change Log
 
@@ -102,4 +106,9 @@ Use stable route namespaces such as `/lessons/catalog/...`, `/classes/:classId/c
 - FE `npm run build`: passed after retrying outside the sandbox for Windows `EPERM` while resolving `src/main.tsx`.
 - BE `npm test -- src/learning/learning.controller.test.ts src/progress/progress.test.ts`: 16 tests passed after retrying outside the sandbox for Windows `EPERM` during Vite realpath resolution.
 - FE `npx playwright test tests/student-lessons-hub.spec.ts --reporter=line`: unable to launch tests because the configured Chromium headless executable is not installed. The test assertions did not run; no browser package was installed.
-- `git diff --check` could not run: Git reported `fatal: this operation must be run in a work tree` for diff commands, although `git status` works and confirms the existing dirty branch. No changes were staged, committed, or pushed.
+
+**Latest verification (2026-10-19):**
+- BE `npm run lint`, `npm run build`, and `npx vitest run src/learning/learning.controller.test.ts` passed; 4 focused tests passed.
+- FE `npm run lint` and `npm run build` passed after retrying outside the sandbox for Vite's Windows `EPERM` realpath issue.
+- FE `tests/student-lessons-hub.spec.ts` passed 4/4 in installed Chrome against local Vite. The assignment catalog test also exercised 375px width with reduced motion, confirmed no horizontal overflow, and confirmed zero per-assignment detail requests.
+- Browser checks used mocked API responses; live API/database and the full FE browser suite were not rerun. 768px/tablet and landscape visual checks remain outstanding.

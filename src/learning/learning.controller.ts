@@ -556,8 +556,27 @@ export class LearningController {
     // Load each content type in one bounded query. The same rows power the
     // availability check and the catalog summary, avoiding per-assignment
     // detail reads while keeping the existing student authorization query.
-    const lessonIds = [...new Set(rows.filter((a) => a.contentType === "lesson").map((a) => a.contentId))];
+    const tests = rows.filter((a) => a.contentType === TEST_CONTENT_TYPE);
+    const testResourceIds = [...new Set(tests.map((a) => a.contentId))];
     const labIds = [...new Set(rows.filter((a) => a.contentType === "lab").map((a) => a.contentId))];
+    const testResources = testResourceIds.length
+      ? await this.db.classResource.findMany({
+          where: { id: { in: testResourceIds }, kind: "TEST", status: { not: "DRAFT" } },
+          select: { id: true, classId: true, lessonId: true },
+        })
+      : [];
+    const resourceByClassAndId = new Map(testResources.map((resource: any) => [`${resource.classId}:${resource.id}`, resource]));
+    const testResourceByAssignment = new Map(tests.map((assignment) => [
+      assignment.id,
+      resourceByClassAndId.get(`${assignment.classId}:${assignment.contentId}`) ?? null,
+    ]));
+    const testLessonIds = tests
+      .map((assignment) => testResourceByAssignment.get(assignment.id)?.lessonId)
+      .filter(Boolean) as string[];
+    const lessonIds = [...new Set([
+      ...rows.filter((a) => a.contentType === "lesson").map((a) => a.contentId),
+      ...testLessonIds,
+    ])];
     const [lessons, labs] = await Promise.all([
       lessonIds.length
         ? this.db.lesson.findMany({
@@ -580,7 +599,6 @@ export class LearningController {
       lesson: new Map(lessons.map((content: any) => [content.id, content])),
       lab: new Map(labs.map((content: any) => [content.id, content])),
     };
-    const tests = rows.filter((a) => a.contentType === TEST_CONTENT_TYPE);
     const testStateByAssignment = new Map<string, any>();
     if (tests.length) {
       const { states, key } = await testStates(this.db, tests, [req.user.sub], now);
@@ -589,11 +607,15 @@ export class LearningController {
     const items: any[] = [];
     for (const a of rows) {
       const isTest = a.contentType === TEST_CONTENT_TYPE;
-      const content = isTest ? null : contentByType[a.contentType as "lesson" | "lab"]?.get(a.contentId) ?? null;
-      const { state } = isTest
-        ? await this.testState(a)
-        : await this.contentState(a, req.user.sub, content, true);
+      const testResource = isTest ? testResourceByAssignment.get(a.id) : null;
+      const content = isTest
+        ? (testResource?.lessonId ? contentByType.lesson.get(testResource.lessonId) : null)
+        : contentByType[a.contentType as "lesson" | "lab"]?.get(a.contentId) ?? null;
+      const state = isTest
+        ? (testResource ? "AVAILABLE" as const : "UNAVAILABLE" as const)
+        : (await this.contentState(a, req.user.sub, content, true)).state;
       if (state === "UNAVAILABLE") continue;
+      const lessonContext = a.contentType === "lesson" || isTest;
       items.push({
         id: a.id,
         title: a.title,
@@ -603,11 +625,11 @@ export class LearningController {
           contentTitle: content.title,
           subject: { id: content.subject.id, name: content.subject.name },
           grade: content.grade,
-          chapter: a.contentType === "lesson" ? content.chapter : null,
+          chapter: lessonContext ? content.chapter : null,
           topic: content.topic,
-          curriculumOrder: a.contentType === "lesson" ? content.curriculumOrder : null,
-          chapterOrder: a.contentType === "lesson" ? content.curriculumChapter?.officialOrder ?? null : null,
-          topicOrder: a.contentType === "lesson" ? content.curriculumTopic?.officialOrder ?? null : null,
+          curriculumOrder: lessonContext ? content.curriculumOrder : null,
+          chapterOrder: lessonContext ? content.curriculumChapter?.officialOrder ?? null : null,
+          topicOrder: lessonContext ? content.curriculumTopic?.officialOrder ?? null : null,
         } : {}),
         dueDate: a.dueDate,
         createdAt: a.createdAt,
