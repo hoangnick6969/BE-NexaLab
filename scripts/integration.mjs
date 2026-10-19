@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -99,7 +100,7 @@ async function measureQuizEndpoint(name, targetMs, count, run) {
 }
 function runLiveQuizBrowser(assignmentId, username, password) {
   if (process.env.RUN_A3_BROWSER_E2E !== "true") return;
-  const frontendRoot = resolve("..", "nexalab-fe");
+  const frontendRoot = process.env.FRONTEND_ROOT ?? [resolve("..", "nexalab-fe"), resolve("..", "FE-NexaLab")].find((path) => existsSync(path));
   const npmCli = process.env.npm_execpath;
   assert.ok(npmCli, "npm_execpath is available to launch the frontend Playwright command");
   const run = spawnSync(process.execPath, [npmCli, "run", "test:e2e", "--", "tests/quiz-learning-live.spec.ts"], {
@@ -986,19 +987,22 @@ try {
       )
     ).data.simulationResult.current === 0.02,
   );
-  const chem = (
-    await req(
-      "/attempts",
-      "POST",
-      {
-        challengeId: "chemistry_001",
-        labState: { reactionId: "mg-hcl", molesA: 0.1, molesB: 0.2 },
-        durationMs: 100,
-      },
-      outsider.data.accessToken,
-    )
-  ).data;
-  check("unassigned student completes chemistry full stack", chem.verdict === "passed");
+  // I1: a student practises a standalone lab only when it is released in the
+  // foundational curriculum or assigned as a lab. An unreleased lab is refused to an
+  // unassigned student, then graded through a lab assignment so the model is still covered.
+  const standaloneLab = async (labId, challengeId, labState) => {
+    const lab = await db.lab.findUnique({ where: { id: labId } });
+    const released = lab.scope === "SHARED_LIBRARY" && lab.releaseCleared && !lab.synthetic && Boolean(lab.topicCode);
+    const body = { challengeId, labState, durationMs: 100 };
+    if (released) return { who: "unassigned student", attempt: (await req("/attempts", "POST", body, outsider.data.accessToken)).data };
+    const refused = await req("/attempts", "POST", body, outsider.data.accessToken);
+    check(`unreleased ${labId} lab is refused to an unassigned student`, refused.status === 404 && refused.data?.code === "LAB_NOT_FOUND");
+    const assigned = await req(`/classes/${classroom.id}/assignments`, "POST", { contentId: labId, contentType: "lab", title: `Integration ${labId} lab`, dueDate: new Date(Date.now() + 86400000).toISOString(), studentIds: [users.STUDENT.id] }, tokens.TEACHER);
+    check(`teacher assigns the unreleased ${labId} lab`, assigned.status === 201);
+    return { who: "assigned student", attempt: (await req("/attempts", "POST", body, tokens.STUDENT)).data };
+  };
+  const chemRun = await standaloneLab("chemistry", "chemistry_001", { reactionId: "mg-hcl", molesA: 0.1, molesB: 0.2 });
+  check(`${chemRun.who} completes chemistry full stack`, chemRun.attempt.verdict === "passed");
   const answers = {
     cornea: "Giác mạc",
     aqueous: "Thủy dịch",
@@ -1009,15 +1013,8 @@ try {
     nerve: "Dây thần kinh thị giác",
     sclera: "Củng mạc",
   };
-  const eye = (
-    await req(
-      "/attempts",
-      "POST",
-      { challengeId: "eye_001", labState: { answers }, durationMs: 100 },
-      outsider.data.accessToken,
-    )
-  ).data;
-  check("unassigned student receives eye anatomy server grade", eye.simulationResult.score === 100);
+  const eyeRun = await standaloneLab("eye", "eye_001", { answers });
+  check(`${eyeRun.who} receives eye anatomy server grade`, eyeRun.attempt.simulationResult?.score === 100);
   check(
     "parent blocked before linking",
     (

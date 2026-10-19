@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Inject, Param, Post, Query, Req } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Query, Req } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
 import { access } from "../auth/auth";
@@ -6,6 +6,9 @@ import { Roles } from "../common/decorators";
 import { Db } from "../infra/db";
 import { email } from "../common/validation";
 import { StudentAccessService } from "../progress/student-access.service";
+import { applicableAssignmentWhere, assignmentQueueOrder } from "../classes/class-access";
+import { TEST_CONTENT_TYPE } from "../classes/assignment-test-contract";
+import { testStates } from "../classes/assignment-test-state";
 import { PARENT_CONSENT_HASH, PARENT_CONSENT_VERSION, parentCode, parentCodeHash } from "./parent-codes";
 
 @ApiTags("NexaLab")
@@ -83,5 +86,39 @@ export class ParentsController {
       this.db.attempt.findMany({ where: { studentId }, orderBy: { createdAt: "desc" }, take: q.limit, select: { id: true, challengeId: true, lessonStepId: true, verdict: true, durationMs: true, createdAt: true } }),
     ]);
     return [...quiz.map((a) => ({ kind: "QUIZ", ...a })), ...practical.map((a) => ({ kind: "PRACTICAL", ...a }))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, q.limit);
+  }
+  /** Read-only status and deadline for a linked child's assigned test; no answers, scores or actions (I3 / 3.6). */
+  private async childTestStates(studentId: string, assignmentId?: string) {
+    const rows = await this.db.assignment.findMany({
+      where: { ...applicableAssignmentWhere(studentId), contentType: TEST_CONTENT_TYPE, ...(assignmentId ? { id: assignmentId } : {}) },
+      include: { classroom: { select: { name: true } } },
+      orderBy: assignmentQueueOrder,
+    });
+    const { states, key } = await testStates(this.db, rows, [studentId]);
+    return rows.map((a) => {
+      const state = states.get(key(a.id, studentId));
+      return {
+        assignmentId: a.id,
+        title: a.title,
+        className: a.classroom.name,
+        status: state?.status ?? null,
+        dueAt: state?.dueAt ?? a.dueDate,
+        revision: state?.revision ?? 1,
+        extended: state?.extended ?? false,
+      };
+    });
+  }
+  @Roles("PARENT") @Get("children/:studentId/assignment-notices") async overdueNotices(@Req() req: any, @Param("studentId") studentId: string) {
+    await this.access.readableStudent(studentId, req);
+    // Derived, not stored: one notice per (assignment, child, deadline revision); an extension clears it (D-I3-03).
+    return (await this.childTestStates(studentId))
+      .filter((item) => item.status === "OVERDUE_UNSUBMITTED")
+      .map((item) => ({ id: `${item.assignmentId}:${studentId}:${item.revision}`, kind: "OVERDUE", ...item }));
+  }
+  @Roles("PARENT") @Get("children/:studentId/assignments/:assignmentId") async childAssignment(@Req() req: any, @Param("studentId") studentId: string, @Param("assignmentId") assignmentId: string) {
+    await this.access.readableStudent(studentId, req);
+    const [item] = await this.childTestStates(studentId, assignmentId);
+    if (!item) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
+    return item;
   }
 }
