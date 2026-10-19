@@ -2,6 +2,7 @@
 import "reflect-metadata";
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 const PATH = "path",
   METHOD = "method";
 const methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "ALL", "OPTIONS", "HEAD"];
@@ -18,7 +19,7 @@ walk(root);
 (async () => {
   const lines: string[] = [];
   for (const file of files) {
-    const mod = await import(file);
+    const mod = await import(pathToFileURL(file).href);
     for (const value of Object.values(mod)) {
       if (
         typeof value !== "function" ||

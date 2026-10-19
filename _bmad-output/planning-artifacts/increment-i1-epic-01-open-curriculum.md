@@ -1,7 +1,7 @@
 ---
 increment: I1
 epic: 01
-status: draft
+status: in-progress
 stories: 1.1–1.5
 ---
 
@@ -9,7 +9,7 @@ stories: 1.1–1.5
 
 ## Agent handoff
 
-Before coding, read in order: `docs/product/prd.md` → `_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-16.md` → `_bmad-output/planning-artifacts/architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md` → the Open Learning/Class Space and Teacher specs → `../nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md`. Check `docs/product/open-questions.md` and this file's gates. If a rule conflicts or a gate is unresolved, stop and report it; do not invent a product decision.
+Before coding, read in order: `docs/product/prd.md` → `_bmad-output/planning-artifacts/architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md` → this increment → `../nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md`. Read `_bmad-output/specs/spec-open-learning-catalog/class-space-assignment-contract.md` only when the story touches Class Space assignments, deadlines, or late work. Check `docs/product/open-questions.md` and this file's gates. If a rule conflicts or a gate is unresolved, stop and report it; do not invent a product decision.
 
 Delegate one story per task. Use `$bmad-build` and implement only that story as a vertical BE/FE/API/schema slice. Keep NestJS/Zod/OpenAPI and FE types/UI aligned; enforce authorization in the backend. Follow the story dependencies. Parallelize only after shared contracts are frozen and file ownership is explicit. Do not commit or push unless requested.
 
@@ -19,6 +19,8 @@ Delegate one story per task. Use `$bmad-build` and implement only that story as 
 ## Increment order
 
 I1 can run alongside I2 after the curriculum/taxonomy and shared API contracts are frozen. Within I1, stories 1.3 and 1.4 can run in parallel after taxonomy identity is fixed; progress work in 1.5 can proceed alongside catalog/detail work after its evidence contract is agreed.
+
+**Readiness gates:** Confirm stable subject/grade/chapter/topic/lesson IDs and canonical ordering; freeze the released-curriculum list/detail API and release-eligibility contract; identify the fixed official course-version denominator and evidence contract before Story 1.5; verify the configured book edition and approved locator contract before Story 1.3. A story may start once its named dependencies are frozen; unrelated story gates do not block it.
 
 Students can navigate released subject learning in curriculum order, use lesson resources and optional foundational Labs, and see evidence-based foundational progress separately from assignment status.
 **FRs covered:** FR-02, FR-04, FR-05, FR-09, FR-10, FR-12 (Open Curriculum), FR-13 (foundational Lab discovery only), FR-15 (foundational portion), FR-23.
@@ -35,12 +37,15 @@ So that I can find released learning content without joining a class or receivin
 
 **Acceptance Criteria:**
 
-**Given** an authenticated student with no Class Space membership, **when** they open `/lessons`, **then** they see only subjects with released curriculum content.
-**Given** the student selects a subject, **when** grade options load, **then** only grades with released content appear in ascending numeric order.
-**Given** the student selects a grade, **when** the table of contents loads, **then** chapters/topics and lessons follow canonical curriculum ordering and stable IDs, with lesson counts and return breadcrumbs.
+**Given** an authenticated student with no Class Space membership, **when** they open `/lessons`, **then** eligible content is grouped under ascending grade headings, with only subjects that have released shared lessons or eligible assigned lessons shown.
+**Given** the student selects a grade and subject, **when** the table of contents loads, **then** chapters/topics and lessons follow canonical curriculum ordering and stable IDs, with lesson counts and return breadcrumbs.
 **Given** content is draft, quarantined, rights-blocked, or class-private, **when** the student browses or requests it by direct URL/ID, **then** the content and identifying metadata are not disclosed.
-**Given** a subject/grade has no released content, **when** the empty state appears, **then** it distinguishes a publication/coverage gap from learner progress and never implies that an assignment is required.
+**Given** a direct catalog link targets a subject/grade with no eligible released or assigned content, **when** the page loads, **then** a recoverable empty state distinguishes unavailable content from learner progress and never implies that an assignment is required.
 **And** the hierarchy supports keyboard/touch and the specified 390/768/1024/1440 px viewports without horizontal overflow.
+
+### Catalog latency acceptance (PRD QR-09)
+
+At the pilot-shaped catalog dataset and from the pilot region, measure `GET /subjects`, released grade/chapter/lesson list reads, and shared lesson detail reads independently. After 50 warm-up requests, collect at least 500 requests per operation in each of three consecutive 10-minute windows, using 25 concurrent virtual students. Every window must have p95 server-observed API latency at or below 500 ms; each catalog mutation that records reading/video/basic-exercise/Lab evidence must be at or below 1,000 ms p95. Exclude ebook/video transfer and Lab simulation rendering; retain request counts, p50/p95/p99, error rate, dataset size, concurrency, and environment in the run report.
 
 ### Story 1.2: Open Lesson Content, Video, and Basic Exercises
 

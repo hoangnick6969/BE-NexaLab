@@ -12,7 +12,7 @@ sources:
 
 > **Historical accepted contract.** This SPEC and its companions define the original assigned-Lab Epic A4. For amended product behavior, the 2026-10-17 PRD and Open Curriculum spec take precedence. A4 remains the prior accepted baseline; this change has not been decomposed into stories.
 
-> **Open Curriculum precedence (2026-10-17):** A4's server-recomputed result, verdict, and retry integrity remain applicable. Its assignment and quiz-pass gate describe the historical assigned circuit path; they do not apply to released foundational Labs. Teacher-created Labs are class-private and linked to the related Class Space lesson and subject/grade/chapter/topic; a quiz prerequisite is not enabled by default. New behavior follows the PRD and `spec-open-learning-catalog`.
+> **Open Curriculum precedence (2026-10-17):** A4's server-recomputed result, verdict, and retry integrity remain applicable. Its assignment and quiz-pass gate describe the historical assigned circuit path; they do not apply to released foundational Labs. Teacher-created Labs are class-private and linked to the related Class Space lesson and subject/grade/chapter/topic; a quiz prerequisite is not enabled by default. New behavior follows the PRD, architecture spine, and the I1-I2 increment plans.
 
 # Epic A4 — A Student Practices, Receives a Verified Verdict, and Retries
 

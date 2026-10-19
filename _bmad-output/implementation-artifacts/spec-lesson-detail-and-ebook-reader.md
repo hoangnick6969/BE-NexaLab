@@ -39,9 +39,9 @@ context:
 
 ## Code Map
 
-- `nexalab-fe/src/pages.tsx` — lesson list/modal and ebook link; reuse API and sanitized HTML.
-- `nexalab-fe/src/App.tsx`, `src/api.ts`, `src/styles.css` — authenticated routes, API client, and responsive patterns.
-- `nexalab-be/src/routes.ts` — subjects expose ebookUrl; lessons are role/assignment filtered. No annotation API exists.
+- `../nexalab-fe/src/features/ebook/ebook.tsx` — lesson detail, sanitized reading content, video/material tabs, PDF reader, annotations, and retry states.
+- `../nexalab-fe/src/app/App.tsx`, `../nexalab-fe/src/lib/api.ts`, `../nexalab-fe/src/styles.css` — authenticated routes, typed API contracts, and responsive patterns.
+- `src/learning/learning.controller.ts`, `src/progress/student-access.service.ts`, and `src/lessons/ebook.controller.ts` — student assignment pathway/content access and user-scoped ebook annotation APIs.
 - `nexalab-be/prisma/schema.prisma` — User/Subject relations for new account annotations.
 - `nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md` — Student responsive/accessibility constraints.
 
@@ -73,6 +73,12 @@ context:
 - Verify PDF/API failure recovery, mobile layout and keyboard use.
 
 ## Implementation Notes
+
+Implemented in the current route architecture: `LessonDetail` lives in `../nexalab-fe/src/features/ebook/ebook.tsx`; student ebook annotations are served by `src/lessons/ebook.controller.ts`. Assigned lesson content opens from Lessons at `/lessons/:id?assignmentId=:assignmentId`, with a separate assignment-taking action. That view uses one authorized lesson-pathway read for content/materials and assignment progress. PDF.js is dynamically imported only when the ebook reader opens, keeping it out of the lesson-detail entry chunk.
+
+Verification recorded for the route/content change: BE and FE lint/build passed; focused BE pathway/progress tests passed 16/16. The focused FE Playwright suite could not launch because Chromium is not installed, so its browser assertions and visual checks remain unverified. FE build output measured the lesson-detail module at 77.98 KB (26.72 KB gzip) and the separate PDF runtime at 483.14 KB (144.26 KB gzip); these are build sizes, not end-to-end latency measurements.
+
+The student `/lessons` card is content-first: assigned content opens `/lessons/:id?assignmentId=:assignmentId` and retains assignment-scoped reading/video evidence; “Làm bài tập” remains a separate `/assignments/:id` action. The lesson-detail route gets content/materials/ebook URL from the authorized pathway request instead of issuing an additional assignment-detail request. PDF.js is dynamically imported only when the ebook reader loads, keeping the lesson-detail entry chunk separate from the PDF runtime.
 
 ## Spec Change Log
 

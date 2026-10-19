@@ -9,7 +9,7 @@ stories: 3.1–3.6
 
 ## Agent handoff
 
-Before coding, read in order: `docs/product/prd.md` → `_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-16.md` → `_bmad-output/planning-artifacts/architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md` → the Open Learning/Class Space and Teacher specs → `../nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md`. Check `docs/product/open-questions.md` and this file's gates. If a rule conflicts or a gate is unresolved, stop and report it; do not invent a product decision.
+Before coding, read in order: `docs/product/prd.md` → `_bmad-output/planning-artifacts/architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md` → this increment → `../nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md`. In the retained Class Space contract, use §2 for assignment deadlines and late decisions, §4 item 5 for role status/notification read models, and §4 for command and acceptance coverage. Use §1 only when a story consumes authored/imported test content; §3 is the custom-Lab access boundary and does not imply a Lab-builder deliverable. Check `docs/product/open-questions.md` and this file's gates. If a rule conflicts or a gate is unresolved, stop and report it; do not invent a product decision.
 
 Delegate one story per task. Use `$bmad-build` and implement only that story as a vertical BE/FE/API/schema slice. Keep NestJS/Zod/OpenAPI and FE types/UI aligned; enforce authorization in the backend. Follow the story dependencies. Parallelize only after shared contracts are frozen and file ownership is explicit. Do not commit or push unless requested.
 
@@ -98,6 +98,7 @@ So that I know what action is required and whether late work is awaiting review.
 **Given** a test expires without a submission, **when** the student views it, **then** the status is overdue/unsubmitted with no automatic zero.
 **Given** a late submission awaits review, **when** the student views the assignment, **then** they see pending status and the required next step without a finalized score.
 **Given** a deadline is extended or another submission is made, **when** the student reopens the same assignment, **then** the new deadline/current latest file result and earlier attempt history are visible.
+**Given** the student subject-achievement summary is displayed, **when** a subject-linked assignment remains actionable and unaccepted (including unsubmitted, in progress, late-review-pending, or rejected), **then** that assignment contributes an unmet status while remaining separate from the fixed foundational-course denominator; when the assignment is closed or archived and no longer actionable, **then** its preserved evidence remains in history but no longer holds the current summary unmet.
 **Decision gate before implementation:** set reminder lead time/cadence and confirm in-app versus additional channels.
 
 ### Story 3.5: Give Teachers an Assignment and Late-Reason Queue
@@ -133,4 +134,8 @@ So that I can support the student without accessing answers or controlling schoo
 **Given** a parent is unlinked, pending, or linked to a different student, **when** they request the notice or assignment detail, **then** access is denied and no other child's data is exposed.
 **Given** the parent opens an authorized notice, **when** the detail is displayed, **then** it is read-only and contains status/deadline context only, with no answer key, submission control, or teacher decision action.
 **And** expiry/notification alone never creates a zero score.
+
+### Assignment lifecycle latency acceptance (PRD QR-09)
+
+At the pilot-shaped dataset and from the pilot region, measure student assignment list/detail/history reads, teacher assignment and late-review queue reads, parent overdue-notice reads, assignment creation, submission, and late-decision/deadline-revision writes independently. After 50 warm-up requests, collect at least 500 requests per operation in each of three consecutive 10-minute windows, using 25 concurrent virtual users. Every window must have p95 API latency at or below 500 ms for reads and 1,000 ms for mutations. Exclude test-file transfer; include authorization, scoring, persistence, and notification-event creation. Record request count, p50/p95/p99, error rate, payload size, concurrency, and environment; exceeding a target fails the performance acceptance gate.
 **Decision gate before implementation:** confirm in-app as the sole MVP channel, notice deduplication, and whether a later extension updates/retracts an existing overdue notice.

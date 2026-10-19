@@ -12,7 +12,7 @@ sources:
 
 > **Historical accepted contract.** This SPEC and its companions define the original assigned-learning Epic A2. For amended product behavior, the 2026-10-17 PRD and Open Curriculum spec take precedence. A2 remains the prior accepted baseline; this change has not been decomposed into stories.
 
-> **Open Curriculum precedence (2026-10-17):** A2's completed reading/video evidence rules remain applicable. Its study-card step and transition to Quiz describe the old assigned pathway only; public lessons contain no cards or quiz. Study-card decks are teacher-created Class Space resources. For new Open Curriculum behavior, follow the PRD and `spec-open-learning-catalog`; existing A2 tickets are historical acceptance.
+> **Open Curriculum precedence (2026-10-17):** A2's completed reading/video evidence rules remain applicable. Its study-card step and transition to Quiz describe the old assigned pathway only; public lessons contain no cards or quiz. Study-card decks are teacher-created Class Space resources. For new Open Curriculum behavior, follow the PRD, architecture spine, and I1 increment plan; existing A2 tickets are historical acceptance.
 
 # Epic A2 — A Student Learns from Complete Core Materials
 
@@ -51,13 +51,13 @@ Against the real seeded API/database/browser stack, the A1 student opens the ass
 - `GET /lessons/:id/pathway` authorizes assignment applicability and returns lesson summary, ordered sanitized steps, per-step state, `nextStepId`, and lock reasons. It never returns quiz answers or hidden authoring data.
 - `PUT /lessons/:lessonId/steps/:stepId/progress` accepts a step-type-specific Zod union plus optional idempotency key. Server validates the step belongs to the lesson/student path, applies monotonic state transition, updates the `Progress` projection transactionally, and returns the full reconciled step/pathway state.
 - Reading payload: `{ action: "complete" }`. Video payload: `{ action: "heartbeat" | "ended" | "complete-fallback", positionSeconds, durationSeconds }`; fallback completion requires a published equivalent. Cards payload: `{ action: "visit" | "complete", cardIndex }` and completion requires every valid index visited.
-- Frontend uses the same assignment-authorized pathway response across separate student destinations: **Bài học** owns reading, video, and study cards; **Bài tập** owns quiz and practical steps. Bài tập links back to Bài học while required core steps remain incomplete. Local state may make controls responsive but reconciles on mutation response and preserves unsent video/card state after recoverable failure.
+- Frontend uses the same assignment-authorized pathway response across separate student destinations: **Bài học** owns reading, video, and study cards; **Bài tập** owns quiz and practical steps. From `/lessons`, an assigned lesson's primary action opens `/lessons/:id?assignmentId=:assignmentId` for content/progress; a separate explicit `/assignments/:id` action starts the assigned task. Bài tập links back to Bài học while required core steps remain incomplete. Local state may make controls responsive but reconciles on mutation response and preserves unsent video/card state after recoverable failure.
 
 Canonical pathway response:
 
 ```ts
 type PathwayResponse = {
-  lesson: { id: string; title: string; subject: { id: string; name: string }; grade: number; chapter: string; topic: string; learningObjective: string; prerequisites: string; curriculum: string };
+  lesson: { id: string; title: string; subject: { id: string; name: string; ebookUrl?: string | null }; grade: number; chapter: string; topic: string; learningObjective: string; prerequisites: string; curriculum: string; content?: string; materials?: Array<{ type: string; url?: string; title?: string }> };
   assignment: { id: string; dueDate: string; overdue: boolean };
   steps: Array<{
     id: string;

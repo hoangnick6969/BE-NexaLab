@@ -111,7 +111,8 @@ export class LabsController {
       if (existing) {
         const samePayload =
           existing.challengeId === b.challengeId &&
-          JSON.stringify(existing.labState) === JSON.stringify(b.labState);
+          JSON.stringify(existing.labState) === JSON.stringify(b.labState) &&
+          (!existing.lessonStepId || existing.assignmentId === b.assignmentId);
         if (!samePayload) {
           throw new ConflictException({
             code: "IDEMPOTENCY_KEY_REUSED",
@@ -131,7 +132,7 @@ export class LabsController {
             where: { id: existing.lessonStepId },
           });
           if (step) {
-            pathway = await this.access.studentPathway(step.lessonId, req.user.sub);
+            pathway = await this.access.studentPathway(step.lessonId, req.user.sub, this.db, existing.assignmentId ?? undefined);
           }
         }
         return {
@@ -168,9 +169,9 @@ export class LabsController {
     }
 
     return this.db.$transaction(async (tx) => {
-      // The step link and assignment are derived server-side; client-sent
-      // assignmentId is ignored so evidence cannot be attributed elsewhere.
-      const link = await this.practicalStepLink(b.lessonStepId, c, req.user.sub, tx);
+      // The supplied ID narrows the server-side eligibility check; only the
+      // authorized pathway supplies the assignment ID persisted as evidence.
+      const link = await this.practicalStepLink(b.lessonStepId, c, req.user.sub, tx, b.assignmentId);
       // D3: a direct attempt counts toward an applicable standalone lab assignment.
       const labAssignment = link ? null : await this.applicableLabAssignment(c.labId, req.user.sub, tx);
       // D-B1-01: an applicable standalone lab assignment opens the lab even when a
@@ -229,7 +230,7 @@ export class LabsController {
               },
         });
         await projectLesson(tx, req.user.sub, link.lessonId, link.assignmentId);
-        pathway = await this.access.studentPathway(link.lessonId, req.user.sub, tx);
+        pathway = await this.access.studentPathway(link.lessonId, req.user.sub, tx, link.assignmentId);
       }
       await projectLab(tx, req.user.sub, c.labId);
       return {
@@ -250,6 +251,7 @@ export class LabsController {
     challenge: { id: string; labId: string },
     studentId: string,
     db: any,
+    assignmentId?: string,
   ) {
     if (!lessonStepId) return null;
     const step = await db.lessonStep.findUnique({ where: { id: lessonStepId } });
@@ -258,7 +260,7 @@ export class LabsController {
       (step?.type === "LAB" && config?.labId === challenge.labId) ||
       (step?.type === "CHALLENGE" && config?.challengeId === challenge.id);
     if (!step || !matches) throw new NotFoundException("Bước thực hành không tồn tại");
-    const pathway = await this.access.studentPathway(step.lessonId, studentId, db);
+    const pathway = await this.access.studentPathway(step.lessonId, studentId, db, assignmentId);
     const current = pathway.steps.find((item: any) => item.id === step.id);
     if (!current || current.state === "LOCKED")
       throw new ForbiddenException({ code: "STEP_LOCKED", message: "Bước thực hành chưa khả dụng" });
