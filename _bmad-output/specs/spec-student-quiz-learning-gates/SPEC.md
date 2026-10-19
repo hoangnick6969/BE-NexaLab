@@ -12,7 +12,7 @@ sources:
 
 > **Historical accepted contract.** This SPEC and its companions define the original assigned-quiz Epic A3. For amended product behavior, the 2026-10-17 PRD and Open Curriculum spec take precedence. A3 remains the prior accepted baseline; this change has not been decomposed into stories.
 
-> **Open Curriculum precedence (2026-10-17):** A3's server scoring, answer-key privacy, immutable attempts, and retry contract remain applicable to historical assigned quizzes and new explicitly assigned tests. New Class Space study quizzes are unscored practice. There is no public quiz step and no quiz/test pass is a default gate for shared content or either Lab type. Existing A3 tickets capture historical assigned-flow acceptance; new behavior follows the PRD and `spec-open-learning-catalog`.
+> **Open Curriculum precedence (2026-10-17):** A3's server scoring, answer-key privacy, immutable attempts, and retry contract remain applicable to historical assigned quizzes and new explicitly assigned tests. New Class Space study quizzes are unscored practice. There is no public quiz step and no quiz/test pass is a default gate for shared content or either Lab type. Existing A3 tickets capture historical assigned-flow acceptance; new behavior follows the PRD, architecture spine, and the I1-I3 increment plans.
 
 # Epic A3 — A Student Proves Understanding and Unlocks Practice
 

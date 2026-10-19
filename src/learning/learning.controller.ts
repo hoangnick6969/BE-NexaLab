@@ -9,6 +9,7 @@ import { StudentAccessService } from "../progress/student-access.service";
 import { challengeObjective } from "../lessons/lesson-content";
 import { ARCHIVED_CONTENT_MESSAGE } from "../lessons/lesson-schema";
 import { projectLesson } from "../progress/progress-projection";
+import { parseAssignmentIdQuery } from "./assignment-query";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -26,9 +27,10 @@ export class LearningController {
   }
   @Roles("STUDENT") @Get("lessons/:id/pathway") async pathway(
     @Param("id") id: string,
-    @Query("assignmentId") assignmentId: string | undefined,
+    @Query() rawQuery: unknown,
     @Req() req: any,
   ) {
+    const assignmentId = parseAssignmentIdQuery(rawQuery);
     return this.access.studentPathway(id, req.user.sub, this.db, assignmentId);
   }
   @Roles("STUDENT") @Get("open-curriculum/lessons/:id") async openCurriculumLesson(@Param("id") id: string, @Req() req: any) {
@@ -72,7 +74,7 @@ export class LearningController {
         const config = step.config as any;
         return {
           id: step.id, type: step.type, position: step.position, required: step.required,
-          state: progress?.status === "COMPLETED" || step.basicExerciseAttempts?.[0]?.passed ? "COMPLETED" : progress?.status === "IN_PROGRESS" || step.basicExerciseAttempts?.length ? "IN_PROGRESS" : "IN_PROGRESS",
+          state: progress?.status === "COMPLETED" || step.basicExerciseAttempts?.[0]?.passed ? "COMPLETED" : progress?.status === "IN_PROGRESS" || step.basicExerciseAttempts?.length ? "IN_PROGRESS" : "NOT_STARTED",
           progressValue: progress?.progressValue ?? 0,
           lastPosition: progress?.lastPosition ?? null,
           resource: step.type === "READING" ? { html: config.html } : step.type === "BASIC_EXERCISE" ? sanitizeBasicExerciseConfig(config) : config,
@@ -158,9 +160,11 @@ export class LearningController {
   @ApiResponse({ status: 404, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
   async studentQuiz(
     @Param("lessonId") lessonId: string,
+    @Query() rawQuery: unknown,
     @Req() req: any,
   ) {
-    const pathway = await this.access.studentPathway(lessonId, req.user.sub);
+    const assignmentId = parseAssignmentIdQuery(rawQuery);
+    const pathway = await this.access.studentPathway(lessonId, req.user.sub, this.db, assignmentId);
     const step = pathway.steps.find((item: any) => item.type === "QUIZ");
     if (!step || !["IN_PROGRESS", "COMPLETED"].includes(step.state) || !step.resource)
       throw new NotFoundException("Bài kiểm tra chưa khả dụng");
@@ -175,14 +179,17 @@ export class LearningController {
   @ApiResponse({ status: 404, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
   async studentQuizAttempts(
     @Param("lessonId") lessonId: string,
+    @Query() rawQuery: unknown,
     @Req() req: any,
   ) {
-    const pathway = await this.access.studentPathway(lessonId, req.user.sub);
+    const assignmentId = parseAssignmentIdQuery(rawQuery);
+    const pathway = await this.access.studentPathway(lessonId, req.user.sub, this.db, assignmentId);
+    const selectedAssignmentId = pathway.assignment.id;
     const step = pathway.steps.find((item: any) => item.type === "QUIZ");
     if (!step || !["IN_PROGRESS", "COMPLETED"].includes(step.state))
       throw new NotFoundException("Bài kiểm tra chưa khả dụng");
     const attempts = await this.db.quizAttempt.findMany({
-      where: { studentId: req.user.sub, lessonId, stepId: step.id },
+      where: { studentId: req.user.sub, lessonId, stepId: step.id, assignmentId: selectedAssignmentId },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     });
     const latestId = attempts[0]?.id;
@@ -229,12 +236,18 @@ export class LearningController {
   async submitQuizAttempt(
     @Param("lessonId") lessonId: string,
     @Body() body: unknown,
+    @Query() rawQuery: unknown,
     @Req() req: any,
   ) {
+    const assignmentId = parseAssignmentIdQuery(rawQuery);
     const request = quizAttemptRequestSchema.parse(body);
     const studentId = req.user.sub;
     try {
       return await this.db.$transaction(async (tx) => {
+      const assignment = await this.access.applicableLessonAssignment(lessonId, studentId, tx, assignmentId);
+      if (!assignment)
+        throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
+      const pathway = await this.access.studentPathway(lessonId, studentId, tx, assignment.id);
       const previous = await tx.quizAttempt.findUnique({
         where: { studentId_idempotencyKey: { studentId, idempotencyKey: request.idempotencyKey } },
       });
@@ -244,14 +257,13 @@ export class LearningController {
         const sameAnswers = savedAnswers.length === answers.length && savedAnswers.every((saved, index) =>
           saved.questionId === answers[index].questionId && saved.optionId === answers[index].optionId,
         );
-        if (previous.lessonId !== lessonId || !sameAnswers)
+        if (previous.lessonId !== lessonId || previous.assignmentId !== assignment.id || !sameAnswers)
           throw new ConflictException({ code: "IDEMPOTENCY_KEY_REUSED", message: "Khóa gửi lại đã được dùng cho nội dung khác" });
         return {
           attempt: this.quizAttemptSummary(previous),
-          pathway: await this.access.studentPathway(lessonId, studentId, tx),
+          pathway,
         };
       }
-      const pathway = await this.access.studentPathway(lessonId, studentId, tx);
       const currentStep = pathway.steps.find((item: any) => item.type === "QUIZ");
       if (!currentStep || !["IN_PROGRESS", "COMPLETED"].includes(currentStep.state))
         throw new NotFoundException("Bài kiểm tra chưa khả dụng");
@@ -266,7 +278,6 @@ export class LearningController {
       const correctCount = questions.filter((question) => answers.some((answer) => answer.questionId === question.id && answer.optionId === question.answerOptionId)).length;
       const score = (correctCount / questions.length) * 100;
       const passed = score >= 50;
-      const assignment = await this.access.applicableLessonAssignment(lessonId, studentId, tx);
       const created = await tx.quizAttempt.create({
         data: {
           studentId,
@@ -304,7 +315,7 @@ export class LearningController {
       await projectLesson(tx, studentId, lessonId, assignment.id);
       return {
         attempt: this.quizAttemptSummary(created),
-        pathway: await this.access.studentPathway(lessonId, studentId, tx),
+        pathway: await this.access.studentPathway(lessonId, studentId, tx, assignment.id),
       };
       });
     } catch (error) {
@@ -313,15 +324,16 @@ export class LearningController {
         where: { studentId_idempotencyKey: { studentId, idempotencyKey: request.idempotencyKey } },
       });
       if (!previous) throw error;
+      const assignment = await this.access.applicableLessonAssignment(lessonId, studentId, this.db, assignmentId);
       const answers = [...request.answers].sort((a, b) => a.questionId.localeCompare(b.questionId));
       const savedAnswers = [...(previous.answers as any[])].sort((a, b) => a.questionId.localeCompare(b.questionId));
-      const sameAnswers = previous.lessonId === lessonId && savedAnswers.length === answers.length &&
+      const sameAnswers = Boolean(assignment) && previous.lessonId === lessonId && previous.assignmentId === assignment.id && savedAnswers.length === answers.length &&
         savedAnswers.every((saved, index) => saved.questionId === answers[index].questionId && saved.optionId === answers[index].optionId);
       if (!sameAnswers)
         throw new ConflictException({ code: "IDEMPOTENCY_KEY_REUSED", message: "Khóa gửi lại đã được dùng cho nội dung khác" });
       return {
         attempt: this.quizAttemptSummary(previous),
-        pathway: await this.access.studentPathway(lessonId, studentId),
+        pathway: await this.access.studentPathway(lessonId, studentId, this.db, previous.assignmentId ?? undefined),
       };
     }
   }
@@ -331,9 +343,11 @@ export class LearningController {
   async studentLab(
     @Param("lessonId") lessonId: string,
     @Param("stepId") stepId: string,
+    @Query() rawQuery: unknown,
     @Req() req: any,
   ) {
-    const pathway = await this.access.studentPathway(lessonId, req.user.sub);
+    const assignmentId = parseAssignmentIdQuery(rawQuery);
+    const pathway = await this.access.studentPathway(lessonId, req.user.sub, this.db, assignmentId);
     const step = pathway.steps.find((item: any) => item.id === stepId && (item.type === "LAB" || item.type === "CHALLENGE"));
     if (!step) throw new NotFoundException("Bước thực hành không tồn tại");
     if (step.state === "LOCKED")
@@ -381,13 +395,15 @@ export class LearningController {
     @Param("lessonId") lessonId: string,
     @Param("stepId") stepId: string,
     @Body() body: unknown,
+    @Query() rawQuery: unknown,
     @Req() req: any,
   ) {
+    const assignmentId = parseAssignmentIdQuery(rawQuery);
     const action = stepProgressActionSchema.parse(body);
     const studentId = req.user.sub;
     const now = new Date();
     return this.db.$transaction(async (tx) => {
-      const assignment = await this.access.applicableLessonAssignment(lessonId, studentId, tx);
+      const assignment = await this.access.applicableLessonAssignment(lessonId, studentId, tx, assignmentId);
       if (!assignment)
         throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
       const lesson = await tx.lesson.findFirst({
@@ -475,7 +491,7 @@ export class LearningController {
         throw new NotFoundException("Bước học không còn khả dụng");
       }
       await projectLesson(tx, studentId, lessonId, assignment.id);
-      const pathway = await this.access.studentPathway(lessonId, studentId, tx);
+      const pathway = await this.access.studentPathway(lessonId, studentId, tx, assignment.id);
       return { step: pathway.steps.find((item) => item.id === stepId), pathway };
     }, { isolationLevel: "Serializable" });
   }
@@ -501,17 +517,23 @@ export class LearningController {
     });
   }
   /** Availability of assigned content for one student (Q-B1-02, MSG-36). */
-  private async contentState(a: { contentType: string; contentId: string }, studentId: string) {
-    const content =
-      a.contentType === "lesson"
+  private async contentState(
+    a: { id: string; contentType: string; contentId: string },
+    studentId: string,
+    preloadedContent?: any,
+    contentWasPreloaded = false,
+  ) {
+    const content = contentWasPreloaded
+      ? preloadedContent ?? null
+      : a.contentType === "lesson"
         ? await this.db.lesson.findUnique({ where: { id: a.contentId }, include: { subject: true } })
         : await this.db.lab.findUnique({ where: { id: a.contentId }, include: { subject: true } });
     if (!content || !["published", "archived"].includes(content.status)) return { state: "UNAVAILABLE" as const, content: null };
     if (content.status === "published") return { state: "AVAILABLE" as const, content };
     const started =
       a.contentType === "lesson"
-        ? await this.access.lessonStarted(a.contentId, studentId)
-        : (await this.db.attempt.count({ where: { studentId, challenge: { labId: a.contentId } } })) > 0;
+        ? await this.access.lessonStarted(a.contentId, studentId, this.db, a.id)
+        : (await this.db.attempt.count({ where: { studentId, assignmentId: a.id, challenge: { labId: a.contentId } } })) > 0;
     return { state: started ? ("ARCHIVED_STARTED" as const) : ("ARCHIVED_NOT_STARTED" as const), content };
   }
   @Roles("STUDENT") @Get("assignments") async assignments(@Req() req: any) {
@@ -521,15 +543,51 @@ export class LearningController {
       include: { classroom: { select: { id: true, name: true } } },
       orderBy: assignmentQueueOrder,
     });
+    // Load each content type in one bounded query. The same rows power the
+    // availability check and the catalog summary, avoiding per-assignment
+    // detail reads while keeping the existing student authorization query.
+    const lessonIds = [...new Set(rows.filter((a) => a.contentType === "lesson").map((a) => a.contentId))];
+    const labIds = [...new Set(rows.filter((a) => a.contentType === "lab").map((a) => a.contentId))];
+    const [lessons, labs] = await Promise.all([
+      lessonIds.length
+        ? this.db.lesson.findMany({
+            where: { id: { in: lessonIds } },
+            include: {
+              subject: { select: { id: true, name: true } },
+              curriculumChapter: { select: { officialOrder: true } },
+              curriculumTopic: { select: { officialOrder: true } },
+            },
+          })
+        : Promise.resolve([]),
+      labIds.length
+        ? this.db.lab.findMany({
+            where: { id: { in: labIds } },
+            include: { subject: { select: { id: true, name: true } } },
+          })
+        : Promise.resolve([]),
+    ]);
+    const contentByType = {
+      lesson: new Map(lessons.map((content: any) => [content.id, content])),
+      lab: new Map(labs.map((content: any) => [content.id, content])),
+    };
     const items: any[] = [];
     for (const a of rows) {
-      const { state } = await this.contentState(a, req.user.sub);
+      const content = contentByType[a.contentType as "lesson" | "lab"]?.get(a.contentId);
+      const { state } = await this.contentState(a, req.user.sub, content, true);
       if (state === "UNAVAILABLE") continue;
       items.push({
         id: a.id,
         title: a.title,
         contentId: a.contentId,
         contentType: a.contentType,
+        contentTitle: content.title,
+        subject: { id: content.subject.id, name: content.subject.name },
+        grade: content.grade,
+        chapter: a.contentType === "lesson" ? content.chapter : null,
+        topic: content.topic,
+        curriculumOrder: a.contentType === "lesson" ? content.curriculumOrder : null,
+        chapterOrder: a.contentType === "lesson" ? content.curriculumChapter?.officialOrder ?? null : null,
+        topicOrder: a.contentType === "lesson" ? content.curriculumTopic?.officialOrder ?? null : null,
         dueDate: a.dueDate,
         createdAt: a.createdAt,
         overdue: isOverdue(a.dueDate, now),

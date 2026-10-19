@@ -2,15 +2,13 @@
 title: 'I1 — Browse Open Curriculum and Track Foundational Progress'
 type: 'feature'
 created: '2026-10-18'
-status: 'approved'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/planning-artifacts/increment-i1-epic-01-open-curriculum.md'
   - '{project-root}/docs/product/prd.md'
   - '{project-root}/_bmad-output/planning-artifacts/architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md'
-  - '{project-root}/_bmad-output/specs/spec-open-learning-catalog/SPEC.md'
-  - '{project-root}/_bmad-output/specs/spec-open-learning-catalog/access-and-lab-discovery.md'
   - '{project-root}/../nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md'
 ---
 

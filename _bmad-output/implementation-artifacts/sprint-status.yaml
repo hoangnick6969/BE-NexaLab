@@ -6,15 +6,16 @@ project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
 scope: Release 1 / Content Foundation CF-T1..T4 platform (completes the C2-T3/C2-T5 surfaces; CF-T5 corpus remains a staffed workstream)
-last_updated: '2026-10-17'
+last_updated: '2026-10-19'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'BE-NexaLab (branch feat/content-foundation, merged with origin/main incl. C2 PR #15 and pH demo 3f521d7)'
   frontend: 'FE-NexaLab (branch feat/content-foundation; C2 merged on origin/main)'
 sources:
   plan: ../planning-artifacts/increment-b-c-plan.md
-  next_plan: ../planning-artifacts/next-development-plan.md  # draft 2026-10-17, awaiting PO/team review
-  open_learning_assessment: ../planning-artifacts/open-learning-prd-assessment.md
+  open_curriculum_plan: ../planning-artifacts/increment-i1-epic-01-open-curriculum.md
+  class_space_plan: ../planning-artifacts/increment-i2-epic-02-class-space-resources.md
+  assigned_test_plan: ../planning-artifacts/increment-i3-epic-03-assigned-test-lifecycle.md
   acceptance_criteria: ../specs/spec-content-foundation/tickets.md
   spec: ../specs/spec-content-foundation/SPEC.md
   platform_spec: ../specs/spec-b0-platform/SPEC.md

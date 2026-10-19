@@ -6,6 +6,7 @@ import { Roles } from "../common/decorators";
 import { applicableAssignmentWhere, assignmentQueueOrder, isOverdue } from "../classes/class-access";
 import { Db } from "../infra/db";
 import { StudentAccessService } from "./student-access.service";
+import { FoundationalProgressService } from "./foundational-progress.service";
 import { challengeObjective } from "../lessons/lesson-content";
 import { decodeCursor, deriveLesson, mergeActivityPage, normalizeVerdict, practicalSummary, quizSummary } from "./progress";
 
@@ -13,7 +14,17 @@ import { decodeCursor, deriveLesson, mergeActivityPage, normalizeVerdict, practi
 @ApiBearerAuth()
 @Controller()
 export class ProgressController {
-  constructor(@Inject(Db) private db: Db, @Inject(StudentAccessService) private access: StudentAccessService) {}
+  constructor(
+    @Inject(Db) private db: Db,
+    @Inject(StudentAccessService) private access: StudentAccessService,
+    @Inject(FoundationalProgressService) private foundational: FoundationalProgressService,
+  ) {}
+  @Roles("STUDENT")
+  @Get("me/foundational-progress")
+  @ApiOperation({ summary: "Foundational evidence against the student's active official course version" })
+  foundationalProgress(@Req() req: any) {
+    return this.foundational.forStudent(req.user.sub, req.user.grade);
+  }
   @Get("progress/:studentId") async progress(
     @Param("studentId") studentId: string,
     @Req() req: any,

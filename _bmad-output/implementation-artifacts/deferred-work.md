@@ -26,3 +26,6 @@
 - source_spec: `C:\Users\FPT\.codex\worktrees\lesson-detail-ebook-reader-be\nexalab-be\_bmad-output\implementation-artifacts\spec-lesson-detail-and-ebook-reader.md`
   summary: Add API integration coverage for ebook annotation owner isolation and owner CRUD.
   evidence: The review searched both repositories and found no tests for EbookAnnotation ownership or CRUD; these behaviors are implemented and type-checked but have no regression test evidence.
+- source_spec: none
+  summary: Redesign the student Lessons, Class Space, and Assignments surfaces around the hierarchy subject and grade, chapter, then lesson or activity.
+  evidence: The user explicitly chose to clean obsolete and duplicate specification artifacts first, so the UI information-architecture implementation is deferred to the next work item.

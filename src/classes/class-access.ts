@@ -19,7 +19,7 @@ export const applicableAssignmentWhere = (studentId: string) => ({
 
 export const applicableLessonAssignmentWhere = (studentId: string, lessonId: string, assignmentId?: string) => ({
   ...applicableAssignmentWhere(studentId),
-  ...(assignmentId ? { id: assignmentId } : {}),
+  ...(assignmentId !== undefined ? { id: assignmentId } : {}),
   contentId: lessonId,
   contentType: "lesson",
 });

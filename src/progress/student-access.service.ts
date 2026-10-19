@@ -23,9 +23,9 @@ export class StudentAccessService {
   async lessonStarted(lessonId: string, studentId: string, db: any = this.db, assignmentId?: string) {
     const stepIds = (await db.lessonStep.findMany({ where: { lessonId }, select: { id: true } })).map((step: any) => step.id);
     const [progress, quiz, practical] = await Promise.all([
-      db.stepProgress.count({ where: { studentId, ...(assignmentId ? { assignmentId } : {}), stepId: { in: stepIds }, status: { not: "NOT_STARTED" } } }),
-      db.quizAttempt.count({ where: { studentId, lessonId, ...(assignmentId ? { assignmentId } : {}) } }),
-      db.attempt.count({ where: { studentId, lessonStepId: { in: stepIds }, ...(assignmentId ? { assignmentId } : {}) } }),
+      db.stepProgress.count({ where: { studentId, ...(assignmentId !== undefined ? { assignmentId } : {}), stepId: { in: stepIds }, status: { not: "NOT_STARTED" } } }),
+      db.quizAttempt.count({ where: { studentId, lessonId, ...(assignmentId !== undefined ? { assignmentId } : {}) } }),
+      db.attempt.count({ where: { studentId, lessonStepId: { in: stepIds }, ...(assignmentId !== undefined ? { assignmentId } : {}) } }),
     ]);
     return progress + quiz + practical > 0;
   }
@@ -74,13 +74,15 @@ export class StudentAccessService {
       lesson: {
         id: lesson.id,
         title: lesson.title,
-        subject: { id: lesson.subject.id, name: lesson.subject.name },
+        subject: { id: lesson.subject.id, name: lesson.subject.name, ebookUrl: lesson.subject.ebookUrl },
         grade: lesson.grade,
         chapter: lesson.chapter,
         topic: lesson.topic,
         learningObjective: lesson.learningObjective,
         prerequisites: lesson.prerequisites,
         curriculum: lesson.curriculum,
+        content: lesson.content,
+        materials: lesson.materials,
       },
       attribution: attribution(lesson),
       assignment: {

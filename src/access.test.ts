@@ -16,4 +16,8 @@ describe("applicable lesson assignment query", () => {
   it("keeps the existing eligible-assignment query when no assignment is requested", () => {
     expect(applicableLessonAssignmentWhere("student-1", "lesson-1")).not.toHaveProperty("id");
   });
+
+  it("does not treat an explicitly empty assignment ID as omitted", () => {
+    expect(applicableLessonAssignmentWhere("student-1", "lesson-1", "")).toHaveProperty("id", "");
+  });
 });

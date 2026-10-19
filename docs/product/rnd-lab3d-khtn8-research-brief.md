@@ -184,7 +184,7 @@ Gate between research and design: explicit choice of exemplar, curriculum author
 
 - Backend PRD: `docs/product/prd.md`, especially role/scope, release constraints, decisions 12 and 15–19, and implementation-evidence note.
 - Product open questions: `docs/product/open-questions.md`, 3D Lab R&D and current-sprint non-goal.
-- Open Learning contracts: `_bmad-output/specs/spec-open-learning-catalog/access-and-lab-discovery.md` and `class-space-assignment-contract.md`.
+- Open Learning boundaries: `docs/product/prd.md`, the architecture spine, and `_bmad-output/specs/spec-open-learning-catalog/class-space-assignment-contract.md` for Class Space assignment-specific rules.
 - Content and taxonomy governance: `_bmad-output/specs/spec-content-foundation/SPEC.md`, `_bmad-output/specs/spec-khtn8-taxonomy/brownfield.md`, `source-evidence.md`.
 - Persistence/runtime: `prisma/schema.prisma`; `src/sim-packs.ts`; `src/simulation-versions.ts`; `src/routes.ts`; `packages/sim/index.ts`.
 - Frontend runtime: `../nexalab-fe/src/labs/Lab.tsx`, `PracticalPathwayStep.tsx`, `CircuitPathwayStep.tsx`, `api.ts`, and `library.tsx`.

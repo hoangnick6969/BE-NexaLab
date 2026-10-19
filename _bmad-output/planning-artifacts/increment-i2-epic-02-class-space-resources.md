@@ -9,7 +9,7 @@ stories: 2.1–2.4
 
 ## Agent handoff
 
-Before coding, read in order: `docs/product/prd.md` → `_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-16.md` → `_bmad-output/planning-artifacts/architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md` → the Open Learning/Class Space and Teacher specs → `../nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md`. Check `docs/product/open-questions.md` and this file's gates. If a rule conflicts or a gate is unresolved, stop and report it; do not invent a product decision.
+Before coding, read in order: `docs/product/prd.md` → `_bmad-output/planning-artifacts/architecture-spine-nexalab-release-1/ARCHITECTURE-SPINE.md` → this increment → `../nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md`. In the retained Class Space contract, use §1 for authoring/import, §3 for membership-scoped resource access and custom-Lab boundaries, and §4 for command/acceptance coverage. Read §2 only when a story changes assigned-test deadlines or late decisions. Check `docs/product/open-questions.md` and this file's gates. If a rule conflicts or a gate is unresolved, stop and report it; do not invent a product decision.
 
 Delegate one story per task. Use `$bmad-build` and implement only that story as a vertical BE/FE/API/schema slice. Keep NestJS/Zod/OpenAPI and FE types/UI aligned; enforce authorization in the backend. Follow the story dependencies. Parallelize only after shared contracts are frozen and file ownership is explicit. Do not commit or push unless requested.
 
@@ -100,3 +100,7 @@ So that I can prepare class materials efficiently and correct errors before publ
 **Given** the preview is valid and current, **when** the teacher confirms, **then** one idempotent draft is created and requires teacher review before publication.
 **Given** the upload contains macros/formulas, an untrusted MIME/name, or a Lab/3D asset payload, **when** import validation runs, **then** executable content is never run and the file is rejected as an unsupported Lab-import path.
 **Decision gate before implementation:** Freeze allowlisted format(s), per-resource templates, size/row/time limits, duplicate behavior, and supported question/card field schema in story refinement.
+
+### Class resource latency acceptance (PRD QR-09)
+
+At the pilot-shaped class/resource dataset and from the pilot region, measure membership-authorized resource list and detail reads, draft create/update, publish/share, import preview, and import confirmation independently. After 50 warm-up requests, collect at least 500 requests per operation in each of three consecutive 10-minute windows, using 25 concurrent virtual students/teachers. Every window must have p95 API latency at or below 500 ms for reads and 1,000 ms for mutations. Measure server-side validation and persistence; exclude client-to-server file transfer and Lab simulation rendering. For every operation, record request count, p50/p95/p99, error rate, resource/file sizes, concurrency, and environment. Any operation exceeding its target fails the performance acceptance gate.
