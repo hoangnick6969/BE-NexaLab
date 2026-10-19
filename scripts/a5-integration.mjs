@@ -270,8 +270,20 @@ try {
   else check("A5 read endpoints meet the 500 ms p95 pilot target", Object.values(latency).every((value) => value <= 500), latency);
 
   // Regression: standalone lab practice, hints and the Teacher/Parent progress route.
+  // I1: a student practises a standalone lab only when it is released in the
+  // foundational curriculum or assigned as a lab; otherwise the attempt is refused.
+  const circuitLab = (await db.challenge.findUnique({ where: { id: "circuit_001" }, include: { lab: true } })).lab;
+  const circuitReleased = circuitLab.scope === "SHARED_LIBRARY" && circuitLab.releaseCleared && !circuitLab.synthetic && Boolean(circuitLab.topicCode);
+  let labAssignmentId = null;
+  if (!circuitReleased) {
+    const refused = await req("/attempts", "POST", { challengeId: "circuit_001", labState: circuit(100), durationMs: 100 }, peer.token);
+    check("unreleased, unassigned standalone lab attempt is refused", refused.status === 404 && refused.data?.code === "LAB_NOT_FOUND", refused.data);
+    const labAssignment = await req(`/classes/${classroomId}/assignments`, "POST", { contentId: circuitLab.id, contentType: "lab", title: prefix + " Lab mạch điện", dueDate: due, studentIds: [peer.id] }, teacherToken);
+    check("teacher assigns the unreleased lab to the peer", labAssignment.status === 201, labAssignment.data);
+    labAssignmentId = labAssignment.data.assignment.id;
+  }
   const standalone = await req("/attempts", "POST", { challengeId: "circuit_001", labState: circuit(100), durationMs: 100 }, peer.token);
-  check("standalone lab attempt without a lesson step still records", standalone.status === 201 && standalone.data.lessonStepId === null && standalone.data.assignmentId === null);
+  check("standalone lab attempt without a lesson step still records", standalone.status === 201 && standalone.data.lessonStepId === null && standalone.data.assignmentId === labAssignmentId, standalone.data);
   const hint = await req(`/attempts/${standalone.data.id}/hint`, "POST", undefined, peer.token);
   const peerLab = await db.progress.findUnique({ where: { studentId_contentId: { studentId: peer.id, contentId: "circuit" } } });
   check("hint request still works and projects lastHintLevel", hint.status === 201 && peerLab?.lastHintLevel === hint.data.level && peerLab.status === "in_progress" && peerLab.attemptsCount === 1);

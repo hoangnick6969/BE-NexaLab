@@ -9,6 +9,11 @@ import { StudentAccessService } from "../progress/student-access.service";
 import { challengeObjective } from "../lessons/lesson-content";
 import { ARCHIVED_CONTENT_MESSAGE } from "../lessons/lesson-schema";
 import { projectLesson } from "../progress/progress-projection";
+import { scoreTest, studentTestContent, TEST_CONTENT_TYPE, testSubmissionSchema } from "../classes/assignment-test-contract";
+import { currentDeadlines, testStates } from "../classes/assignment-test-state";
+import { lock } from "../classes/class-common";
+import { audit } from "../common/audit";
+import { idempotent, readIdempotencyKey } from "../common/idempotency";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -514,6 +519,11 @@ export class LearningController {
         : (await this.db.attempt.count({ where: { studentId, challenge: { labId: a.contentId } } })) > 0;
     return { state: started ? ("ARCHIVED_STARTED" as const) : ("ARCHIVED_NOT_STARTED" as const), content };
   }
+  /** A published class test stays readable through its assignment even after the resource is archived. */
+  private async testState(a: { contentId: string; classId: string }) {
+    const test = await this.db.classResource.findFirst({ where: { id: a.contentId, classId: a.classId, kind: "TEST", status: { not: "DRAFT" } } });
+    return test ? { state: "AVAILABLE" as const, test } : { state: "UNAVAILABLE" as const, test: null };
+  }
   @Roles("STUDENT") @Get("assignments") async assignments(@Req() req: any) {
     const now = new Date();
     const rows = await this.db.assignment.findMany({
@@ -521,9 +531,11 @@ export class LearningController {
       include: { classroom: { select: { id: true, name: true } } },
       orderBy: assignmentQueueOrder,
     });
+    const tests = rows.filter((a) => a.contentType === TEST_CONTENT_TYPE);
+    const { states, key } = await testStates(this.db, tests, [req.user.sub], now);
     const items: any[] = [];
     for (const a of rows) {
-      const { state } = await this.contentState(a, req.user.sub);
+      const { state } = a.contentType === TEST_CONTENT_TYPE ? await this.testState(a) : await this.contentState(a, req.user.sub);
       if (state === "UNAVAILABLE") continue;
       items.push({
         id: a.id,
@@ -537,6 +549,7 @@ export class LearningController {
         contentState: state,
         canOpen: state !== "ARCHIVED_NOT_STARTED",
         notice: state === "AVAILABLE" ? null : ARCHIVED_CONTENT_MESSAGE,
+        ...(a.contentType === TEST_CONTENT_TYPE ? { testStatus: this.testSummary(states.get(key(a.id, req.user.sub))) } : {}),
       });
     }
     return items;
@@ -546,6 +559,7 @@ export class LearningController {
     @Req() req: any,
   ) {
     const a = await this.applicableAssignment(id, req.user.sub);
+    if (a.contentType === TEST_CONTENT_TYPE) return this.testAssignment(a, req.user.sub);
     const { state, content } = await this.contentState(a, req.user.sub);
     if (!content) throw new NotFoundException("Nội dung không còn khả dụng");
     if (state === "ARCHIVED_NOT_STARTED")
@@ -572,4 +586,75 @@ export class LearningController {
       },
     };
   }
+  private testSummary(state: any) {
+    if (!state) return null;
+    return { status: state.status, dueAt: state.dueAt, revision: state.revision, extended: state.extended, dueSoon: state.dueSoon, score: state.current?.score ?? null };
+  }
+  private async testAssignment(a: any, studentId: string) {
+    const [{ test }, { states, key }] = await Promise.all([this.testState(a), testStates(this.db, [a], [studentId])]);
+    if (!test) throw new NotFoundException("Nội dung không còn khả dụng");
+    const state = states.get(key(a.id, studentId))!;
+    const content = studentTestContent(test.content);
+    return {
+      id: a.id,
+      title: a.title,
+      contentType: a.contentType,
+      dueDate: state.dueAt,
+      overdue: isOverdue(state.dueAt),
+      classroom: a.classroom,
+      contentState: "AVAILABLE" as const,
+      deadline: { revision: state.revision, dueAt: state.dueAt },
+      state,
+      content: { id: test.id, title: test.title, version: test.version, questionCount: content.questions.length, questions: content.questions },
+    };
+  }
+  @Roles("STUDENT") @Post("assignments/:id/submissions")
+  @ApiOperation({ summary: "Submit an assigned test; server scores it and decides on-time versus late (late needs a reason)" })
+  async submitTest(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
+    const b = testSubmissionSchema.parse(body);
+    const studentId = req.user.sub;
+    const a = await this.applicableAssignment(id, studentId);
+    if (a.contentType !== TEST_CONTENT_TYPE)
+      throw new BadRequestException({ code: "NOT_A_TEST_ASSIGNMENT", message: "Bài được giao này không phải bài kiểm tra" });
+    const ctx = { actorId: studentId, key: readIdempotencyKey(req), scope: "POST assignments/:id/submissions:" + id, payload: b };
+    return idempotent(this.db, ctx, async (tx) => {
+      // Same lock as deadline revision and rejection, so a late submission cannot slip past an extension.
+      await lock(tx, "assignment-deadline:" + id);
+      // Re-check inside the transaction: archive, removal or a new deadline may have landed meanwhile.
+      const current = await tx.assignment.findFirst({ where: { id, ...applicableAssignmentWhere(studentId) }, select: { id: true, dueDate: true } });
+      if (!current) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
+      const deadline = (await currentDeadlines(tx, [current])).get(id);
+      const test = await tx.classResource.findFirst({ where: { id: a.contentId, classId: a.classId, kind: "TEST", status: { not: "DRAFT" } } });
+      if (!deadline?.id || !test) throw new NotFoundException("Nội dung không còn khả dụng");
+      const result = scoreTest(test.content, b.answers);
+      const submittedAt = new Date();
+      const late = submittedAt.getTime() > deadline.dueAt.getTime();
+      if (late && !b.lateReason)
+        throw new BadRequestException({ code: "LATE_REASON_REQUIRED", message: "Bài nộp sau hạn cần có lý do nộp trễ" });
+      const submission = await tx.assignmentSubmission.create({
+        data: {
+          assignmentId: id,
+          studentId,
+          deadlineRevisionId: deadline.id,
+          resourceVersion: test.version,
+          answers: b.answers,
+          ...result,
+          timing: late ? "LATE" : "ON_TIME",
+          lateReason: late ? b.lateReason! : null,
+          submittedAt,
+        },
+      });
+      await audit(tx, {
+        actor: req.user,
+        action: "assignment.submit",
+        targetType: "AssignmentSubmission",
+        targetId: submission.id,
+        after: { assignmentId: id, timing: submission.timing, deadlineRevision: deadline.revision },
+      });
+      const { states, key } = await testStates(tx, [current], [studentId], submittedAt);
+      const state = states.get(key(id, studentId))!;
+      return { submission: state.history.find((row) => row.id === submission.id), state };
+    });
+  }
+
 }

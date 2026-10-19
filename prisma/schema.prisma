@@ -87,6 +87,7 @@ model User {
   parents ParentLink[] @relation("student")
   children ParentLink[] @relation("parent")
   assignmentTargets AssignmentTarget[]
+  assignmentSubmissions AssignmentSubmission[]
   ebookAnnotations EbookAnnotation[]
 }
 model Session {
@@ -512,6 +513,8 @@ model Assignment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   targets AssignmentTarget[]
+  deadlineRevisions AssignmentDeadlineRevision[]
+  submissions AssignmentSubmission[]
   stepProgress StepProgress[]
   @@index([classId, status, dueDate])
   @@index([contentType, contentId, status])
@@ -524,6 +527,61 @@ model AssignmentTarget {
   createdAt DateTime @default(now())
   @@id([assignmentId, studentId])
   @@index([studentId])
+}
+/// Immutable due-date history of a scored test assignment (I3). Revision 1 is written at creation;
+/// Assignment.dueDate mirrors the latest revision.
+model AssignmentDeadlineRevision {
+  id String @id @default(cuid())
+  assignmentId String
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  revision Int
+  dueAt DateTime
+  actorId String
+  note String?
+  /// Late submission whose review triggered this revision; null for revision 1.
+  triggeredBySubmissionId String?
+  createdAt DateTime @default(now())
+  submissions AssignmentSubmission[]
+  lateDecisions LateDecision[]
+  @@unique([assignmentId, revision])
+}
+/// Immutable test submission (I3 / 3.2). The server scores every submission; a late one stays
+/// pending until a LateDecision exists. The latest submission per student is current.
+model AssignmentSubmission {
+  id String @id @default(cuid())
+  assignmentId String
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId String
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  /// Deadline revision in force when the server received the submission.
+  deadlineRevisionId String
+  deadlineRevision AssignmentDeadlineRevision @relation(fields: [deadlineRevisionId], references: [id])
+  /// Resource version answered, so later test revisions never rescore history.
+  resourceVersion Int
+  answers Json
+  score Int
+  correctCount Int
+  questionCount Int
+  /// ON_TIME (submittedAt <= dueAt) or LATE.
+  timing String
+  lateReason String?
+  submittedAt DateTime @default(now())
+  decision LateDecision?
+  @@index([assignmentId, studentId, submittedAt])
+  @@index([studentId, submittedAt])
+}
+/// Owning teacher's decision on one late submission (I3 / 3.3): REJECT_ZERO, or
+/// REVISE_DEADLINE_FOR_CLASS written for every pending submission when the deadline is revised.
+model LateDecision {
+  id String @id @default(cuid())
+  submissionId String @unique
+  submission AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  decision String
+  actorId String
+  note String?
+  deadlineRevisionId String?
+  deadlineRevision AssignmentDeadlineRevision? @relation(fields: [deadlineRevisionId], references: [id])
+  createdAt DateTime @default(now())
 }
 model TeacherGateOverride {
   id String @id @default(cuid())

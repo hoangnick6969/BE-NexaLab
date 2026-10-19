@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -99,7 +100,7 @@ async function measureQuizEndpoint(name, targetMs, count, run) {
 }
 function runLiveQuizBrowser(assignmentId, username, password) {
   if (process.env.RUN_A3_BROWSER_E2E !== "true") return;
-  const frontendRoot = resolve("..", "nexalab-fe");
+  const frontendRoot = process.env.FRONTEND_ROOT ?? [resolve("..", "nexalab-fe"), resolve("..", "FE-NexaLab")].find((path) => existsSync(path));
   const npmCli = process.env.npm_execpath;
   assert.ok(npmCli, "npm_execpath is available to launch the frontend Playwright command");
   const run = spawnSync(process.execPath, [npmCli, "run", "test:e2e", "--", "tests/quiz-learning-live.spec.ts"], {

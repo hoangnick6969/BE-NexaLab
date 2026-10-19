@@ -83,6 +83,13 @@ export const AUDIT_FIELDS = new Set([
   "resourceVersion",
   "sourceName",
   "itemCount",
+  // I3 assigned-test lifecycle
+  "timing",
+  "deadlineRevision",
+  "dueAt",
+  "decision",
+  "submissionId",
+  "acceptedCount",
 ]);
 
 const credentialLike = [
