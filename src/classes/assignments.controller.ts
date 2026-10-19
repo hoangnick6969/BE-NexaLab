@@ -21,6 +21,18 @@ import { audit } from "../common/audit";
 import { idempotent, readIdempotencyKey } from "../common/idempotency";
 import { Db } from "../infra/db";
 import { labVersion, lessonVersion } from "../lessons/lesson-content";
+import {
+  assertTestAssignmentUpdate,
+  deadlineRevisionSchema,
+  latestSubmission,
+  rejectLateSchema,
+  requireTestDueDate,
+  submissionStatus,
+  TEST_CONTENT_TYPE,
+} from "./assignment-test-contract";
+import { currentDeadlines, testStates } from "./assignment-test-state";
+
+type ContentType = "lesson" | "lab" | "test";
 
 function assignmentView(a: any, now = new Date()) {
   return {
@@ -42,7 +54,7 @@ function assignmentView(a: any, now = new Date()) {
 
 const assignmentInput = z
   .object({
-    contentType: z.enum(["lesson", "lab"]),
+    contentType: z.enum(["lesson", "lab", "test"]),
     contentId: text,
     title: text.optional(),
     dueDate: z.string().datetime().nullable().optional(),
@@ -77,20 +89,246 @@ export class AssignmentsController {
         classId: id,
         ...(q.status === "ALL" ? {} : { status: q.status }),
       },
-      include: { _count: { select: { targets: true } } },
+      include: { _count: { select: { targets: true } }, targets: { select: { studentId: true } } },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     });
-    return rows.map((a) => assignmentView(a));
+    const tests = rows.filter((a) => a.contentType === TEST_CONTENT_TYPE);
+    const studentIds = [...new Set(tests.flatMap((a) => a.targets.map((t) => t.studentId)))];
+    const { states, key } = await testStates(this.db, tests, studentIds);
+    return rows.map(({ targets, ...a }) => {
+      if (a.contentType !== TEST_CONTENT_TYPE) return assignmentView(a);
+      const counts = { SUBMITTED: 0, LATE_REVIEW_PENDING: 0, REJECTED: 0, OVERDUE_UNSUBMITTED: 0, NOT_SUBMITTED: 0 };
+      let revision = 1;
+      for (const t of targets) {
+        const state = states.get(key(a.id, t.studentId));
+        if (!state) continue;
+        revision = state.revision;
+        if (state.status in counts) counts[state.status as keyof typeof counts]++;
+        else counts.NOT_SUBMITTED++;
+      }
+      return { ...assignmentView(a), testSummary: { revision, extended: revision > 1, counts } };
+    });
+  }
+
+  // ---------- I3 assigned-test lifecycle ----------
+
+  private async ownedTestAssignment(db: any, classId: string, assignmentId: string) {
+    const assignment = await db.assignment.findFirst({
+      where: { id: assignmentId, classId, contentType: TEST_CONTENT_TYPE },
+      include: { targets: { include: { student: { select: { id: true, fullName: true, username: true } } } }, classroom: { select: { status: true } } },
+    });
+    if (!assignment)
+      throw new NotFoundException({
+        code: "ASSIGNMENT_NOT_FOUND",
+        message: "Không tìm thấy bài kiểm tra đã giao",
+      });
+    return assignment;
+  }
+
+  @Roles("TEACHER")
+  @Get("classes/:id/assignments/:assignmentId/test-status")
+  @ApiOperation({ summary: "Per-recipient test status, submissions, late reasons and deadline history (owner only)" })
+  async testStatus(@Param("id") id: string, @Param("assignmentId") assignmentId: string, @Req() req: any) {
+    await ownedClass(this.db, id, req.user);
+    const a = await this.ownedTestAssignment(this.db, id, assignmentId);
+    const [{ states, key }, revisions] = await Promise.all([
+      testStates(this.db, [a], a.targets.map((t: any) => t.studentId)),
+      this.db.assignmentDeadlineRevision.findMany({
+        where: { assignmentId },
+        orderBy: { revision: "asc" },
+        select: { revision: true, dueAt: true, note: true, createdAt: true, triggeredBySubmissionId: true },
+      }),
+    ]);
+    return {
+      assignment: assignmentView({ ...a, _count: { targets: a.targets.length } }),
+      deadlines: revisions,
+      permittedDecisions: this.permittedDecisions(a),
+      students: a.targets.map((t: any) => ({ student: t.student, ...states.get(key(a.id, t.studentId))! })),
+    };
+  }
+
+  @Roles("TEACHER")
+  @Get("classes/:id/late-queue")
+  @ApiOperation({ summary: "Latest late submissions awaiting the owning teacher's decision in one class" })
+  async lateQueue(@Param("id") id: string, @Req() req: any) {
+    await ownedClass(this.db, id, req.user);
+    const pending = await this.db.assignmentSubmission.findMany({
+      where: { assignment: { classId: id, contentType: TEST_CONTENT_TYPE }, timing: "LATE", decision: null },
+      select: { id: true, assignmentId: true, studentId: true },
+    });
+    if (!pending.length) return [];
+    const assignments = await this.db.assignment.findMany({
+      where: { id: { in: [...new Set(pending.map((p) => p.assignmentId))] } },
+      include: { targets: { include: { student: { select: { id: true, fullName: true, username: true } } } }, classroom: { select: { status: true } } },
+    });
+    const { states, key } = await testStates(this.db, assignments, [...new Set(pending.map((p) => p.studentId))]);
+    const items: any[] = [];
+    for (const a of assignments)
+      for (const t of a.targets) {
+        const state = states.get(key(a.id, t.studentId));
+        // Only the current (latest) submission is decided; an older pending one is superseded.
+        if (state?.status !== "LATE_REVIEW_PENDING" || !state.current) continue;
+        items.push({
+          assignmentId: a.id,
+          assignmentTitle: a.title,
+          assignmentStatus: a.status,
+          student: t.student,
+          submissionId: state.current.id,
+          submittedAt: state.current.submittedAt,
+          lateReason: state.current.lateReason,
+          dueAt: state.dueAt,
+          revision: state.revision,
+          permittedDecisions: this.permittedDecisions(a),
+        });
+      }
+    return items.sort((x, y) => new Date(x.submittedAt).getTime() - new Date(y.submittedAt).getTime());
+  }
+
+  /** Rejection stays available after archive (§2a); a deadline revision needs an active assignment and class. */
+  private permittedDecisions(a: { status: string; classroom: { status: string } }) {
+    return a.status === "ACTIVE" && a.classroom.status === "ACTIVE" ? ["REJECT_ZERO", "REVISE_DEADLINE_FOR_CLASS"] : ["REJECT_ZERO"];
+  }
+
+  @Roles("TEACHER")
+  @Post("classes/:id/assignments/:assignmentId/late-submissions/:submissionId/reject")
+  @ApiOperation({ summary: "Reject the current late submission of one student: score 0, evidence kept" })
+  async rejectLate(
+    @Param("id") id: string,
+    @Param("assignmentId") assignmentId: string,
+    @Param("submissionId") submissionId: string,
+    @Req() req: any,
+    @Body() body: unknown,
+  ) {
+    const b = rejectLateSchema.parse(body ?? {});
+    await ownedClass(this.db, id, req.user);
+    const ctx = {
+      actorId: req.user.sub,
+      key: readIdempotencyKey(req),
+      scope: "POST late-submissions/:submissionId/reject:" + submissionId,
+      payload: b,
+    };
+    return idempotent(this.db, ctx, async (tx) => {
+      await lock(tx, "assignment-deadline:" + assignmentId);
+      await this.ownedTestAssignment(tx, id, assignmentId);
+      const submission = await tx.assignmentSubmission.findFirst({
+        where: { id: submissionId, assignmentId },
+        include: { decision: true },
+      });
+      if (!submission)
+        throw new NotFoundException({ code: "SUBMISSION_NOT_FOUND", message: "Không tìm thấy bài nộp" });
+      if (submissionStatus(submission) !== "LATE_REVIEW_PENDING")
+        throw new ConflictException({ code: "LATE_SUBMISSION_NOT_PENDING", message: "Bài nộp này không còn chờ duyệt" });
+      const own = await tx.assignmentSubmission.findMany({
+        where: { assignmentId, studentId: submission.studentId },
+        select: { id: true, submittedAt: true },
+      });
+      if (latestSubmission(own)?.id !== submissionId)
+        throw new ConflictException({ code: "LATE_SUBMISSION_SUPERSEDED", message: "Học sinh đã nộp bài mới hơn; hãy xem bài nộp hiện tại" });
+      const decision = await tx.lateDecision.create({
+        data: { submissionId, decision: "REJECT_ZERO", actorId: req.user.sub, note: b.note ?? null },
+      });
+      await audit(tx, {
+        actor: req.user,
+        action: "assignment.late_reject",
+        targetType: "AssignmentSubmission",
+        targetId: submissionId,
+        after: { assignmentId, studentId: submission.studentId, decision: "REJECT_ZERO" },
+      });
+      return { submissionId, decision: decision.decision, decidedAt: decision.createdAt, score: 0 };
+    });
+  }
+
+  @Roles("TEACHER")
+  @Post("classes/:id/assignments/:assignmentId/deadline-revisions")
+  @ApiOperation({ summary: "Revise the due date of the same assignment for its whole recipient set; accepts pending late work" })
+  async reviseDeadline(@Param("id") id: string, @Param("assignmentId") assignmentId: string, @Req() req: any, @Body() body: unknown) {
+    const b = deadlineRevisionSchema.parse(body);
+    const c = await ownedClass(this.db, id, req.user);
+    if (c.status === "ARCHIVED") throw classArchived();
+    const ctx = {
+      actorId: req.user.sub,
+      key: readIdempotencyKey(req),
+      scope: "POST classes/:id/assignments/:assignmentId/deadline-revisions:" + assignmentId,
+      payload: b,
+    };
+    return idempotent(this.db, ctx, async (tx) => {
+      await lock(tx, "assignment-deadline:" + assignmentId);
+      const a = await this.ownedTestAssignment(tx, id, assignmentId);
+      if (a.status !== "ACTIVE")
+        throw new ConflictException({ code: "ASSIGNMENT_ARCHIVED", message: "Bài đã lưu trữ; không thể đổi hạn nộp" });
+      const current = (await currentDeadlines(tx, [a])).get(assignmentId)!;
+      if (b.expectedRevision !== current.revision)
+        throw new ConflictException({
+          code: "DEADLINE_REVISION_STALE",
+          message: "Hạn nộp vừa được thay đổi; hãy tải lại trước khi đổi tiếp",
+          details: { revision: current.revision, dueAt: current.dueAt },
+        });
+      const now = new Date();
+      const dueAt = new Date(b.dueAt);
+      if (dueAt.getTime() <= now.getTime() || dueAt.getTime() <= current.dueAt.getTime())
+        throw new BadRequestException({ code: "DUE_DATE_NOT_LATER", message: "Hạn mới phải sau hạn hiện tại và sau thời điểm này" });
+      if (b.submissionId) {
+        const trigger = await tx.assignmentSubmission.findFirst({ where: { id: b.submissionId, assignmentId }, include: { decision: true } });
+        if (!trigger || submissionStatus(trigger) !== "LATE_REVIEW_PENDING")
+          throw new ConflictException({ code: "LATE_SUBMISSION_NOT_PENDING", message: "Bài nộp này không còn chờ duyệt" });
+      }
+      const revision = await tx.assignmentDeadlineRevision.create({
+        data: {
+          assignmentId,
+          revision: current.revision + 1,
+          dueAt,
+          actorId: req.user.sub,
+          note: b.note ?? null,
+          triggeredBySubmissionId: b.submissionId ?? null,
+        },
+      });
+      await tx.assignment.update({ where: { id: assignmentId }, data: { dueDate: dueAt } });
+      // D-I3-01: the class-wide revision accepts every late submission still awaiting review.
+      const pending = await tx.assignmentSubmission.findMany({
+        where: { assignmentId, timing: "LATE", decision: null },
+        select: { id: true },
+      });
+      if (pending.length)
+        await tx.lateDecision.createMany({
+          data: pending.map((p: any) => ({
+            submissionId: p.id,
+            decision: "REVISE_DEADLINE_FOR_CLASS",
+            actorId: req.user.sub,
+            note: b.note ?? null,
+            deadlineRevisionId: revision.id,
+          })),
+        });
+      await audit(tx, {
+        actor: req.user,
+        action: "assignment.deadline_revise",
+        targetType: "Assignment",
+        targetId: assignmentId,
+        before: { dueDate: current.dueAt, deadlineRevision: current.revision },
+        after: {
+          dueDate: dueAt,
+          deadlineRevision: revision.revision,
+          recipientCount: a.targets.length,
+          acceptedCount: pending.length,
+          submissionId: b.submissionId ?? null,
+        },
+      });
+      return {
+        deadline: { revision: revision.revision, dueAt: revision.dueAt },
+        recipientCount: a.targets.length,
+        acceptedSubmissions: pending.length,
+        message: `Đã dời hạn cho ${a.targets.length} học sinh.`,
+      };
+    });
   }
 
   @Roles("TEACHER")
   @Get("classes/:id/assignable-content")
   @ApiOperation({
-    summary: "Published lessons and labs this teacher may assign",
+    summary: "Published lessons, labs and class tests this teacher may assign",
   })
   async assignableContent(@Param("id") id: string, @Req() req: any) {
     const c = await ownedClass(this.db, id, req.user);
-    const [lessons, labs] = await Promise.all([
+    const [lessons, labs, tests] = await Promise.all([
       this.db.lesson.findMany({
         where: {
           status: "published",
@@ -119,11 +357,34 @@ export class AssignmentsController {
         },
         orderBy: { title: "asc" },
       }),
+      this.db.classResource.findMany({
+        where: { classId: id, kind: "TEST", status: "PUBLISHED" },
+        select: { id: true, title: true, version: true, lessonId: true, content: true, publishedAt: true },
+        orderBy: [{ title: "asc" }, { version: "desc" }],
+      }),
     ]);
-    return { classGrade: c.grade, lessons, labs };
+    return {
+      classGrade: c.grade,
+      lessons,
+      labs,
+      tests: tests.map(({ content, ...test }) => ({ ...test, questionCount: (content as any)?.questions?.length ?? 0 })),
+    };
   }
 
-  private async assignableContentOrThrow(tx: any, contentType: "lesson" | "lab", contentId: string, teacherId: string) {
+  private async assignableContentOrThrow(tx: any, classId: string, contentType: ContentType, contentId: string, teacherId: string) {
+    if (contentType === TEST_CONTENT_TYPE) {
+      // Only an explicit assignment makes a shared class test scored (I3 / 3.1).
+      const test = await tx.classResource.findFirst({
+        where: { id: contentId, classId, kind: "TEST", status: "PUBLISHED" },
+        select: { id: true, title: true, version: true },
+      });
+      if (!test)
+        throw new BadRequestException({
+          code: "CONTENT_NOT_PUBLISHED",
+          message: MSG.publishFirst,
+        });
+      return { id: test.id as string, title: test.title as string, version: String(test.version) };
+    }
     const content =
       contentType === "lesson"
         ? await tx.lesson.findFirst({
@@ -227,7 +488,7 @@ export class AssignmentsController {
   @Roles("TEACHER")
   @Post("classes/:id/assignments")
   @ApiOperation({
-    summary: "Assign a published lesson or lab to approved members or a subset (MSG-31 count)",
+    summary: "Assign a published lesson, lab or class test to approved members or a subset (MSG-31 count)",
   })
   async assign(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
     const b = assignmentInput.parse(body);
@@ -235,6 +496,7 @@ export class AssignmentsController {
     if (c.status === "ARCHIVED") throw classArchived();
     const now = new Date();
     const dueDate = this.assertDueDate(b.dueDate, now);
+    if (b.contentType === TEST_CONTENT_TYPE) requireTestDueDate(dueDate);
     const ctx = {
       actorId: req.user.sub,
       key: readIdempotencyKey(req),
@@ -243,7 +505,7 @@ export class AssignmentsController {
     };
     return idempotent(this.db, ctx, async (tx) => {
       await lock(tx, "class-assign:" + id);
-      const content = await this.assignableContentOrThrow(tx, b.contentType, b.contentId, req.user.sub);
+      const content = await this.assignableContentOrThrow(tx, id, b.contentType, b.contentId, req.user.sub);
       const targets = await this.resolveTargets(tx, id, b.studentIds);
       const hash = targetHash(targets);
       await this.assertNotDuplicate(tx, {
@@ -275,6 +537,10 @@ export class AssignmentsController {
         },
         include: { _count: { select: { targets: true } } },
       });
+      if (b.contentType === TEST_CONTENT_TYPE)
+        await tx.assignmentDeadlineRevision.create({
+          data: { assignmentId: assignment.id, revision: 1, dueAt: dueDate!, actorId: req.user.sub },
+        });
       await audit(tx, {
         actor: req.user,
         action: "assignment.create",
@@ -325,6 +591,7 @@ export class AssignmentsController {
           code: "ASSIGNMENT_ARCHIVED",
           message: "Bài đã lưu trữ; hãy giao bài mới",
         });
+      if (existing.contentType === TEST_CONTENT_TYPE) assertTestAssignmentUpdate(b, existing.dueDate);
       const dueDate =
         b.dueDate === undefined
           ? existing.dueDate

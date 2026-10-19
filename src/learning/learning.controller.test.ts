@@ -57,4 +57,42 @@ describe("LearningController assignment catalog summaries", () => {
     expect(db.lesson.findUnique).not.toHaveBeenCalled();
     expect(db.lab.findMany).not.toHaveBeenCalled();
   });
+
+  it("keeps I3 test status while returning I1 catalog metadata for assigned lessons", async () => {
+    const dueAt = new Date("2026-11-01T00:00:00Z");
+    const assignmentRows = [
+      {
+        id: "lesson-assignment", title: "Bài được giao", contentId: "lesson-1", contentType: "lesson",
+        dueDate: dueAt, createdAt: new Date("2026-10-19T00:00:00Z"), classroom: { id: "class-1", name: "8A" },
+      },
+      {
+        id: "test-assignment", title: "Bài kiểm tra", contentId: "test-1", contentType: "test",
+        classId: "class-1", dueDate: dueAt, createdAt: new Date("2026-10-19T00:00:00Z"), classroom: { id: "class-1", name: "8A" },
+      },
+    ];
+    const lesson = {
+      id: "lesson-1", status: "published", title: "Mạch điện", subject: { id: "physics", name: "Vật lý" },
+      grade: 8, chapter: "Điện học", topic: "Mạch điện", curriculumOrder: 12,
+      curriculumChapter: { officialOrder: 3 }, curriculumTopic: { officialOrder: 2 },
+    };
+    const db = {
+      assignment: { findMany: vi.fn().mockResolvedValue(assignmentRows) },
+      lesson: { findMany: vi.fn().mockResolvedValue([lesson]), findUnique: vi.fn() },
+      lab: { findMany: vi.fn().mockResolvedValue([]), findUnique: vi.fn() },
+      classResource: { findFirst: vi.fn().mockResolvedValue({ id: "test-1" }) },
+      assignmentDeadlineRevision: { findMany: vi.fn().mockResolvedValue([{ id: "deadline-1", assignmentId: "test-assignment", revision: 1, dueAt }]) },
+      assignmentSubmission: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const controller = new LearningController(db as any, {} as any);
+
+    const result = await controller.assignments({ user: { sub: "student-1" } });
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ subject: { id: "physics", name: "Vật lý" }, grade: 8, chapterOrder: 3 });
+    expect(result[1]).toMatchObject({ id: "test-assignment", testStatus: { status: "UPCOMING", revision: 1 } });
+    expect(result[1]).not.toHaveProperty("subject");
+    expect(db.lesson.findMany).toHaveBeenCalledTimes(1);
+    expect(db.assignmentDeadlineRevision.findMany).toHaveBeenCalledTimes(1);
+    expect(db.assignmentSubmission.findMany).toHaveBeenCalledTimes(1);
+  });
 });

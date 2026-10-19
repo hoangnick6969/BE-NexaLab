@@ -1,16 +1,16 @@
-# Release 1 execution tracking across backend and frontend. Increment A (A1-A5) is accepted history;
-# Increment B/C follows _bmad-output/planning-artifacts/increment-b-c-plan.md.
+# Release 1 execution tracking across backend and frontend. A (A1-A5) is accepted history;
+# B/C and I1-I3 have separate plans under _bmad-output/planning-artifacts/.
 # Prior chat summaries are not acceptance proof. Update this file at the end of every implementation session.
 project: NexaLab
 project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
-scope: Release 1 / Content Foundation CF-T1..T4 platform (completes the C2-T3/C2-T5 surfaces; CF-T5 corpus remains a staffed workstream)
+scope: Release 1 / Content Foundation CF-T1..T4 plus I1 open curriculum, I2 Class Space resources, and I3 assigned-test lifecycle; CF-T5 corpus remains a staffed workstream
 last_updated: '2026-10-19'
 tracking_timezone: Asia/Saigon
 repositories:
-  backend: 'BE-NexaLab (branch feat/content-foundation, merged with origin/main incl. C2 PR #15 and pH demo 3f521d7)'
-  frontend: 'FE-NexaLab (branch feat/content-foundation; C2 merged on origin/main)'
+  backend: 'BE-NexaLab (codex/i2-i3-lessons-class-space, fast-forwarded to origin/main 2026-10-18)'
+  frontend: 'FE-NexaLab (codex/i2-i3-lessons-class-space, fast-forwarded to origin/main 2026-10-18)'
 sources:
   plan: ../planning-artifacts/increment-b-c-plan.md
   open_curriculum_plan: ../planning-artifacts/increment-i1-epic-01-open-curriculum.md
@@ -92,15 +92,84 @@ development_status:
   c2-t4-adult-reset-admin-login: done
   c2-t5-asset-source-operations: done
   c2-t6-admin-console-audit-journey: done
+  epic-i2-class-space-resources: review
+  i2-2-1-create-publish-study-resources: review
+  i2-2-2-create-test-content: review
+  i2-2-3-share-membership-scoped-resources: review
+  i2-2-4-import-structured-resources: review
+  epic-i3-assigned-test-lifecycle: review
+  i3-3-1-assign-test-due-date-recipient-snapshot: review
+  i3-3-2-submit-assignment-late-reason: review
+  i3-3-3-reject-or-revise-deadline: review
+  i3-3-4-student-assignment-states: review
+  i3-3-5-teacher-assignment-late-queue: review
+  i3-3-6-parent-overdue-notice: review
+
+increment_i2_tracking:
+  plan: ../planning-artifacts/increment-i2-epic-02-class-space-resources.md
+  status: review
+  date: '2026-10-18'
+  scope: 'I2 / Epic 02: class-scoped decks, unscored study quizzes, unpublished-to-assignment tests, membership-scoped sharing, CSV import, and teacher/student Class Space UI.'
+  verification: 'Backend contract tests 154/154, Prisma validation, backend lint/build, and FE lint/build passed. A prior isolated API/DB Playwright run passed before this main sync; this turn could not safely repeat it because the configured API targets shared Supabase and fixture login returned 401.'
+  remaining:
+    - 'Repeat API/DB Playwright acceptance against an isolated local database with matching seeded fixtures.'
+    - 'Apply the migration to shared development only after the normal approval/review step.'
+    - 'Run product acceptance on the integrated branch before marking done.'
+
+increment_i3_tracking:
+  plan: ../planning-artifacts/increment-i3-epic-03-assigned-test-lifecycle.md
+  record: spec-i3-assigned-test-lifecycle.md
+  status: review
+  date: '2026-10-19'
+  branch: 'feat/i3-3.1-assign-test (BE and FE, uncommitted; carries Stories 3.1-3.6)'
+  scope: 'I3 / Epic 03: assigned scored tests with due date, late reason and teacher decision, deadline revision, role status surfaces.'
+  gates: 'All readiness gates decided 2026-10-19 (D-I3-01..03 confirmed by the product owner); see class-space-assignment-contract.md §2a.'
+  verification: 'Stories 3.1-3.6 (2026-10-19): BE lint/build, Vitest 164/164 (10 I3 contract tests), Prisma validate, both migrations equal prisma migrate diff; FE lint/build. Both I3 migrations applied to shared Supabase development by the user (prisma migrate deploy). npm run test:i3 against a local API on shared Supabase development: 65/65 checks passed with isolated prefixed fixtures, all removed afterwards (verified 0 leftover rows). Browser: FE tests/i3-assigned-test-live.spec.ts 2/2 passed (system Chrome via PLAYWRIGHT_CHANNEL=chrome, local Vite + API on shared development); test assignments and resources archived afterwards.'
+  remaining:
+    - 'npx tsx scripts/route-manifest.ts src fails with esbuild transform errors on unmodified main too; route list not regenerated.'
+
+e2e_repair_2026_10_19:
+  result: 'Full FE Playwright suite (local Vite + API on shared Supabase development, system Chrome): 40 passed, 6 skipped with reason, 0 failed. Before: 10 passed / 16 failed / 8 did not run, identical failures on FE main.'
+  app_regressions_fixed:
+    - 'Merge eac1c22 (I1 into the feature-based FE layout) dropped every src/pages.tsx change from 2c2975c and 625fec3: the open-curriculum and assigned-lesson student hub (lesson-catalog.ts was orphaned), AssignedLearning ?assignmentId= pathway scoping, the student Class Space nav link, and released-only student lab cards. Restored in features/lessons/Lessons.tsx, features/learning/AssignedLearning.tsx, app/App.tsx and features/labs/LabLibrary.tsx.'
+    - 'LessonDetail (features/ebook/ebook.tsx) returned "Không tìm thấy bài học" for an assigned lesson that is not in the released open curriculum, so reading/video/cards (and therefore the quiz) were unreachable; it now falls back to the assignment pathway.'
+    - 'LessonDetail video reconcile treated the pathway passed by VideoLearningStep as an open-curriculum step update and threw, so assigned-lesson video progress never refreshed the page.'
+    - 'Parent progress page crashed on selecting a child (read attempts the API does not return).'
+    - 'Class Space create form overflowed to 776 px on a 390 px phone (long lesson option).'
+  stale_tests_updated:
+    - 'reading-completion, study-cards, video-completion: reading/video/cards moved to the lesson page tabs in I1.'
+    - 'flagship: login lives at /login and the dashboard heading is "Chào An"; lab journeys skip with reason when the lab is not released to students (dev DB releases none, CF-T5); new check of the unreleased-lab notice.'
+    - 'b1-teacher-live: assignment pathway region is "Bài tập và thực hành"; the chemistry practical is the litmus pH lab since PR #14 (6362a18), reaction-challenge assertions removed; side class now always archived in afterAll.'
+    - 'b2-teacher-evidence-live: builds its own class, student, quiz evidence and expired due date via the API instead of an unseeded b2-browser@teacher.local account.'
+    - 'progress-history: metric renamed "Bài tập đã hoàn thành" (8398656); student-lessons-hub: exact text match; circuit-lab and quiz-learning: pathway mocks match the ?assignmentId= query.'
+    - 'progress-live and quiz-learning-live skip when launched without their backend launcher env; progress-live verified via BE scripts/a5-integration.mjs (RUN_A5_BROWSER_E2E=true, A5_LATENCY_ADVISORY=true): 55 assertions + browser 2/2.'
+    - 'BE scripts/a5-integration.mjs: the standalone-lab regression now follows the I1 rule (unreleased, unassigned lab refused; assigned lab attempt recorded on the lab assignment). BE scripts/integration.mjs: frontend root also resolves ../FE-NexaLab.'
+  open_product_questions:
+    - 'PR #14 replaced the chemistry reaction workspace with the litmus pH lab, so a teacher chemistry challenge with reactionId (challengeParams) renders the pH lab and cannot be satisfied. Decide whether the reaction library returns alongside the pH lab or chemistry challenges are retired.'
+    - 'Lesson-page step progress (PUT lessons/:id/steps/:stepId/progress) has no assignmentId, so duplicate assignments of one lesson share lesson-page progress; only the assignment pathway read is scoped.'
+    - 'No lab is released to students on shared development, so student lab journeys (flagship) stay skipped until the CF-T5 content release.'
+
+fe_structure_2026_10_19:
+  status: review
+  summary: 'FE files regrouped without behaviour change (moves and whole-declaration splits only, done with the TypeScript compiler API so imports stay exact).'
+  changes:
+    - 'learning/ renamed assignments/ (the /assignments routes); VideoLearningStep and StudyCardsStep moved to lessons/; LessonDetail moved from ebook/ to lessons/; src/lesson-catalog.ts moved to lessons/.'
+    - 'Split: classes.tsx (1264 lines) into Classes, TeacherClasses, ClassDetail, Roster, Assignments, TestAssignments, StudentClasses, PracticeAnalytics, class-ui, class-types; Admin.tsx (1522) into a tab shell, one file per tab and admin-ui; StudentProgress into AssignmentProgress, ActivityList, EvidenceSheet, progress-format; AssignedLearning into QuizLearningStep and AssignedTest; Dashboard into StudentDashboard; App into TopbarBreadcrumb and PasswordGate; Lessons editor fields into LessonEditorFields; httpsUrl into lib/urls.ts.'
+    - 'Lower-case component files renamed PascalCase (Classes, EbookReader, StudentProgress, Chemistry, Circuit, Eye); docs/architecture/project-structure.md updated with the layout and naming rule.'
+  verification: 'FE lint and build pass; no import cycles (script check); full Playwright suite 40 passed / 6 skipped with reason / 0 failed, identical to before the move.'
+  follow_ups:
+    - 'Lessons.tsx (~600 lines) still mixes the teacher library and the student hub in one component.'
+    - 'styles.css (~5800 lines) is still one global stylesheet.'
 
 execution:
-  current_story: cf-t4-practical-simulation-pack-registry
-  next_story: 'Owner PR for Content Foundation (BE and FE); shared Supabase CF migration with approval; CF-T5 needs named content capacity (Q-DATA-02/03/04)'
+  current_story: epic-i3-assigned-test-lifecycle
+  next_story: 'I3 review/merge. Full FE Playwright suite 40 passed / 6 skipped with reason / 0 failed on 2026-10-19 (see e2e_repair_2026_10_19).'
   selection_reason: >
     2026-10-16 (Content Foundation): CF-T1..T4 platform implemented on feat/content-foundation and verified against the real
     Cloudflare R2 development bucket (r2:check 9/9, test:cf 60/60, Playwright browser→R2 CORS upload 1/1, Vitest 144/144).
     This completes the R2/AssetVersion/SourceRegistry/ingestion/topic-pack surfaces C2 had deferred. CF-T5 corpus stays backlog: it is a staffed editorial delivery.
     Branch merged with origin/main (C2 PR #15, pH demo); the pH demo extended chemistry@1.0.0 in place, so the model registry should declare its new outputs.
+    2026-10-18 (I2): implementation synced to origin/main. Backend contract tests 154/154, schema validation, BE lint/build and FE lint/build pass; API/DB rerun is pending an isolated database because the configured .env points to shared Supabase.
     2026-10-15 (C2): all six C2 tickets implemented on the approved current-foundation scope and merged to origin/main (BE 8de28c0; FE C2 merged).
     BE lint/build and Vitest 123/123 pass; FE lint/build pass; shared-development test:c2 80 passed + 1 justified SKIP and c2:preflight RESULT ok after cleanup.
     Latest Supabase dev p95 read 1261 ms / mutation 2902 ms misses QR-09 (500/1000 ms); production and pilot latency are not claimed.
@@ -111,6 +180,7 @@ execution:
   next_epic_unlocked: true
   implementation_readiness: complete
   blockers:
+    - 'I2 API/DB Playwright acceptance must be repeated on an isolated local database; current .env targets shared Supabase and the configured fixture login returned 401, so no shared-database mutation was attempted'
     - 'Content Foundation migrations (cf_asset_versions, cf_sources_packs_releases, cf_simulation_packs) are not yet applied to shared Supabase; approval required'
     - 'Production media needs approved budgets (ASSET_BUDGETS_APPROVED) and a malware scanner; pilot/production R2 buckets are not created'
     - 'CF-T5 corpus needs the official Grade 8-9 outcome inventory and named editorial/subject/rights capacity (Q-DATA-02/03/04)'
@@ -119,6 +189,27 @@ execution:
     - 'Production requires JOIN_CODE_HMAC_KEYS and JOIN_CODE_HMAC_KEY_VERSION'
     - 'Released catalog and coverage claims wait for Content Foundation CF-T5 (released outcome map, reviewed corpus); Q-C2-04 parameter ranges are pending, so parameterised challenges cannot enter the shared library yet'
   decisions:
+    - id: D-I3-01
+      status: accepted
+      date: '2026-10-19'
+      proposed: '2026-10-18'
+      decision: 'Class-wide deadline revision resolves every pending late submission of the assignment as ACCEPTED_BY_EXTENSION (scored under the new revision); recipients may still resubmit.'
+      rationale: 'PRD 18 frames approval as the revision; forcing an identical resubmission adds no evidence.'
+      code_state: implemented on feat/i3-3.1-assign-test; test:i3 65/65 on shared development
+    - id: D-I3-02
+      status: accepted
+      date: '2026-10-19'
+      proposed: '2026-10-18'
+      decision: 'No time-based auto-close in MVP; archive closes submission; late decisions remain allowed after archive; archive never records zero.'
+      rationale: 'no source document defines a close window, and a pending item must never become undecidable.'
+      code_state: implemented on feat/i3-3.1-assign-test; test:i3 65/65 on shared development
+    - id: D-I3-03
+      status: accepted
+      date: '2026-10-19'
+      proposed: '2026-10-18'
+      decision: 'Due-soon reminder in-app only, derived at read time 24h before dueAt; parent overdue notice in-app only, derived at read time, one per (assignment, student, deadline revision), removed by an extension.'
+      rationale: 'the baseline has no notification model or scheduler; derived state cannot drift from the deadline history.'
+      code_state: implemented on feat/i3-3.1-assign-test; test:i3 65/65 on shared development
     - id: D-B1-01
       status: accepted
       date: '2026-10-15'
@@ -572,6 +663,56 @@ story_notes:
     changed_files: []
     remaining: []
 
+  i3-3-1-assign-test-due-date-recipient-snapshot:
+    depends_on: i2-2-2-create-test-content
+    decisions:
+      - 'Test assignment uses contentType "test", contentId = published TEST ClassResource of the same class, contentVersion = resource version; dueAt required (DUE_DATE_REQUIRED).'
+      - 'Creation writes AssignmentDeadlineRevision 1 in the same transaction; Assignment.dueDate mirrors the latest revision.'
+      - 'PUT on a test assignment accepts title only; target or due-date changes return 409 TEST_ASSIGNMENT_IMMUTABLE (deadline moves only via Story 3.3).'
+      - 'Student detail strips correctOption and explanation before submission.'
+    verification: 'BE lint, Vitest 157/157, Prisma validate, migration SQL equals prisma migrate diff; FE lint/build. API/DB and browser acceptance not run.'
+    changed_files:
+      - 'BE: prisma/schema.prisma'
+      - 'BE: prisma/migrations/20261018150000_i3_assignment_deadline_revision/migration.sql'
+      - 'BE: src/classes/assignment-test-contract.ts, src/classes/assignment-test-contract.test.ts'
+      - 'BE: src/classes/assignments.controller.ts'
+      - 'BE: src/learning/learning.controller.ts'
+      - 'FE: src/features/classes/classes.tsx'
+      - 'FE: src/features/learning/StudentAssignments.tsx, src/features/learning/AssignedLearning.tsx'
+    remaining:
+      - 'Apply migration to shared development (approval) and run API/DB acceptance: owner/non-owner, unpublished/draft/other-class test, missing due date, non-approved target (no partial targets), target vs non-target student read, idempotent retry.'
+      - 'Teacher progress/support boards treat a test assignment like a lab (no attempts yet); proper test status belongs to Story 3.5.'
+  i3-3-2-submit-assignment-late-reason:
+    depends_on: i3-3-1-assign-test-due-date-recipient-snapshot
+    decisions:
+      - 'POST /assignments/:id/submissions {answers, lateReason?} with Idempotency-Key; server time decides timing (submittedAt <= dueAt is on time); late without reason -> 400 LATE_REASON_REQUIRED; incomplete/foreign answers -> 400 TEST_ANSWERS_INVALID.'
+      - 'Every submission is an immutable AssignmentSubmission linked to its deadline revision and resource version; score is always computed but hidden while LATE_REVIEW_PENDING.'
+      - 'Submission, rejection and deadline revision share the advisory lock assignment-deadline:<id>, so a late submission cannot slip past an extension.'
+    remaining: ['Covered by test:i3 (late with/without reason, non-target/outsider, replay and key reuse); exact dueAt equality is unit-level only.']
+  i3-3-3-reject-or-revise-deadline:
+    depends_on: i3-3-2-submit-assignment-late-reason
+    decisions:
+      - 'POST classes/:id/assignments/:aid/late-submissions/:sid/reject {note?}: only the student current pending late submission (else 409 LATE_SUBMISSION_NOT_PENDING / LATE_SUBMISSION_SUPERSEDED); allowed after archive.'
+      - 'POST classes/:id/assignments/:aid/deadline-revisions {dueAt, expectedRevision, note?, submissionId?}: ACTIVE only, stale revision -> 409 DEADLINE_REVISION_STALE, dueAt must be later than now and current -> 400 DUE_DATE_NOT_LATER; writes revision n+1, mirrors Assignment.dueDate, and records REVISE_DEADLINE_FOR_CLASS for every pending late submission (D-I3-01).'
+      - 'Expiry never creates a score; only REJECT_ZERO yields 0.'
+    remaining: ['Covered by test:i3 (owner vs non-owner, stale revision, resubmission after revision, immutable history); a second revision in one run is not exercised.']
+  i3-3-4-student-assignment-states:
+    depends_on: i3-3-3-reject-or-revise-deadline
+    decisions:
+      - 'GET /assignments adds testStatus {status, dueAt, revision, extended, dueSoon, score}; GET /assignments/:id adds state with current submission and newest-first history.'
+      - 'Statuses UPCOMING, DUE_SOON (24h window), OVERDUE_UNSUBMITTED, SUBMITTED, LATE_REVIEW_PENDING, REJECTED come from studentTestState, shared by all roles.'
+    remaining: ['Browser acceptance of due-soon banner, late reason form, resubmission after extension.']
+  i3-3-5-teacher-assignment-late-queue:
+    depends_on: i3-3-3-reject-or-revise-deadline
+    decisions:
+      - 'GET classes/:id/assignments adds testSummary counts; GET classes/:id/assignments/:aid/test-status lists every original recipient with state, reasons and deadline history; GET classes/:id/late-queue lists current pending late submissions with permittedDecisions.'
+      - 'Non-owner gets the existing CLASS_ACCESS_DENIED 403 before any student evidence is read.'
+    remaining: ['Teacher progress/support boards still treat test assignments like labs; the new test-status view replaces them for tests.']
+  i3-3-6-parent-overdue-notice:
+    depends_on: i3-3-1-assign-test-due-date-recipient-snapshot
+    decisions:
+      - 'GET children/:studentId/assignment-notices derives OVERDUE notices (id assignment:student:revision) for approved, unrevoked links; GET children/:studentId/assignments/:aid returns read-only status and deadline. No answers, scores or actions.'
+    remaining: ['Covered by test:i3 (pending parent and other child denied, extension clears the notice); revoked link not exercised.']
 tracking_update:
   verdict: Epic A3 accepted for source, automated, and Supabase development runtime evidence; production remains unverified and development latency targets were missed.
   date: '2026-10-13'
