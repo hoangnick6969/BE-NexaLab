@@ -8,7 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 const db = new PrismaClient();
-const origin = process.env.TEST_API ?? "http://127.0.0.1:4000/api";
+const origin = process.env.TEST_API ?? "http://127.0.0.1:4100/api";
 const prefix = "it-" + Date.now();
 const created = [];
 const uploaded = [];

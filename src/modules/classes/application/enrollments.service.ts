@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Body, ConflictException, Controller, Delete, Get, Inject, NotFoundException, Param, Post, Put, Query, Req, } from "@nestjs/common";
+import { Injectable, BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Put, Query, Req, } from "@nestjs/common";
 import * as argon from "argon2";
 import { z } from "zod";
 import { publicUser } from "../../auth/interface/auth";
@@ -311,10 +311,27 @@ export class EnrollmentsService {
       where: { classId_studentId: { classId: id, studentId } },
       include: { student: true },
     });
-    if (!enrollment || enrollment.status === "removed" || enrollment.student.role !== "STUDENT")
+    if (!enrollment || enrollment.status !== "approved" || enrollment.student.role !== "STUDENT")
       throw new NotFoundException({
         code: "ENROLLMENT_NOT_FOUND",
         message: "Không tìm thấy học sinh trong lớp",
+      });
+    // Only the teacher who provisioned the account may reset it. Enrolling an
+    // existing account by username must not hand its credentials to the teacher.
+    const provisioned = await this.db.auditLog.findFirst({
+      where: {
+        action: "enrollment.provision",
+        actorId: req.user.sub,
+        targetType: "Enrollment",
+        targetId: { endsWith: ":" + studentId },
+        outcome: "success",
+      },
+      select: { id: true },
+    });
+    if (!provisioned)
+      throw new ForbiddenException({
+        code: "PASSWORD_RESET_NOT_ALLOWED",
+        message: "Chỉ giáo viên đã cấp tài khoản mới được đặt lại mật khẩu. Hãy liên hệ quản trị viên.",
       });
     const password = temporaryPassword();
     const expiresAt = new Date(Date.now() + 86400000);

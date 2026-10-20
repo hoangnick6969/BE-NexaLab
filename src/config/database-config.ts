@@ -6,7 +6,8 @@ export function databaseUrl(value: string | undefined): string {
     throw new Error("Database URL must use PostgreSQL");
   if (url.port === "6543" || url.searchParams.get("pgbouncer") === "true")
     throw new Error("A1 requires a direct or Session-pooler connection, not transaction pooling");
-  if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) &&
+  // "postgres" is the docker-compose service on the private compose network.
+  if (!["localhost", "127.0.0.1", "[::1]", "postgres"].includes(url.hostname) &&
       !["require", "verify-ca", "verify-full"].includes(url.searchParams.get("sslmode") ?? ""))
     throw new Error("Remote database requires SSL");
   return url.toString();

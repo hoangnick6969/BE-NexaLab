@@ -4,7 +4,7 @@
 // access boundary (outsider teacher, pending, removed, archived) is checked
 // against the running API and its database. All fixtures are generated with
 // a unique prefix and removed afterwards.
-//   TEST_API=http://127.0.0.1:4000/api DATABASE_URL=... npm run test:b1
+//   TEST_API=http://127.0.0.1:4100/api DATABASE_URL=... npm run test:b1
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
@@ -30,7 +30,7 @@ async function removeUploadedAssets(db, where) {
 }
 
 const db = new PrismaClient();
-const origin = process.env.TEST_API ?? "http://127.0.0.1:4000/api";
+const origin = process.env.TEST_API ?? "http://127.0.0.1:4100/api";
 const prefix = "b1-" + Date.now().toString(36);
 const createdUsers = [];
 const createdStudents = [];

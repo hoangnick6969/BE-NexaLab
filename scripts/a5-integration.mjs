@@ -13,7 +13,7 @@ import * as argon from "argon2";
 import jwt from "jsonwebtoken";
 
 const db = new PrismaClient();
-const origin = process.env.TEST_API ?? "http://127.0.0.1:4000/api";
+const origin = process.env.TEST_API ?? "http://127.0.0.1:4100/api";
 const prefix = "a5-" + Date.now();
 let lessonId;
 let passed = 0;

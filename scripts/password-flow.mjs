@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { readdir,readFile,unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
-const db=new PrismaClient();const base=process.env.TEST_API??'http://127.0.0.1:4000/api';const email='reset-'+Date.now()+'@example.test';let id;const before=new Set(await readdir('.local/mailbox'));let files=[];
+const db=new PrismaClient();const base=process.env.TEST_API??'http://127.0.0.1:4100/api';const email='reset-'+Date.now()+'@example.test';let id;const before=new Set(await readdir('.local/mailbox'));let files=[];
 const call=async(path,body,token)=>{const r=await fetch(base+path,{method:'POST',headers:{'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})},body:JSON.stringify(body)});return {status:r.status,data:await r.json()};};
 try{
  const admin=await call('/auth/admin/login',{email:'admin@nexalab.local',password:process.env.SEED_PASSWORD});assert.equal(admin.status,201);

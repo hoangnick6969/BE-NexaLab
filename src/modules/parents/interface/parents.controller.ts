@@ -34,6 +34,9 @@ export class ParentsController {
     await this.db.user.update({ where: { id: req.user.sub }, data: { emailVerifiedAt: new Date() } });
     return { verified: true };
   }
+  @Roles("PARENT") @Get("auth/consents/parent-child-progress") parentConsentTerms() {
+    return { purpose: "PARENT_CHILD_PROGRESS", version: PARENT_CONSENT_VERSION, contentHash: PARENT_CONSENT_HASH };
+  }
   @Roles("PARENT") @Post("auth/consents") async acceptParentConsent(@Req() req: any, @Body() body: unknown) {
     const b = z.object({ purpose: z.literal("PARENT_CHILD_PROGRESS"), version: z.string().min(1), contentHash: z.string().min(1) }).parse(body);
     if (b.version !== PARENT_CONSENT_VERSION || (b.contentHash !== PARENT_CONSENT_HASH && !(process.env.NODE_ENV !== "production" && b.contentHash === "dev"))) throw new BadRequestException("Phiên bản đồng ý không hợp lệ");

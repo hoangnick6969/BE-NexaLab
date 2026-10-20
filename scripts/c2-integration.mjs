@@ -3,7 +3,7 @@
 // removed by this run; shared seed rows are only read, and the one shared
 // mutation (activating a circuit configuration version) is reverted in cleanup.
 //   npm run mailbox                       (SMTP on 127.0.0.1:1025, needed for reset links)
-//   TEST_API=http://127.0.0.1:4000/api npm run test:c2
+//   TEST_API=http://127.0.0.1:4100/api npm run test:c2
 // The API must use the same SMTP host and DATABASE_URL as this script.
 import * as argon from "argon2";
 import { readdir, readFile, unlink } from "node:fs/promises";

@@ -6,6 +6,8 @@ import { Db } from "../../../db/db";
 import { username } from "../../../common/validation";
 import { misconceptions } from "../../labs/application/tutor";
 import { deriveLesson } from "../../progress/application/progress";
+import { TEST_CONTENT_TYPE } from "../../classes/application/assignment-test-contract";
+import { testStates } from "../../classes/application/assignment-test-state";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -44,6 +46,21 @@ export class ClassProgressController {
       });
     }
     const studentIds = assignment.targets.map((target) => target.studentId);
+    if (assignment.contentType === TEST_CONTENT_TYPE) {
+      // Test submissions are not Attempt rows; report the server-derived test state.
+      const { states, key } = await testStates(this.db, [assignment], studentIds);
+      return assignment.targets.map(({ student }) => {
+        const state = states.get(key(assignment.id, student.id));
+        return {
+          student,
+          attempts: state?.history.length ?? 0,
+          latestVerdict: null,
+          passed: state?.status === "SUBMITTED",
+          testStatus: state?.status ?? null,
+          score: state?.current?.score ?? null,
+        };
+      });
+    }
     const attempts = await this.db.attempt.findMany({ where: { assignmentId, studentId: { in: studentIds } }, select: { id: true, studentId: true, verdict: true, createdAt: true } });
     return assignment.targets.map(({ student }) => {
       const rows = attempts.filter((attempt) => attempt.studentId === student.id);

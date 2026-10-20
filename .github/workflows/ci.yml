@@ -35,5 +35,5 @@ jobs:
           SEED_TARGET: localhost/nexalab
       - run: |
           npm start > /tmp/nexalab-api.log 2>&1 &
-          for i in $(seq 1 30); do curl --fail http://127.0.0.1:4000/api/health && break || sleep 1; done
+          for i in $(seq 1 30); do curl --fail http://127.0.0.1:4100/api/health && break || sleep 1; done
           npm run test:integration

@@ -1,7 +1,7 @@
 // Content Foundation on real dependencies (API + PostgreSQL + object storage).
 // CF-T2: presigned single and multipart uploads straight to private storage,
 // server-side validation, immutable versions, signed reads and cleanup.
-//   TEST_API=http://127.0.0.1:4000/api npm run test:cf
+//   TEST_API=http://127.0.0.1:4100/api npm run test:cf
 import * as argon from "argon2";
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";

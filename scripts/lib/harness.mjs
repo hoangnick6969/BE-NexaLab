@@ -3,7 +3,7 @@
 // mock or a committed credential. Each run prints the dependencies it used
 // and the evidence tier, and a failure before the journey starts is reported
 // as SETUP FAILURE, never as a product result.
-//   TEST_API      API base (default http://127.0.0.1:4000/api)
+//   TEST_API      API base (default http://127.0.0.1:4100/api)
 //   TEST_WEB      browser base, when the journey drives a browser
 //   DATABASE_URL  database the API uses (read by Prisma)
 //   EVIDENCE_TIER optional explicit tier: pilot | production (needs APP_ENV to match)
@@ -34,7 +34,7 @@ export function databaseHost(env = process.env) {
 }
 
 export function createHarness(name, { browser = false } = {}) {
-  const origin = process.env.TEST_API ?? "http://127.0.0.1:4000/api";
+  const origin = process.env.TEST_API ?? "http://127.0.0.1:4100/api";
   const db = new PrismaClient();
   let passed = 0;
   let setupComplete = false;

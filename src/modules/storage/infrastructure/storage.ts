@@ -290,7 +290,7 @@ export function storage(): ObjectStorage {
     );
   } else {
     const root = resolve(process.env.UPLOAD_DIR ?? "uploads", "objects");
-    const base = (process.env.API_PUBLIC_URL ?? `http://127.0.0.1:${process.env.PORT ?? 4000}/api`).replace(/\/$/, "");
+    const base = (process.env.API_PUBLIC_URL ?? `http://127.0.0.1:${process.env.PORT ?? 4100}/api`).replace(/\/$/, "");
     cached = new LocalStorage(root, base);
   }
   return cached;
