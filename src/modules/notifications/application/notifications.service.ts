@@ -1,5 +1,6 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { NotificationInput } from "./notify";
+import { dueSoonNotice, overdueNotice } from "./time-based-notices";
 import { NOTIFICATION_REPOSITORY, type NotificationRepository } from "./notification.repository";
 
 /** Time-based notices change on a scale of hours, so one sync per user per interval is enough. */
@@ -67,10 +68,8 @@ export class NotificationsService {
     const items: NotificationInput[] = [];
     for (const child of children) {
       for (const test of await this.repo.assignedTestStates(child.id)) {
-        if (viewer.role === "STUDENT" && test.status === "DUE_SOON")
-          items.push({ recipientId: viewer.sub, type: "ASSIGNMENT_DUE_SOON", title: `Sắp đến hạn: ${test.title}`, body: `Lớp ${test.className}`, link: `/assignments/${test.assignmentId}`, dedupKey: `due-soon:${test.assignmentId}:${test.revision}` });
-        if (viewer.role === "PARENT" && test.status === "OVERDUE_UNSUBMITTED")
-          items.push({ recipientId: viewer.sub, type: "ASSIGNMENT_OVERDUE", title: `${child.fullName} chưa nộp "${test.title}" đã quá hạn`, body: `Lớp ${test.className}`, link: "/progress", dedupKey: `overdue:${test.assignmentId}:${child.id}:${test.revision}` });
+        if (viewer.role === "STUDENT" && test.status === "DUE_SOON") items.push(dueSoonNotice(viewer.sub, test));
+        if (viewer.role === "PARENT" && test.status === "OVERDUE_UNSUBMITTED") items.push(overdueNotice(viewer.sub, child, test));
       }
     }
     await this.repo.insert(items);

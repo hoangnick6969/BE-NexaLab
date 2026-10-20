@@ -25,7 +25,7 @@ import { temporaryPassword } from "../../auth/application/temporary-password";
 import { audit, changedFields } from "../../../common/audit";
 import { Db } from "../../../db/db";
 import { smtpDeliver } from "../../mail/infrastructure/mail";
-import { storage } from "../../storage/infrastructure/storage";
+import { readTtl, storage } from "../../storage/infrastructure/storage";
 import {
   DELETION_BLOCKER_LABELS,
   activeOwnership,
@@ -111,7 +111,8 @@ export class AdminUsersController {
     const user = await this.db.user.findUnique({ where: { id } });
     if (!user) throw notFound("tài khoản");
     const [ownership, blockers] = await Promise.all([activeOwnership(this.db, id), deletionBlockers(this.db, id)]);
-    return { user: adminUser(user), ownership, deletion: this.eligibility(blockers) };
+    const avatarUrl = user.avatarKey ? await storage().presignGet(user.avatarKey, readTtl()) : null;
+    return { user: { ...adminUser(user), avatarUrl }, ownership, deletion: this.eligibility(blockers) };
   }
 
   @Get("users/:id/deletion-eligibility")

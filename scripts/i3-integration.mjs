@@ -177,7 +177,9 @@ try {
   check("linked parent sees no overdue notice for a child with a pending submission", s3Notices.status === 200 && s3Notices.data.length === 0, s3Notices.data);
   await db.parentLink.create({ data: { parentId: parent.id, studentId: students.s3.id, status: "approved" } });
   const notices = await req(`/children/${students.s3.id}/assignment-notices`, "GET", undefined, parent.token);
-  check("linked parent sees one overdue notice for the unsubmitted child", notices.data?.length === 1 && notices.data[0].assignmentId === aid && notices.data[0].id.endsWith(":1"), notices.data);
+  check("linked parent sees one overdue notice for the unsubmitted child", notices.data?.length === 1 && notices.data[0].assignmentId === aid && notices.data[0].revision === 1, notices.data);
+  const bell = await req("/me/notifications", "GET", undefined, parent.token);
+  check("the panel notice is the stored notification the bell shows (acc-3)", bell.data?.items?.some((n) => n.id === notices.data?.[0]?.id && n.type === "ASSIGNMENT_OVERDUE"), bell.data);
   check("parent notice holds no answers or scores", !JSON.stringify(notices.data).match(/score|answers|questions|lateReason/));
   const parentDetail = await req(`/children/${students.s3.id}/assignments/${aid}`, "GET", undefined, parent.token);
   check("parent detail is status and deadline only", parentDetail.status === 200 && parentDetail.data.status === "OVERDUE_UNSUBMITTED" && !("state" in parentDetail.data), parentDetail.data);

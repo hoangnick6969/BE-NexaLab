@@ -27,6 +27,7 @@ import { idempotent, readIdempotencyKey, replay, TX_LIMITS } from "../../../comm
 import { JOIN_LIMITS, clear, hit, limiterKey, lockedAny, sweep } from "../../../common/limiter";
 import { Db } from "../../../db/db";
 import { notify } from "../../notifications/application/notify";
+import { readTtl, storage } from "../../storage/infrastructure/storage";
 
 const username = z
   .string()
@@ -85,12 +86,20 @@ export class EnrollmentsController {
             username: true,
             grade: true,
             mustChangePassword: true,
+            avatarKey: true,
           },
         },
       },
       orderBy: [{ status: "asc" }, { joinedAt: "asc" }],
     });
-    return rows.map(enrollmentView);
+    // The owning teacher sees members' avatars (short presigned URLs) so an inappropriate one can be removed (D-ACC-03).
+    return Promise.all(
+      rows.map(async (row) => {
+        const { avatarKey, ...student } = row.student;
+        const view = enrollmentView({ ...row, student });
+        return { ...view, student: { ...view.student, avatarUrl: avatarKey ? await storage().presignGet(avatarKey, readTtl()) : null } };
+      }),
+    );
   }
 
   @Roles("TEACHER")

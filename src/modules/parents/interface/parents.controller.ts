@@ -9,6 +9,8 @@ import { StudentAccessService } from "../../progress/application/student-access.
 import { applicableAssignmentWhere, assignmentQueueOrder } from "../../classes/application/class-access";
 import { TEST_CONTENT_TYPE } from "../../classes/application/assignment-test-contract";
 import { testStates } from "../../classes/application/assignment-test-state";
+import { notify } from "../../notifications/application/notify";
+import { overdueNotice } from "../../notifications/application/time-based-notices";
 import { PARENT_CONSENT_HASH, PARENT_CONSENT_VERSION, parentCode, parentCodeHash } from "../application/parent-codes";
 
 @ApiTags("NexaLab")
@@ -110,10 +112,23 @@ export class ParentsController {
   }
   @Roles("PARENT") @Get("children/:studentId/assignment-notices") async overdueNotices(@Req() req: any, @Param("studentId") studentId: string) {
     await this.access.readableStudent(studentId, req);
-    // Derived, not stored: one notice per (assignment, child, deadline revision); an extension clears it (D-I3-03).
-    return (await this.childTestStates(studentId))
-      .filter((item) => item.status === "OVERDUE_UNSUBMITTED")
-      .map((item) => ({ id: `${item.assignmentId}:${studentId}:${item.revision}`, kind: "OVERDUE", ...item }));
+    // The panel shows the parent's stored overdue notifications (D-ACC-02 replaces the derived I3 notice), limited to
+    // the ones still current: an extension changes the revision, so the old notice drops out of the panel but stays
+    // in the notification history. Reading it here or from the bell marks the same row.
+    const current = (await this.childTestStates(studentId)).filter((item) => item.status === "OVERDUE_UNSUBMITTED");
+    if (!current.length) return [];
+    const child = await this.db.user.findUnique({ where: { id: studentId }, select: { id: true, fullName: true } });
+    const notices = current.map((item) => overdueNotice(req.user.sub, child!, item));
+    await notify(this.db, notices);
+    const stored = await this.db.notification.findMany({
+      where: { recipientId: req.user.sub, dedupKey: { in: notices.map((n) => n.dedupKey!) } },
+      select: { id: true, dedupKey: true, readAt: true, createdAt: true },
+    });
+    const byKey = new Map(stored.map((row) => [row.dedupKey, row]));
+    return current.map((item, i) => {
+      const row = byKey.get(notices[i].dedupKey!);
+      return { id: row?.id ?? notices[i].dedupKey, kind: "OVERDUE", readAt: row?.readAt ?? null, notifiedAt: row?.createdAt ?? null, ...item };
+    });
   }
   @Roles("PARENT") @Get("children/:studentId/assignments/:assignmentId") async childAssignment(@Req() req: any, @Param("studentId") studentId: string, @Param("assignmentId") assignmentId: string) {
     await this.access.readableStudent(studentId, req);
