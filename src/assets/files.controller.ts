@@ -41,7 +41,7 @@ export class FilesController {
   @ApiConsumes("multipart/form-data")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: FORM_LIMIT, files: 1, fields: 0 } }))
   async upload(@UploadedFile() file: any, @Req() req: any) {
-    if (!file) throw new BadRequestException("Chọn tệp để tải lên");
+    if (!file) throw new BadRequestException({ code: "FILE_REQUIRED", message: "Chọn tệp để tải lên" });
     const bytes = file.buffer as Buffer;
     const fileName = String(file.originalname ?? "").slice(0, 200);
     const type = mediaTypes().find((t) => t.extensions.includes(extname(fileName).toLowerCase()) && t.signature(bytes));

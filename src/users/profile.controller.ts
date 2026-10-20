@@ -71,7 +71,7 @@ export class ProfileController {
   }
 
   @Patch("me/preferences")
-  @ApiOperation({ summary: "Merge UI preferences (theme); every role, students included" })
+  @ApiOperation({ summary: "Merge UI preferences (theme, locale); every role, students included" })
   async updatePreferences(@Req() req: any, @Body() body: unknown) {
     const b = preferencesUpdateSchema.parse(body);
     const current = await this.db.user.findUnique({ where: { id: req.user.sub }, select: { preferences: true } });

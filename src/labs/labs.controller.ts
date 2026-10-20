@@ -54,7 +54,7 @@ export class LabsController {
       }
     }
     if (!hasApplicableAssignment) return;
-    throw new NotFoundException("Hoàn thành và vượt qua bài kiểm tra được giao để mở phòng thực hành");
+    throw new NotFoundException({ code: "LAB_LOCKED", message: "Hoàn thành và vượt qua bài kiểm tra được giao để mở phòng thực hành" });
   }
   @Roles("STUDENT", "TEACHER") @Post("simulate/:labId") async preview(
     @Param("labId") labId: string,

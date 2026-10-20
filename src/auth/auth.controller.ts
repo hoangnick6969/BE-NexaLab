@@ -44,7 +44,7 @@ export class AuthController {
       user.status !== "active" ||
       !(await argon.verify(user.passwordHash, b.password))
     )
-      throw new UnauthorizedException("Email hoặc mật khẩu không đúng");
+      throw new UnauthorizedException({ code: "INVALID_CREDENTIALS", message: "Email hoặc mật khẩu không đúng" });
     return this.session(user, res, readRemember(body));
   }
   @Public() @Post("auth/admin/login") async adminLogin(
@@ -61,7 +61,7 @@ export class AuthController {
       user.status !== "active" ||
       !(await argon.verify(user.passwordHash, b.password))
     )
-      throw new UnauthorizedException("Email hoặc mật khẩu quản trị không đúng");
+      throw new UnauthorizedException({ code: "INVALID_CREDENTIALS", message: "Email hoặc mật khẩu quản trị không đúng" });
     return this.session(user, res, readRemember(body));
   }
   @Public() @Post("auth/student/login") async studentLogin(
@@ -78,15 +78,13 @@ export class AuthController {
       user.status !== "active" ||
       !(await argon.verify(user.passwordHash, b.password))
     )
-      throw new UnauthorizedException("Tên đăng nhập hoặc mật khẩu không đúng");
+      throw new UnauthorizedException({ code: "INVALID_CREDENTIALS", message: "Tên đăng nhập hoặc mật khẩu không đúng" });
     if (
       user.mustChangePassword &&
       user.temporaryPasswordExpiresAt &&
       user.temporaryPasswordExpiresAt < new Date()
     )
-      throw new UnauthorizedException(
-        "Mật khẩu tạm đã hết hạn. Hãy nhờ giáo viên cấp lại.",
-      );
+      throw new UnauthorizedException({ code: "TEMPORARY_PASSWORD_EXPIRED", message: "Mật khẩu tạm đã hết hạn. Hãy nhờ giáo viên cấp lại." });
     return this.session(user, res, readRemember(body));
   }
   @Public() @Post("auth/register") async register(
@@ -161,7 +159,7 @@ export class AuthController {
       where: { id: req.user.sub },
     });
     if (!(await argon.verify(u.passwordHash, b.currentPassword)))
-      throw new BadRequestException("Mật khẩu cũ không đúng");
+      throw new BadRequestException({ code: "CURRENT_PASSWORD_INCORRECT", message: "Mật khẩu cũ không đúng" });
     // The new session keeps the remember-me choice of the session that changed the password.
     const current = await this.db.session.findUnique({ where: { id: req.user.sid }, select: { remember: true } });
     const remember = current?.remember ?? false;
