@@ -5,14 +5,17 @@ project: NexaLab
 project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
-scope: Release 1 / Content Foundation CF-T1..T4 plus I1 open curriculum, I2 Class Space resources, and I3 assigned-test lifecycle; CF-T5 corpus remains a staffed workstream
-last_updated: '2026-10-20'
+scope: Release 1 / Content Foundation CF-T1..T4 plus I1 open curriculum, I2 Class Space resources, I3 assigned-test lifecycle, account/notifications (acc-1..acc-6) and the BE module-layer refactor; CF-T5 corpus remains a staffed workstream
+last_updated: '2026-10-21'
 tracking_timezone: Asia/Saigon
 repositories:
-  backend: 'BE-NexaLab (codex/i1-open-curriculum; includes latest origin/main integration through HEAD 87bf6fe plus uncommitted assignment-catalog fix)'
-  frontend: 'FE-NexaLab (codex/i1-open-curriculum; includes latest origin/main integration through HEAD d6031eb plus uncommitted assignment-catalog fix)'
+  backend: 'BE-NexaLab: origin/main ebfaba7 (PR #28 refactor/be-module-layers incl. acc-1..acc-6; earlier PR #27, I1 #23/#26, I2 #24, I3 #25, project-structure #20). Still unmerged: feat/content-foundation 1 commit ahead (824dc74 chemistry pH-mode registry outputs; the CF core 8a1d44b and its three migrations are already on main).'
+  frontend: 'FE-NexaLab: origin/main c7fe891 (PR #23 feat/account-notifications-r2 incl. acc-1..acc-5; earlier PR #22, I1 #18/#21, I2 #19, I3 #20). Still unmerged: feat/content-foundation 1 commit ahead (1040821 versioned asset uploads and content foundation admin tabs, incl. cf-storage-live spec).'
+  audited_against_git: '2026-10-21'
 sources:
   plan: ../planning-artifacts/increment-b-c-plan.md
+  next_development_plan: '../planning-artifacts/next-development-plan.md (draft, uncommitted; 93 tasks T0.xx..T6.xx/R.xx split in section 11 but not yet approved or assigned, none tracked here)'
+  account_notifications_plan: ../planning-artifacts/increment-account-notifications-r2.md
   open_curriculum_plan: ../planning-artifacts/increment-i1-epic-01-open-curriculum.md
   class_space_plan: ../planning-artifacts/increment-i2-epic-02-class-space-resources.md
   assigned_test_plan: ../planning-artifacts/increment-i3-epic-03-assigned-test-lifecycle.md
@@ -64,7 +67,11 @@ development_status:
   cf-t3-source-registry-ingestion-importer: review
   cf-t4-practical-simulation-pack-registry: review
   cf-t5-grade-8-9-open-baseline-corpus: backlog
-  project-structure-refactor: review
+  project-structure-refactor: done
+  fe-structure-2026-10-19: done
+  epic-i1-open-curriculum: review
+  student-assignment-catalog-hierarchy: review
+  refactor-be-module-layers: review
   epic-b1-teacher-operations: done
   b1-t1-class-lifecycle: done
   b1-t2-managed-enrollment: done
@@ -128,7 +135,7 @@ increment_i3_tracking:
   record: spec-i3-assigned-test-lifecycle.md
   status: review
   date: '2026-10-19'
-  branch: 'I3 implementation merged to origin/main via BE PR #25 and FE PR #20; current integrated worktree is codex/i1-open-curriculum in both repositories.'
+  branch: 'I3 implementation merged to origin/main via BE PR #25 and FE PR #20; later integrated with I1 via BE PR #26 / FE PR #21.'
   scope: 'I3 / Epic 03: assigned scored tests with due date, late reason and teacher decision, deadline revision, role status surfaces.'
   gates: 'All readiness gates decided 2026-10-19 (D-I3-01..03 confirmed by the product owner); see class-space-assignment-contract.md §2a.'
   verification: 'Stories 3.1-3.6 (2026-10-19): BE lint/build, Vitest 164/164 (10 I3 contract tests), Prisma validate, both migrations equal prisma migrate diff; FE lint/build. Both I3 migrations applied to shared Supabase development by the user (prisma migrate deploy). npm run test:i3 against a local API on shared Supabase development: 65/65 checks passed with isolated prefixed fixtures, all removed afterwards (verified 0 leftover rows). Browser: FE tests/i3-assigned-test-live.spec.ts 2/2 passed (system Chrome via PLAYWRIGHT_CHANNEL=chrome, local Vite + API on shared development); test assignments and resources archived afterwards.'
@@ -157,7 +164,8 @@ e2e_repair_2026_10_19:
     - 'No lab is released to students on shared development, so student lab journeys (flagship) stay skipped until the CF-T5 content release.'
 
 fe_structure_2026_10_19:
-  status: review
+  status: done
+  merged: 'FE origin/main via 416e9e9 (PR #20), audited 2026-10-21'
   summary: 'FE files regrouped without behaviour change (moves and whole-declaration splits only, done with the TypeScript compiler API so imports stay exact).'
   changes:
     - 'learning/ renamed assignments/ (the /assignments routes); VideoLearningStep and StudyCardsStep moved to lessons/; LessonDetail moved from ebook/ to lessons/; src/lesson-catalog.ts moved to lessons/.'
@@ -170,7 +178,7 @@ fe_structure_2026_10_19:
 
 assignment_catalog_hierarchy_2026_10_19:
   status: review
-  branch: 'codex/i1-open-curriculum in BE and FE, containing the latest origin/main integration; this fix is uncommitted.'
+  branch: 'Committed and merged: BE b4eebc9 (PR #26) and FE PR #21 on origin/main.'
   scope: 'Restore the student assignment catalog hierarchy for I3 tests while preserving lesson/practical routes, test lifecycle badges, due-soon notice, and student authorization.'
   changes:
     - 'BE batches non-draft test-resource metadata and resolves each test to its linked lesson hierarchy; missing or mismatched links remain unavailable or ungrouped rather than receiving guessed taxonomy.'
@@ -181,7 +189,10 @@ assignment_catalog_hierarchy_2026_10_19:
     - 'Full FE browser suite and live API/database acceptance were not rerun for this focused catalog fix.'
 
 refactor_be_module_layers:
-  branch: 'refactor/be-module-layers (BE only, from feat/account-notifications-r2 269141c)'
+  branch: 'refactor/be-module-layers (BE only, from feat/account-notifications-r2 269141c). 2026-10-21: origin/main (PR #27) merged in as d515605 (lint, build, Vitest 193/193, check:layers ok; integration/Playwright not rerun); merged to main by BE PR #28 (ebfaba7). FE counterpart feat/account-notifications-r2 merged with main as 9c67306 (lint/build ok, Playwright not rerun) and merged by FE PR #23 (c7fe891).'
+  merge_follow_ups:
+    - 'FE screens added by main PR #22 are Vietnamese only: TeacherDashboard, ResourceEditor, ClassLessonCards, admin/audit-labels.ts, Roster parent-code modal, Assets version list (acc-5 gap).'
+    - 'Rerun integration suites and full Playwright on the merged branches.'
   date: '2026-10-21'
   status: review
   requested_by: 'Product owner, from a screenshot of another NestJS project: src/{common,config,db}, src/modules/<feature>/{application,infrastructure,interface}, <feature>.module.ts.'
@@ -196,7 +207,7 @@ increment_account_notifications_r2:
   plan: ../planning-artifacts/increment-account-notifications-r2.md
   status: review
   date: '2026-10-20'
-  branch: 'feat/account-notifications-r2 (BE and FE, from main 51d7f98 / e5bba7c)'
+  branch: 'feat/account-notifications-r2 (BE and FE, from main 51d7f98 / e5bba7c); merged to main via BE PR #28 (with refactor/be-module-layers) and FE PR #23 on 2026-10-21'
   decisions: 'D-ACC-01..04 accepted by the product owner 2026-10-20 (remember-me 30 days / 12 h session cookie; stored notifications with 30 s polling, supersedes D-I3-03; private avatars for every role; UI-only i18n and dev-bucket R2).'
   acc_1_remember_me:
     status: review
@@ -245,9 +256,12 @@ increment_account_notifications_r2:
     - 'FIXED in acc-2: student settings "Tạo mã liên kết" called POST /parent-code, which does not exist.'
 
 execution:
-  current_story: student-assignment-catalog-hierarchy
-  next_story: 'No additional story selected; I3 remains in review pending its recorded route-manifest limitation.'
+  current_story: refactor-be-module-layers
+  next_story: 'acc-1..acc-6 and the module-layer refactor are on main (BE PR #28, FE PR #23); they stay review until the post-merge Playwright/integration rerun, the R2 dashboard actions and PO acceptance. Open PRs for the remaining feat/content-foundation commits. No task from next-development-plan.md is assigned yet; it needs PO approval (section 8 Q-1..Q-10) first.'
   selection_reason: >
+    2026-10-21 (audit against git): I1, I2, I3, the FE restructure and the assignment-catalog fix are merged to origin/main in both repositories;
+    project-structure-refactor merged (BE PR #20) and is done. I1/I2/I3 stay review until isolated Playwright reruns and PO acceptance.
+    acc-1..acc-6 and the BE module-layer refactor were synced with main and merged the same day (BE PR #28, FE PR #23).
     2026-10-16 (Content Foundation): CF-T1..T4 platform implemented on feat/content-foundation and verified against the real
     Cloudflare R2 development bucket (r2:check 9/9, test:cf 60/60, Playwright browser→R2 CORS upload 1/1, Vitest 144/144).
     This completes the R2/AssetVersion/SourceRegistry/ingestion/topic-pack surfaces C2 had deferred. CF-T5 corpus stays backlog: it is a staffed editorial delivery.
@@ -336,9 +350,9 @@ verification:
 
 story_notes:
   project-structure-refactor:
-    status: review
+    status: done
     audited_against_code: '2026-10-17'
-    branch: refactor/project-structure (BE from main 5446e68, FE from main 3ed54cb; uncommitted)
+    branch: 'refactor/project-structure merged to origin/main (BE PR #20 7601904; FE branch fully merged), audited 2026-10-21. The service-per-domain follow-up continues in refactor_be_module_layers.'
     artifact: project-structure-refactor.md
     structure: ../../docs/architecture/project-structure.md
     verification: 'pass 2 (one Nest module per domain, admin/classes controllers split by domain): handler bodies unchanged (line-multiset diff), route manifest 140/140 identical, API boots with 24 controllers/140 routes/140 Swagger ops; tsc, lint, build, Vitest 145/145; B0, B2, C2 80, CF 60, password flow 6 pass; B1 and test:integration fail at the same pre-existing checks as main; no file import cycles'
@@ -349,7 +363,7 @@ story_notes:
   epic-content-foundation:
     status: in-progress
     audited_against_code: '2026-10-16'
-    branch: feat/content-foundation (BE and FE, stacked on feat/c2-admin-operations; uncommitted)
+    branch: 'feat/content-foundation (BE and FE, pushed). Audited 2026-10-21: BE core 8a1d44b and the three CF migrations are on origin/main; still unmerged are BE 824dc74 (chemistry pH-mode registry outputs) and FE 1040821 (versioned asset uploads, content foundation admin tabs, cf-storage-live spec).'
     artifact: content-foundation-implementation.md
     object_storage: 'Cloudflare R2 development bucket nexalab-dev (owner-provided credentials in .env, never read by the agent); r2:check 9/9'
     verification: 'Vitest 144/144; test:cf 60/60; Playwright cf-storage-live 1/1 and c2-admin-live 1/1; regression B0 9, B1 172, B2 13, A1-A3 95, A5 53, C2 80, password-flow 6 (local runtime, R2-backed uploads)'
