@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applicableLessonAssignmentWhere } from "./classes/class-access";
+import { applicableLessonAssignmentWhere } from "./modules/classes/application/class-access";
 
 describe("applicable lesson assignment query", () => {
   it("binds a requested assignment to the student, lesson, and lesson content type", () => {

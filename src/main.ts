@@ -7,7 +7,7 @@ import cookieParser from "cookie-parser";
 import express from "express";
 import { AppModule } from "./app.module";
 import { Errors } from "./common/errors";
-import { quizOpenApiSchemas } from "./learning/quiz-contract";
+import { quizOpenApiSchemas } from "./modules/learning/interface/quiz-contract";
 async function bootstrap() {
   if (
     !process.env.JWT_SECRET ||

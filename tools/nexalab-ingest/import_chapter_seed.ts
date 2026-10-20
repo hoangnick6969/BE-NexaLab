@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
-import { seedUrl } from "../../src/infra/database-config";
+import { seedUrl } from "../../src/config/database-config";
 
 const inputPath = path.resolve(
   process.argv.find((arg) => arg.startsWith("--input="))?.slice(8) ??

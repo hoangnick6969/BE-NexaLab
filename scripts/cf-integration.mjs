@@ -7,9 +7,9 @@ import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createHarness } from "./lib/harness.mjs";
-import { objectKeys, storage } from "../src/infra/storage.ts";
-import { cleanupExpiredUploads } from "../src/assets/asset-versions.ts";
-import { applyRelease, planRelease } from "../src/content/content-release.ts";
+import { objectKeys, storage } from "../src/modules/storage/infrastructure/storage.ts";
+import { cleanupExpiredUploads } from "../src/modules/assets/application/asset-versions.ts";
+import { applyRelease, planRelease } from "../src/modules/content/application/content-release.ts";
 
 const h = createHarness("Content Foundation");
 const releaseFixture = JSON.parse(readFileSync(new URL("../content/releases/fixture-khtn8-energy.json", import.meta.url), "utf8"));
