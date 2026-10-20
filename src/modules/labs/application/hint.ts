@@ -1,6 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { applicableAssignmentWhere } from "../../classes/application/class-access";
-import { explain } from "../infrastructure/llm";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
 import { buildContext } from "./tutor";
 
@@ -39,7 +38,8 @@ async function assertStillAuthorized(db: any, actor: Actor, attempt: { id: strin
  * lock held. Context is read first, the provider is called, then a short
  * transaction rechecks authorization and context before persisting.
  */
-export async function requestHint(db: any, actor: Actor, attemptId: string, provider: Provider = explain) {
+/** `provider` is the explanation port; the interface layer passes the LLM adapter (infrastructure/llm.ts). */
+export async function requestHint(db: any, actor: Actor, attemptId: string, provider: Provider) {
   // 1. Read context (no transaction, no lock).
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, studentId: actor.sub },

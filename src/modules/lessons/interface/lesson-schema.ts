@@ -51,7 +51,6 @@ export const lessonSchema = z.object({
   scope: z.enum(["TEACHER_PRIVATE", "SHARED_LIBRARY"]).optional(),
 });
 /** MSG-36: archived content for a student who has not started it. */
-export const ARCHIVED_CONTENT_MESSAGE = "Nội dung này không còn được cập nhật.";
 export function publishedSteps(lesson: z.infer<typeof lessonSchema>, namespace?: string) {
   if (lesson.status !== "published") return [];
   try {

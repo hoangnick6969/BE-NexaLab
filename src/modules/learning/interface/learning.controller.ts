@@ -7,7 +7,7 @@ import { Db } from "../../../db/db";
 import { basicExerciseAttemptRequestSchema, buildPathwaySteps, evaluateBasicExercise, quizAttemptRequestSchema, quizConfigSchema, reconcileCardProgress, reconcileVideoProgress, sanitizeBasicExerciseConfig, stepProgressActionSchema } from "../../lessons/application/pathway";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { challengeObjective } from "../../lessons/application/lesson-content";
-import { ARCHIVED_CONTENT_MESSAGE } from "../../lessons/interface/lesson-schema";
+import { ARCHIVED_CONTENT_MESSAGE } from "../../lessons/application/lesson-moderation";
 import { projectLesson } from "../../progress/application/progress-projection";
 import { parseAssignmentIdQuery } from "./assignment-query";
 import { scoreTest, studentTestContent, TEST_CONTENT_TYPE, testSubmissionSchema } from "../../classes/application/assignment-test-contract";

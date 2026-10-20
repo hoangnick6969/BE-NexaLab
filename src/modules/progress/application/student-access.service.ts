@@ -4,7 +4,7 @@ import { applicableAssignmentWhere, applicableLessonAssignmentWhere, assignmentQ
 import { Db } from "../../../db/db";
 import { buildPathwaySteps, validateLessonSteps } from "../../lessons/application/pathway";
 import { attribution } from "../../lessons/application/lesson-content";
-import { ARCHIVED_CONTENT_MESSAGE } from "../../lessons/interface/lesson-schema";
+import { ARCHIVED_CONTENT_MESSAGE } from "../../lessons/application/lesson-moderation";
 import { loadLessonEvidence } from "./progress-projection";
 import { withDerivedCompletion } from "./progress";
 

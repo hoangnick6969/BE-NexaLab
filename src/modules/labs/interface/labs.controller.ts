@@ -8,6 +8,7 @@ import { Db } from "../../../db/db";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { text } from "../../../common/validation";
 import { requestHint } from "../application/hint";
+import { explain } from "../infrastructure/llm";
 import { resolveModel } from "../application/sim-packs";
 import { ENGINE as SIMULATION_ENGINE, evaluate, versionParams } from "../application/simulation-versions";
 import { StudentAccessService } from "../../progress/application/student-access.service";
@@ -280,7 +281,7 @@ export class LabsController {
   ) {
     this.limiter.rate("hint:" + req.user.sub, 8);
     // B0P-T4: provider call outside the transaction; authorization rechecked before persisting.
-    return requestHint(this.db, req.user, id);
+    return requestHint(this.db, req.user, id, explain);
   }
   @Roles("STUDENT") @Post("saved") async save(
     @Req() req: any,
