@@ -107,7 +107,7 @@ development_status:
   epic-account-notifications-r2: in-progress
   acc-1-remember-me-sessions: review
   acc-2-profile-avatar: review
-  acc-3-notifications: ready-for-dev
+  acc-3-notifications: review
   acc-4-theme-dark-mode: backlog
   acc-5-i18n-en-vi: backlog
   acc-6-r2-setup-docs: backlog
@@ -196,6 +196,13 @@ increment_account_notifications_r2:
     changes: 'User.avatarKey/avatarUpdatedAt (migration 20261020100000_acc_user_avatar, applied to shared development by the user); ProfileController: GET/PATCH /me/profile (adults rename, students 403 PROFILE_NAME_LOCKED), POST /me/avatar/upload-url (presigned PUT, PNG/JPEG/WebP <= 2 MB), POST /me/avatar (own-prefix key + server head size/type check), DELETE /me/avatar, owning-teacher and admin moderation deletes; previous objects removed from R2; audited. FE: profile settings page, Avatar component in sidebar/topbar, broken POST /parent-code button replaced by the C1 teacher-issued code guidance.'
     verification: 'BE lint, Vitest 181/181 (avatar rules 5 new); FE lint/build; Playwright acc-profile-live 2/2 against real R2 dev bucket (upload, sidebar image, presigned GET returns image/png, rename + restore, removal, foreign key refused, student name lock, outsider teacher 403, owning teacher removal) and acc-remember-me-live 2/2.'
     remaining: 'Teacher roster has no avatar column yet, so the moderation API has no UI entry point.'
+  acc_3_notifications:
+    status: review
+    changes: 'Code complete, uncommitted on feat/account-notifications-r2 (BE and FE). Notification model + migration 20261020110000_acc_notifications (applied to shared development by the user); common/notify.ts writers for assignment created, submission/late submission, late rejection, deadline revision, enrollment request/approval, class resource published; NotificationsModule (list, unread count, read one/all) with on-read sync of due-soon (student) and overdue (parent) notices; FE topbar bell (30 s poll) and /notifications page; Playwright spec acc-notifications-live.'
+    blocker_resolved_2026_10_20: 'The intermittent 500/503s were diagnosed after errors.ts started logging the Prisma error class and code (never the message): P2028 (interactive transaction start/run limit) on create-assignment, and P1001/pool pressure making even login return 503. Fixes: the due-soon/overdue sync now runs at most once per user per 5 min with one in-flight run shared by concurrent polls (reset on failure), so the 30 s unread-count poll is a plain count; idempotent() and the two direct notify transactions (resource publish, enrollment approval) use TX_LIMITS (maxWait 10 s, timeout 15 s) instead of Prisma defaults 2 s / 5 s.'
+    verification: 'BE lint/build, Vitest 186/186 (3 new throttle tests); FE lint/build. Playwright acc-notifications-live + acc-profile-live + i3-assigned-test-edges-live run together against a local API on shared Supabase development: 10/11 passed with no 500 or 503 in the API log (before the fix the same run had 3 failures and four 503s).'
+    preexisting_failures: 'i3-assigned-test-edges-live "archiving an assigned test removes it from the student queue" expects a flat link on /assignments, which is now the grade/subject catalog (PR #21, student-assignment-catalog-hierarchy); fails independently of acc-3, not fixed here.'
+    remaining: 'Due-soon/overdue notices can lag up to 5 min (throttle is per API instance, in memory). Commit and push BE/FE once reviewed.'
   known_bugs_on_main:
     - 'FIXED in acc-1: GET /me/foundational-progress always returned no courses because the auth guard never set req.user.grade.'
     - 'FIXED in acc-2: student settings "Tạo mã liên kết" called POST /parent-code, which does not exist.'

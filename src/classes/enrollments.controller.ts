@@ -23,9 +23,10 @@ import { ownedClass } from "./class-access";
 import { MSG, classArchived, grade, joinInvalid, joinLocked, reason, text } from "./class-common";
 import { parseJoinCode, verifySecret } from "./join-code";
 import { audit } from "../common/audit";
-import { idempotent, readIdempotencyKey, replay } from "../common/idempotency";
+import { idempotent, readIdempotencyKey, replay, TX_LIMITS } from "../common/idempotency";
 import { JOIN_LIMITS, clear, hit, limiterKey, lockedAny, sweep } from "../common/limiter";
 import { Db } from "../infra/db";
+import { notify } from "../common/notify";
 
 const username = z
   .string()
@@ -326,11 +327,13 @@ export class EnrollmentsController {
         before: { enrollmentStatus: existing.status },
         after: { enrollmentStatus: status, classId: id, studentId },
       });
+      if (status === "approved")
+        await notify(tx, [{ recipientId: studentId, type: "ENROLLMENT_APPROVED", title: `Em đã được duyệt vào lớp ${c.name}`, link: "/classes", dedupKey: `enrollment-approved:${id}:${studentId}:${updated.statusChangedAt.getTime()}` }]);
       return {
         enrollment: enrollmentView({ ...updated, student: existing.student }),
         changed: true,
       };
-    });
+    }, TX_LIMITS);
   }
 
   @Roles("TEACHER")
@@ -423,6 +426,7 @@ export class EnrollmentsController {
         joinCodeEnabled: true,
         requiresApproval: true,
         joinSecretHash: true,
+        teacherId: true,
         joinKeyVersion: true,
       },
     });
@@ -475,6 +479,10 @@ export class EnrollmentsController {
           rejoin: Boolean(existing),
         },
       });
+      if (status === "pending") {
+        const student = await tx.user.findUnique({ where: { id: studentId }, select: { fullName: true } });
+        await notify(tx, [{ recipientId: classroom.teacherId, type: "ENROLLMENT_REQUESTED", title: `${student?.fullName} xin vào lớp ${classroom.name}`, link: "/classes", dedupKey: `enrollment-request:${classroom.id}:${studentId}:${Date.now()}` }]);
+      }
       return this.joinResult(classroom, status, true);
     });
   }

@@ -14,6 +14,7 @@ import { ReportsModule } from "./reports/reports.module";
 import { AssetsModule } from "./assets/assets.module";
 import { ContentModule } from "./content/content.module";
 import { AdminModule } from "./admin/admin.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 
 /**
  * Composition root. InfraModule and CommonModule are global (Db, RequestRateLimiter); every other module owns one
@@ -36,6 +37,7 @@ import { AdminModule } from "./admin/admin.module";
     AssetsModule,
     ContentModule,
     AdminModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

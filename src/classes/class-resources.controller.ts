@@ -4,11 +4,12 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { Roles } from "../common/decorators";
 import { audit } from "../common/audit";
-import { idempotent, readIdempotencyKey } from "../common/idempotency";
+import { idempotent, readIdempotencyKey, TX_LIMITS } from "../common/idempotency";
 import { Db } from "../infra/db";
 import { ownedClass } from "./class-access";
 import { classArchived, lock } from "./class-common";
 import { normalizeResourceContent, parseResourceCsv, ResourceKind, studentResource } from "./class-resource-contract";
+import { notify } from "../common/notify";
 
 const kindSchema = z.enum(["DECK", "STUDY_QUIZ", "TEST"]);
 const titleSchema = z.string().trim().min(1).max(160);
@@ -101,8 +102,10 @@ export class ClassResourcesController {
       if (!changed.count) throw new ConflictException({ code: "RESOURCE_NOT_DRAFT", message: "Chỉ có thể xuất bản bản nháp" });
       const updated = await tx.classResource.findUnique({ where: { id: resourceId }, select: resourceSelect });
       await audit(tx, { actor: req.user, action: "class_resource.publish", targetType: "ClassResource", targetId: resourceId, after: { classId, resourceKind: existing.kind, resourceVersion: existing.version } });
+      const members = await tx.enrollment.findMany({ where: { classId, status: "approved" }, select: { studentId: true } });
+      await notify(tx, members.map((m) => ({ recipientId: m.studentId, type: "RESOURCE_PUBLISHED" as const, title: `Tài liệu mới trong lớp ${c.name}: ${existing.title}`, link: "/classes", dedupKey: `resource:${resourceId}` })));
       return updated;
-    });
+    }, TX_LIMITS);
   }
 
   @Roles("TEACHER")

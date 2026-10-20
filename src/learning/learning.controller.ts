@@ -15,6 +15,7 @@ import { currentDeadlines, testStates } from "../classes/assignment-test-state";
 import { lock } from "../classes/class-common";
 import { audit } from "../common/audit";
 import { idempotent, readIdempotencyKey } from "../common/idempotency";
+import { notify } from "../common/notify";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -740,6 +741,20 @@ export class LearningController {
         targetId: submission.id,
         after: { assignmentId: id, timing: submission.timing, deadlineRevision: deadline.revision },
       });
+      const [owner, me] = await Promise.all([
+        tx.classroom.findUnique({ where: { id: a.classId }, select: { teacherId: true } }),
+        tx.user.findUnique({ where: { id: studentId }, select: { fullName: true } }),
+      ]);
+      await notify(tx, [
+        {
+          recipientId: owner?.teacherId ?? "",
+          type: late ? "LATE_SUBMISSION_PENDING" : "SUBMISSION_RECEIVED",
+          title: late ? `${me?.fullName} nộp trễ "${a.title}"` : `${me?.fullName} đã nộp "${a.title}"`,
+          body: late ? `Lý do: ${b.lateReason}` : null,
+          link: "/classes",
+          dedupKey: `submission:${submission.id}`,
+        },
+      ]);
       const { states, key } = await testStates(tx, [current], [studentId], submittedAt);
       const state = states.get(key(id, studentId))!;
       return { submission: state.history.find((row) => row.id === submission.id), state };

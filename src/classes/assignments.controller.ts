@@ -31,6 +31,7 @@ import {
   TEST_CONTENT_TYPE,
 } from "./assignment-test-contract";
 import { currentDeadlines, testStates } from "./assignment-test-state";
+import { notify } from "../common/notify";
 
 type ContentType = "lesson" | "lab" | "test";
 
@@ -209,7 +210,7 @@ export class AssignmentsController {
     };
     return idempotent(this.db, ctx, async (tx) => {
       await lock(tx, "assignment-deadline:" + assignmentId);
-      await this.ownedTestAssignment(tx, id, assignmentId);
+      const owned = await this.ownedTestAssignment(tx, id, assignmentId);
       const submission = await tx.assignmentSubmission.findFirst({
         where: { id: submissionId, assignmentId },
         include: { decision: true },
@@ -234,6 +235,16 @@ export class AssignmentsController {
         targetId: submissionId,
         after: { assignmentId, studentId: submission.studentId, decision: "REJECT_ZERO" },
       });
+      await notify(tx, [
+        {
+          recipientId: submission.studentId,
+          type: "LATE_REJECTED",
+          title: `Bài nộp trễ bị từ chối: ${owned.title}`,
+          body: b.note ? `Ghi chú của giáo viên: ${b.note}` : "Kết quả hiện tại là 0 điểm.",
+          link: `/assignments/${assignmentId}`,
+          dedupKey: `late-reject:${submissionId}`,
+        },
+      ]);
       return { submissionId, decision: decision.decision, decidedAt: decision.createdAt, score: 0 };
     });
   }
@@ -312,6 +323,17 @@ export class AssignmentsController {
           submissionId: b.submissionId ?? null,
         },
       });
+      await notify(
+        tx,
+        a.targets.map((t: any) => ({
+          recipientId: t.studentId,
+          type: "DEADLINE_EXTENDED" as const,
+          title: `Hạn nộp mới: ${a.title}`,
+          body: b.note ?? null,
+          link: `/assignments/${assignmentId}`,
+          dedupKey: `deadline:${assignmentId}:${revision.revision}`,
+        })),
+      );
       return {
         deadline: { revision: revision.revision, dueAt: revision.dueAt },
         recipientCount: a.targets.length,
@@ -537,6 +559,17 @@ export class AssignmentsController {
         },
         include: { _count: { select: { targets: true } } },
       });
+      await notify(
+        tx,
+        targets.map((studentId: string) => ({
+          recipientId: studentId,
+          type: "ASSIGNMENT_CREATED" as const,
+          title: `Bài mới: ${assignment.title}`,
+          body: `Lớp ${c.name}`,
+          link: `/assignments/${assignment.id}`,
+          dedupKey: `assignment:${assignment.id}`,
+        })),
+      );
       if (b.contentType === TEST_CONTENT_TYPE)
         await tx.assignmentDeadlineRevision.create({
           data: { assignmentId: assignment.id, revision: 1, dueAt: dueDate!, actorId: req.user.sub },

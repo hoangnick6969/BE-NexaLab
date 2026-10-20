@@ -91,6 +91,7 @@ model User {
   children ParentLink[] @relation("parent")
   assignmentTargets AssignmentTarget[]
   assignmentSubmissions AssignmentSubmission[]
+  notifications Notification[]
   ebookAnnotations EbookAnnotation[]
 }
 model Session {
@@ -992,4 +993,20 @@ model SimulationPackVersion {
   retiredAt DateTime?
   @@unique([key, version])
   @@index([labId, status])
+}
+/// In-app notification (acc-3, D-ACC-02): written in the same transaction as its domain event,
+/// or synced on read for time-based notices (due soon, overdue). dedupKey makes writers idempotent.
+model Notification {
+  id String @id @default(cuid())
+  recipientId String
+  recipient User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  type String
+  title String
+  body String?
+  link String?
+  dedupKey String?
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([recipientId, dedupKey])
+  @@index([recipientId, readAt, createdAt])
 }
