@@ -119,8 +119,11 @@ export class Errors implements ExceptionFilter {
   catch(error: any, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse();
     const body = toErrorBody(error);
-    if (body.statusCode === 500) console.error("NexaLab internal server error");
-    if (body.statusCode === 503) console.error("NexaLab dependency failure");
+    // Class name and Prisma code only: enough to diagnose, never the message (it can carry user data).
+    if (body.statusCode === 500)
+      console.error("NexaLab internal server error", error?.constructor?.name ?? "unknown", error?.code ?? "");
+    if (body.statusCode === 503)
+      console.error("NexaLab dependency failure", error?.constructor?.name ?? "unknown", error?.code ?? "");
     response.status(body.statusCode).json(body);
   }
 }

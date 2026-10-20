@@ -72,6 +72,11 @@ model User {
   linkCode String? @unique
   /// Set when an admin disables the account (C2-T1); cleared on reactivation.
   disabledAt DateTime?
+  /// Private avatar object key in object storage (D-ACC-03); read only through short presigned URLs.
+  avatarKey String?
+  avatarUpdatedAt DateTime?
+  /// UI preferences (acc-4, acc-5): { theme?: "system" | "light" | "dark", locale?: "vi" | "en" }; read through users/preferences.ts.
+  preferences Json @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   sessions Session[]
@@ -88,6 +93,7 @@ model User {
   children ParentLink[] @relation("parent")
   assignmentTargets AssignmentTarget[]
   assignmentSubmissions AssignmentSubmission[]
+  notifications Notification[]
   ebookAnnotations EbookAnnotation[]
 }
 model Session {
@@ -96,6 +102,9 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash String @unique
   kind String @default("refresh")
+  /// D-ACC-01: persistent 30-day session (true) or browser-session cookie with a 12-hour server expiry (false).
+  /// Existing rows predate the choice and were 7-day persistent sessions.
+  remember Boolean @default(true)
   expiresAt DateTime
 }
 model ParentLink {
@@ -986,4 +995,20 @@ model SimulationPackVersion {
   retiredAt DateTime?
   @@unique([key, version])
   @@index([labId, status])
+}
+/// In-app notification (acc-3, D-ACC-02): written in the same transaction as its domain event,
+/// or synced on read for time-based notices (due soon, overdue). dedupKey makes writers idempotent.
+model Notification {
+  id String @id @default(cuid())
+  recipientId String
+  recipient User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  type String
+  title String
+  body String?
+  link String?
+  dedupKey String?
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([recipientId, dedupKey])
+  @@index([recipientId, readAt, createdAt])
 }

@@ -9,7 +9,7 @@ import * as argon from "argon2";
 import { readdir, readFile, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createHarness } from "./lib/harness.mjs";
-import { storage } from "../src/infra/storage.ts";
+import { storage } from "../src/modules/storage/infrastructure/storage.ts";
 
 const h = createHarness("C2 admin operations");
 const { db, req, check, skip, envelope, key } = h;

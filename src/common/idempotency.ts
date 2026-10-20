@@ -69,6 +69,12 @@ export async function replay(db: any, ctx: IdempotencyContext) {
 }
 
 /**
+ * Interactive transaction limits. Prisma's defaults (2 s to start, 5 s to run) fail with P2028 on a
+ * remote pooled database, where a write with its audit row and notifications (acc-3) takes ~10 round trips.
+ */
+export const TX_LIMITS = { maxWait: 10_000, timeout: 15_000 };
+
+/**
  * Runs `work` in one transaction with the idempotency claim. `stored` lets a
  * caller keep one-time secrets (for example a temporary password) out of the
  * persisted replay body.
@@ -80,7 +86,8 @@ export async function idempotent<T>(
   options: { stored?: (result: T) => unknown; isolationLevel?: "Serializable" } = {},
 ): Promise<T> {
   const normalize = (value: unknown) => JSON.parse(JSON.stringify(value ?? null));
-  if (!ctx.key) return normalize(await db.$transaction(work, options.isolationLevel ? { isolationLevel: options.isolationLevel } : undefined));
+  const txOptions = { ...TX_LIMITS, ...(options.isolationLevel ? { isolationLevel: options.isolationLevel } : {}) };
+  if (!ctx.key) return normalize(await db.$transaction(work, txOptions));
   const hash = requestHash(ctx.scope, ctx.payload);
   try {
     return await db.$transaction(
@@ -103,7 +110,7 @@ export async function idempotent<T>(
         });
         return result;
       },
-      options.isolationLevel ? { isolationLevel: options.isolationLevel } : undefined,
+      txOptions,
     );
   } catch (error) {
     if ((error as any)?.code !== "P2002" && (error as any)?.code !== "P2034") throw error;

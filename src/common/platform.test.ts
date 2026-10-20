@@ -11,8 +11,8 @@ import {
   randomBase32,
   verifySecret,
   withFreshJoinCode,
-} from "../classes/join-code";
-import { targetHash } from "../classes/class-access";
+} from "../modules/classes/application/join-code";
+import { targetHash } from "../modules/classes/application/class-access";
 
 const env = { JWT_SECRET: "x".repeat(40) } as NodeJS.ProcessEnv;
 
@@ -284,8 +284,8 @@ describe("assignment target hash", () => {
   });
 });
 
-import { isStructureChange, publishBlockers } from "../lessons/lesson-content";
-import { materializeQuizQuestions } from "../lessons/pathway";
+import { isStructureChange, publishBlockers } from "../modules/lessons/application/lesson-content";
+import { materializeQuizQuestions } from "../modules/lessons/application/pathway";
 
 describe("teacher content gates (B1-T4)", () => {
   const lesson = {

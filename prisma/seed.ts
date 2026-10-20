@@ -2,8 +2,8 @@ import "dotenv/config";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { hash } from "argon2";
 import { createHash } from "node:crypto";
-import { seedUrl } from "../src/infra/database-config";
-import { materializeQuizQuestions } from "../src/lessons/pathway";
+import { seedUrl } from "../src/config/database-config";
+import { materializeQuizQuestions } from "../src/modules/lessons/application/pathway";
 const db = new PrismaClient({ datasourceUrl: seedUrl(process.env) });
 async function main() {
   if (process.env.NODE_ENV === "production")

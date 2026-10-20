@@ -5,7 +5,7 @@
 // Output carries IDs and counts only, no answers or credentials.
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
-import { checkProjection } from "../src/progress/progress-projection";
+import { checkProjection } from "../src/modules/progress/application/progress-projection";
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");

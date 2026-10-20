@@ -6,7 +6,7 @@ project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
 scope: Release 1 / Content Foundation CF-T1..T4 plus I1 open curriculum, I2 Class Space resources, and I3 assigned-test lifecycle; CF-T5 corpus remains a staffed workstream
-last_updated: '2026-10-19'
+last_updated: '2026-10-20'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'BE-NexaLab (codex/i1-open-curriculum; includes latest origin/main integration through HEAD 87bf6fe plus uncommitted assignment-catalog fix)'
@@ -104,6 +104,13 @@ development_status:
   i3-3-4-student-assignment-states: review
   i3-3-5-teacher-assignment-late-queue: review
   i3-3-6-parent-overdue-notice: review
+  epic-account-notifications-r2: review
+  acc-1-remember-me-sessions: review
+  acc-2-profile-avatar: review
+  acc-3-notifications: review
+  acc-4-theme-dark-mode: review
+  acc-5-i18n-en-vi: review
+  acc-6-r2-setup-docs: review
 
 increment_i2_tracking:
   plan: ../planning-artifacts/increment-i2-epic-02-class-space-resources.md
@@ -172,6 +179,70 @@ assignment_catalog_hierarchy_2026_10_19:
   verification: 'BE and FE lint/build passed; BE src/learning/learning.controller.test.ts 4/4 passed. FE tests/student-lessons-hub.spec.ts 4/4 passed in installed Chrome against local Vite; assignment catalog scenario also asserted 375px width, reduced motion, route navigation, I3 status badge, and zero per-assignment detail requests. This was focused UI verification, not the full API-backed application suite.'
   remaining:
     - 'Full FE browser suite and live API/database acceptance were not rerun for this focused catalog fix.'
+
+refactor_be_module_layers:
+  branch: 'refactor/be-module-layers (BE only, from feat/account-notifications-r2 269141c)'
+  date: '2026-10-21'
+  status: review
+  requested_by: 'Product owner, from a screenshot of another NestJS project: src/{common,config,db}, src/modules/<feature>/{application,infrastructure,interface}, <feature>.module.ts.'
+  changes: 'Every backend file moved into src/modules/<feature>/{interface,application,infrastructure} (controllers/guards/request schemas; rules/services/ports; Prisma, R2, SMTP, LLM adapters), with src/db (global DbModule), src/config and src/common; InfraModule split into DbModule, HealthModule, StorageModule. notifications converted fully as the reference module (thin controller, NotificationsService, NotificationRepository port, PrismaNotificationRepository adapter, service tests on an in-memory port). Two layer violations fixed (lessons archived message moved to application; labs hint receives the LLM adapter from the controller). scripts/check-layers.ts (npm run check:layers) enforces five rules including explicit @Inject. integration.mjs and b1-integration.mjs cleanup now imports the real storage path (it never deleted stored objects before). docs/architecture/project-structure.md rewritten.'
+  verification: 'route-manifest identical before/after; the 174 routes Nest registers identical; lint, build, Vitest 190/190 (188 before; notifications tests replaced by 5 service tests); check:layers ok (98 files); live Playwright on shared development: acc notifications/profile/remember-me/theme/i18n 8/8, circuit-lab, c2-admin, progress-live, b2, i2 API 4 passed + 2 env-gated skips; no 500/503 in the API log.'
+  found_during_verification: 'The first live run returned 500 TypeError: the new controller had no @Inject and the tsx dev runtime emits no decorator metadata (tsc and Vitest passed). Fixed and now caught by check:layers rule 5.'
+  classes_module_2026_10_21: 'Controllers split into thin interface controllers and application services (ClassesService, EnrollmentsService, AssignmentsService, ClassResourcesService), bodies moved unchanged by a bracket-aware script; controllers no longer reference Db. Verified: route-manifest identical, lint, Vitest 190/190, check:layers ok (103 files), test:i3 66/66, test:acc 29/29, Playwright i2-class-space-api + acc-notifications + acc-profile + i3-assigned-test-edges 11 passed, 1 pre-existing failure (archive test expects a flat /assignments link); no 500/503.'
+  remaining: 'classes services still use Db directly (repository ports next). learning, lessons, labs, progress, users, curriculum, assets, content, parents, reports, admin and auth still query Prisma from controllers; convert one at a time. The labs hint endpoint has no live spec; its wiring is type-checked and unit-tested.'
+
+
+increment_account_notifications_r2:
+  plan: ../planning-artifacts/increment-account-notifications-r2.md
+  status: review
+  date: '2026-10-20'
+  branch: 'feat/account-notifications-r2 (BE and FE, from main 51d7f98 / e5bba7c)'
+  decisions: 'D-ACC-01..04 accepted by the product owner 2026-10-20 (remember-me 30 days / 12 h session cookie; stored notifications with 30 s polling, supersedes D-I3-03; private avatars for every role; UI-only i18n and dev-bucket R2).'
+  acc_1_remember_me:
+    status: review
+    changes: 'Session.remember (migration 20261020090000_acc_session_remember, default true for pre-existing 7-day sessions; applied to shared development by the user); src/auth/session-policy.ts (30-day persistent vs browser-session cookie + 12 h server expiry, sliding on refresh); student/adult/admin login read remember, register is short, refresh and password change keep the flag; FE login checkbox (default off). Guard now selects and sets req.user.grade, fixing GET /me/foundational-progress.'
+    verification: 'BE lint, Vitest 176/176 (session-policy 3 new, guard test updated); FE lint; Playwright acc-remember-me-live 2/2 (30-day cookie survives rotation and reload; session cookie stays session after rotation; new browser session signed out); flagship, c2-admin pass.'
+    preexisting_failures: 'i3-assigned-test-live and reading-completion fail on FE main without acc-1 changes (UI changed by PR #21 "unify curriculum and class learning flows"); not fixed in acc-1.'
+  acc_2_profile_avatar:
+    status: review
+    changes: 'User.avatarKey/avatarUpdatedAt (migration 20261020100000_acc_user_avatar, applied to shared development by the user); ProfileController: GET/PATCH /me/profile (adults rename, students 403 PROFILE_NAME_LOCKED), POST /me/avatar/upload-url (presigned PUT, PNG/JPEG/WebP <= 2 MB), POST /me/avatar (own-prefix key + server head size/type check), DELETE /me/avatar, owning-teacher and admin moderation deletes; previous objects removed from R2; audited. FE: profile settings page, Avatar component in sidebar/topbar, broken POST /parent-code button replaced by the C1 teacher-issued code guidance.'
+    verification: 'BE lint, Vitest 181/181 (avatar rules 5 new); FE lint/build; Playwright acc-profile-live 2/2 against real R2 dev bucket (upload, sidebar image, presigned GET returns image/png, rename + restore, removal, foreign key refused, student name lock, outsider teacher 403, owning teacher removal) and acc-remember-me-live 2/2.'
+    remaining: 'Teacher roster has no avatar column yet, so the moderation API has no UI entry point.'
+  acc_3_notifications:
+    status: review
+    changes: 'Committed and pushed on feat/account-notifications-r2 (BE de3a4e4, FE 450ab85). Notification model + migration 20261020110000_acc_notifications (applied to shared development by the user); common/notify.ts writers for assignment created, submission/late submission, late rejection, deadline revision, enrollment request/approval, class resource published; NotificationsModule (list, unread count, read one/all) with on-read sync of due-soon (student) and overdue (parent) notices; FE topbar bell (30 s poll) and /notifications page; Playwright spec acc-notifications-live.'
+    blocker_resolved_2026_10_20: 'The intermittent 500/503s were diagnosed after errors.ts started logging the Prisma error class and code (never the message): P2028 (interactive transaction start/run limit) on create-assignment, and P1001/pool pressure making even login return 503. Fixes: the due-soon/overdue sync now runs at most once per user per 5 min with one in-flight run shared by concurrent polls (reset on failure), so the 30 s unread-count poll is a plain count; idempotent() and the two direct notify transactions (resource publish, enrollment approval) use TX_LIMITS (maxWait 10 s, timeout 15 s) instead of Prisma defaults 2 s / 5 s.'
+    verification: 'BE lint/build, Vitest 186/186 (3 new throttle tests); FE lint/build. Playwright acc-notifications-live + acc-profile-live + i3-assigned-test-edges-live run together against a local API on shared Supabase development: 10/11 passed with no 500 or 503 in the API log (before the fix the same run had 3 failures and four 503s).'
+    preexisting_failures: 'i3-assigned-test-edges-live "archiving an assigned test removes it from the student queue" expects a flat link on /assignments, which is now the grade/subject catalog (PR #21, student-assignment-catalog-hierarchy); fails independently of acc-3, not fixed here.'
+    remaining: 'Due-soon/overdue notices can lag up to 5 min (throttle is per API instance, in memory).'
+  acc_4_theme_dark_mode:
+    status: review
+    changes: 'BE: User.preferences JSONB (migration 20261020120000_acc_user_preferences, applied to shared development by Claude with the user''s approval 2026-10-20); users/preferences.ts (theme system|light|dark, malformed values fall back to system); PATCH /me/preferences for every role; GET /me/profile returns preferences. FE: src/tokens.css with every colour literal in styles.css replaced by tokens (737 uses -> 294 role tokens fill/ink/line/shadow plus semantic bg/surface/text/brand; light values unchanged except merges below OKLab dE 0.012), dark palette derived per role in OKLCH; data-theme on <html> set before first paint by an inline script in index.html; src/lib/theme.ts (localStorage + profile, System follows prefers-color-scheme live); Settings "Giao diện" System/Light/Dark switch; the saved profile preference wins once the profile loads.'
+    verification: 'BE lint/build, Vitest 188/188 (preferences 2 new); FE lint/build, 0 colour literals left in styles.css. Playwright acc-theme-live 2/2 (signed-out system scheme before render; dark persists on reload and reaches a fresh browser via the profile; back to system follows the OS) plus acc-notifications/profile/remember-me 7 passed, flagship 3 skipped (env-gated). Dark screenshots reviewed for student home, settings, notifications, teacher home/classes and login.'
+    remaining: 'Inline SVG illustration colours in Dashboard.tsx and the lab scenes (Eye, Circuit) are unchanged by design; the codemod was one-off and is not committed.'
+  acc_5_i18n_en_vi:
+    status: review
+    changes: 'FE: no i18n library; typed defineText({ vi, en }) next to each feature (the compiler requires en to match the vi shape), shared copy in src/i18n/common.ts, Intl date/number helpers. A language change reloads the page, so module-level label maps read the current locale. Every UI file is bilingual (shell, auth, settings, notifications, dashboards, lessons, ebook, assignments, quiz/test, progress, classes, Class Space, labs, admin, landing); VI/EN toggle on the sign-in card and the landing header, Settings language radio. API errors are shown in English from their stable codes (src/i18n/errors.ts covers every BE code; detail lists are appended), support flags translated by code. A language picked before sign-in is saved to the profile after sign-in (latest explicit choice wins); otherwise the profile value is adopted. BE: preferences.locale (vi|en, null until chosen, no migration); stable codes INVALID_CREDENTIALS, TEMPORARY_PASSWORD_EXPIRED, CURRENT_PASSWORD_INCORRECT, LAB_LOCKED, FILE_REQUIRED (messages unchanged).'
+    not_translated: 'Lesson content, graded eye-part names, simulation engine messages, server-written notification titles and other server text stay Vietnamese (D-ACC-04); content-matching regexes untouched.'
+    verification: 'BE lint, Vitest 188/188; FE lint/build. Playwright acc-i18n-live 1/1 (English on sign-in, English error by code, English shell, saved to profile, switch back to Vietnamese, other browser follows the profile) and acc-theme-live 2/2. Full suite in Vietnamese: 34 passed, 6 skipped, 12 failed, of which 11 fail identically on the pre-i18n FE (461f012, run against the same API) and the 12th was acc-i18n-live, since fixed. English screenshots reviewed (teacher home/classes/lessons, landing).'
+    preexisting_failures: 'b1-teacher-live, i2-class-space-ui-live (2), i3-assigned-test-edges-live archive test, i3-assigned-test-live, quiz-learning, reading-completion, study-cards, video-completion (3): fail on 461f012 as well (UI changed by PR #21 and the catalog hierarchy).'
+    remaining: 'Stored notifications keep the language they were written in (Vietnamese). English copy has not had a native-speaker review.'
+  acc_6_r2_setup_docs:
+    status: review
+    changes: 'docs/operations/r2-storage.md: principles, configuration, key layout and lifecycle per prefix, avatar lifecycle, bucket CORS JSON (GET/HEAD/PUT, content-type, expose ETag, exact origins), lifecycle rules (expire <env>/staging/ after 2 days, abort incomplete multipart after 1 day), bucket-scoped token policy and rotation, and the pilot/production bucket checklist (documented, not performed; D-ACC-04). Two gaps found while documenting and fixed: avatar uploads now land in <env>/staging/avatars/<user>/ and are copied to <env>/avatars/<user>/ on confirmation, so an unconfirmed upload is expired by the lifecycle rule; permanent account deletion now deletes the avatar object. .env.example points at the runbook.'
+    verification: 'BE lint, Vitest 188/188 (avatar key tests updated for staging and release). Against the real dev bucket: r2:check 9/9; Playwright acc-profile-live 2/2 (confirmed avatar served from <env>/avatars/, never staging; foreign staging key refused); one-off live check that DELETE /admin/users/:id removes the avatar object (temporary user and its audit row removed afterwards); 0 objects left under development/staging/ and development/avatars/.'
+    owner_actions: 'The app token cannot read or set bucket settings (AccessDenied on GetBucketCors/Lifecycle, by design), so the owner must confirm the dev bucket CORS and add the two lifecycle rules in the Cloudflare dashboard (runbook section 4). Pilot/production buckets: runbook section 6 when approved.'
+    notes: 'cf-storage-live.spec.ts (multipart through bucket CORS) exists only on FE feat/content-foundation, not on this branch.'
+  gaps_closed_2026_10_21:
+    branch: 'BE on refactor/be-module-layers (it contains the whole increment); FE on feat/account-notifications-r2'
+    parent_notice: 'GET /children/:id/assignment-notices now materialises and returns the parent''s stored ASSIGNMENT_OVERDUE notifications (shared builders in notifications/application/time-based-notices.ts), limited to the current revision so an extension still clears the panel; the panel id is the notification id and the FE marks it read (same row as the bell). i3-integration checks updated plus one new check.'
+    avatar_moderation_ui: 'Roster rows show the member avatar (presigned URL from the roster API) with a confirmed "Gỡ ảnh" action for the owning teacher; the admin account dialog shows the avatar with "Gỡ ảnh đại diện". acc-profile-live drives the teacher removal through the UI.'
+    test_acc: 'scripts/acc-integration.mjs (npm run test:acc): 29 checks over acc-1..acc-6 (cookies, rotation, error code, profile, avatar staging/release/serve/refusal, enrollment notifications, read/read-all/isolation, roster avatar and moderation, parent panel, preferences, deletion eligibility and avatar removal); isolated prefixed fixtures, 0 left after cleanup.'
+    finding: 'Uploading an avatar is audited and audit history blocks hard deletion, so accounts that ever set an avatar can only be disabled; a disabled account keeps its avatar object. Avatar removal on deletion therefore only applies to accounts without history.'
+    verification: 'BE lint, Vitest 190/190, check:layers ok; test:acc 29/29; test:i3 66/66; FE tsc; Playwright acc-profile/notifications/i18n 4/4.'
+  known_bugs_on_main:
+    - 'FIXED in acc-1: GET /me/foundational-progress always returned no courses because the auth guard never set req.user.grade.'
+    - 'FIXED in acc-2: student settings "Tạo mã liên kết" called POST /parent-code, which does not exist.'
 
 execution:
   current_story: student-assignment-catalog-hierarchy

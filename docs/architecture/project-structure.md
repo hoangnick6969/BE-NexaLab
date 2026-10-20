@@ -11,56 +11,64 @@ NexaLab/
 
 ## Backend (`src/`)
 
-Each domain folder is one Nest module (`<domain>.module.ts`) that owns its controllers, providers, pure rules and their unit
-tests. Admin routes keep their `/admin/...` URLs but live in the module of the domain they manage (`Admin<Domain>Controller`).
-`app.module.ts` only composes modules; `main.ts` only bootstraps (security headers, CORS, Swagger).
-
-| Module | Responsibility | Controllers | Providers / exports |
-|---|---|---|---|
-| `infra/` (global) | Prisma client, database URL guards, SMTP, object storage (R2 or local) and the local driver's signed-URL endpoint, health | `HealthController`, `LocalStorageController` | `Db` (exported) |
-| `common/` (global) | Error envelope, audit log, idempotency, join/request rate limits, `@Public`/`@Roles`, shared Zod fields, `/admin` input and keyset pagination (`admin-api.ts`) | — | `RequestRateLimiter` (exported) |
-| `auth/` | JWT guard (registered as `APP_GUARD`), login/session/refresh, password change and reset, temporary passwords | `AuthController` | `AuthGuard` |
-| `users/` | Admin user lifecycle: create, edit, disable with ownership resolution, reactivate, delete, reset links; lifecycle policy | `AdminUsersController` | — |
-| `curriculum/` | Subject/chapter/topic/outcome taxonomy: public catalog and admin curation | `CatalogController`, `AdminCurriculumController` | — |
-| `lessons/` | Lesson model and steps (`pathway.ts`), authoring, library review and coverage, ebook annotations, admin content operations | `LessonsController`, `EbookController`, `AdminLessonsController` | — |
-| `classes/` | Classes and join codes, enrollment and roster, assignments, assignment visibility rules (`class-access.ts`) | `ClassesController`, `EnrollmentsController`, `AssignmentsController` | — |
-| `progress/` | Progress derivation and projections, activity history, evidence reads; student visibility rules | `ProgressController` | `StudentAccessService` (exported) |
-| `learning/` | Student pathway delivery: reading/video/cards progress, quizzes and attempts, assigned work | `LearningController` | imports `ProgressModule` |
-| `labs/` | Simulation preview and attempts, hints/tutor, saved experiments; admin simulation versions, practicals, sim packs | `LabsController`, `AdminLabsController` | imports `ProgressModule` |
-| `parents/` | Parent link codes, consent, linked children and their progress | `ParentsController` | imports `ProgressModule` |
-| `reports/` | Teacher reports: assignment progress board, analytics, evidence review with support flags | `ClassProgressController`, `ClassEvidenceController` | — |
-| `assets/` | Versioned assets: upload/finalize/read grants (`asset-versions.ts`), media inspection, legacy files, admin asset operations | `AssetsController`, `FilesController`, `AdminAssetsController` | — |
-| `content/` | Content packs, coverage, releases, source policies and ingestion | `AdminContentController` | — |
-| `admin/` | Admin console shell: overview counts and the audit log | `AdminController` | — |
-
-### Dependency rules
-
-Imports go downwards only; this is checked by the import graph (no file cycles, one documented folder exception):
+Feature modules split by layer (adopted 2026-10-21, branch `refactor/be-module-layers`):
 
 ```text
-infra, common            ← everything
-auth                     ← every domain below
-curriculum, lessons, assets, content, users
-classes                  (assignments pin lesson/lab versions from lessons)
-progress                 (StudentAccessService: assignment rules + pathway + derived completion)
-learning, labs, parents  (inject StudentAccessService via ProgressModule)
-reports                  (reads progress, labs tutor misconceptions, classes)
-admin                    (common, infra only)
+src/
+  main.ts            bootstrap only (security headers, CORS, Swagger)
+  app.module.ts      composition root, imports every module
+  common/            global: error envelope, audit, idempotency, rate limits, @Public/@Roles, shared Zod fields, admin paging
+  config/            environment guards (database URLs)
+  db/                global DbModule: the one Prisma client (Db)
+  modules/<feature>/
+    interface/       HTTP: controllers, guards, request schemas and API contracts
+    application/     use cases and domain rules: services, pure rules, ports (interfaces) for persistence and providers
+    infrastructure/  adapters: Prisma repositories, R2/local storage, SMTP, LLM
+    <feature>.module.ts   wires the layers through DI ({ provide: PORT, useClass: Adapter })
 ```
 
-- Known exception: `lessons/lessons.controller.ts` filters the student lesson list with `classes/class-access.ts`, while
-  `classes/assignments.controller.ts` reads lesson versions. Both are pure helpers, not module imports.
-- A controller never imports another controller. Code shared by several controllers is a provider (`StudentAccessService`,
-  `RequestRateLimiter`) or a plain module (`*-common.ts`, `class-access.ts`, `asset-versions.ts`, `lesson-moderation.ts`).
-- Only `infra` and `common` are `@Global()`. Any other cross-module provider must be exported by its module and imported
-  explicitly (today only `ProgressModule` → `StudentAccessService`).
-- `Db` stays one instance (one connection pool) and `RequestRateLimiter` one instance (shared login/attempt buckets).
+| Module | Responsibility | Controllers |
+|---|---|---|
+| `health` | Liveness | `HealthController` |
+| `storage` | R2 or local object storage (`infrastructure/storage.ts`, see `docs/operations/r2-storage.md`) and the local driver's signed-URL endpoint | `LocalStorageController` |
+| `mail` | SMTP delivery (`infrastructure/mail.ts`) | — |
+| `auth` | JWT guard (`APP_GUARD`), login/session/refresh, remember-me policy, password change and reset, temporary passwords | `AuthController` |
+| `users` | Admin user lifecycle and lifecycle policy; own profile, avatar and UI preferences | `AdminUsersController`, `ProfileController` |
+| `curriculum` | Subject/chapter/topic/outcome taxonomy | `CatalogController`, `AdminCurriculumController` |
+| `lessons` | Lesson model and steps (`pathway.ts`), authoring, library review, ebook annotations, admin content operations | `LessonsController`, `EbookController`, `AdminLessonsController` |
+| `classes` | Classes and join codes, enrollment and roster, assignments and tests, class resources, visibility rules (`class-access.ts`) | `ClassesController`, `EnrollmentsController`, `AssignmentsController`, `ClassResourcesController` |
+| `progress` | Progress derivation and projections, activity, evidence; `StudentAccessService` (exported) | `ProgressController` |
+| `learning` | Student pathway delivery, quizzes and attempts, assigned work | `LearningController` |
+| `labs` | Simulation preview and attempts, hints/tutor (LLM adapter in `infrastructure/llm.ts`), admin simulation versions and packs | `LabsController`, `AdminLabsController` |
+| `parents` | Parent link codes, consent, children's progress | `ParentsController` |
+| `reports` | Teacher progress board, analytics, evidence review | `ClassProgressController`, `ClassEvidenceController` |
+| `assets` | Versioned assets, media inspection, legacy files, admin asset operations | `AssetsController`, `FilesController`, `AdminAssetsController` |
+| `content` | Content packs, releases, source policies and ingestion | `AdminContentController` |
+| `notifications` | In-app notifications (acc-3). **Reference module for the target shape**: thin controller → `NotificationsService` → `NotificationRepository` port ← `PrismaNotificationRepository`; `application/notify.ts` is the writer other modules call inside their transactions | `NotificationsController` |
+| `admin` | Admin console overview and audit log | `AdminController` |
+
+### Layer rules (`npm run check:layers`)
+
+1. `application` never imports `interface` or `infrastructure`; it declares ports and receives adapters through DI
+   (or as an explicit argument, e.g. `requestHint(..., explain)`).
+2. `infrastructure` never imports `interface`.
+3. A module never reaches into another module's `interface` or `infrastructure`; cross-module use goes through the other
+   module's `application` (pure rules) or an exported provider. Shared exceptions: `auth/interface/auth.ts` (guard and
+   public user shape), `storage/infrastructure/storage.ts` and `mail/infrastructure/mail.ts` (process-wide adapters).
+4. `common`, `config` and `db` never import from `modules`.
+5. Every constructor parameter of a Nest class uses `@Inject(...)`: the `tsx` dev runtime emits no decorator metadata,
+   so an unannotated parameter is `undefined` at runtime although `tsc` and Vitest pass.
+
+Other rules kept from the flat layout: imports go downwards (`common`/`db` ← `auth` ← content domains ← `classes` ←
+`progress` ← `learning`/`labs`/`parents` ← `reports`); a controller never imports another controller; only `DbModule`
+and `CommonModule` are `@Global()`; `Db` and `RequestRateLimiter` stay single instances.
 
 Conventions:
 
 - Unit tests sit next to the code as `*.test.ts` (Vitest). Integration suites live in `scripts/*-integration.mjs`.
 - `scripts/route-manifest.ts src` prints every route with method, path, roles and public flag. Use it before and after a
   refactor: the output must not change. No two routes overlap, so module order does not change route matching.
+- `npm run check:layers` before committing backend changes.
 
 Other top-level folders: `prisma/` (schema, migrations, seed), `packages/sim/` (deterministic simulation engine shared with
 the frontend), `content/` (release manifests and simulation packs), `tools/nexalab-ingest/` (textbook ingestion tooling),
@@ -68,7 +76,12 @@ the frontend), `content/` (release manifests and simulation packs), `tools/nexal
 
 ### Known follow-ups
 
-- Controllers still query Prisma directly through `Db`; services per domain (thin controllers) are the next step, starting
-  with `classes`, `users` and `progress`.
-- Largest handlers files: `lessons/lessons.controller.ts` (≈570 lines), `classes/enrollments.controller.ts` (≈490),
-  `learning/learning.controller.ts` (≈460).
+- `classes` (2026-10-21): controllers are thin and delegate to `ClassesService`, `EnrollmentsService`,
+  `AssignmentsService` and `ClassResourcesService` in `application`; those services still use `Db` directly, so the
+  next step there is repository ports like `notifications`.
+- The other modules (except `notifications`) still have controllers that query Prisma through `Db` directly. Move each to the
+  reference shape (service in `application`, repository port + Prisma adapter in `infrastructure`) one module at a time,
+  keeping `route-manifest` identical: next are `learning/interface/learning.controller.ts` (≈760 lines) and
+  `lessons/interface/lessons.controller.ts` (≈570).
+- Several `application` files (`asset-versions.ts`, `content-release.ts`, `admin-policy.ts`, `student-access.service.ts`,
+  `progress-projection.ts`, `hint.ts`) take `Db` directly; give them repository ports when their module is converted.

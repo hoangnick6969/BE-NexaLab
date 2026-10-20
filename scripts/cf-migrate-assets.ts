@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import { readFile, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { audit } from "../src/common/audit";
-import { objectKeys, storage } from "../src/infra/storage";
+import { objectKeys, storage } from "../src/modules/storage/infrastructure/storage";
 
 const apply = process.argv.includes("--apply");
 const deleteLocal = process.argv.includes("--delete-local");
