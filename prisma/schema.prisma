@@ -96,6 +96,9 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash String @unique
   kind String @default("refresh")
+  /// D-ACC-01: persistent 30-day session (true) or browser-session cookie with a 12-hour server expiry (false).
+  /// Existing rows predate the choice and were 7-day persistent sessions.
+  remember Boolean @default(true)
   expiresAt DateTime
 }
 model ParentLink {

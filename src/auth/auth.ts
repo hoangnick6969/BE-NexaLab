@@ -62,7 +62,7 @@ export class AuthGuard implements CanActivate {
       },
       select: {
         user: {
-          select: { role: true, status: true, mustChangePassword: true },
+          select: { role: true, status: true, mustChangePassword: true, grade: true },
         },
       },
     });
@@ -75,6 +75,8 @@ export class AuthGuard implements CanActivate {
     if (user.status !== "active")
       throw new UnauthorizedException("Tài khoản đã bị khóa");
     req.user.role = user.role;
+    // The access token carries no grade; grade-scoped reads (foundational progress) need it.
+    req.user.grade = user.grade;
     if (
       user.mustChangePassword &&
       !["/auth/me", "/auth/password", "/auth/logout"].some((path) =>

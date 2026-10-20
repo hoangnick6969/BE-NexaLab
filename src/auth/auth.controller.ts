@@ -1,3 +1,4 @@
+import { readRemember, refreshCookieOptions, sessionExpiry } from "./session-policy";
 import { BadRequestException, Body, Controller, Get, Inject, Post, Req, Res, UnauthorizedException } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import * as argon from "argon2";
@@ -15,22 +16,17 @@ import { email, password, text, username } from "../common/validation";
 @Controller()
 export class AuthController {
   constructor(@Inject(Db) private db: Db, @Inject(RequestRateLimiter) private limiter: RequestRateLimiter) {}
-  private async session(user: any, res: any) {
+  private async session(user: any, res: any, remember: boolean) {
     const refresh = token();
     const session = await this.db.session.create({
       data: {
         userId: user.id,
         tokenHash: hashToken(refresh),
-        expiresAt: new Date(Date.now() + 7 * 86400000),
+        remember,
+        expiresAt: sessionExpiry(remember),
       },
     });
-    res.cookie("refresh", refresh, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/api/auth",
-      maxAge: 7 * 86400000,
-    });
+    res.cookie("refresh", refresh, refreshCookieOptions(remember));
     return { user: publicUser(user), accessToken: access(user, session.id) };
   }
   @Public() @Post("auth/login") async login(
@@ -49,7 +45,7 @@ export class AuthController {
       !(await argon.verify(user.passwordHash, b.password))
     )
       throw new UnauthorizedException("Email hoặc mật khẩu không đúng");
-    return this.session(user, res);
+    return this.session(user, res, readRemember(body));
   }
   @Public() @Post("auth/admin/login") async adminLogin(
     @Body() body: unknown,
@@ -66,7 +62,7 @@ export class AuthController {
       !(await argon.verify(user.passwordHash, b.password))
     )
       throw new UnauthorizedException("Email hoặc mật khẩu quản trị không đúng");
-    return this.session(user, res);
+    return this.session(user, res, readRemember(body));
   }
   @Public() @Post("auth/student/login") async studentLogin(
     @Body() body: unknown,
@@ -91,7 +87,7 @@ export class AuthController {
       throw new UnauthorizedException(
         "Mật khẩu tạm đã hết hạn. Hãy nhờ giáo viên cấp lại.",
       );
-    return this.session(user, res);
+    return this.session(user, res, readRemember(body));
   }
   @Public() @Post("auth/register") async register(
     @Body() body: unknown,
@@ -117,7 +113,7 @@ export class AuthController {
         consentAt: new Date(),
       },
     });
-    return this.session(user, res);
+    return this.session(user, res, false);
   }
   @Public() @Post("auth/refresh") async refresh(
     @Req() req: any,
@@ -138,7 +134,7 @@ export class AuthController {
       throw new UnauthorizedException();
     const deleted = await this.db.session.deleteMany({ where: { id: s.id } });
     if (!deleted.count) throw new UnauthorizedException();
-    return this.session(s.user, res);
+    return this.session(s.user, res, s.remember);
   }
   @Public() @Post("auth/logout") async logout(
     @Req() req: any,
@@ -166,6 +162,9 @@ export class AuthController {
     });
     if (!(await argon.verify(u.passwordHash, b.currentPassword)))
       throw new BadRequestException("Mật khẩu cũ không đúng");
+    // The new session keeps the remember-me choice of the session that changed the password.
+    const current = await this.db.session.findUnique({ where: { id: req.user.sid }, select: { remember: true } });
+    const remember = current?.remember ?? false;
     await this.db.$transaction([
       this.db.user.update({
         where: { id: u.id },
@@ -180,7 +179,7 @@ export class AuthController {
     const refreshedUser = await this.db.user.findUniqueOrThrow({
       where: { id: u.id },
     });
-    return this.session(refreshedUser, res);
+    return this.session(refreshedUser, res, remember);
   }
   @Public() @Post("auth/forgot") async forgot(
     @Req() req: any,

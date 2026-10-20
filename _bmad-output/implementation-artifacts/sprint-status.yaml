@@ -6,7 +6,7 @@ project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
 scope: Release 1 / Content Foundation CF-T1..T4 plus I1 open curriculum, I2 Class Space resources, and I3 assigned-test lifecycle; CF-T5 corpus remains a staffed workstream
-last_updated: '2026-10-19'
+last_updated: '2026-10-20'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'BE-NexaLab (codex/i1-open-curriculum; includes latest origin/main integration through HEAD 87bf6fe plus uncommitted assignment-catalog fix)'
@@ -104,6 +104,13 @@ development_status:
   i3-3-4-student-assignment-states: review
   i3-3-5-teacher-assignment-late-queue: review
   i3-3-6-parent-overdue-notice: review
+  epic-account-notifications-r2: in-progress
+  acc-1-remember-me-sessions: review
+  acc-2-profile-avatar: ready-for-dev
+  acc-3-notifications: backlog
+  acc-4-theme-dark-mode: backlog
+  acc-5-i18n-en-vi: backlog
+  acc-6-r2-setup-docs: backlog
 
 increment_i2_tracking:
   plan: ../planning-artifacts/increment-i2-epic-02-class-space-resources.md
@@ -172,6 +179,21 @@ assignment_catalog_hierarchy_2026_10_19:
   verification: 'BE and FE lint/build passed; BE src/learning/learning.controller.test.ts 4/4 passed. FE tests/student-lessons-hub.spec.ts 4/4 passed in installed Chrome against local Vite; assignment catalog scenario also asserted 375px width, reduced motion, route navigation, I3 status badge, and zero per-assignment detail requests. This was focused UI verification, not the full API-backed application suite.'
   remaining:
     - 'Full FE browser suite and live API/database acceptance were not rerun for this focused catalog fix.'
+
+increment_account_notifications_r2:
+  plan: ../planning-artifacts/increment-account-notifications-r2.md
+  status: in-progress
+  date: '2026-10-20'
+  branch: 'feat/account-notifications-r2 (BE and FE, from main 51d7f98 / e5bba7c)'
+  decisions: 'D-ACC-01..04 accepted by the product owner 2026-10-20 (remember-me 30 days / 12 h session cookie; stored notifications with 30 s polling, supersedes D-I3-03; private avatars for every role; UI-only i18n and dev-bucket R2).'
+  acc_1_remember_me:
+    status: review
+    changes: 'Session.remember (migration 20261020090000_acc_session_remember, default true for pre-existing 7-day sessions; applied to shared development by the user); src/auth/session-policy.ts (30-day persistent vs browser-session cookie + 12 h server expiry, sliding on refresh); student/adult/admin login read remember, register is short, refresh and password change keep the flag; FE login checkbox (default off). Guard now selects and sets req.user.grade, fixing GET /me/foundational-progress.'
+    verification: 'BE lint, Vitest 176/176 (session-policy 3 new, guard test updated); FE lint; Playwright acc-remember-me-live 2/2 (30-day cookie survives rotation and reload; session cookie stays session after rotation; new browser session signed out); flagship, c2-admin pass.'
+    preexisting_failures: 'i3-assigned-test-live and reading-completion fail on FE main without acc-1 changes (UI changed by PR #21 "unify curriculum and class learning flows"); not fixed in acc-1.'
+  known_bugs_on_main:
+    - 'FIXED in acc-1: GET /me/foundational-progress always returned no courses because the auth guard never set req.user.grade.'
+    - 'Student settings "Tạo mã liên kết" calls POST /parent-code, which does not exist (fix in acc-2).'
 
 execution:
   current_story: student-assignment-catalog-hierarchy

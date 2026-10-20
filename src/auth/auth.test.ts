@@ -9,7 +9,7 @@ describe("AuthGuard", () => {
 
   it("validates the session and user in one database query", async () => {
     const findFirst = vi.fn().mockResolvedValue({
-      user: { role: "STUDENT", status: "active", mustChangePassword: false },
+      user: { role: "STUDENT", status: "active", mustChangePassword: false, grade: 9 },
     });
     const reflector = {
       getAllAndOverride: vi.fn((key: string) => (key === "public" ? false : ["STUDENT"])),
@@ -35,9 +35,10 @@ describe("AuthGuard", () => {
     expect(findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ id: "session-1", userId: "student-1", kind: "refresh" }),
-        select: { user: { select: { role: true, status: true, mustChangePassword: true } } },
+        select: { user: { select: { role: true, status: true, mustChangePassword: true, grade: true } } },
       }),
     );
     expect(request.user.role).toBe("STUDENT");
+    expect(request.user.grade).toBe(9);
   });
 });
