@@ -4,6 +4,7 @@ import { Roles } from "../common/decorators";
 import { audit } from "../common/audit";
 import { Db } from "../infra/db";
 import { readTtl, storage, storageEnv, uploadTtl } from "../infra/storage";
+import { mergePreferences, preferencesUpdateSchema, readPreferences } from "./preferences";
 import { assertAvatarObject, assertOwnAvatarKey, avatarConfirmSchema, avatarUploadSchema, newAvatarKey, profileUpdateSchema } from "./avatar";
 
 const profileSelect = {
@@ -17,6 +18,7 @@ const profileSelect = {
   createdAt: true,
   avatarKey: true,
   avatarUpdatedAt: true,
+  preferences: true,
 } as const;
 
 /** Account profile and private avatar (acc-2, D-ACC-03). */
@@ -27,9 +29,10 @@ export class ProfileController {
   constructor(@Inject(Db) private db: Db) {}
 
   private async view(user: any) {
-    const { avatarKey, ...rest } = user;
+    const { avatarKey, preferences, ...rest } = user;
     return {
       ...rest,
+      preferences: readPreferences(preferences),
       // Students' names are provisioned by their teacher; adults may rename themselves.
       canEditName: user.role !== "STUDENT",
       avatarUrl: avatarKey ? await storage().presignGet(avatarKey, readTtl()) : null,
@@ -65,6 +68,17 @@ export class ProfileController {
     const updated = await this.db.user.update({ where: { id: req.user.sub }, data: { fullName: b.fullName }, select: profileSelect });
     await audit(this.db, { actor: req.user, action: "user.profile.update", targetType: "User", targetId: req.user.sub, after: { name: b.fullName } });
     return this.view(updated);
+  }
+
+  @Patch("me/preferences")
+  @ApiOperation({ summary: "Merge UI preferences (theme); every role, students included" })
+  async updatePreferences(@Req() req: any, @Body() body: unknown) {
+    const b = preferencesUpdateSchema.parse(body);
+    const current = await this.db.user.findUnique({ where: { id: req.user.sub }, select: { preferences: true } });
+    if (!current) throw new NotFoundException();
+    const preferences = mergePreferences(current.preferences, b);
+    await this.db.user.update({ where: { id: req.user.sub }, data: { preferences } });
+    return { preferences };
   }
 
   @Post("me/avatar/upload-url")

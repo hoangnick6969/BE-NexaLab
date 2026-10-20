@@ -75,6 +75,8 @@ model User {
   /// Private avatar object key in object storage (D-ACC-03); read only through short presigned URLs.
   avatarKey String?
   avatarUpdatedAt DateTime?
+  /// UI preferences (acc-4): { theme?: "system" | "light" | "dark" }; read through users/preferences.ts.
+  preferences Json @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   sessions Session[]
