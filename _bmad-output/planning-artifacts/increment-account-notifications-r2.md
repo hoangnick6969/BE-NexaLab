@@ -1,6 +1,6 @@
 ---
 increment: account-notifications-r2
-status: in-progress
+status: review
 created: '2026-10-20'
 branch: feat/account-notifications-r2 (BE and FE, from main 51d7f98 / e5bba7c)
 ---

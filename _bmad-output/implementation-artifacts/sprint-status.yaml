@@ -104,13 +104,13 @@ development_status:
   i3-3-4-student-assignment-states: review
   i3-3-5-teacher-assignment-late-queue: review
   i3-3-6-parent-overdue-notice: review
-  epic-account-notifications-r2: in-progress
+  epic-account-notifications-r2: review
   acc-1-remember-me-sessions: review
   acc-2-profile-avatar: review
   acc-3-notifications: review
   acc-4-theme-dark-mode: review
   acc-5-i18n-en-vi: review
-  acc-6-r2-setup-docs: backlog
+  acc-6-r2-setup-docs: review
 
 increment_i2_tracking:
   plan: ../planning-artifacts/increment-i2-epic-02-class-space-resources.md
@@ -182,7 +182,7 @@ assignment_catalog_hierarchy_2026_10_19:
 
 increment_account_notifications_r2:
   plan: ../planning-artifacts/increment-account-notifications-r2.md
-  status: in-progress
+  status: review
   date: '2026-10-20'
   branch: 'feat/account-notifications-r2 (BE and FE, from main 51d7f98 / e5bba7c)'
   decisions: 'D-ACC-01..04 accepted by the product owner 2026-10-20 (remember-me 30 days / 12 h session cookie; stored notifications with 30 s polling, supersedes D-I3-03; private avatars for every role; UI-only i18n and dev-bucket R2).'
@@ -215,6 +215,12 @@ increment_account_notifications_r2:
     verification: 'BE lint, Vitest 188/188; FE lint/build. Playwright acc-i18n-live 1/1 (English on sign-in, English error by code, English shell, saved to profile, switch back to Vietnamese, other browser follows the profile) and acc-theme-live 2/2. Full suite in Vietnamese: 34 passed, 6 skipped, 12 failed, of which 11 fail identically on the pre-i18n FE (461f012, run against the same API) and the 12th was acc-i18n-live, since fixed. English screenshots reviewed (teacher home/classes/lessons, landing).'
     preexisting_failures: 'b1-teacher-live, i2-class-space-ui-live (2), i3-assigned-test-edges-live archive test, i3-assigned-test-live, quiz-learning, reading-completion, study-cards, video-completion (3): fail on 461f012 as well (UI changed by PR #21 and the catalog hierarchy).'
     remaining: 'Stored notifications keep the language they were written in (Vietnamese). English copy has not had a native-speaker review.'
+  acc_6_r2_setup_docs:
+    status: review
+    changes: 'docs/operations/r2-storage.md: principles, configuration, key layout and lifecycle per prefix, avatar lifecycle, bucket CORS JSON (GET/HEAD/PUT, content-type, expose ETag, exact origins), lifecycle rules (expire <env>/staging/ after 2 days, abort incomplete multipart after 1 day), bucket-scoped token policy and rotation, and the pilot/production bucket checklist (documented, not performed; D-ACC-04). Two gaps found while documenting and fixed: avatar uploads now land in <env>/staging/avatars/<user>/ and are copied to <env>/avatars/<user>/ on confirmation, so an unconfirmed upload is expired by the lifecycle rule; permanent account deletion now deletes the avatar object. .env.example points at the runbook.'
+    verification: 'BE lint, Vitest 188/188 (avatar key tests updated for staging and release). Against the real dev bucket: r2:check 9/9; Playwright acc-profile-live 2/2 (confirmed avatar served from <env>/avatars/, never staging; foreign staging key refused); one-off live check that DELETE /admin/users/:id removes the avatar object (temporary user and its audit row removed afterwards); 0 objects left under development/staging/ and development/avatars/.'
+    owner_actions: 'The app token cannot read or set bucket settings (AccessDenied on GetBucketCors/Lifecycle, by design), so the owner must confirm the dev bucket CORS and add the two lifecycle rules in the Cloudflare dashboard (runbook section 4). Pilot/production buckets: runbook section 6 when approved.'
+    notes: 'cf-storage-live.spec.ts (multipart through bucket CORS) exists only on FE feat/content-foundation, not on this branch.'
   known_bugs_on_main:
     - 'FIXED in acc-1: GET /me/foundational-progress always returned no courses because the auth guard never set req.user.grade.'
     - 'FIXED in acc-2: student settings "Tạo mã liên kết" called POST /parent-code, which does not exist.'

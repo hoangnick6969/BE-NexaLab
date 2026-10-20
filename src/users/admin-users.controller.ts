@@ -25,6 +25,7 @@ import { temporaryPassword } from "../auth/temporary-password";
 import { audit, changedFields } from "../common/audit";
 import { Db } from "../infra/db";
 import { smtpDeliver } from "../infra/mail";
+import { storage } from "../infra/storage";
 import {
   DELETION_BLOCKER_LABELS,
   activeOwnership,
@@ -382,12 +383,14 @@ export class AdminUsersController {
       .parse(body ?? {});
     if (id === req.user.sub)
       throw new ConflictException({ code: "SELF_ACTION_FORBIDDEN", message: "Không thể xóa tài khoản đang đăng nhập" });
-    return this.db.$transaction(
+    let avatarKey: string | null = null;
+    const result = await this.db.$transaction(
       async (tx) => {
         await lockAdminLifecycle(tx);
         const target = await tx.user.findUnique({ where: { id } });
         if (!target) throw notFound("tài khoản");
         await assertNotLastActiveAdmin(tx, target);
+        avatarKey = target.avatarKey;
         const blockers = await deletionBlockers(tx, id);
         const keys = blockingKeys(blockers);
         if (keys.length)
@@ -411,6 +414,9 @@ export class AdminUsersController {
       },
       { timeout: 20000 },
     );
+    // The avatar is personal data: remove the private object once the account row is gone (D-ACC-03).
+    if (avatarKey) await storage().delete(avatarKey).catch(() => undefined);
+    return result;
   }
 
   @Post("users/:id/reset-link")

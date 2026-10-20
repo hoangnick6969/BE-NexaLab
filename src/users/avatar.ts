@@ -15,13 +15,22 @@ export const avatarUploadSchema = z
 export const avatarConfirmSchema = z.object({ key: z.string().min(1).max(300) }).strict();
 export const profileUpdateSchema = z.object({ fullName: z.string().trim().min(1).max(120) }).strict();
 
+/**
+ * Key layout (docs/operations/r2-storage.md): uploads land under `<env>/staging/avatars/<user>/` and are
+ * copied to `<env>/avatars/<user>/` on confirmation, so an upload that is never confirmed stays in the
+ * staging prefix, which the bucket lifecycle rule expires.
+ */
+export const avatarStagingPrefix = (env: string, userId: string) => `${env}/staging/avatars/${userId}/`;
 export const avatarPrefix = (env: string, userId: string) => `${env}/avatars/${userId}/`;
 export const newAvatarKey = (env: string, userId: string, contentType: keyof typeof AVATAR_TYPES) =>
-  `${avatarPrefix(env, userId)}${randomUUID()}.${AVATAR_TYPES[contentType]}`;
+  `${avatarStagingPrefix(env, userId)}${randomUUID()}.${AVATAR_TYPES[contentType]}`;
+/** Final key for a confirmed upload: same file name, moved out of staging. */
+export const releasedAvatarKey = (stagingKey: string, env: string, userId: string) =>
+  avatarPrefix(env, userId) + stagingKey.slice(avatarStagingPrefix(env, userId).length);
 
-/** A confirmed key must be one this user was issued: their own prefix, one segment, a known extension. */
+/** A confirmed key must be one this user was issued: their own staging prefix, one segment, a known extension. */
 export function assertOwnAvatarKey(key: string, env: string, userId: string) {
-  const prefix = avatarPrefix(env, userId);
+  const prefix = avatarStagingPrefix(env, userId);
   const name = key.startsWith(prefix) ? key.slice(prefix.length) : "";
   if (!/^[0-9a-f-]{36}\.(png|jpg|webp)$/.test(name))
     throw new BadRequestException({ code: "AVATAR_KEY_INVALID", message: "Tệp ảnh không hợp lệ" });

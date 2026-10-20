@@ -5,7 +5,7 @@ import { audit } from "../common/audit";
 import { Db } from "../infra/db";
 import { readTtl, storage, storageEnv, uploadTtl } from "../infra/storage";
 import { mergePreferences, preferencesUpdateSchema, readPreferences } from "./preferences";
-import { assertAvatarObject, assertOwnAvatarKey, avatarConfirmSchema, avatarUploadSchema, newAvatarKey, profileUpdateSchema } from "./avatar";
+import { assertAvatarObject, assertOwnAvatarKey, avatarConfirmSchema, avatarUploadSchema, newAvatarKey, profileUpdateSchema, releasedAvatarKey } from "./avatar";
 
 const profileSelect = {
   id: true,
@@ -82,7 +82,7 @@ export class ProfileController {
   }
 
   @Post("me/avatar/upload-url")
-  @ApiOperation({ summary: "Presigned PUT for a new avatar under the caller's private prefix" })
+  @ApiOperation({ summary: "Presigned PUT for a new avatar under the caller's private staging prefix" })
   async avatarUploadUrl(@Req() req: any, @Body() body: unknown) {
     const b = avatarUploadSchema.parse(body);
     const key = newAvatarKey(storageEnv(), req.user.sub, b.contentType);
@@ -91,12 +91,15 @@ export class ProfileController {
   }
 
   @Post("me/avatar")
-  @ApiOperation({ summary: "Confirm an uploaded avatar after server-side size and type checks" })
+  @ApiOperation({ summary: "Confirm an uploaded avatar after server-side size and type checks; moves it out of staging" })
   async confirmAvatar(@Req() req: any, @Body() body: unknown) {
     const { key } = avatarConfirmSchema.parse(body);
     assertOwnAvatarKey(key, storageEnv(), req.user.sub);
     assertAvatarObject(await storage().head(key));
-    return this.view(await this.setAvatar(req.user, req.user.sub, key, "user.avatar.update"));
+    const released = releasedAvatarKey(key, storageEnv(), req.user.sub);
+    await storage().copy(key, released);
+    await storage().delete(key).catch(() => undefined);
+    return this.view(await this.setAvatar(req.user, req.user.sub, released, "user.avatar.update"));
   }
 
   @Delete("me/avatar")
