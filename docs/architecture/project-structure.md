@@ -76,9 +76,12 @@ the frontend), `content/` (release manifests and simulation packs), `tools/nexal
 
 ### Known follow-ups
 
-- Every module except `notifications` still has controllers that query Prisma through `Db` directly. Move each to the
+- `classes` (2026-10-21): controllers are thin and delegate to `ClassesService`, `EnrollmentsService`,
+  `AssignmentsService` and `ClassResourcesService` in `application`; those services still use `Db` directly, so the
+  next step there is repository ports like `notifications`.
+- The other modules (except `notifications`) still have controllers that query Prisma through `Db` directly. Move each to the
   reference shape (service in `application`, repository port + Prisma adapter in `infrastructure`) one module at a time,
-  keeping `route-manifest` identical: start with the largest handlers, `classes/interface/assignments.controller.ts`
-  (≈740 lines), `learning/interface/learning.controller.ts` (≈760) and `lessons/interface/lessons.controller.ts` (≈570).
+  keeping `route-manifest` identical: next are `learning/interface/learning.controller.ts` (≈760 lines) and
+  `lessons/interface/lessons.controller.ts` (≈570).
 - Several `application` files (`asset-versions.ts`, `content-release.ts`, `admin-policy.ts`, `student-access.service.ts`,
   `progress-projection.ts`, `hint.ts`) take `Db` directly; give them repository ports when their module is converted.
