@@ -55,7 +55,7 @@ async function bootstrap() {
   };
   SwaggerModule.setup("api/docs", app, spec);
   await app.listen(
-    Number(process.env.PORT ?? 4000),
+    Number(process.env.PORT ?? 4100),
     process.env.HOST ?? "127.0.0.1",
   );
 }

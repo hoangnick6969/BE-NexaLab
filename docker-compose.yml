@@ -31,9 +31,12 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://nexalab:nexalab_local@postgres:5432/nexalab?schema=public
+      # Migrations and seed use DIRECT_URL; override it so they never reach the database in .env.
+      DIRECT_URL: postgresql://nexalab:nexalab_local@postgres:5432/nexalab?schema=public
+      SEED_TARGET: postgres/nexalab
       SMTP_HOST: mailpit
       HOST: 0.0.0.0
-    ports: ["127.0.0.1:4000:4000"]
+    ports: ["127.0.0.1:4100:4100"]
     depends_on:
       postgres:
         condition: service_healthy

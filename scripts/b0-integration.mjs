@@ -1,7 +1,7 @@
 // B0 platform verification on real dependencies (B0P-T1/T2/T4), built on the
 // shared B/C harness (B0P-T3). Run with tsx so the audit helper is imported
 // from source:
-//   TEST_API=http://127.0.0.1:4000/api npx tsx scripts/b0-integration.mjs
+//   TEST_API=http://127.0.0.1:4100/api npx tsx scripts/b0-integration.mjs
 // The T4 checks need the API started with APP_ENV=test (or development) and
 // HINT_PROVIDER_TEST_DELAY_MS=3000; without it they are reported as SKIP.
 import * as argon from "argon2";

@@ -177,7 +177,10 @@ export class LabsController {
       // D-B1-01: an applicable standalone lab assignment opens the lab even when a
       // gated lesson embeds it; the attempt has no lessonStepId, so it never
       // completes the lesson's lab step. Every other direct submission keeps the A3 gate.
-      if (!labAssignment) await this.assertPracticalGate(c.labId, req.user.sub, tx);
+      // A released foundational Lab opened outside a lesson step is open curriculum
+      // and is never gated by an assignment's quiz (spec §2b, FR-13).
+      const openFoundational = !b.lessonStepId && c.lab.scope === "SHARED_LIBRARY" && c.lab.releaseCleared && !c.lab.synthetic && Boolean(c.lab.topicCode);
+      if (!labAssignment && !openFoundational) await this.assertPracticalGate(c.labId, req.user.sub, tx);
       const a = await tx.attempt.create({
         data: {
           studentId: req.user.sub,

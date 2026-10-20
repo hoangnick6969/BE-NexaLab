@@ -5,5 +5,5 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run db:generate && npm run build
-EXPOSE 4000
+EXPOSE 4100
 CMD ["sh", "-c", "npm run db:migrate && npm start"]

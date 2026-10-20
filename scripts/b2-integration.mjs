@@ -5,7 +5,7 @@ import { PrismaClient } from "@prisma/client";
 import * as argon from "argon2";
 
 const db = new PrismaClient();
-const api = process.env.TEST_API ?? "http://127.0.0.1:4000/api";
+const api = process.env.TEST_API ?? "http://127.0.0.1:4100/api";
 const prefix = process.env.B2_FIXTURE_PREFIX ?? "b2-" + Date.now().toString(36);
 const password = "B2-Local-Test-2026!";
 const ids = { teacher: `${prefix}-teacher`, outsider: `${prefix}-outsider`, student: `${prefix}-student`, class: `${prefix}-class`, lesson: `${prefix}-lesson`, assignment: `${prefix}-assignment` };
