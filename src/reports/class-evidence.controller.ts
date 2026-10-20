@@ -8,6 +8,8 @@ import { deriveLesson } from "../progress/progress";
 import { audit } from "../common/audit";
 import { idempotent, readIdempotencyKey } from "../common/idempotency";
 import { supportFlags } from "./evidence-support";
+import { TEST_CONTENT_TYPE } from "../classes/assignment-test-contract";
+import { testStates } from "../classes/assignment-test-state";
 
 const reasonSchema = z.object({ reason: z.string().trim().min(3).max(500), stepId: z.string().min(1).max(200) }).strict();
 const notFound = () => new NotFoundException({ code: "EVIDENCE_NOT_FOUND", message: "Không tìm thấy bằng chứng học tập" });
@@ -47,6 +49,24 @@ export class ClassEvidenceController {
     if (assignment.status !== "ACTIVE" || assignment.classroom.status !== "ACTIVE") return [];
     const now = new Date();
     const studentIds = assignment.targets.map((target) => target.studentId);
+    if (assignment.contentType === TEST_CONTENT_TYPE) {
+      // Test submissions are not Attempt rows; derive state from the test lifecycle.
+      const { deadlines, states, key } = await testStates(this.db, [assignment], studentIds, now);
+      const dueAt = deadlines.get(assignment.id)?.dueAt ?? assignment.dueDate;
+      return assignment.targets.map(({ student }) => {
+        const state = states.get(key(assignment.id, student.id));
+        const flags = supportFlags({
+          now,
+          dueDate: dueAt,
+          completed: state?.status === "SUBMITTED",
+          assignmentCreatedAt: assignment.createdAt,
+          progressAt: (state?.history ?? []).map((row) => row.submittedAt),
+          quizzes: [],
+          practicals: [],
+        });
+        return { student, flags };
+      }).filter((row) => row.flags.length);
+    }
     const [steps, progress, quizzes, attempts] = await Promise.all([
       assignment.contentType === "lesson"
         ? this.db.lessonStep.findMany({ where: { lessonId: assignment.contentId }, orderBy: { position: "asc" } })
@@ -78,7 +98,10 @@ export class ClassEvidenceController {
 
   @Roles("TEACHER")
   @Get("classes/:classId/students/:studentId/evidence")
-  async evidence(@Param("classId") classId: string, @Param("studentId") studentId: string, @Query("assignmentId") assignmentId: string, @Req() req: any) {
+  async evidence(@Param("classId") classId: string, @Param("studentId") studentId: string, @Query("assignmentId") rawAssignmentId: unknown, @Req() req: any) {
+    // Without this, a missing assignmentId becomes `undefined`, which Prisma
+    // ignores, and every query below would return the student's evidence from all classes.
+    const assignmentId = z.string().trim().min(1).max(200).parse(rawAssignmentId);
     await this.authorizedStudent(classId, studentId, req.user);
     const assignment = await this.db.assignment.findFirst({ where: { id: assignmentId, classId, targets: { some: { studentId } } } });
     if (!assignment) throw notFound();

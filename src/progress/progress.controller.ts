@@ -30,10 +30,20 @@ export class ProgressController {
     @Req() req: any,
   ) {
     await this.access.readableStudent(studentId, req);
+    // A teacher only sees evidence from assignments in classes they own.
+    const owned =
+      req.user.role === "TEACHER"
+        ? await this.db.assignment.findMany({
+            where: { classroom: { teacherId: req.user.sub }, targets: { some: { studentId } } },
+            select: { id: true, contentId: true },
+          })
+        : null;
     const [progress, attempts] = await Promise.all([
-      this.db.progress.findMany({ where: { studentId } }),
+      this.db.progress.findMany({
+        where: { studentId, ...(owned && { contentId: { in: owned.map((a) => a.contentId) } }) },
+      }),
       this.db.attempt.findMany({
-        where: { studentId },
+        where: { studentId, ...(owned && { assignmentId: { in: owned.map((a) => a.id) } }) },
         select: {
           id: true,
           verdict: true,

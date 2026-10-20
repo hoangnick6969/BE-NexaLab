@@ -52,15 +52,22 @@ function assignmentView(a: any, now = new Date()) {
   };
 }
 
-const assignmentInput = z
+export const assignmentInput = z
   .object({
     contentType: z.enum(["lesson", "lab", "test"]),
     contentId: text,
     title: text.optional(),
     dueDate: z.string().datetime().nullable().optional(),
     studentIds: z.array(text).max(200).default([]),
+    audience: z.enum(["CLASS", "SUBSET"]).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.audience === "SUBSET" && value.studentIds.length === 0)
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["studentIds"], message: "Hãy chọn ít nhất một học sinh." });
+    if (value.audience === "CLASS" && value.studentIds.length > 0)
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["studentIds"], message: "Giao cả lớp không được kèm danh sách nhóm." });
+  });
 
 const assignmentUpdate = z
   .object({

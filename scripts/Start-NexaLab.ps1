@@ -26,9 +26,9 @@ Start-NexaService 'mail' $backendPath @('scripts/mailbox.mjs')
 $ready = $false
 for ($attempt = 0; $attempt -lt 40; $attempt++) {
     try {
-        $health = Invoke-RestMethod 'http://127.0.0.1:4000/api/health' -TimeoutSec 2
+        $health = Invoke-RestMethod 'http://127.0.0.1:4100/api/health' -TimeoutSec 2
         if ($health.status -eq 'ok') { $ready = $true; break }
     } catch { Start-Sleep -Milliseconds 500 }
 }
 if (-not $ready) { throw "API chưa sẵn sàng. Xem log trong $localPath" }
-Write-Output 'Frontend: http://localhost:5173 | API: http://127.0.0.1:4000/api/docs | Mailbox: http://127.0.0.1:8025'
+Write-Output 'Frontend: http://localhost:5173 | API: http://127.0.0.1:4100/api/docs | Mailbox: http://127.0.0.1:8025'

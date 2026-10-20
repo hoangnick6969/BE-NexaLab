@@ -3,7 +3,7 @@
 // on time and late, the teacher rejects and revises the deadline, and student,
 // teacher and linked-parent views are checked against the running API and its
 // database. Every fixture is generated with a unique prefix and removed afterwards.
-//   TEST_API=http://127.0.0.1:4000/api npx tsx scripts/i3-integration.mjs
+//   TEST_API=http://127.0.0.1:4100/api npx tsx scripts/i3-integration.mjs
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -11,7 +11,7 @@ import { PrismaClient } from "@prisma/client";
 import * as argon from "argon2";
 
 const db = new PrismaClient();
-const origin = process.env.TEST_API ?? "http://127.0.0.1:4000/api";
+const origin = process.env.TEST_API ?? "http://127.0.0.1:4100/api";
 const prefix = "i3-accept-" + Date.now().toString(36);
 const password = "I3-Accept-Password-2026!";
 const createdUsers = [];

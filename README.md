@@ -101,8 +101,8 @@ npm run dev
 
 | Địa chỉ | Dịch vụ |
 | --- | --- |
-| `http://127.0.0.1:4000/api/health` | Health check |
-| `http://127.0.0.1:4000/api/docs` | Swagger |
+| `http://127.0.0.1:4100/api/health` | Health check |
+| `http://127.0.0.1:4100/api/docs` | Swagger |
 | `http://localhost:8025` | Mailpit khi chạy bằng Compose |
 
 Seed tạo học sinh `nguyenan.8a` và các tài khoản người lớn `teacher@nexalab.local`, `parent@nexalab.local`, `admin@nexalab.local`, dùng mật khẩu từ `SEED_PASSWORD`. Mã lớp mẫu: `NEXA8A`. Chạy lại seed không ghi đè mật khẩu của tài khoản đã tồn tại.
