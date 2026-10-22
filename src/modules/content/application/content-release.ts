@@ -154,7 +154,12 @@ async function materialize(
   const steps = materializeLegacySteps(body as any, lessonId);
   for (const step of steps)
     await tx.lessonStep.create({
-      data: { ...step, id: `step-${lessonId}-${step.type.toLowerCase().replace("_", "-")}`, lessonId, config: step.config as any },
+      data: {
+        ...step,
+        id: `step-${lessonId}-${step.id ?? step.type.toLowerCase().replace("_", "-")}`,
+        lessonId,
+        config: step.config as any,
+      },
     });
   return lessonId;
 }

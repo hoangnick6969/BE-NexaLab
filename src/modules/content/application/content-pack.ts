@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import { DOMAINS, domainSchema } from "../../lessons/application/lesson-content";
+import { basicExerciseConfigSchema } from "../../lessons/application/pathway";
 
 /**
  * CF-T1 content pack manifest and release gates. A pack is NexaLab-authored
@@ -29,6 +30,17 @@ const id = z
   .string()
   .trim()
   .regex(/^[a-z0-9][a-z0-9._-]{1,79}$/, "ID ổn định: chữ thường, số, dấu chấm, gạch ngang, gạch dưới");
+const basicExercises = basicExerciseConfigSchema
+  .extend({ id })
+  .strict()
+  .superRefine((exercise, ctx) => {
+    for (const [path, value] of exercise.questions.flatMap((question, questionIndex) => [
+      [["questions", questionIndex, "id"], question.id] as const,
+      ...question.options.map((option, optionIndex) => [["questions", questionIndex, "options", optionIndex, "id"], option.id] as const),
+    ]))
+      if (!id.safeParse(value).success)
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [...path], message: "ID bài tập phải là ID authored ổn định" });
+  });
 const person = z
   .object({
     name: z.string().trim().min(2).max(120),
@@ -136,6 +148,7 @@ export const packManifestSchema = z
           )
           .max(30)
           .default([]),
+        basicExercises: basicExercises.optional(),
         labId: z.string().max(40).nullable().default(null),
       })
       .strict(),
@@ -279,6 +292,7 @@ export function lessonFromPack(m: PackManifest) {
       options: q.options.map((o) => o.text),
       answer: q.options.findIndex((o) => o.id === q.answerId),
     })),
+    ...(m.lesson.basicExercises ? { basicExercises: m.lesson.basicExercises } : {}),
     labId: m.lesson.labId,
   };
 }

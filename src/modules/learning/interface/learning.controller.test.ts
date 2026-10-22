@@ -21,6 +21,63 @@ describe("LearningController assignment context", () => {
   });
 });
 
+describe("LearningController Open Curriculum basic exercises", () => {
+  it("returns authored IDs without exposing the answer key", async () => {
+    const db = {
+      lesson: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "lesson-1",
+          subjectId: "physics",
+          subject: { id: "physics", name: "Vật lý", ebookUrl: null },
+          title: "Mạch nối tiếp",
+          chapter: "Điện",
+          grade: 8,
+          topic: "Mạch nối tiếp",
+          learningObjective: "Nhận biết dòng điện",
+          prerequisites: "",
+          curriculum: "GDPT 2018",
+          content: "Read",
+          materials: [],
+          steps: [{
+            id: "step-practice-series-current",
+            type: "BASIC_EXERCISE",
+            position: 30,
+            required: true,
+            progress: [],
+            basicExerciseAttempts: [],
+            config: {
+              passThreshold: 60,
+              questions: [{
+                id: "practice-current-question",
+                prompt: "Current?",
+                options: [{ id: "same-current", text: "Same" }, { id: "different-current", text: "Different" }],
+                correctOptionId: "same-current",
+              }],
+            },
+          }],
+          ebookLocators: [],
+        }),
+      },
+    };
+    const controller = new LearningController(db as any, {} as any);
+
+    const result = await controller.openCurriculumLesson("lesson-1", { user: { sub: "student-1" } });
+
+    expect(result.steps[0]).toMatchObject({
+      id: "step-practice-series-current",
+      type: "BASIC_EXERCISE",
+      resource: {
+        passThreshold: 60,
+        questions: [{
+          id: "practice-current-question",
+          options: [{ id: "same-current", text: "Same" }, { id: "different-current", text: "Different" }],
+        }],
+      },
+    });
+    expect(JSON.stringify(result.steps[0].resource)).not.toContain("correctOptionId");
+  });
+});
+
 describe("LearningController assignment catalog summaries", () => {
   it("returns hierarchy metadata from a batch content read and omits unavailable items", async () => {
     const assignmentRows = [
