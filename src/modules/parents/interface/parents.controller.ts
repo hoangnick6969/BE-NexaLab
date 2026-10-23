@@ -1,8 +1,10 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Query, Req } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Query, Req, ServiceUnavailableException } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
 import { access } from "../../auth/interface/auth";
-import { Roles } from "../../../common/decorators";
+import { Public, Roles } from "../../../common/decorators";
+import { RequestRateLimiter } from "../../../common/request-rate-limiter";
+import { smtpDeliver } from "../../mail/infrastructure/mail";
 import { Db } from "../../../db/db";
 import { email } from "../../../common/validation";
 import { StudentAccessService } from "../../progress/application/student-access.service";
@@ -12,12 +14,20 @@ import { testStates } from "../../classes/application/assignment-test-state";
 import { notify } from "../../notifications/application/notify";
 import { overdueNotice } from "../../notifications/application/time-based-notices";
 import { PARENT_CONSENT_HASH, PARENT_CONSENT_VERSION, parentCode, parentCodeHash } from "../application/parent-codes";
+import { approvePendingLinks, confirmEmailVerification, issueEmailVerification, linkPrerequisites } from "../application/parent-links";
+
+const MINUTE = 60 * 1000;
+const linkCodeInvalid = () => new BadRequestException({ code: "LINK_CODE_INVALID", message: "Mã liên kết không hợp lệ" });
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
 @Controller()
 export class ParentsController {
-  constructor(@Inject(Db) private db: Db, @Inject(StudentAccessService) private access: StudentAccessService) {}
+  constructor(
+    @Inject(Db) private db: Db,
+    @Inject(StudentAccessService) private access: StudentAccessService,
+    @Inject(RequestRateLimiter) private limiter: RequestRateLimiter,
+  ) {}
   @Roles("TEACHER") @Post("classes/:classId/students/:studentId/parent-link-codes") async issueParentLinkCode(
     @Req() req: any, @Param("classId") classId: string, @Param("studentId") studentId: string,
     @Body() body: unknown,
@@ -30,9 +40,19 @@ export class ParentsController {
     await this.db.parentLinkCode.create({ data: { studentId, teacherId: req.user.sub, classId, codeHash: parentCodeHash(code), guardianVerifiedAt: new Date(), expiresAt } });
     return { code, expiresAt, consentVersion: PARENT_CONSENT_VERSION };
   }
-  @Roles("PARENT") @Post("auth/email/verify") async verifyParentEmail(@Req() req: any) {
-    await this.db.user.update({ where: { id: req.user.sub }, data: { emailVerifiedAt: new Date() } });
-    return { verified: true };
+  /** Mails a one-time verification link; the email counts as verified only when that link is opened (PRD §14). */
+  @Roles("PARENT") @Post("auth/email/verify/request") async requestEmailVerification(@Req() req: any) {
+    this.limiter.rate("email-verify-request:" + req.user.sub, 3);
+    const user = await this.db.user.findUniqueOrThrow({ where: { id: req.user.sub }, select: { id: true, email: true, role: true, status: true, emailVerifiedAt: true } });
+    if (user.emailVerifiedAt) return { verified: true, sent: false };
+    if (!(await issueEmailVerification(this.db, user, smtpDeliver)))
+      throw new ServiceUnavailableException({ code: "EMAIL_DELIVERY_FAILED", message: "Chưa gửi được email xác minh, hãy thử lại sau" });
+    return { verified: false, sent: true };
+  }
+  @Public() @Post("auth/email/verify") async verifyParentEmail(@Req() req: any, @Body() body: unknown) {
+    this.limiter.rate("email-verify:" + req.ip, 10);
+    const b = z.object({ token: z.string().min(1).max(200) }).parse(body);
+    return confirmEmailVerification(this.db, b.token);
   }
   @Roles("PARENT") @Get("auth/consents/parent-child-progress") parentConsentTerms() {
     return { purpose: "PARENT_CHILD_PROGRESS", version: PARENT_CONSENT_VERSION, contentHash: PARENT_CONSENT_HASH };
@@ -40,24 +60,53 @@ export class ParentsController {
   @Roles("PARENT") @Post("auth/consents") async acceptParentConsent(@Req() req: any, @Body() body: unknown) {
     const b = z.object({ purpose: z.literal("PARENT_CHILD_PROGRESS"), version: z.string().min(1), contentHash: z.string().min(1) }).parse(body);
     if (b.version !== PARENT_CONSENT_VERSION || (b.contentHash !== PARENT_CONSENT_HASH && !(process.env.NODE_ENV !== "production" && b.contentHash === "dev"))) throw new BadRequestException("Phiên bản đồng ý không hợp lệ");
-    const consent = await this.db.parentConsent.create({ data: { userId: req.user.sub, purpose: b.purpose, version: b.version, contentHash: b.contentHash, actorId: req.user.sub } });
-    await this.db.parentLink.updateMany({ where: { parentId: req.user.sub, status: "pending", revokedAt: null }, data: { status: "approved", verifiedAt: new Date() } });
-    return consent;
+    // Pending links are approved only when the email is verified as well (C1 SPEC).
+    return this.db.$transaction(async (tx) => {
+      const consent = await tx.parentConsent.create({ data: { userId: req.user.sub, purpose: b.purpose, version: b.version, contentHash: b.contentHash, actorId: req.user.sub } });
+      return { ...consent, approvedLinks: await approvePendingLinks(tx, req.user.sub) };
+    });
   }
   @Roles("PARENT") @Post("children/link") async link(
     @Req() req: any,
     @Body() body: unknown,
   ) {
-    const b = z.object({ code: z.string().regex(/^NP-[0-9A-Z]{5}(?:-[0-9A-Z]{5}){3}$/i) }).parse(body);
-    return this.db.$transaction(async (tx) => {
-      const linkCode = await tx.parentLinkCode.findUnique({ where: { codeHash: parentCodeHash(b.code) } });
-      if (!linkCode || linkCode.consumedAt || linkCode.revokedAt || linkCode.expiresAt <= new Date()) throw new BadRequestException({ code: "LINK_CODE_INVALID", message: "Mã liên kết không hợp lệ" });
+    // C1 SPEC redemption limits: IP + account 5 failures / 10 min, account 15 failures / hour, IP 30 attempts / hour.
+    const pair = `parent-link:${req.ip}:${req.user.sub}`;
+    const account = `parent-link-account:${req.user.sub}`;
+    this.limiter.guard(pair, 5);
+    this.limiter.guard(account, 15);
+    this.limiter.rate(`parent-link-ip:${req.ip}`, 30, 60 * MINUTE);
+    const failed = () => {
+      this.limiter.record(pair, 10 * MINUTE);
+      this.limiter.record(account, 60 * MINUTE);
+      return linkCodeInvalid();
+    };
+    // Malformed, unknown, expired, used and revoked codes all get the same response.
+    const b = z.object({ code: z.string().regex(/^NP-[0-9A-Z]{5}(?:-[0-9A-Z]{5}){3}$/i) }).safeParse(body);
+    if (!b.success) throw failed();
+    const link = await this.db.$transaction(async (tx) => {
+      const linkCode = await tx.parentLinkCode.findUnique({ where: { codeHash: parentCodeHash(b.data.code) } });
+      if (!linkCode || linkCode.consumedAt || linkCode.revokedAt || linkCode.expiresAt <= new Date()) return null;
       await tx.parentLinkCode.update({ where: { id: linkCode.id }, data: { consumedAt: new Date() } });
-      const parent = await tx.user.findUnique({ where: { id: req.user.sub }, select: { emailVerifiedAt: true } });
-      const consent = await tx.parentConsent.findFirst({ where: { userId: req.user.sub, purpose: "PARENT_CHILD_PROGRESS", version: PARENT_CONSENT_VERSION, ...(process.env.NODE_ENV !== "production" ? { contentHash: { in: [PARENT_CONSENT_HASH, "dev"] } } : { contentHash: PARENT_CONSENT_HASH }), withdrawnAt: null } });
-      const approved = Boolean(parent?.emailVerifiedAt && consent);
-      return tx.parentLink.upsert({ where: { parentId_studentId: { parentId: req.user.sub, studentId: linkCode.studentId } }, create: { parentId: req.user.sub, studentId: linkCode.studentId, codeId: linkCode.id, status: approved ? "approved" : "pending" }, update: { codeId: linkCode.id, status: approved ? "approved" : "pending", revokedAt: null } });
+      const { emailVerified, consent } = await linkPrerequisites(tx, req.user.sub);
+      const status = emailVerified && consent ? "approved" : "pending";
+      return tx.parentLink.upsert({ where: { parentId_studentId: { parentId: req.user.sub, studentId: linkCode.studentId } }, create: { parentId: req.user.sub, studentId: linkCode.studentId, codeId: linkCode.id, status }, update: { codeId: linkCode.id, status, revokedAt: null } });
     });
+    if (!link) throw failed();
+    return link;
+  }
+  /** C1 CAP-3: the parent's own activation prerequisites and pending links (approved children come from GET children). */
+  @Roles("PARENT") @Get("children/link-status") async linkStatus(@Req() req: any) {
+    const [prerequisites, pending] = await Promise.all([
+      linkPrerequisites(this.db, req.user.sub),
+      this.db.parentLink.findMany({
+        where: { parentId: req.user.sub, status: "pending", revokedAt: null },
+        // verifiedAt defaults to the redemption time while the link is still pending.
+        select: { verifiedAt: true, student: { select: { id: true, fullName: true } } },
+        orderBy: { verifiedAt: "asc" },
+      }),
+    ]);
+    return { ...prerequisites, pending: pending.map((p) => ({ studentId: p.student.id, fullName: p.student.fullName, linkedAt: p.verifiedAt })) };
   }
   @Roles("PARENT") @Get("children") async children(@Req() req: any) {
     return this.db.parentLink.findMany({

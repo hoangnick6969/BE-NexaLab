@@ -2,6 +2,7 @@ import { ForbiddenException, Inject, Injectable, NotFoundException } from "@nest
 import { access } from "../../auth/interface/auth";
 import { applicableAssignmentWhere, applicableLessonAssignmentWhere, assignmentQueueOrder, isOverdue } from "../../classes/application/class-access";
 import { Db } from "../../../db/db";
+import { audit } from "../../../common/audit";
 import { buildPathwaySteps, validateLessonSteps } from "../../lessons/application/pathway";
 import { attribution } from "../../lessons/application/lesson-content";
 import { ARCHIVED_CONTENT_MESSAGE } from "../../lessons/application/lesson-moderation";
@@ -131,17 +132,16 @@ export class StudentAccessService {
   }
   async readableStudent(id: string, req: any) {
     if (req.user.sub === id || req.user.role === "ADMIN") return;
-    if (
-      req.user.role === "PARENT" &&
-      (await this.db.parentLink.findUnique({
-        where: {
-          parentId_studentId: { parentId: req.user.sub, studentId: id },
-        },
+    if (req.user.role === "PARENT") {
+      const link = await this.db.parentLink.findUnique({
+        where: { parentId_studentId: { parentId: req.user.sub, studentId: id } },
         select: { status: true, revokedAt: true },
-      }))?.status === "approved" &&
-      !(await this.db.parentLink.findUnique({ where: { parentId_studentId: { parentId: req.user.sub, studentId: id } }, select: { revokedAt: true } }))?.revokedAt
-    )
-      return;
+      });
+      if (link?.status === "approved" && !link.revokedAt) return;
+      // C1 SPEC: one non-enumerating denial for unlinked, revoked, pending or nonexistent children, audited without the reason.
+      await audit(this.db, { actor: req.user, action: "parent.child.read", targetType: "User", targetId: id, outcome: "denied" });
+      throw new ForbiddenException({ code: "PARENT_LINK_REQUIRED", message: "Chưa có liên kết phụ huynh" });
+    }
     if (
       req.user.role === "TEACHER" &&
       (await this.db.enrollment.findFirst({

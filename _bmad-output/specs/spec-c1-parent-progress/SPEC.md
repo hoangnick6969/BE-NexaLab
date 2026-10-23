@@ -54,3 +54,8 @@ A responsible teacher issues a seven-day code after recording guardian verificat
 ## Release gate
 
 - Product/legal must approve the exact Vietnamese consent text, purpose, version, and content hash before pilot activation. The versioned consent model and UI flow may be implemented against a clearly marked development copy first.
+
+## Implementation notes
+
+- 2026-10-23 (branch `test/codebase-flow-review-2026-10-22`, in review): email verification now uses a mailed one-time link (`POST /auth/email/verify/request`, public token-based `POST /auth/email/verify`); pending links are approved only when both the verified email and current consent exist and are re-evaluated when either completes; `GET /children/link-status` lists the parent's prerequisites and pending links (CAP-3); redemption follows the §40 limits with a uniform `LINK_CODE_INVALID`; parent denials return `PARENT_LINK_REQUIRED` and are audited (§42). Limits are per-process, in memory.
+

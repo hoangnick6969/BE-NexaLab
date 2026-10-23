@@ -77,7 +77,7 @@ export class AdminCurriculumController {
         targetId: id,
         reason: b.reason,
         before: { name: before.name, ebookUrl: before.ebookUrl },
-        after: { name: b.name, ebookUrl: b.ebookUrl ?? before.ebookUrl },
+        after: { name: b.name, ebookUrl: b.ebookUrl !== undefined ? b.ebookUrl : before.ebookUrl },
       });
       return subject;
     });

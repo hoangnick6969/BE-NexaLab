@@ -310,9 +310,11 @@ export class AdminLabsController {
   async activateSimPack(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
     const b = z.object({ reason }).strict().parse(body ?? {});
     return this.db.$transaction(async (tx) => {
-      const pack = await tx.simulationPackVersion.findUnique({ where: { id } });
-      if (!pack) throw notFound("gói mô phỏng");
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-pack-lab:" + pack.labId}))`;
+      const found = await tx.simulationPackVersion.findUnique({ where: { id }, select: { labId: true } });
+      if (!found) throw notFound("gói mô phỏng");
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-pack-lab:" + found.labId}))`;
+      // Read the status under the lock so two concurrent activations cannot both pass the draft check.
+      const pack = (await tx.simulationPackVersion.findUnique({ where: { id } }))!;
       if (pack.status !== "draft") throw new ConflictException({ code: "PACK_NOT_DRAFT", message: "Chỉ kích hoạt được gói ở trạng thái nháp; gói đã dùng là bất biến" });
       if (["pilot", "production"].includes(storageEnv()) && !(pack.reviews as any)?.rangeApproval)
         throw new ConflictException({ code: "RANGE_APPROVAL_REQUIRED", message: "Khoảng tham số của mô hình chưa được duyệt (Q-C2-04)" });

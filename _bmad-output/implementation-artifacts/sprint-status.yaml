@@ -6,7 +6,7 @@ project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
 scope: Release 1 / Content Foundation CF-T1..T4 plus I1 open curriculum, I2 Class Space resources, I3 assigned-test lifecycle, account/notifications (acc-1..acc-6) and the BE module-layer refactor; CF-T5 corpus remains a staffed workstream
-last_updated: '2026-10-21'
+last_updated: '2026-10-23'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'BE-NexaLab: origin/main ebfaba7 (PR #28 refactor/be-module-layers incl. acc-1..acc-6; earlier PR #27, I1 #23/#26, I2 #24, I3 #25, project-structure #20). Still unmerged: feat/content-foundation 1 commit ahead (824dc74 chemistry pH-mode registry outputs; the CF core 8a1d44b and its three migrations are already on main).'
@@ -202,6 +202,15 @@ refactor_be_module_layers:
   classes_module_2026_10_21: 'Controllers split into thin interface controllers and application services (ClassesService, EnrollmentsService, AssignmentsService, ClassResourcesService), bodies moved unchanged by a bracket-aware script; controllers no longer reference Db. Verified: route-manifest identical, lint, Vitest 190/190, check:layers ok (103 files), test:i3 66/66, test:acc 29/29, Playwright i2-class-space-api + acc-notifications + acc-profile + i3-assigned-test-edges 11 passed, 1 pre-existing failure (archive test expects a flat /assignments link); no 500/503.'
   remaining: 'classes services still use Db directly (repository ports next). learning, lessons, labs, progress, users, curriculum, assets, content, parents, reports, admin and auth still query Prisma from controllers; convert one at a time. The labs hint endpoint has no live spec; its wiring is type-checked and unit-tested.'
 
+
+codebase_flow_review_2026_10_23:
+  status: review
+  branch: 'test/codebase-flow-review-2026-10-22 (BE and FE, from main 48463ea / c7fe891); FE login-form commit a535547 pushed; everything below is uncommitted'
+  record: '../../../test-fix-log-2026-10-22.md (workspace root): FIX-01..FIX-10, FINDING-01..13, TEST-01..05, ENV-01..04'
+  scope: 'Flows 1-34 of the review checklist. Automated suites plus API scripts for the untested flows 2, 4, 15, 22-24, 23, 27, 29, 30, then a code review of those flows against the PRD and SPEC C1.'
+  fixes: 'C1 parent activation: mailed one-time email verification (POST auth/email/verify/request; auth/email/verify now public and token-based), pending links approved only with verified email AND consent and re-evaluated when either completes, GET children/link-status, redemption limiter + uniform LINK_CODE_INVALID, PARENT_LINK_REQUIRED denial with audit. FE parent panel states/feedback, verification page, login copy, presigned/multipart uploads above 20 MB, Roster i18n, audit labels. BE: ebookUrl added to AUDIT_FIELDS, sim-pack visuals block asset deletion, activateSimPack reads status under the lock. Test scripts c2/cf adapted to FR-13 lab access.'
+  verification: 'BE lint, check:layers 104 files, Vitest 198/198; test:i3 66, acc 29, b2 13, c2 80 (+1 skip), cf 60; API scripts 63/63 and 6/6; FE lint/build; Playwright acc-* / c2-admin / confirmed-ui-fixes / progress-* 15 passed 2 skipped; Chrome checks of the parent UI and 21 MB / 66 MB uploads passed. Test data cleaned from shared development.'
+  open: 'b0/b1 integration scripts still expect pre-FR-13 lab access and the old chemistry objective (TEST-01/02); 7 FE specs still target the previous UI (TEST-04); student.temp expiry blocks test:integration (ENV-01); BE default port 4100 vs .env 4000 (ENV-04).'
 
 increment_account_notifications_r2:
   plan: ../planning-artifacts/increment-account-notifications-r2.md
