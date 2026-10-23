@@ -593,6 +593,18 @@ await h.run({
       { "Idempotency-Key": crypto.randomUUID() },
     );
     createdUsers.push(provisioned.data.user.id);
+    // Standalone lab attempts need an applicable lab assignment unless the lab is released to the shared library (FR-13).
+    await db.assignment.create({
+      data: {
+        classId: classMade.data.class.id,
+        contentId: "circuit",
+        contentType: "lab",
+        title: `${prefix} lab`,
+        status: "ACTIVE",
+        audience: "CLASS",
+        targets: { create: { studentId: provisioned.data.user.id } },
+      },
+    });
     let sLogin = await req("/auth/student/login", "POST", {
       username: provisioned.data.credentials.username,
       password: provisioned.data.credentials.temporaryPassword,
@@ -650,7 +662,8 @@ await h.run({
     check("the earlier attempt still reproduces its original verdict", replay.data.matches === true);
     check(
       "the preview route resolves the model by its allowlisted reference",
-      (await req("/simulate/circuit", "POST", flag.pack.template.goldenCases[2].state, studentToken)).data?.verdict === "passed",
+      // Students preview only released shared-library labs (FR-13); the lab page previews as a teacher.
+      (await req("/simulate/circuit", "POST", flag.pack.template.goldenCases[2].state, owner.token)).data?.verdict === "passed",
     );
   },
   async cleanup() {
@@ -666,10 +679,15 @@ await h.run({
     }
     await db.practicalActivityVersion.deleteMany({ where: { key: { in: created.practicals } } });
     const packVersions = await db.contentPackVersion.findMany({ where: { packKey: { in: created.packs } } });
+    // Lesson.packVersionId restricts deletes, so materialized lessons are detached before their pack versions go.
+    const packVersionIds = packVersions.map((v) => v.id);
+    const packLessons = await db.lesson.findMany({ where: { packVersionId: { in: packVersionIds } }, select: { id: true } });
+    const packLessonIds = [...new Set([...packVersions.map((v) => v.lessonId).filter(Boolean), ...packLessons.map((l) => l.id)])];
     await db.contentReleaseItem.deleteMany({ where: { releaseId: { in: created.releases } } });
     await db.contentRelease.deleteMany({ where: { id: { in: created.releases } } });
+    await db.lesson.updateMany({ where: { id: { in: packLessonIds } }, data: { packVersionId: null } });
     await db.contentPackVersion.deleteMany({ where: { packKey: { in: created.packs } } });
-    await db.lesson.deleteMany({ where: { id: { in: packVersions.map((v) => v.lessonId).filter(Boolean) } } });
+    await db.lesson.deleteMany({ where: { id: { in: packLessonIds } } });
     await db.contentPack.deleteMany({ where: { key: { in: created.packs } } });
     const artifacts = await db.sourceArtifact.findMany({ where: { sourceKey: { in: created.sources } }, include: { versions: true } });
     for (const a of artifacts) for (const v of a.versions) if (v.rawObjectKey) await s.delete(v.rawObjectKey).catch(() => undefined);

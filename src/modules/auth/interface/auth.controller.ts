@@ -8,6 +8,7 @@ import { Public } from "../../../common/decorators";
 import { FORGOT_MESSAGE, completePasswordReset, requestPasswordReset } from "../application/password-reset";
 import { Db } from "../../../db/db";
 import { smtpDeliver } from "../../mail/infrastructure/mail";
+import { issueEmailVerification } from "../../parents/application/parent-links";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { email, password, text, username } from "../../../common/validation";
 
@@ -111,6 +112,8 @@ export class AuthController {
         consentAt: new Date(),
       },
     });
+    // The verification link is mailed in the background; the parent can request a new one from the progress page.
+    void issueEmailVerification(this.db, user, smtpDeliver).catch(() => console.error("NexaLab email-verification request failed"));
     return this.session(user, res, false);
   }
   @Public() @Post("auth/refresh") async refresh(

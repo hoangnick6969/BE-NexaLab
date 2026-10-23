@@ -62,6 +62,7 @@ export const AUDIT_FIELDS = new Set([
   "active",
   // C2 admin operations
   "ownerId",
+  "ebookUrl",
   "sessionsRevoked",
   "resolutions",
   "nameChanged",

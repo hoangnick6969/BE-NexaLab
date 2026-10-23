@@ -174,10 +174,10 @@ export async function canReadVersion(db: any, user: { sub: string; role: string 
   return (lessons as any[]).length + (labs as any[]).length > 0;
 }
 
-/** Lessons, steps and labs whose JSON references any version of the asset (or a given version). */
+/** Lessons, steps and labs whose JSON references any version of the asset (or a given version), and simulation packs using a version as their visual. */
 export async function assetReferences(db: any, ids: { versionIds: string[]; legacyFileId?: string | null }) {
   const needles = [...ids.versionIds.map((id) => `%assetv:${id}%`), ...(ids.legacyFileId ? [`%asset:${ids.legacyFileId}%`] : [])];
-  if (!needles.length) return { lessons: [], labs: [] };
+  if (!needles.length) return { lessons: [], labs: [], simPacks: [] };
   const lessons: any[] = [];
   const labs: any[] = [];
   for (const needle of needles) {
@@ -188,7 +188,13 @@ export async function assetReferences(db: any, ids: { versionIds: string[]; lega
     labs.push(...((await db.$queryRaw`SELECT id, title, status FROM "Lab" WHERE assets::text LIKE ${needle}`) as any[]));
   }
   const unique = (rows: any[]) => [...new Map(rows.map((r) => [r.id, r])).values()];
-  return { lessons: unique(lessons), labs: unique(labs) };
+  const simPacks = ids.versionIds.length
+    ? await db.simulationPackVersion.findMany({
+        where: { visualAssetVersionId: { in: ids.versionIds } },
+        select: { id: true, key: true, version: true, status: true },
+      })
+    : [];
+  return { lessons: unique(lessons), labs: unique(labs), simPacks };
 }
 
 /** Validates an upload request and creates the asset (or its next version) in PENDING state. */

@@ -158,6 +158,18 @@ await h.run({
     const assignment = await db.assignment.create({
       data: { classId, contentId: lesson.id, contentType: "lesson", title: `${prefix} bài giao`, status: "ACTIVE", audience: "CLASS" },
     });
+    // Standalone lab attempts need an applicable lab assignment unless the lab is released to the shared library (FR-13).
+    await db.assignment.create({
+      data: {
+        classId,
+        contentId: "circuit",
+        contentType: "lab",
+        title: `${prefix} lab`,
+        status: "ACTIVE",
+        audience: "CLASS",
+        targets: { create: { studentId: provisioned.data.user.id } },
+      },
+    });
     return { admin, admin2, owner, heir, parent, student, classId, lesson, assignment };
   },
 
