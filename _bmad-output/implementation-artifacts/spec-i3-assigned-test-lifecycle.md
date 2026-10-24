@@ -79,3 +79,9 @@ The spec found a pre-existing crash: the parent progress page read `attempts`, w
 - Full suite result: 21 passed, 16 failed (pre-existing), 8 did not run.
 
 **Remaining:** none for I3. The pre-existing e2e failures are tracked as a separate task.
+
+## Review Triage Log — 2026-10-24 (flows 11, 18, 25, 33)
+
+- The live UI specs had drifted from the app, not the reverse. `/assignments` now groups work by grade → subject → chapter, so `i3-assigned-test-live` and `i3-assigned-test-edges-live` open the chapter screen through the `studentAssignmentRow` helper (`tests/fixtures/live.ts`). The parent overdue notice carries one control, "Đã xem", which marks the stored notification read (acc-3, `a988908`); the work itself stays read-only, so the spec now asserts exactly that control and no links.
+- Result on shared development: 10/10 (2 + 8), including the parent notice cleared by a deadline revision.
+- Related privacy fix found while probing roles: `GET /lessons` no longer serves parents (FINDING-21 in `flows-remaining-2026-10-24.md`).

@@ -203,6 +203,16 @@ refactor_be_module_layers:
   remaining: 'classes services still use Db directly (repository ports next). learning, lessons, labs, progress, users, curriculum, assets, content, parents, reports, admin and auth still query Prisma from controllers; convert one at a time. The labs hint endpoint has no live spec; its wiring is type-checked and unit-tested.'
 
 
+flows_remaining_review_2026_10_24:
+  status: review
+  branch: 'test/flows-remaining-2026-10-24 (BE and FE, stacked on test/flows-7-8-9-2026-10-24); uncommitted'
+  record: '../../../flows-remaining-2026-10-24.md (workspace root): FINDING-20..23, OBS-06..08; summary in ../../../bugs-fixed-2026-10-24.md'
+  scope: 'Flows 11-13, 16-20, 25, 31-34 (the 13 flows left after flows 7-9): repair the stale live specs, add API suites for class management, probe every role against every FE route, check the admin overview against the database, gesture control and the landing page.'
+  fixes: 'BE: GET /lessons is limited to students, teachers and admins (a parent account read every teacher-private published lesson with review metadata); /teacher/content computes structureLocked in five grouped queries (19 s -> 2 s for a teacher with 34 lessons). FE: parents have no lesson library link or /lessons routes, /saved is student-only, parent lab cards open the lab list; the class resource editor is localised.'
+  tests: 'i2-class-space-ui-live fills the structured editor and opens the class resources tab; i3 specs reach /assignments through grade/subject/chapter (studentAssignmentRow helper) and expect the parent "Đã xem" control; b0 assigns the circuit lab (FR-13); new npm run test:classes (27 checks: rename, join code switches, archive read-only, password reset by the provisioning teacher); new role-routes-live spec; test:learning checks that a parent cannot list lessons (TEST-04 closed).'
+  verification: 'BE lint, check:layers 104 files, Vitest 199/199, test:b0 13/13, test:learning 62/62, test:classes 27/27, test:b1 176 passed 3 environment skips; FE lint/build, Playwright i2 3/3, i3 10/10, b1-teacher-live 9/9, role-routes-live 3/3, acc-i18n + acc-theme 3/3; probes for 4 roles x 14 routes, fake-camera gesture control and the landing page at 390/1280 light/dark.'
+  open: 'OBS-06 bulk enrolment is not in the PRD; OBS-07 /health does not check the database; OBS-08 admin "active simulation configurations" counts config versions only; OBS-05 b1-teacher-live leaves pw-b1 accounts; earlier OBS-01/02/04 and ENV-01 unchanged.'
+
 flows_7_8_9_review_2026_10_24:
   status: review
   branch: 'test/flows-7-8-9-2026-10-24 (BE and FE, from main 4129314 / dd53cd6); pushed BE e0b5a2d, FE eac5f13; PR bodies in ../../../pr-bodies-2026-10-24.md'

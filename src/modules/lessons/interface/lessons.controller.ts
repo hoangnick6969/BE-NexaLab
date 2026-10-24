@@ -80,7 +80,8 @@ export class LessonsController {
         });
     }
   }
-  @Get("lessons") async lessons(@Req() req: any) {
+  // Parents read linked-child progress only (QR-03); class-private lessons must not reach them.
+  @Roles("STUDENT", "TEACHER", "ADMIN") @Get("lessons") async lessons(@Req() req: any) {
     let assignedLessonIds: string[] | undefined;
     if (req.user.role === "STUDENT") {
       const assignments = await this.db.assignment.findMany({
@@ -105,7 +106,7 @@ export class LessonsController {
     return list.map((l) => ({
       ...l,
       questions:
-        req.user.role === "STUDENT" || req.user.role === "PARENT"
+        req.user.role === "STUDENT"
           ? (l.questions as any[]).map(({ answer, ...q }) => q)
           : l.questions,
     }));
@@ -130,6 +131,24 @@ export class LessonsController {
       db.attempt.count({ where: { lessonStepId: { in: stepIds } } }),
     ]);
     return assignments + progress + quiz + practical > 0;
+  }
+  /** structureLocked for many lessons in a fixed number of queries (the library lists every own lesson). */
+  private async structureLockedIds(lessonIds: string[]) {
+    if (!lessonIds.length) return new Set<string>();
+    const steps = await this.db.lessonStep.findMany({ where: { lessonId: { in: lessonIds } }, select: { id: true, lessonId: true } });
+    const lessonOfStep = new Map(steps.map((step: any) => [step.id, step.lessonId as string]));
+    const stepIds = [...lessonOfStep.keys()];
+    const [assignments, progress, quiz, practical] = await Promise.all([
+      this.db.assignment.groupBy({ by: ["contentId"], where: { contentType: "lesson", contentId: { in: lessonIds }, status: "ACTIVE" } }),
+      this.db.stepProgress.groupBy({ by: ["stepId"], where: { stepId: { in: stepIds } } }),
+      this.db.quizAttempt.groupBy({ by: ["lessonId"], where: { lessonId: { in: lessonIds } } }),
+      this.db.attempt.groupBy({ by: ["lessonStepId"], where: { lessonStepId: { in: stepIds } } }),
+    ]);
+    return new Set<string>([
+      ...assignments.map((row: any) => row.contentId),
+      ...quiz.map((row: any) => row.lessonId),
+      ...[...progress.map((row: any) => row.stepId), ...practical.map((row: any) => row.lessonStepId)].map((stepId) => lessonOfStep.get(stepId)!),
+    ]);
   }
   private lessonAuditFields(lesson: any) {
     return {
@@ -386,6 +405,7 @@ export class LessonsController {
       include: { subject: { select: { id: true, name: true } } },
       orderBy: [{ grade: "asc" }, { chapter: "asc" }, { title: "asc" }],
     });
+    const locked = await this.structureLockedIds(rows.filter((lesson) => lesson.authorId === req.user.sub && lesson.status !== "draft").map((lesson) => lesson.id));
     const items: any[] = [];
     for (const lesson of rows) {
       const own = lesson.authorId === req.user.sub;
@@ -407,7 +427,7 @@ export class LessonsController {
         own,
         editable: own && lesson.scope === "TEACHER_PRIVATE",
         clonedFromId: lesson.clonedFromId,
-        structureLocked: own && lesson.status !== "draft" ? await this.structureLocked(lesson.id) : false,
+        structureLocked: locked.has(lesson.id),
         publishBlockers:
           (own || req.user.role === "ADMIN") && lesson.status === "draft" ? publishBlockers(lesson as any, lesson.scope) : [],
         releaseReview: lesson.scope === "SHARED_LIBRARY" ? this.releaseReviewView(lesson.releaseReview) : null,
