@@ -9,6 +9,35 @@ import { DOMAINS, domainSchema } from "../../lessons/application/lesson-content"
 
 const ebookUrl = z.string().url().refine((value) => new URL(value).protocol === "https:", "Liên kết ebook phải dùng HTTPS").nullable().optional();
 
+export function curriculumTargetInfo(env: NodeJS.ProcessEnv = process.env) {
+  const environment = env.APP_ENV ?? "";
+  const values = [env.DATABASE_URL, env.DIRECT_URL];
+  const connections = values.map((value) => {
+    if (!value) return null;
+    try {
+      const url = new URL(value);
+      if (!["postgres:", "postgresql:"].includes(url.protocol)) return null;
+      const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+      const username = decodeURIComponent(url.username);
+      const projectRef = host.match(/^db\.([a-z0-9]+)\.supabase\.co$/)?.[1] ?? username.match(/^postgres\.([a-z0-9]+)$/)?.[1] ?? null;
+      return { host, projectRef };
+    } catch {
+      return null;
+    }
+  });
+  const loopback = new Set(["localhost", "127.0.0.1", "::1"]);
+  const projectRefs = connections.map((item) => item?.projectRef).filter((item): item is string => Boolean(item));
+  const projectRef = projectRefs.length === 2 && projectRefs[0] === projectRefs[1] ? projectRefs[0] : null;
+  const allowlistedRefs = new Set((env.CURRICULUM_REMOTE_DEVELOPMENT_PROJECT_REFS ?? "").split(",").map((item) => item.trim()).filter(Boolean));
+  return {
+    environment,
+    configuredConnections: connections.filter(Boolean).length,
+    localDevelopmentTarget: environment === "development" && connections.length === 2 && connections.every((item) => item !== null && loopback.has(item.host)),
+    remoteDevelopmentTarget: environment === "development" && projectRef !== null && allowlistedRefs.has(projectRef),
+    projectRef,
+  };
+}
+
 /**
  * Epic C2 admin console API. Every route is ADMIN-only (other roles get 403 from
  * the guard), every mutation and every audit read writes an AuditLog row in the
@@ -25,7 +54,8 @@ export class AdminCurriculumController {
   @Get("taxonomy")
   @ApiOperation({ summary: "Subjects, chapters, topics and outcomes with usage counts" })
   async taxonomy() {
-    const [subjects, chapters, topics, outcomes, lessons] = await Promise.all([
+    const [frameworks, subjects, chapters, topics, outcomes, lessons] = await Promise.all([
+      this.db.curriculumFramework.findMany({ include: { subjects: { select: { subjectId: true, grade: true } } }, orderBy: [{ title: "asc" }, { version: "asc" }] }),
       this.db.subject.findMany({ include: { _count: { select: { lessons: true, labs: true } } }, orderBy: { id: "asc" } }),
       this.db.curriculumChapter.findMany({ orderBy: [{ grade: "asc" }, { code: "asc" }] }),
       this.db.curriculumTopic.findMany({ orderBy: { code: "asc" } }),
@@ -36,11 +66,56 @@ export class AdminCurriculumController {
     for (const lesson of lessons) for (const c of (lesson.outcomeCodes as string[]) ?? []) usage.set(c, (usage.get(c) ?? 0) + 1);
     return {
       domains: DOMAINS,
+      frameworks,
       subjects: subjects.map(({ _count, ...s }) => ({ ...s, lessons: _count.lessons, labs: _count.labs })),
       chapters,
       topics,
       outcomes: outcomes.map((o) => ({ ...o, lessons: usage.get(o.code) ?? 0 })),
     };
+  }
+  @Get("curriculum-target")
+  @ApiOperation({ summary: "Return sanitized database target safety for local curriculum sync" })
+  curriculumTarget() {
+    return curriculumTargetInfo();
+  }
+  @Post("frameworks")
+  @ApiOperation({ summary: "Create an immutable curriculum framework version with verified source provenance" })
+  async createFramework(@Req() req: any, @Body() body: unknown) {
+    const b = z.object({
+      id: code,
+      frameworkKey: code,
+      title: text,
+      version: z.string().trim().min(1).max(40),
+      sourceMetadata: z.object({
+        authority: z.string().trim().min(2).max(200),
+        url: z.string().url().max(500).refine((value) => new URL(value).protocol === "https:", "Curriculum source must use HTTPS"),
+        publishedAt: z.string().trim().min(4).max(40),
+        accessedAt: z.string().trim().min(4).max(40),
+        sha256: z.string().regex(/^[a-fA-F0-9]{64}$/),
+      }).strict(),
+      subjects: z.array(z.object({ subjectId: text, grade: z.number().int().min(8).max(9) }).strict()).min(1).max(50),
+      reason: reason.optional(),
+    }).strict().parse(body);
+    if (new Set(b.subjects.map((item) => `${item.subjectId}:${item.grade}`)).size !== b.subjects.length)
+      throw new BadRequestException({ code: "DUPLICATE_FRAMEWORK_SUBJECT", message: "Framework subject/grade entries must be unique" });
+    return this.db.$transaction(async (tx) => {
+      if (await tx.curriculumFramework.findUnique({ where: { id: b.id } }) || await tx.curriculumFramework.findFirst({ where: { frameworkKey: b.frameworkKey, version: b.version } }))
+        throw new ConflictException({ code: "FRAMEWORK_EXISTS", message: `Mã framework "${b.id}" đã tồn tại; không ghi đè` });
+      const available = await tx.subject.findMany({ where: { id: { in: b.subjects.map((item) => item.subjectId) } }, select: { id: true } });
+      const missing = b.subjects.map((item) => item.subjectId).filter((id) => !available.some((item) => item.id === id));
+      if (missing.length) throw notFound(`môn học: ${missing.join(", ")}`);
+      const { reason: why, ...data } = b;
+      const framework = await tx.curriculumFramework.create({ data: { ...data, subjects: { create: b.subjects } }, include: { subjects: { select: { subjectId: true, grade: true } } } });
+      await audit(tx, {
+        actor: req.user,
+        action: "curriculumFramework.create",
+        targetType: "CurriculumFramework",
+        targetId: b.id,
+        reason: why,
+        after: { title: b.title, version: b.version, sourceMetadata: b.sourceMetadata, subjects: b.subjects },
+      });
+      return framework;
+    });
   }
   @Post("subjects")
   async createSubject(@Req() req: any, @Body() body: unknown) {
@@ -96,11 +171,12 @@ export class AdminCurriculumController {
         tx.lab.count({ where: { subjectId: id } }),
         tx.curriculumChapter.count({ where: { subjectId: id } }),
       ]);
-      if (lessons + labs + chapters)
+      const frameworks = await tx.curriculumFrameworkSubject.count({ where: { subjectId: id } });
+      if (lessons + labs + chapters + frameworks)
         throw new ConflictException({
           code: "SUBJECT_IN_USE",
           message: "Môn học còn bài học, phòng thực hành hoặc chương; không thể xóa",
-          details: { lessons, labs, chapters },
+          details: { lessons, labs, chapters, frameworks },
         });
       await tx.subject.delete({ where: { id } });
       await audit(tx, {

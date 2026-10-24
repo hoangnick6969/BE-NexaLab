@@ -36,6 +36,7 @@
     "r2:check": "tsx scripts/r2-check.ts",
     "cf:migrate-assets": "tsx scripts/cf-migrate-assets.ts",
     "content:release": "tsx scripts/content-release.ts",
+    "content:studio:validate": "tsx scripts/content-studio-validate.ts",
     "mailbox": "node scripts/mailbox.mjs",
     "format": "prettier --write src packages prisma scripts"
   },

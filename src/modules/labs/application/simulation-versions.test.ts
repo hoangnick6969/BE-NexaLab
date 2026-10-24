@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { evaluate, goldenCaseResults, goldenTemplates, versionErrors, versionInputSchema, versionParams } from "./simulation-versions";
+import { validateContentStudioBlueprint } from "./content-studio-validation";
 
 const circuit = goldenTemplates("circuit");
 const input = (overrides: Record<string, unknown> = {}) =>
@@ -52,5 +53,15 @@ describe("simulation configuration versions (C2-T3)", () => {
     expect(evaluate("circuit", state, versionParams(v2, "circuit_001")).verdict).toBe("partial");
     expect(versionParams(v2, "circuit_002")).toBeNull();
     expect(evaluate("eye", goldenTemplates("eye")[0].labState, null).verdict).toBe("needs_practice");
+  });
+
+  it("validates an editable Content Studio blueprint without storing or activating it", () => {
+    const config = input();
+    expect(validateContentStudioBlueprint({ labId: "circuit", modelRef: "circuit@1.0.0", challengeIds: ["circuit_001"], config })).toEqual(
+      expect.objectContaining({ ok: true, errors: [], golden: expect.arrayContaining([expect.objectContaining({ ok: true })]) }),
+    );
+    expect(validateContentStudioBlueprint({ labId: "circuit", modelRef: "chemistry@1.0.0", challengeIds: ["circuit_001"], config })).toEqual(
+      expect.objectContaining({ ok: false, errors: expect.arrayContaining([expect.stringContaining("does not match")]) }),
+    );
   });
 });

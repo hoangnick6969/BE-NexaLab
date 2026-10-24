@@ -30,6 +30,19 @@ export class AdminContentController {
     return importStructuredLessonDrafts(this.db, b.lessons);
   }
 
+  @Get("structured-lessons/drafts/:id")
+  @ApiOperation({ summary: "Read back an imported private Structured Lesson draft" })
+  async structuredLessonDraft(@Param("id") id: string) {
+    const draft = await this.db.contentPackVersion.findUnique({
+      where: { id },
+      select: { id: true, packKey: true, version: true, digest: true, manifest: true, status: true, synthetic: true },
+    });
+    if (!draft || draft.status !== "draft" || !draft.synthetic) throw notFound("bản nháp Structured Lesson");
+    const manifest = structuredLessonSchema.safeParse(draft.manifest);
+    if (!manifest.success) throw notFound("bản nháp Structured Lesson");
+    return { ...draft, manifest: manifest.data };
+  }
+
   // ───────────────────────── C2-T5 sources and ingestion (CF-T3) ─────────────────────────
   @Get("sources")
   @ApiOperation({ summary: "Source policy registry with current policy, enabled state, preflight problems and recent runs" })

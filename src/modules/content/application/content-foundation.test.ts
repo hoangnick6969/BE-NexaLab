@@ -57,6 +57,21 @@ describe("content pack gates (CF-T1)", () => {
     expect(errors).toContain('video "Video" thiếu phụ đề WebVTT đã kiểm tra');
     expect(errors).toContain('học liệu "Video" không trỏ tới phiên bản tệp sẵn sàng');
   });
+  it("accepts a pinned ready shared-library video with transcript and checked caption", () => {
+    const m = pack();
+    m.lesson.materials = [{
+      type: "video",
+      url: "assetv:videoversion00000001",
+      title: "Reviewed video",
+      transcript: "Reviewed transcript",
+      captionUrl: "assetv:captionversion0000001",
+    }];
+    const assetVersions = new Map([
+      ["videoversion00000001", { kind: "video", scope: "SHARED_LIBRARY", assetStatus: "ACTIVE", status: "READY" }],
+      ["captionversion0000001", { kind: "caption", scope: "SHARED_LIBRARY", assetStatus: "ACTIVE", status: "READY" }],
+    ]);
+    expect(packGateErrors(m, ctx({ assetVersions })).filter((error) => error.includes("học liệu") || error.includes("video"))).toEqual([]);
+  });
   it("digests ignore key order and change with content", () => {
     expect(digestOf({ a: 1, b: [1, { c: 2, d: 3 }] })).toBe(digestOf({ b: [1, { d: 3, c: 2 }], a: 1 }));
     const m = pack();

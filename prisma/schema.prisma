@@ -226,6 +226,35 @@ model Subject {
   ebookAnnotations EbookAnnotation[]
   ebookEditions EbookEdition[]
   foundationalCourseVersions FoundationalCourseVersion[]
+  curriculumFrameworks CurriculumFrameworkSubject[]
+}
+
+/// Versioned authoritative curriculum framework metadata, independent of source textbooks.
+model CurriculumFramework {
+  id String @id
+  /// Stable NexaLab framework identity shared by its immutable versions.
+  frameworkKey String
+  title String
+  version String
+  /// Official source authority, URL, publication/access dates and source checksum.
+  sourceMetadata Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  subjects CurriculumFrameworkSubject[]
+  @@unique([frameworkKey, version])
+  @@index([title, version])
+}
+
+/// Framework coverage of a subject at a grade; chapters/topics/outcomes remain in the existing taxonomy.
+model CurriculumFrameworkSubject {
+  frameworkId String
+  framework CurriculumFramework @relation(fields: [frameworkId], references: [id], onDelete: Restrict)
+  subjectId String
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  grade Int
+  createdAt DateTime @default(now())
+  @@id([frameworkId, subjectId, grade])
+  @@index([subjectId, grade])
 }
 
 model EbookAnnotation {
