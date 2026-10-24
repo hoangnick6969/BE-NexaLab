@@ -81,7 +81,20 @@ await h.run({
     const created = await req("/classes", "POST", { name: `${prefix} lớp`, grade: 8 }, owner.token, key());
     if (created.status !== 201) throw new Error(`class create ${created.status}`);
     const classId = created.data.class.id;
-    return { owner, classId, pupil: await student(classId, owner.token) };
+    const pupil = await student(classId, owner.token);
+    // Standalone lab attempts need an applicable lab assignment unless the lab is released to the shared library (FR-13).
+    await db.assignment.create({
+      data: {
+        classId,
+        contentId: "circuit",
+        contentType: "lab",
+        title: `${prefix} lab`,
+        status: "ACTIVE",
+        audience: "CLASS",
+        targets: { create: { studentId: pupil.id } },
+      },
+    });
+    return { owner, classId, pupil };
   },
 
   async journey({ owner, classId, pupil }) {
