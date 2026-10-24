@@ -205,7 +205,7 @@ refactor_be_module_layers:
 
 flows_remaining_review_2026_10_24:
   status: review
-  branch: 'test/flows-remaining-2026-10-24 (BE and FE, stacked on test/flows-7-8-9-2026-10-24); uncommitted'
+  branch: 'test/flows-remaining-2026-10-24 (BE and FE, stacked on test/flows-7-8-9-2026-10-24); pushed BE 2daba47, FE 5d168f4'
   record: '../../../flows-remaining-2026-10-24.md (workspace root): FINDING-20..23, OBS-06..08; summary in ../../../bugs-fixed-2026-10-24.md'
   scope: 'Flows 11-13, 16-20, 25, 31-34 (the 13 flows left after flows 7-9): repair the stale live specs, add API suites for class management, probe every role against every FE route, check the admin overview against the database, gesture control and the landing page.'
   fixes: 'BE: GET /lessons is limited to students, teachers and admins (a parent account read every teacher-private published lesson with review metadata); /teacher/content computes structureLocked in five grouped queries (19 s -> 2 s for a teacher with 34 lessons). FE: parents have no lesson library link or /lessons routes, /saved is student-only, parent lab cards open the lab list; the class resource editor is localised.'
