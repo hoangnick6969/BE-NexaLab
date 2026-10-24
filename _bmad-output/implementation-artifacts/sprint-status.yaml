@@ -205,7 +205,7 @@ refactor_be_module_layers:
 
 flows_7_8_9_review_2026_10_24:
   status: review
-  branch: 'test/flows-7-8-9-2026-10-24 (BE and FE, from main 4129314 / dd53cd6); uncommitted'
+  branch: 'test/flows-7-8-9-2026-10-24 (BE and FE, from main 4129314 / dd53cd6); pushed BE e0b5a2d, FE eac5f13; PR bodies in ../../../pr-bodies-2026-10-24.md'
   record: '../../../flows-7-8-9-2026-10-24.md (workspace root): FINDING-14..19, OBS-01..05'
   scope: 'Flow 7 (join a class by code), 8 (Open Curriculum) and 9 (assigned lesson pathway): repair b1 and the FE specs for these flows, add a live API suite, review the code against I1 and the learning-gate specs.'
   fixes: 'BE: litmus (pH) teacher variants graded by identified jars, not a missing sample.color (always failed); locked steps name the actual blocking step (no quiz -> PREREQUISITE_INCOMPLETE instead of QUIZ_NOT_PASSED); Open Curriculum chapter lessonCount counts only listed lessons; assignment-free step progress serialized with an advisory lock (concurrent writes duplicated rows). FE: catalog grouped by the official chapter/topic; student bottom navigation laid out in a row on phones (only Home was visible at <= 760 px).'
