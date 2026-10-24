@@ -172,6 +172,8 @@ try {
     check(`${role} cannot read the student catalog`, denied.status === 403, denied.status);
   }
   check("an anonymous request is rejected", (await req("/open-curriculum")).status === 401);
+  // Teacher-private lessons are published for their classes only; a parent account must not list them (QR-03).
+  check("a parent cannot list lessons", (await req("/lessons", "GET", undefined, parent.token)).status === 403);
 
   // ---------- 1.2 lesson detail ----------
   const detail = await req(`/open-curriculum/lessons/${open.id}`, "GET", undefined, studentA.token);
