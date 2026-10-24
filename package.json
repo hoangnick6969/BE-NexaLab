@@ -31,6 +31,7 @@
     "test:cf": "tsx scripts/cf-integration.mjs",
     "test:i3": "tsx scripts/i3-integration.mjs",
     "test:acc": "tsx scripts/acc-integration.mjs",
+    "test:learning": "tsx scripts/learning-integration.mjs",
     "c2:preflight": "node scripts/c2-preflight.mjs",
     "r2:check": "tsx scripts/r2-check.ts",
     "cf:migrate-assets": "tsx scripts/cf-migrate-assets.ts",

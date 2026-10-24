@@ -136,6 +136,8 @@ export class LearningController {
         where: { id: stepId, lessonId, type: { in: ["READING", "VIDEO"] }, lesson: { status: "published", scope: "SHARED_LIBRARY", synthetic: false, packVersion: { status: "released", synthetic: false } } },
       });
       if (!step) throw new NotFoundException({ code: "CURRICULUM_STEP_NOT_FOUND", message: "Không tìm thấy bước học" });
+      // The unique key does not cover assignmentId NULL rows, so concurrent writes serialize here.
+      await lock(tx, `open-step-progress:${studentId}:${stepId}`);
       const saved = await tx.stepProgress.findFirst({ where: { studentId, stepId, assignmentId: null } });
       const now = new Date();
       let evidence: any;
@@ -147,13 +149,9 @@ export class LearningController {
       } else {
         throw new BadRequestException({ code: "STEP_ACTION_INVALID", message: "Thao tác này không áp dụng cho bước học" });
       }
-      if (saved) await tx.stepProgress.update({ where: { id: saved.id }, data: evidence });
-      else {
-        await tx.stepProgress.createMany({ data: [{ studentId, stepId, assignmentId: null, ...evidence }], skipDuplicates: true });
-        const current = await tx.stepProgress.findFirst({ where: { studentId, stepId, assignmentId: null } });
-        if (current && current.updatedAt < now) await tx.stepProgress.update({ where: { id: current.id }, data: evidence });
-      }
-      const current = await tx.stepProgress.findFirstOrThrow({ where: { studentId, stepId, assignmentId: null } });
+      const current = saved
+        ? await tx.stepProgress.update({ where: { id: saved.id }, data: evidence })
+        : await tx.stepProgress.create({ data: { studentId, stepId, assignmentId: null, ...evidence } });
       return { step: { id: stepId, state: current.status, progressValue: current.progressValue, lastPosition: current.lastPosition, completedAt: current.completedAt?.toISOString() ?? null } };
     });
   }

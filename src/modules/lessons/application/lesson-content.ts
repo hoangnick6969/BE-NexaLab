@@ -126,8 +126,10 @@ export function evaluateChallenge(labId: string, labState: any, result: any, par
     if (verdict === "passed" && unmet.length) verdict = "partial";
   } else if (labId === "chemistry") {
     if (params.experiment === "ph") {
-      const samples = result.samples ?? [];
-      if (samples.length !== 3 || samples.some((sample: any) => sample.color == null)) verdict = "not_passed";
+      // The litmus model grades each jar itself; the variant only requires that
+      // the attempt was the litmus experiment with every jar identified.
+      const samples: Array<{ type: string | null }> = result.samples ?? [];
+      if (samples.length !== 3 || samples.some((sample) => sample.type == null)) verdict = "not_passed";
     } else if (params.reactionId && labState?.reactionId !== params.reactionId) {
       unmet.push("reactionId");
       verdict = "not_passed";
