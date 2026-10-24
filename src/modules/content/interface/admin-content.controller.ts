@@ -7,6 +7,7 @@ import { audit } from "../../../common/audit";
 import { coverageReport } from "../application/content-pack";
 import { planRelease, retireRelease } from "../application/content-release";
 import { preFetchProblems, runIngestion, sourcePolicySchema } from "../application/ingestion";
+import { importStructuredLessons as importStructuredLessonDrafts, structuredLessonSchema } from "../application/structured-lesson-import";
 import { Db } from "../../../db/db";
 import { storageEnv } from "../../storage/infrastructure/storage";
 
@@ -21,6 +22,13 @@ import { storageEnv } from "../../storage/infrastructure/storage";
 @Controller("admin")
 export class AdminContentController {
   constructor(@Inject(Db) private db: Db) {}
+
+  @Post("structured-lessons/import")
+  @ApiOperation({ summary: "Import Content Tool Structured Lesson candidates as private, idempotent drafts" })
+  async importStructuredLessons(@Body() body: unknown) {
+    const b = z.object({ lessons: z.array(structuredLessonSchema).min(1).max(100) }).strict().parse(body);
+    return importStructuredLessonDrafts(this.db, b.lessons);
+  }
 
   // ───────────────────────── C2-T5 sources and ingestion (CF-T3) ─────────────────────────
   @Get("sources")
