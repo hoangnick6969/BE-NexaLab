@@ -110,9 +110,20 @@ The two option prompts retained below are historical; the user's decisions above
 
 Do not import or promote the current KHTN8 source map: its locators/outcome mapping remain human-review-only. Any structural implementation must treat absent/unverified content as absent, keep the source map out of student responses, and avoid claiming real-corpus/runtime acceptance until the release gate is met.
 
+Flow review 2026-10-24 (branch `test/flows-7-8-9-2026-10-24`, record `flows-7-8-9-2026-10-24.md` at the workspace root):
+- Catalog `lessonCount` now counts only the lessons it lists (a lesson under an archived topic was counted but not shown).
+- Assignment-free reading/video evidence writes take `pg_advisory_xact_lock(studentId:stepId)`: the unique key does not cover `assignmentId IS NULL`, and six concurrent writes produced two rows.
+- FE `flattenReleasedCurriculum` groups by the official chapter/topic title from the catalog, not the lesson's free-text `chapter`/`topic`.
+- `npm run test:learning` (scripts/learning-integration.mjs) covers stories 1.1, 1.2 and 1.5 against the running API with generated released fixtures; the shared development database has no released Open Curriculum content of its own.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+- 2026-10-24 · patch · catalog lessonCount vs listed lessons (archived topic) — fixed.
+- 2026-10-24 · patch · duplicate assignment-free StepProgress under concurrent writes — fixed.
+- 2026-10-24 · patch · student catalog grouped by free-text chapter instead of the official taxonomy (AC 1.1) — fixed in FE.
+- 2026-10-24 · defer · lesson detail heading still shows the free-text `lesson.chapter`.
 
 ## Design Notes
 

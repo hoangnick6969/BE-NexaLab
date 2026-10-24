@@ -38,15 +38,18 @@ export class CatalogController {
             .filter((chapter: any) => chapter.subjectId === subject.id && chapter.grade === grade)
             .map((chapter: any) => {
               const chapterLessons = lessons.filter((l: any) => l.subjectId === subject.id && l.grade === grade && l.curriculumChapterCode === chapter.code).sort((a: any, b: any) => (a.curriculumOrder ?? Number.MAX_SAFE_INTEGER) - (b.curriculumOrder ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id));
+              const topics = chapter.topics
+                .map((topic: any) => ({ id: topic.code, title: topic.title, officialOrder: topic.officialOrder, lessons: chapterLessons.filter((l: any) => l.curriculumTopicCode === topic.code) }))
+                .filter((topic: any) => topic.lessons.length);
+              const chapterLevel = chapterLessons.filter((l: any) => !l.curriculumTopicCode);
               return {
                 id: chapter.code,
                 title: chapter.title,
                 officialOrder: chapter.officialOrder,
-                lessonCount: chapterLessons.length,
-                topics: chapter.topics
-                  .map((topic: any) => ({ id: topic.code, title: topic.title, officialOrder: topic.officialOrder, lessons: chapterLessons.filter((l: any) => l.curriculumTopicCode === topic.code) }))
-                  .filter((topic: any) => topic.lessons.length),
-                lessons: chapterLessons.filter((l: any) => !l.curriculumTopicCode),
+                // Lessons under an archived topic are not listed, so they are not counted either.
+                lessonCount: chapterLevel.length + topics.reduce((sum: number, topic: any) => sum + topic.lessons.length, 0),
+                topics,
+                lessons: chapterLevel,
               };
             })
             .filter((chapter: any) => chapter.lessonCount > 0),

@@ -275,7 +275,8 @@ function resource(step: StoredStep) {
 }
 
 export function buildPathwaySteps(steps: StoredStep[]) {
-  let blocked = false;
+  // The first required step that is not complete; locked steps name it as their reason.
+  let blocker: StepType | null = null;
   let nextStepId: string | null = null;
   const ordered = validateLessonSteps(steps).map((step) => {
     const saved = step.progress?.[0];
@@ -291,17 +292,17 @@ export function buildPathwaySteps(steps: StoredStep[]) {
       throw new Error("Step resume position must be a valid integer second");
     const completed = saved?.status === "COMPLETED";
     const future = false;
-    const state = completed ? "COMPLETED" : !blocked && !future ? "IN_PROGRESS" : "LOCKED";
+    const state = completed ? "COMPLETED" : blocker === null && !future ? "IN_PROGRESS" : "LOCKED";
     if (state === "IN_PROGRESS" && nextStepId === null) nextStepId = step.id;
-    if (step.required && !completed) blocked = true;
     const lockReasonCode =
       state !== "LOCKED"
         ? null
-        : step.type === "LAB"
+        : blocker === "QUIZ"
           ? "QUIZ_NOT_PASSED"
-          : step.type === "CHALLENGE"
+          : blocker === "LAB" && step.type === "CHALLENGE"
             ? "PRACTICE_NOT_PASSED"
             : "PREREQUISITE_INCOMPLETE";
+    if (step.required && !completed && blocker === null) blocker = step.type;
     return {
       id: step.id,
       type: step.type,

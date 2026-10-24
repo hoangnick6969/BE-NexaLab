@@ -10,7 +10,7 @@ import {
   publishBlockers,
   variantChallengeId,
 } from "./lesson-content";
-import { circuit } from "../../../../packages/sim";
+import { chemistry, circuit } from "../../../../packages/sim";
 
 const review = {
   sources: "SGK KHTN 8 và tài liệu tự biên soạn",
@@ -76,6 +76,11 @@ describe("challenge parameters (B1-T4)", () => {
     const passed = { verdict: "passed" };
     expect(evaluateChallenge("chemistry", { reactionId: "mg-hcl" }, passed, { reactionId: "mg-hcl" }).verdict).toBe("passed");
     expect(evaluateChallenge("chemistry", { reactionId: "naoh-hcl" }, passed, { reactionId: "mg-hcl" }).verdict).toBe("not_passed");
+    const litmus = (samples: Record<string, string>) => chemistry({ samples });
+    expect(evaluateChallenge("chemistry", null, litmus({ jar1: "acid", jar2: "neutral", jar3: "base" }), { experiment: "ph" }).verdict).toBe("passed");
+    expect(evaluateChallenge("chemistry", null, litmus({ jar1: "base", jar2: "neutral", jar3: "acid" }), { experiment: "ph" }).verdict).toBe("not_passed");
+    expect(evaluateChallenge("chemistry", null, litmus({ jar1: "acid" }), { experiment: "ph" }).verdict).toBe("not_passed");
+    expect(evaluateChallenge("chemistry", null, chemistry({ reactionId: "naoh-hcl", molesA: 0.1, molesB: 0.1 }), { experiment: "ph" }).verdict).toBe("not_passed");
     expect(evaluateChallenge("eye", null, { verdict: "partial", score: 80 }, { minScore: 80 }).verdict).toBe("passed");
     expect(evaluateChallenge("eye", null, { verdict: "partial", score: 60 }, { minScore: 80 }).verdict).toBe("partial");
   });

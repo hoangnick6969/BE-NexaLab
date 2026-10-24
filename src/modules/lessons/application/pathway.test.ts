@@ -247,5 +247,18 @@ describe("lesson pathway", () => {
     expect(labCompleted.steps[4].lockReasonCode).toBeNull();
     expect(labCompleted.steps[4].resource).toEqual({ challengeId: "circuit_001" });
   });
-});
 
+  it("names the step that actually blocks a locked step", () => {
+    const questions = materializeQuizQuestions([{ prompt: "Q", options: ["A", "B"], answer: 1 }]);
+    const reading = { id: "read", type: "READING" as const, position: 10, required: true, config: { html: "Read" } };
+    const quiz = { id: "quiz", type: "QUIZ" as const, position: 40, required: true, config: { questions } };
+    const lab = { id: "lab", type: "LAB" as const, position: 50, required: true, config: { labId: "circuit" } };
+    const challenge = { id: "challenge", type: "CHALLENGE" as const, position: 60, required: true, config: { challengeId: "circuit_001" } };
+    const done = [{ status: "COMPLETED" as const, progressValue: 100 }];
+
+    // No quiz in the lesson: the lab waits for reading, not for a quiz.
+    expect(buildPathwaySteps([reading, lab, challenge]).steps.map((step) => step.lockReasonCode)).toEqual([null, "PREREQUISITE_INCOMPLETE", "PREREQUISITE_INCOMPLETE"]);
+    // Reading done, quiz pending: both practical steps wait for the quiz.
+    expect(buildPathwaySteps([{ ...reading, progress: done }, quiz, lab, challenge]).steps.map((step) => step.lockReasonCode)).toEqual([null, null, "QUIZ_NOT_PASSED", "QUIZ_NOT_PASSED"]);
+  });
+});

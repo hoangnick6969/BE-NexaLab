@@ -969,6 +969,7 @@ try {
     draftPreview.status === 200 &&
       draftPreview.data.readiness.ready === false &&
       draftPreview.data.readiness.blockers.some((b) => /phiếu kiểm duyệt/.test(b)),
+    { status: draftPreview.status, created: unreviewed.status, readiness: draftPreview.data?.readiness ?? draftPreview.data },
   );
   check(
     "another teacher cannot preview a private variant",
@@ -1127,39 +1128,27 @@ try {
   chemPath = await req(`/lessons/${chem.data.id}/pathway`, "GET", undefined, studentA.token);
   const chemLab = chemPath.data.steps.find((step) => step.type === "LAB");
   const chemLabView = await req(`/lessons/${chem.data.id}/steps/${chemLab.id}/lab`, "GET", undefined, studentA.token);
+  // The shared chemistry_001 lab is the litmus (pH) experiment; the variant's
+  // own reaction is checked at its CHALLENGE step below.
   check(
     "the chemistry lab step names its own model and objective",
     chemLabView.data.labId === "chemistry" &&
       chemLabView.data.challengeId === "chemistry_001" &&
-      /phản ứng vừa đủ/.test(chemLabView.data.targetObjective),
+      /quỳ tím/.test(chemLabView.data.targetObjective),
+    chemLabView.data,
   );
-  const leftover = await req(
-    "/attempts",
-    "POST",
-    {
-      challengeId: "chemistry_001",
-      lessonStepId: chemLab.id,
-      labState: { reactionId: "mg-hcl", molesA: 0.2, molesB: 0.2 },
-      durationMs: 1000,
-    },
-    studentA.token,
-  );
+  const phAttempt = (samples) =>
+    req("/attempts", "POST", { challengeId: "chemistry_001", lessonStepId: chemLab.id, labState: { samples }, durationMs: 1000 }, studentA.token);
+  const incomplete = await phAttempt({ jar1: "acid" });
   check(
-    "an unbalanced chemistry attempt gets chemistry guidance, not circuit guidance",
-    leftover.data.verdict === "partial" && /dư/.test(leftover.data.retryGuidance) && !/LED|điện trở/.test(leftover.data.retryGuidance),
-    leftover.data.retryGuidance,
+    "an incomplete litmus attempt gets chemistry guidance, not circuit guidance",
+    incomplete.data.verdict === "partial" && /quỳ tím/.test(incomplete.data.retryGuidance) && !/LED|điện trở/.test(incomplete.data.retryGuidance),
+    incomplete.data,
   );
-  await req(
-    "/attempts",
-    "POST",
-    {
-      challengeId: "chemistry_001",
-      lessonStepId: chemLab.id,
-      labState: { reactionId: "mg-hcl", molesA: 0.1, molesB: 0.2 },
-      durationMs: 1000,
-    },
-    studentA.token,
-  );
+  const mislabelled = await phAttempt({ jar1: "base", jar2: "neutral", jar3: "acid" });
+  check("a complete but wrong litmus answer does not pass", mislabelled.data.verdict === "needs_practice", mislabelled.data.verdict);
+  const litmus = await phAttempt({ jar1: "acid", jar2: "neutral", jar3: "base" });
+  check("the correct litmus answer passes the chemistry lab", litmus.data.verdict === "passed" && litmus.data.retryGuidance == null, litmus.data);
   chemPath = await req(`/lessons/${chem.data.id}/pathway`, "GET", undefined, studentA.token);
   const chemChallenge = chemPath.data.steps.find((step) => step.type === "CHALLENGE");
   const chemChallengeId = `chemistry_v-${chem.data.id}`;
@@ -1194,6 +1183,59 @@ try {
     "the teacher's reaction, balanced, passes the chemistry challenge for that assignment",
     rightReaction.data.verdict === "passed" && rightReaction.data.assignmentId === chemAssign.data.assignment.id,
     rightReaction.data,
+  );
+
+  // A litmus (pH) variant is graded by the samples the student identified.
+  const phVariant = await req(
+    "/lessons",
+    "POST",
+    {
+      ...variantBody,
+      title: `${prefix} nhận biết axit bazơ`,
+      subjectId: "chemistry",
+      chapter: "Axit, bazơ, muối",
+      topic: "Thang pH",
+      labId: "chemistry",
+      domain: "MATTER",
+      outcomeCodes: ["FX8-MATTER-01"],
+      questions: [],
+      challengeParams: { experiment: "ph" },
+    },
+    owner.token,
+  );
+  check("a litmus challenge variant publishes", phVariant.status === 201 && phVariant.data.status === "published", phVariant.data);
+  const phAssign = await req(`/classes/${classId}/assignments`, "POST", { contentType: "lesson", contentId: phVariant.data.id }, owner.token, key());
+  let phPath = await req(`/lessons/${phVariant.data.id}/pathway`, "GET", undefined, studentA.token);
+  for (const step of phPath.data.steps) {
+    if (step.type === "READING")
+      await req(`/lessons/${phVariant.data.id}/steps/${step.id}/progress`, "PUT", { action: "complete" }, studentA.token);
+    if (step.type === "VIDEO")
+      await req(`/lessons/${phVariant.data.id}/steps/${step.id}/progress`, "PUT", { action: "complete-fallback" }, studentA.token);
+  }
+  phPath = await req(`/lessons/${phVariant.data.id}/pathway`, "GET", undefined, studentA.token);
+  const phLab = phPath.data.steps.find((step) => step.type === "LAB");
+  await req(
+    "/attempts",
+    "POST",
+    { challengeId: "chemistry_001", lessonStepId: phLab.id, labState: { samples: { jar1: "acid", jar2: "neutral", jar3: "base" } }, durationMs: 1000 },
+    studentA.token,
+  );
+  phPath = await req(`/lessons/${phVariant.data.id}/pathway`, "GET", undefined, studentA.token);
+  const phChallenge = phPath.data.steps.find((step) => step.type === "CHALLENGE");
+  const phChallengeAttempt = (samples) =>
+    req(
+      "/attempts",
+      "POST",
+      { challengeId: `chemistry_v-${phVariant.data.id}`, lessonStepId: phChallenge.id, labState: { samples }, durationMs: 1000 },
+      studentA.token,
+    );
+  const phWrong = await phChallengeAttempt({ jar1: "neutral", jar2: "acid", jar3: "base" });
+  check("a wrong litmus answer does not meet the litmus challenge", phWrong.data.verdict === "needs_practice", phWrong.data.verdict);
+  const phRight = await phChallengeAttempt({ jar1: "acid", jar2: "neutral", jar3: "base" });
+  check(
+    "the correct litmus answer passes the litmus challenge for that assignment",
+    phRight.data.verdict === "passed" && phRight.data.assignmentId === phAssign.data.assignment.id,
+    phRight.data,
   );
 
   // Shared library: admin-only, released only with named and independent reviews.
