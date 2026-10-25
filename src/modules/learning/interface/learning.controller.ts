@@ -137,6 +137,8 @@ export class LearningController {
             }
           : null,
       materials: lesson.materials,
+      videos: lesson.videos ?? [],
+      sections: lesson.sections ?? [],
       steps: lesson.steps.map((step: any) => {
         const progress = step.progress[0];
         const config = step.config as any;
