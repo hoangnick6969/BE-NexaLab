@@ -63,18 +63,16 @@ export class CatalogController {
         orderBy: [{ officialOrder: "asc" }, { code: "asc" }],
       }),
     ]);
-    const scienceSubjectIds = new Set(["khtn", "physics", "chemistry", "biology"]);
-    const scienceLessons = lessons.filter((lesson: any) => scienceSubjectIds.has(lesson.subjectId));
-    const subjectData = subjects.filter((subject: any) => subject.id === "khtn").map((subject: any) => {
-      const grades = [...new Set(scienceLessons.map((l: any) => l.grade))].sort((a: number, b: number) => a - b);
+    const subjectData = subjects.map((subject: any) => {
+      const grades = [...new Set(lessons.filter((l: any) => l.subjectId === subject.id).map((l: any) => l.grade))].sort((a: number, b: number) => a - b);
       return {
         ...subject,
         grades: grades.map((grade) => ({
           grade,
           chapters: chapters
-            .filter((chapter: any) => scienceSubjectIds.has(chapter.subjectId) && chapter.grade === grade)
+            .filter((chapter: any) => chapter.subjectId === subject.id && chapter.grade === grade)
             .map((chapter: any) => {
-              const chapterLessons = scienceLessons.filter((l: any) => l.grade === grade && l.curriculumChapterCode === chapter.code).sort((a: any, b: any) => (a.curriculumOrder ?? Number.MAX_SAFE_INTEGER) - (b.curriculumOrder ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id));
+              const chapterLessons = lessons.filter((l: any) => l.subjectId === subject.id && l.grade === grade && l.curriculumChapterCode === chapter.code).sort((a: any, b: any) => (a.curriculumOrder ?? Number.MAX_SAFE_INTEGER) - (b.curriculumOrder ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id));
               const topics = chapter.topics
                 .map((topic: any) => ({
                   id: topic.code,
