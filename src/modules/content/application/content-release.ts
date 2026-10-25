@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { materializeLegacySteps } from "../../lessons/application/pathway";
+import { khtn9Curriculum, normalizeLessonHtml } from "./lesson-html";
 import { audit } from "../../../common/audit";
 import { storageEnv } from "../../storage/infrastructure/storage";
 import { sourcePolicySchema } from "./ingestion";
@@ -38,15 +39,33 @@ export type ReleaseManifest = z.infer<typeof releaseManifestSchema>;
 async function gateContext(db: any, namespace: "fixture" | "baseline"): Promise<GateContext> {
   const [outcomes, versions, reviewers, labs] = await Promise.all([
     db.curriculumOutcome.findMany(),
-    db.assetVersion.findMany({ where: { status: "READY" }, include: { asset: true } }),
-    db.user.findMany({ where: { status: "active", role: { in: ["TEACHER", "ADMIN"] }, email: { not: null } }, select: { email: true } }),
+    db.assetVersion.findMany({
+      where: { status: "READY" },
+      include: { asset: true },
+    }),
+    db.user.findMany({
+      where: {
+        status: "active",
+        role: { in: ["TEACHER", "ADMIN"] },
+        email: { not: null },
+      },
+      select: { email: true },
+    }),
     db.lab.findMany({ where: { status: "published" }, select: { id: true } }),
   ]);
   return {
     namespace,
     outcomes: new Map(outcomes.map((o: any) => [o.code, o])),
     assetVersions: new Map(
-      versions.map((v: any) => [v.id, { kind: v.asset.kind, scope: v.asset.scope, assetStatus: v.asset.status, status: v.status }]),
+      versions.map((v: any) => [
+        v.id,
+        {
+          kind: v.asset.kind,
+          scope: v.asset.scope,
+          assetStatus: v.asset.status,
+          status: v.status,
+        },
+      ]),
     ),
     reviewers: new Set(reviewers.map((u: any) => u.email)),
     labs: new Set(labs.map((l: any) => l.id)),
@@ -59,9 +78,10 @@ export async function planRelease(db: any, raw: unknown, target: string) {
   const environment = storageEnv();
   const blockers: string[] = [];
   if (target !== environment) blockers.push(`đích ${target} khác môi trường đang chạy ${environment}`);
-  if (manifest.namespace === "fixture" && ["pilot", "production"].includes(target))
-    blockers.push("gói minh họa (fixture) không được đưa vào pilot/production");
-  const existing = await db.contentRelease.findUnique({ where: { environment_digest: { environment, digest } } });
+  if (manifest.namespace === "fixture" && ["pilot", "production"].includes(target)) blockers.push("gói minh họa (fixture) không được đưa vào pilot/production");
+  const existing = await db.contentRelease.findUnique({
+    where: { environment_digest: { environment, digest } },
+  });
   const sources = [];
   for (const s of manifest.sources) {
     const current = await db.sourcePolicy.findUnique({
@@ -80,7 +100,10 @@ export async function planRelease(db: any, raw: unknown, target: string) {
   for (const m of manifest.packs) {
     const packDigest = digestOf(m);
     const errors = packGateErrors(m, ctx);
-    const pack = await db.contentPack.findUnique({ where: { key: m.key }, include: { versions: { orderBy: { version: "desc" } } } });
+    const pack = await db.contentPack.findUnique({
+      where: { key: m.key },
+      include: { versions: { orderBy: { version: "desc" } } },
+    });
     if (pack && pack.namespace !== manifest.namespace) errors.push(`gói ${m.key} thuộc namespace ${pack.namespace}`);
     const same = pack?.versions.find((v: any) => v.digest === packDigest);
     const released = pack?.versions.find((v: any) => v.status === "released");
@@ -109,59 +132,72 @@ export async function planRelease(db: any, raw: unknown, target: string) {
 }
 
 const lessonIdFor = (key: string, version: number) => `pack-${key}-v${version}`;
-async function materialize(
-  tx: any,
-  m: PackManifest,
-  version: number,
-  packVersionId: string,
-  authorId: string,
-  reviewerIds: Record<string, string>,
-) {
-  const lessonId = lessonIdFor(m.key, version);
+async function materialize(tx: any, m: PackManifest, version: number, packVersionId: string, authorId: string, reviewerIds: Record<string, string>, existingLessonId?: string | null) {
+  const lessonId = existingLessonId ?? lessonIdFor(m.key, version);
   const body = lessonFromPack(m);
   const releasable = m.sources.filter((s) => s.license !== "REFERENCE_ONLY");
-  await tx.lesson.create({
-    data: {
-      id: lessonId,
-      subjectId: m.subjectId,
-      authorId,
-      title: m.title,
-      chapter: m.chapter,
-      grade: m.grade,
-      topic: m.topic,
-      learningObjective: m.lesson.learningObjective,
-      prerequisites: m.lesson.prerequisites,
-      curriculum: "GDPT 2018 – Khoa học tự nhiên",
-      content: body.content,
-      labId: body.labId,
-      status: "published",
-      scope: "SHARED_LIBRARY",
-      synthetic: m.synthetic,
-      domain: m.domain,
-      outcomeCodes: m.outcomeCodes,
-      materials: body.materials,
-      questions: body.questions,
-      packVersionId,
-      review: {
-        sources: m.sources.map((s) => s.attribution).join("; "),
-        license: ["CC0", "CC_BY", "CC_BY_SA", "SCHOOL_OWNED"].includes(releasable[0]?.license ?? "") ? releasable[0].license : "ORIGINAL",
-      },
-      releaseReview: Object.fromEntries(
-        Object.entries(m.reviews).map(([kind, r]) => [kind, { reviewerId: reviewerIds[r!.email] ?? r!.email, at: r!.at, note: r!.name }]),
-      ),
-      publishedAt: new Date(),
+  const lessonData = {
+    subjectId: m.subjectId,
+    authorId,
+    title: m.title,
+    chapter: m.chapter,
+    grade: m.grade,
+    topic: m.topic,
+    learningObjective: m.lesson.learningObjective,
+    prerequisites: m.lesson.prerequisites,
+    curriculum: "GDPT 2018 – Khoa học tự nhiên",
+    content: normalizeLessonHtml(body.content),
+    ...khtn9Curriculum(m.key),
+    labId: body.labId,
+    status: "published",
+    scope: "SHARED_LIBRARY",
+    synthetic: m.synthetic,
+    domain: m.domain,
+    outcomeCodes: m.outcomeCodes,
+    materials: body.materials,
+    questions: body.questions,
+    packVersionId,
+    review: {
+      sources: m.sources.map((s) => s.attribution).join("; "),
+      license: ["CC0", "CC_BY", "CC_BY_SA", "SCHOOL_OWNED"].includes(releasable[0]?.license ?? "") ? releasable[0].license : "ORIGINAL",
     },
-  });
+    releaseReview: Object.fromEntries(
+      Object.entries(m.reviews).map(([kind, r]) => [
+        kind,
+        {
+          reviewerId: reviewerIds[r!.email] ?? r!.email,
+          at: r!.at,
+          note: r!.name,
+        },
+      ]),
+    ),
+    publishedAt: new Date(),
+  };
+  if (existingLessonId) await tx.lesson.update({ where: { id: lessonId }, data: lessonData });
+  else await tx.lesson.create({ data: { id: lessonId, ...lessonData } });
   const steps = materializeLegacySteps(body as any, lessonId);
-  for (const step of steps)
-    await tx.lessonStep.create({
-      data: {
-        ...step,
-        id: `step-${lessonId}-${step.id ?? step.type.toLowerCase().replace("_", "-")}`,
-        lessonId,
-        config: step.config as any,
-      },
-    });
+  const existingSteps = existingLessonId ? await tx.lessonStep.findMany({ where: { lessonId } }) : [];
+  for (const step of steps) {
+    const prior = existingSteps.find((item: any) => item.type === step.type);
+    if (prior)
+      await tx.lessonStep.update({
+        where: { id: prior.id },
+        data: {
+          position: step.position,
+          required: step.required,
+          config: step.config as any,
+        },
+      });
+    else
+      await tx.lessonStep.create({
+        data: {
+          ...step,
+          id: `step-${lessonId}-${step.id ?? step.type.toLowerCase().replace("_", "-")}`,
+          lessonId,
+          config: step.config as any,
+        },
+      });
+  }
   return lessonId;
 }
 
@@ -170,18 +206,27 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
   if (plan.blocked) throw Object.assign(new Error("RELEASE_BLOCKED"), { plan });
   if (plan.alreadyApplied)
     return {
-      receipt: await db.contentRelease.findUnique({ where: { id: plan.alreadyApplied }, include: { items: true } }),
+      receipt: await db.contentRelease.findUnique({
+        where: { id: plan.alreadyApplied },
+        include: { items: true },
+      }),
       plan,
       idempotent: true,
     };
   const manifest = releaseManifestSchema.parse(raw);
-  const approver = await db.user.findUnique({ where: { email: options.approvedByEmail.toLowerCase() } });
+  const approver = await db.user.findUnique({
+    where: { email: options.approvedByEmail.toLowerCase() },
+  });
   if (!approver || approver.role !== "ADMIN" || approver.status !== "active") throw new Error("APPROVER_NOT_ACTIVE_ADMIN");
   if (manifest.namespace === "baseline" && approver.id === options.initiatedById) throw new Error("APPROVER_MUST_DIFFER_FROM_INITIATOR");
   const reviewerIds = Object.fromEntries(
     (
       await db.user.findMany({
-        where: { email: { in: manifest.packs.flatMap((p) => Object.values(p.reviews).map((r) => r!.email)) } },
+        where: {
+          email: {
+            in: manifest.packs.flatMap((p) => Object.values(p.reviews).map((r) => r!.email)),
+          },
+        },
         select: { id: true, email: true },
       })
     ).map((u: any) => [u.email, u.id]),
@@ -197,19 +242,40 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
           status: "APPLIED",
           initiatedById: options.initiatedById,
           approvedById: approver.id,
-          summary: { sources: plan.sources, packs: plan.packs.map(({ errors: _e, ...p }) => p) },
+          summary: {
+            sources: plan.sources,
+            packs: plan.packs.map(({ errors: _e, ...p }) => p),
+          },
         },
       });
       const item = (kind: string, refId: string, action: string) =>
-        tx.contentReleaseItem.create({ data: { releaseId: release.id, kind, refId, action } });
+        tx.contentReleaseItem.create({
+          data: { releaseId: release.id, kind, refId, action },
+        });
       for (const [i, s] of manifest.sources.entries()) {
         const step = plan.sources[i];
         if (step.action === "create")
-          await tx.sourcePolicy.create({ data: { key: s.key, title: s.title, enabled: false, currentVersion: 1 } });
+          await tx.sourcePolicy.create({
+            data: {
+              key: s.key,
+              title: s.title,
+              enabled: false,
+              currentVersion: 1,
+            },
+          });
         if (step.action !== "unchanged") {
-          await tx.sourcePolicy.update({ where: { key: s.key }, data: { title: s.title, currentVersion: step.version } });
+          await tx.sourcePolicy.update({
+            where: { key: s.key },
+            data: { title: s.title, currentVersion: step.version },
+          });
           const v = await tx.sourcePolicyVersion.create({
-            data: { key: s.key, version: step.version, policy: s.policy, reason: `release ${manifest.name}`, createdById: approver.id },
+            data: {
+              key: s.key,
+              version: step.version,
+              policy: s.policy,
+              reason: `release ${manifest.name}`,
+              createdById: approver.id,
+            },
           });
           await item("source-policy", v.id, "created");
         } else await item("source-policy", s.key, "unchanged");
@@ -222,22 +288,48 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
         }
         await tx.contentPack.upsert({
           where: { key: m.key },
-          create: { key: m.key, grade: m.grade, domain: m.domain, title: m.title, namespace: manifest.namespace },
+          create: {
+            key: m.key,
+            grade: m.grade,
+            domain: m.domain,
+            title: m.title,
+            namespace: manifest.namespace,
+          },
           update: { title: m.title },
         });
-        const previous = await tx.contentPackVersion.findFirst({ where: { packKey: m.key, status: "released" } });
+        const previous = await tx.contentPackVersion.findFirst({
+          where: { packKey: m.key, status: "released" },
+        });
         if (previous) {
-          await tx.contentPackVersion.update({ where: { id: previous.id }, data: { status: "retired", retiredAt: new Date() } });
-          if (previous.lessonId) await tx.lesson.update({ where: { id: previous.lessonId }, data: { status: "archived" } });
+          await tx.contentPackVersion.update({
+            where: { id: previous.id },
+            data: { status: "retired", retiredAt: new Date() },
+          });
+          if (previous.lessonId)
+            await tx.lesson.update({
+              where: { id: previous.lessonId },
+              data: { status: "archived" },
+            });
           await item("pack-version", previous.id, "superseded");
         }
-        let version = await tx.contentPackVersion.findUnique({ where: { packKey_digest: { packKey: m.key, digest: step.digest } } });
+        let version = await tx.contentPackVersion.findUnique({
+          where: { packKey_digest: { packKey: m.key, digest: step.digest } },
+        });
         if (version) {
           version = await tx.contentPackVersion.update({
             where: { id: version.id },
-            data: { status: "released", retiredAt: null, releasedAt: new Date(), releaseId: release.id },
+            data: {
+              status: "released",
+              retiredAt: null,
+              releasedAt: new Date(),
+              releaseId: release.id,
+            },
           });
-          if (version.lessonId) await tx.lesson.update({ where: { id: version.lessonId }, data: { status: "published" } });
+          if (version.lessonId)
+            await tx.lesson.update({
+              where: { id: version.lessonId },
+              data: { status: "published" },
+            });
         } else {
           version = await tx.contentPackVersion.create({
             data: {
@@ -252,8 +344,11 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
               releasedAt: new Date(),
             },
           });
-          const lessonId = await materialize(tx, m, step.version, version.id, approver.id, reviewerIds);
-          await tx.contentPackVersion.update({ where: { id: version.id }, data: { lessonId } });
+          const lessonId = await materialize(tx, m, step.version, version.id, approver.id, reviewerIds, previous?.lessonId);
+          await tx.contentPackVersion.update({
+            where: { id: version.id },
+            data: { lessonId },
+          });
           await item("lesson", lessonId, "created");
         }
         await item("pack-version", version.id, "created");
@@ -266,7 +361,10 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
         reason: manifest.name,
         after: { status: "APPLIED", references: manifest.packs.length },
       });
-      return tx.contentRelease.findUnique({ where: { id: release.id }, include: { items: true } });
+      return tx.contentRelease.findUnique({
+        where: { id: release.id },
+        include: { items: true },
+      });
     },
     { timeout: 60000 },
   );
@@ -277,15 +375,22 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
  * It keeps the normal release receipt, transaction, audit log and retry semantics while leaving
  * curriculum outcomes and independent review decisions outside this publishing operation.
  */
-const adminDirectRequestSchema = z.object({
-  policy: z.literal("ADMIN_DIRECT"),
-  name: z.string().trim().min(3).max(120),
-  subjectId: z.string().trim().min(1).max(60),
-  draftIds: z.array(z.string().trim().min(1).max(40)).min(1).max(47),
-}).strict().superRefine((value, ctx) => {
-  if (new Set(value.draftIds).size !== value.draftIds.length)
-    ctx.addIssue({ code: "custom", path: ["draftIds"], message: "Bản nháp bị lặp" });
-});
+const adminDirectRequestSchema = z
+  .object({
+    policy: z.literal("ADMIN_DIRECT"),
+    name: z.string().trim().min(3).max(120),
+    subjectId: z.string().trim().min(1).max(60),
+    draftIds: z.array(z.string().trim().min(1).max(40)).min(1).max(47),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (new Set(value.draftIds).size !== value.draftIds.length)
+      ctx.addIssue({
+        code: "custom",
+        path: ["draftIds"],
+        message: "Bản nháp bị lặp",
+      });
+  });
 
 const directLessonId = (packKey: string, version: number) => lessonIdFor(packKey, version);
 const pageNumber = (value: unknown) => {
@@ -329,8 +434,7 @@ function structuredLessonHtml(lesson: z.infer<typeof structuredLessonSchema>) {
   const renderTable = (table: any) => {
     const headers = Array.isArray(table?.headers) ? table.headers : Array.isArray(table?.columns) ? table.columns : [];
     const rows = Array.isArray(table?.rows) ? table.rows : [];
-    if (headers.length && rows.every((row: any) => Array.isArray(row)))
-      return `<table><thead><tr>${headers.map((cell: unknown) => `<th>${escapeHtml(cell)}</th>`).join("")}</tr></thead><tbody>${rows.map((row: unknown[]) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    if (headers.length && rows.every((row: any) => Array.isArray(row))) return `<table><thead><tr>${headers.map((cell: unknown) => `<th>${escapeHtml(cell)}</th>`).join("")}</tr></thead><tbody>${rows.map((row: unknown[]) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
     return `<pre>${escapeHtml(JSON.stringify(table, null, 2))}</pre>`;
   };
   const tables = content.tables as any[];
@@ -344,7 +448,10 @@ function structuredLessonHtml(lesson: z.infer<typeof structuredLessonSchema>) {
 
 async function planAdminDirectDrafts(db: any, raw: unknown, target: string) {
   const request = adminDirectRequestSchema.parse(raw);
-  const subject = await db.subject.findUnique({ where: { id: request.subjectId }, select: { id: true, name: true } });
+  const subject = await db.subject.findUnique({
+    where: { id: request.subjectId },
+    select: { id: true, name: true },
+  });
   const rows = await db.contentPackVersion.findMany({
     where: { id: { in: request.draftIds } },
     include: { pack: true },
@@ -353,8 +460,16 @@ async function planAdminDirectDrafts(db: any, raw: unknown, target: string) {
   const drafts = request.draftIds.map((id) => byId.get(id)).filter(Boolean) as any[];
   const errors: Array<{ draftId: string | null; errors: string[] }> = [];
   const sourceIds = new Set<string>();
-  if (!subject) errors.push({ draftId: null, errors: [`subjectId không tồn tại: ${request.subjectId}`] });
-  if (drafts.length !== request.draftIds.length) errors.push({ draftId: null, errors: [`Không tìm thấy đủ bản nháp: nhận ${drafts.length}/${request.draftIds.length}`] });
+  if (!subject)
+    errors.push({
+      draftId: null,
+      errors: [`subjectId không tồn tại: ${request.subjectId}`],
+    });
+  if (drafts.length !== request.draftIds.length)
+    errors.push({
+      draftId: null,
+      errors: [`Không tìm thấy đủ bản nháp: nhận ${drafts.length}/${request.draftIds.length}`],
+    });
   const ordered = drafts.map((row) => {
     const parsed = structuredLessonSchema.safeParse(row.manifest);
     const itemErrors: string[] = [];
@@ -365,17 +480,32 @@ async function planAdminDirectDrafts(db: any, raw: unknown, target: string) {
       if (sourceIds.has(identity)) itemErrors.push(`Trùng source identity ${identity}`);
       sourceIds.add(identity);
       if (row.digest !== digestOf(lesson)) itemErrors.push("Digest không khớp nội dung nguồn");
-      if (!lesson.learningContent.summary.trim() && !lesson.learningContent.sections.length)
-        itemErrors.push("Lesson không có nội dung đọc được");
-      if (!lesson.pdfPageRange || pageNumber(lesson.pdfPageRange) === Number.MAX_SAFE_INTEGER)
-        itemErrors.push("Thiếu trang PDF bắt đầu để sắp thứ tự Lesson");
+      if (!lesson.learningContent.summary.trim() && !lesson.learningContent.sections.length) itemErrors.push("Lesson không có nội dung đọc được");
+      if (!lesson.pdfPageRange || pageNumber(lesson.pdfPageRange) === Number.MAX_SAFE_INTEGER) itemErrors.push("Thiếu trang PDF bắt đầu để sắp thứ tự Lesson");
       const lessonId = directLessonId(row.packKey, row.version);
-      return { row, lesson, identity, lessonId, order: pageNumber(lesson?.pdfPageRange), errors: itemErrors };
+      return {
+        row,
+        lesson,
+        identity,
+        lessonId,
+        order: pageNumber(lesson?.pdfPageRange),
+        errors: itemErrors,
+      };
     }
-    return { row, lesson: null, identity: row.id, lessonId: directLessonId(row.packKey, row.version), order: Number.MAX_SAFE_INTEGER, errors: itemErrors };
+    return {
+      row,
+      lesson: null,
+      identity: row.id,
+      lessonId: directLessonId(row.packKey, row.version),
+      order: Number.MAX_SAFE_INTEGER,
+      errors: itemErrors,
+    };
   });
   const validLessonIds = ordered.map((item) => item.lessonId);
-  const collisions = await db.lesson.findMany({ where: { id: { in: validLessonIds } }, select: { id: true, packVersionId: true } });
+  const collisions = await db.lesson.findMany({
+    where: { id: { in: validLessonIds } },
+    select: { id: true, packVersionId: true },
+  });
   const collisionsById = new Map(collisions.map((row: any) => [row.id, row]));
   for (const item of ordered) {
     const collision: any = collisionsById.get(item.lessonId);
@@ -383,17 +513,56 @@ async function planAdminDirectDrafts(db: any, raw: unknown, target: string) {
     if (item.errors.length) errors.push({ draftId: item.row.id, errors: item.errors });
   }
   const sorted = ordered.sort((a, b) => a.order - b.order || a.row.id.localeCompare(b.row.id));
-  const digest = digestOf({ policy: request.policy, name: request.name, subjectId: request.subjectId, drafts: sorted.map(({ row }) => ({ id: row.id, digest: row.digest })) });
-  const existingRelease = await db.contentRelease.findUnique({ where: { environment_digest: { environment: storageEnv(), digest } }, select: { id: true, status: true } });
+  const legacyDigest = digestOf({
+    policy: request.policy,
+    name: request.name,
+    subjectId: request.subjectId,
+    drafts: sorted.map(({ row }) => ({ id: row.id, digest: row.digest })),
+  });
+  const digest = digestOf({
+    policy: request.policy,
+    name: request.name,
+    subjectId: request.subjectId,
+    drafts: sorted.map(({ row }) => ({
+      id: row.id,
+      digest: row.digest,
+      subjectId: row.pack?.subjectId ?? null,
+      grade: row.pack?.grade ?? null,
+      domain: row.pack?.domain ?? null,
+      outcomeCodes: row.outcomeCodes,
+      curriculumChapterCode: row.curriculumChapterCode,
+      curriculumTopicCode: row.curriculumTopicCode,
+      curriculumOrder: row.curriculumOrder,
+      classificationReview: row.classificationReview,
+    })),
+  });
+  const currentRelease = await db.contentRelease.findUnique({
+    where: { environment_digest: { environment: storageEnv(), digest } },
+    select: { id: true, status: true },
+  });
+  const legacyRelease = currentRelease
+    ? null
+    : await db.contentRelease.findUnique({
+        where: {
+          environment_digest: {
+            environment: storageEnv(),
+            digest: legacyDigest,
+          },
+        },
+        select: { id: true, status: true },
+      });
+  const existingRelease = currentRelease ?? legacyRelease;
   for (const item of sorted) {
-    const exactRetry = existingRelease?.status === "APPLIED"
-      && item.row.status === "released"
-      && item.row.synthetic === false
-      && item.row.lessonId === item.lessonId
-      && item.row.releaseId === existingRelease.id
-      && item.row.pack?.namespace === "baseline";
-    if (!exactRetry && (item.row.status !== "draft" || !item.row.synthetic || item.row.lessonId || item.row.releaseId))
-      item.errors.push("Bản nháp không còn ở trạng thái riêng tư chưa phát hành");
+    const exactRetry = existingRelease?.status === "APPLIED" && item.row.status === "released" && item.row.synthetic === false && item.row.lessonId === item.lessonId && item.row.releaseId === existingRelease.id && item.row.pack?.namespace === "baseline";
+    if (!exactRetry) {
+      if (request.subjectId !== "khtn" || item.row.pack?.subjectId !== "khtn") item.errors.push("KHTN phải dùng subjectId khtn");
+      if (item.lesson && item.row.pack?.grade !== item.lesson.book.grade) item.errors.push("Grade của pack không khớp grade trong Structured Lesson");
+      if (!["ENERGY", "MATTER", "LIVING", "EARTH_SKY"].includes(item.row.pack?.domain)) item.errors.push("Draft chưa có domain KHTN hợp lệ");
+      if (!Array.isArray(item.row.outcomeCodes) || item.row.outcomeCodes.length === 0) item.errors.push("Draft chưa mapping chuẩn đầu ra");
+      if (!item.row.curriculumChapterCode || !item.row.curriculumTopicCode || !item.row.curriculumOrder) item.errors.push("Draft chưa mapping chapter/topic/order");
+      if (!item.row.classificationReview) item.errors.push("Draft chưa có xác nhận review phân loại");
+    }
+    if (!exactRetry && (item.row.status !== "draft" || !item.row.synthetic || item.row.lessonId || item.row.releaseId)) item.errors.push("Bản nháp không còn ở trạng thái riêng tư chưa phát hành");
     if (item.errors.length) errors.push({ draftId: item.row.id, errors: item.errors });
   }
   return {
@@ -408,7 +577,26 @@ async function planAdminDirectDrafts(db: any, raw: unknown, target: string) {
     draftCount: sorted.length,
     blocked: errors.length > 0 || target !== storageEnv(),
     blockers: [...(target !== storageEnv() ? [`đích ${target} khác môi trường đang chạy ${storageEnv()}`] : []), ...errors.flatMap((entry) => entry.errors.map((message) => `${entry.draftId ?? "request"}: ${message}`))],
-    drafts: sorted.map(({ row, lesson, identity, lessonId, order }) => ({ id: row.id, packKey: row.packKey, version: row.version, digest: row.digest, sourceIdentity: identity, sourceLessonId: lesson?.sourceLesson.id ?? null, title: lesson?.sourceLesson.title ?? null, chapter: lesson?.chapter.title ?? null, subjectId: request.subjectId, lessonId, order, pdfPageRange: lesson?.pdfPageRange ?? null, warningCount: lesson?.warnings.length ?? 0 })),
+    drafts: sorted.map(({ row, lesson, identity, lessonId }) => ({
+      id: row.id,
+      packKey: row.packKey,
+      version: row.version,
+      digest: row.digest,
+      sourceIdentity: identity,
+      sourceLessonId: lesson?.sourceLesson.id ?? null,
+      title: lesson?.sourceLesson.title ?? null,
+      chapter: lesson?.chapter.title ?? null,
+      subjectId: request.subjectId,
+      lessonId,
+      order: row.curriculumOrder,
+      grade: row.pack?.grade,
+      domain: row.pack?.domain,
+      outcomeCodes: row.outcomeCodes,
+      curriculumChapterCode: row.curriculumChapterCode,
+      curriculumTopicCode: row.curriculumTopicCode,
+      pdfPageRange: lesson?.pdfPageRange ?? null,
+      warningCount: lesson?.warnings.length ?? 0,
+    })),
   };
 }
 
@@ -420,99 +608,209 @@ export async function applyAdminDirectDraftRelease(db: any, raw: unknown, option
   if (options.confirm !== true) throw new Error("ADMIN_DIRECT_CONFIRMATION_REQUIRED");
   const plan = await planAdminDirectDrafts(db, raw, options.target);
   if (plan.blocked) throw Object.assign(new Error("ADMIN_DIRECT_RELEASE_BLOCKED"), { plan });
-  const prior = await db.contentRelease.findUnique({ where: { environment_digest: { environment: plan.environment, digest: plan.digest } }, include: { items: true } });
+  const prior = await db.contentRelease.findUnique({
+    where: {
+      environment_digest: {
+        environment: plan.environment,
+        digest: plan.digest,
+      },
+    },
+    include: { items: true },
+  });
   if (prior?.status === "APPLIED") return { receipt: prior, plan, idempotent: true };
-  const admin = await db.user.findUnique({ where: { id: options.adminId }, select: { id: true, role: true, status: true } });
+  const admin = await db.user.findUnique({
+    where: { id: options.adminId },
+    select: { id: true, role: true, status: true },
+  });
   if (!admin || admin.role !== "ADMIN" || admin.status !== "active") throw new Error("ADMIN_NOT_ACTIVE");
   const draftIds = new Set(plan.drafts.map((item) => item.id));
-  const rows = await db.contentPackVersion.findMany({ where: { id: { in: [...draftIds] } }, include: { pack: true } });
+  const rows = await db.contentPackVersion.findMany({
+    where: { id: { in: [...draftIds] } },
+    include: { pack: true },
+  });
   const orderedRows = new Map(rows.map((row: any) => [row.id, row]));
-  const receipt = await db.$transaction(async (tx: any) => {
-    const release = await tx.contentRelease.create({ data: {
-      environment: plan.environment,
-      name: plan.name,
-      digest: plan.digest,
-      importerVersion: `${IMPORTER_VERSION}+ADMIN_DIRECT`,
-      status: "APPLIED",
-      initiatedById: admin.id,
-      approvedById: admin.id,
-      summary: { policy: "ADMIN_DIRECT", actorId: admin.id, subjectId: plan.subject!.id, subjectName: plan.subject!.name, drafts: plan.drafts.map((draft) => ({ id: draft.id, sourceIdentity: draft.sourceIdentity, digest: draft.digest, sourceLessonId: draft.sourceLessonId, lessonId: draft.lessonId, warningCount: draft.warningCount })) },
-    } });
-    for (const planned of plan.drafts) {
-      const row: any = orderedRows.get(planned.id);
-      if (!row || row.status !== "draft" || !row.synthetic || row.lessonId || row.releaseId) throw new Error(`ADMIN_DIRECT_DRAFT_CHANGED:${planned.id}`);
-      const source = structuredLessonSchema.parse(row.manifest);
-      const html = structuredLessonHtml(source);
-      const createdLesson = await tx.lesson.create({ data: {
-        id: planned.lessonId,
-        subjectId: plan.subject!.id,
-        authorId: admin.id,
-        title: source.sourceLesson.title,
-        chapter: source.chapter.title,
-        grade: 8,
-        topic: source.sourceLesson.title,
-        learningObjective: source.learningContent.summary.slice(0, 500) || source.sourceLesson.title,
-        prerequisites: "",
-        curriculum: "GDPT 2018 – Khoa học tự nhiên (nội dung SGK; đối chiếu outcomes riêng)",
-        content: html,
-        labId: null,
-        status: "published",
-        scope: "SHARED_LIBRARY",
-        synthetic: false,
-        domain: row.pack.domain,
-        outcomeCodes: [],
-        materials: [],
-        questions: [],
-        packVersionId: row.id,
-        curriculumOrder: planned.order,
-        review: {
-          publicationPolicy: "ADMIN_DIRECT",
-          publishedById: admin.id,
-          publisher: source.book.author,
-          sourceBookKey: source.book.key,
-          sourceBookTitle: source.book.title,
-          sourceBookVersion: source.book.version,
-          sourceBookSha256: source.book.sha256,
-          sourceDigest: row.digest,
-          sourceIdentity: planned.sourceIdentity,
-          sourceLessonId: source.sourceLesson.id,
-          chapterId: source.chapter.id,
-          pdfPageRange: source.pdfPageRange,
-          printedPageRange: source.printedPageRange,
-          sourceBlocks: source.sourceBlocks.map((block: any) => ({ id: block.id, pdfPage: block.pdfPage ?? block.page ?? null })),
-          warnings: source.warnings,
+  const receipt = await db.$transaction(
+    async (tx: any) => {
+      const release = await tx.contentRelease.create({
+        data: {
+          environment: plan.environment,
+          name: plan.name,
+          digest: plan.digest,
+          importerVersion: `${IMPORTER_VERSION}+ADMIN_DIRECT`,
+          status: "APPLIED",
+          initiatedById: admin.id,
+          approvedById: admin.id,
+          summary: {
+            policy: "ADMIN_DIRECT",
+            actorId: admin.id,
+            subjectId: plan.subject!.id,
+            subjectName: plan.subject!.name,
+            drafts: plan.drafts.map((draft) => ({
+              id: draft.id,
+              sourceIdentity: draft.sourceIdentity,
+              digest: draft.digest,
+              sourceLessonId: draft.sourceLessonId,
+              lessonId: draft.lessonId,
+              warningCount: draft.warningCount,
+            })),
+          },
         },
-        publishedAt: new Date(),
-      } });
-      await tx.lessonStep.create({ data: { id: `step-${createdLesson.id}-reading`, lessonId: createdLesson.id, type: "READING", position: 10, required: true, config: { html } } });
-      await tx.contentPackVersion.update({ where: { id: row.id }, data: { status: "released", synthetic: false, outcomeCodes: [], lessonId: createdLesson.id, releaseId: release.id, releasedAt: new Date(), retiredAt: null } });
-      await tx.contentPack.update({ where: { key: row.packKey }, data: { namespace: "baseline" } });
-      await tx.contentReleaseItem.create({ data: { releaseId: release.id, kind: "lesson", refId: createdLesson.id, action: "created" } });
-      await tx.contentReleaseItem.create({ data: { releaseId: release.id, kind: "pack-version", refId: row.id, action: "created" } });
-    }
-    await audit(tx, { actor: { sub: admin.id, role: "ADMIN" }, action: "content.release.apply.admin-direct", targetType: "ContentRelease", targetId: release.id, reason: plan.name, after: { policy: "ADMIN_DIRECT", status: "APPLIED", lessons: plan.draftCount, digests: plan.drafts.map((draft) => draft.digest) } });
-    return tx.contentRelease.findUnique({ where: { id: release.id }, include: { items: true } });
-  }, { timeout: 120000 });
+      });
+      for (const planned of plan.drafts) {
+        const row: any = orderedRows.get(planned.id);
+        if (!row || row.status !== "draft" || !row.synthetic || row.lessonId || row.releaseId) throw new Error(`ADMIN_DIRECT_DRAFT_CHANGED:${planned.id}`);
+        const source = structuredLessonSchema.parse(row.manifest);
+        const html = structuredLessonHtml(source);
+        const createdLesson = await tx.lesson.create({
+          data: {
+            id: planned.lessonId,
+            subjectId: plan.subject!.id,
+            authorId: admin.id,
+            title: source.sourceLesson.title,
+            chapter: source.chapter.title,
+            grade: row.pack.grade,
+            topic: source.sourceLesson.title,
+            learningObjective: source.learningContent.summary.slice(0, 500) || source.sourceLesson.title,
+            prerequisites: "",
+            curriculum: "GDPT 2018 – Khoa học tự nhiên (nội dung SGK; đối chiếu outcomes riêng)",
+            content: html,
+            labId: null,
+            status: "published",
+            scope: "SHARED_LIBRARY",
+            synthetic: false,
+            domain: row.pack.domain,
+            outcomeCodes: row.outcomeCodes,
+            materials: [],
+            questions: [],
+            packVersionId: row.id,
+            curriculumChapterCode: row.curriculumChapterCode,
+            curriculumTopicCode: row.curriculumTopicCode,
+            curriculumOrder: row.curriculumOrder,
+            review: {
+              publicationPolicy: "ADMIN_DIRECT",
+              publishedById: admin.id,
+              publisher: source.book.author,
+              sourceBookKey: source.book.key,
+              sourceBookTitle: source.book.title,
+              sourceBookVersion: source.book.version,
+              sourceBookSha256: source.book.sha256,
+              sourceDigest: row.digest,
+              sourceIdentity: planned.sourceIdentity,
+              sourceLessonId: source.sourceLesson.id,
+              chapterId: source.chapter.id,
+              pdfPageRange: source.pdfPageRange,
+              printedPageRange: source.printedPageRange,
+              sourceBlocks: source.sourceBlocks.map((block: any) => ({
+                id: block.id,
+                pdfPage: block.pdfPage ?? block.page ?? null,
+              })),
+              warnings: source.warnings,
+            },
+            publishedAt: new Date(),
+          },
+        });
+        await tx.lessonStep.create({
+          data: {
+            id: `step-${createdLesson.id}-reading`,
+            lessonId: createdLesson.id,
+            type: "READING",
+            position: 10,
+            required: true,
+            config: { html },
+          },
+        });
+        await tx.contentPackVersion.update({
+          where: { id: row.id },
+          data: {
+            status: "released",
+            synthetic: false,
+            lessonId: createdLesson.id,
+            releaseId: release.id,
+            releasedAt: new Date(),
+            retiredAt: null,
+          },
+        });
+        await tx.contentPack.update({
+          where: { key: row.packKey },
+          data: { namespace: "baseline" },
+        });
+        await tx.contentReleaseItem.create({
+          data: {
+            releaseId: release.id,
+            kind: "lesson",
+            refId: createdLesson.id,
+            action: "created",
+          },
+        });
+        await tx.contentReleaseItem.create({
+          data: {
+            releaseId: release.id,
+            kind: "pack-version",
+            refId: row.id,
+            action: "created",
+          },
+        });
+      }
+      await audit(tx, {
+        actor: { sub: admin.id, role: "ADMIN" },
+        action: "content.release.apply.admin-direct",
+        targetType: "ContentRelease",
+        targetId: release.id,
+        reason: plan.name,
+        after: {
+          policy: "ADMIN_DIRECT",
+          status: "APPLIED",
+          lessons: plan.draftCount,
+          digests: plan.drafts.map((draft) => draft.digest),
+        },
+      });
+      return tx.contentRelease.findUnique({
+        where: { id: release.id },
+        include: { items: true },
+      });
+    },
+    { timeout: 120000 },
+  );
   return { receipt, plan, idempotent: false };
 }
 
 /** Retire a release: its pack versions retire (lessons archived, evidence kept) and the versions it superseded return. */
 export async function retireRelease(db: any, releaseId: string, actor: { sub: string }, reason: string) {
   return db.$transaction(async (tx: any) => {
-    const release = await tx.contentRelease.findUnique({ where: { id: releaseId }, include: { items: true } });
+    const release = await tx.contentRelease.findUnique({
+      where: { id: releaseId },
+      include: { items: true },
+    });
     if (!release) throw new Error("RELEASE_NOT_FOUND");
     if (release.status !== "APPLIED") throw new Error("RELEASE_NOT_APPLIED");
     const created = release.items.filter((i: any) => i.kind === "pack-version" && i.action === "created").map((i: any) => i.refId);
     const superseded = release.items.filter((i: any) => i.kind === "pack-version" && i.action === "superseded").map((i: any) => i.refId);
     for (const id of created) {
-      const v = await tx.contentPackVersion.update({ where: { id }, data: { status: "retired", retiredAt: new Date() } });
-      if (v.lessonId) await tx.lesson.update({ where: { id: v.lessonId }, data: { status: "archived" } });
+      const v = await tx.contentPackVersion.update({
+        where: { id },
+        data: { status: "retired", retiredAt: new Date() },
+      });
+      if (v.lessonId)
+        await tx.lesson.update({
+          where: { id: v.lessonId },
+          data: { status: "archived" },
+        });
     }
     for (const id of superseded) {
-      const v = await tx.contentPackVersion.update({ where: { id }, data: { status: "released", retiredAt: null } });
-      if (v.lessonId) await tx.lesson.update({ where: { id: v.lessonId }, data: { status: "published" } });
+      const v = await tx.contentPackVersion.update({
+        where: { id },
+        data: { status: "released", retiredAt: null },
+      });
+      if (v.lessonId)
+        await tx.lesson.update({
+          where: { id: v.lessonId },
+          data: { status: "published" },
+        });
     }
-    const retired = await tx.contentRelease.update({ where: { id: releaseId }, data: { status: "RETIRED", retiredAt: new Date() } });
+    const retired = await tx.contentRelease.update({
+      where: { id: releaseId },
+      data: { status: "RETIRED", retiredAt: new Date() },
+    });
     await audit(tx, {
       actor: { sub: actor.sub, role: "ADMIN" },
       action: "content.release.retire",
@@ -522,6 +820,10 @@ export async function retireRelease(db: any, releaseId: string, actor: { sub: st
       before: { status: "APPLIED" },
       after: { status: "RETIRED", references: created.length },
     });
-    return { release: retired, retiredVersions: created.length, restoredVersions: superseded.length };
+    return {
+      release: retired,
+      retiredVersions: created.length,
+      restoredVersions: superseded.length,
+    };
   });
 }

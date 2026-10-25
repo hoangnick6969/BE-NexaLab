@@ -5,6 +5,12 @@ coverage/
 uploads/
 *.log
 .local/
+codex-work-*/
+workspaces/
+tmp/
+*.pdf
+**/crop*/
+**/crops*/
 tools/nexalab-ingest/out/
 tools/nexalab-ingest/python/__pycache__/
 tools/nexalab-ingest/.venv/

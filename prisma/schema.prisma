@@ -1,17 +1,20 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
-  provider = "postgresql"
-  url = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
+
 enum Role {
   STUDENT
   TEACHER
   PARENT
   ADMIN
 }
+
 enum LessonStepType {
   READING
   VIDEO
@@ -21,226 +24,252 @@ enum LessonStepType {
   CHALLENGE
   BASIC_EXERCISE
 }
+
 enum ClassroomStatus {
   ACTIVE
   ARCHIVED
 }
+
 enum EnrollmentStatus {
   pending
   approved
   removed
 }
+
 enum ClassResourceKind {
   DECK
   STUDY_QUIZ
   TEST
 }
+
 enum ClassResourceStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
 }
+
 enum StepProgressStatus {
   NOT_STARTED
   IN_PROGRESS
   COMPLETED
 }
+
 enum ParentLinkStatus {
   pending
   approved
   revoked
 }
+
 enum EbookAnnotationKind {
   HIGHLIGHT
   UNDERLINE
   NOTE
 }
+
 model User {
-  id String @id @default(cuid())
-  username String? @unique
-  email String? @unique
-  passwordHash String
-  fullName String
-  role Role
-  grade Int @default(8)
-  studentLevel String @default("beginner")
-  status String @default("active")
-  mustChangePassword Boolean @default(false)
+  id                         String                 @id @default(cuid())
+  username                   String?                @unique
+  email                      String?                @unique
+  passwordHash               String
+  fullName                   String
+  role                       Role
+  grade                      Int                    @default(8)
+  studentLevel               String                 @default("beginner")
+  status                     String                 @default("active")
+  mustChangePassword         Boolean                @default(false)
   temporaryPasswordExpiresAt DateTime?
-  consentAt DateTime?
-  emailVerifiedAt DateTime?
-  linkCode String? @unique
+  consentAt                  DateTime?
+  emailVerifiedAt            DateTime?
+  linkCode                   String?                @unique
   /// Set when an admin disables the account (C2-T1); cleared on reactivation.
-  disabledAt DateTime?
+  disabledAt                 DateTime?
   /// Private avatar object key in object storage (D-ACC-03); read only through short presigned URLs.
-  avatarKey String?
-  avatarUpdatedAt DateTime?
+  avatarKey                  String?
+  avatarUpdatedAt            DateTime?
   /// UI preferences (acc-4, acc-5): { theme?: "system" | "light" | "dark", locale?: "vi" | "en" }; read through users/preferences.ts.
-  preferences Json @default("{}")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  sessions Session[]
-  attempts Attempt[]
-  enrollments Enrollment[]
-  classes Classroom[]
-  lessons Lesson[]
-  progress Progress[]
-  stepProgress StepProgress[]
-  quizAttempts QuizAttempt[]
-  basicExerciseAttempts BasicExerciseAttempt[]
-  saved SavedExperiment[]
-  parents ParentLink[] @relation("student")
-  children ParentLink[] @relation("parent")
-  assignmentTargets AssignmentTarget[]
-  assignmentSubmissions AssignmentSubmission[]
-  notifications Notification[]
-  ebookAnnotations EbookAnnotation[]
+  preferences                Json                   @default("{}")
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+  sessions                   Session[]
+  attempts                   Attempt[]
+  enrollments                Enrollment[]
+  classes                    Classroom[]
+  lessons                    Lesson[]
+  progress                   Progress[]
+  stepProgress               StepProgress[]
+  quizAttempts               QuizAttempt[]
+  basicExerciseAttempts      BasicExerciseAttempt[]
+  saved                      SavedExperiment[]
+  parents                    ParentLink[]           @relation("student")
+  children                   ParentLink[]           @relation("parent")
+  assignmentTargets          AssignmentTarget[]
+  assignmentSubmissions      AssignmentSubmission[]
+  notifications              Notification[]
+  ebookAnnotations           EbookAnnotation[]
 }
+
 model Session {
-  id String @id @default(cuid())
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String @unique
-  kind String @default("refresh")
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  kind      String   @default("refresh")
   /// D-ACC-01: persistent 30-day session (true) or browser-session cookie with a 12-hour server expiry (false).
   /// Existing rows predate the choice and were 7-day persistent sessions.
-  remember Boolean @default(true)
+  remember  Boolean  @default(true)
   expiresAt DateTime
 }
+
 model ParentLink {
-  parentId String
-  studentId String
-  parent User @relation("parent", fields: [parentId], references: [id], onDelete: Cascade)
-  student User @relation("student", fields: [studentId], references: [id], onDelete: Cascade)
-  verifiedAt DateTime @default(now())
-  status ParentLinkStatus @default(pending)
-  revokedAt DateTime?
-  codeId String?
+  parentId   String
+  studentId  String
+  parent     User             @relation("parent", fields: [parentId], references: [id], onDelete: Cascade)
+  student    User             @relation("student", fields: [studentId], references: [id], onDelete: Cascade)
+  verifiedAt DateTime         @default(now())
+  status     ParentLinkStatus @default(pending)
+  revokedAt  DateTime?
+  codeId     String?
+
   @@id([parentId, studentId])
   @@index([parentId, status])
   @@index([studentId, status])
 }
+
 model ParentLinkCode {
-  id String @id @default(cuid())
-  studentId String
-  teacherId String
-  classId String
-  codeHash String @unique
-  keyVersion Int @default(1)
+  id                 String    @id @default(cuid())
+  studentId          String
+  teacherId          String
+  classId            String
+  codeHash           String    @unique
+  keyVersion         Int       @default(1)
   guardianVerifiedAt DateTime
-  expiresAt DateTime
-  consumedAt DateTime?
-  revokedAt DateTime?
-  createdAt DateTime @default(now())
+  expiresAt          DateTime
+  consumedAt         DateTime?
+  revokedAt          DateTime?
+  createdAt          DateTime  @default(now())
+
   @@index([studentId, expiresAt])
   @@index([teacherId, classId, createdAt])
 }
+
 model ParentConsent {
-  id String @id @default(cuid())
-  userId String
-  purpose String
-  version String
+  id          String    @id @default(cuid())
+  userId      String
+  purpose     String
+  version     String
   contentHash String
-  actorId String?
-  acceptedAt DateTime @default(now())
+  actorId     String?
+  acceptedAt  DateTime  @default(now())
   withdrawnAt DateTime?
+
   @@index([userId, purpose, version])
 }
+
 model Classroom {
-  id String @id @default(cuid())
-  teacherId String
-  teacher User @relation(fields: [teacherId], references: [id])
-  name String
-  grade Int @default(8)
+  id                String          @id @default(cuid())
+  teacherId         String
+  teacher           User            @relation(fields: [teacherId], references: [id])
+  name              String
+  grade             Int             @default(8)
   /// Legacy Increment A code; no longer accepted for joining (B1-T3).
-  joinCode String? @unique
-  status ClassroomStatus @default(ACTIVE)
-  archivedAt DateTime?
-  joinCodeEnabled Boolean @default(true)
-  requiresApproval Boolean @default(false)
+  joinCode          String?         @unique
+  status            ClassroomStatus @default(ACTIVE)
+  archivedAt        DateTime?
+  joinCodeEnabled   Boolean         @default(true)
+  requiresApproval  Boolean         @default(false)
   /// Opaque 6-character Crockford Base32 locator; the secret is stored only as an HMAC.
-  joinLocator String? @unique
-  joinSecretHash String?
-  joinKeyVersion Int?
+  joinLocator       String?         @unique
+  joinSecretHash    String?
+  joinKeyVersion    Int?
   joinCodeRotatedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-  enrollments Enrollment[]
-  assignments Assignment[]
-    resources ClassResource[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @default(now()) @updatedAt
+  enrollments       Enrollment[]
+  assignments       Assignment[]
+  resources         ClassResource[]
+
   @@index([teacherId, status])
 }
+
 /// Immutable class-owned authoring unit. Published records are never edited in place.
 model ClassResource {
-  id String @id @default(cuid())
-  classId String
-  classroom Classroom @relation(fields: [classId], references: [id], onDelete: Cascade)
-  kind ClassResourceKind
-  title String
-  lessonId String?
-  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  version Int @default(1)
-  status ClassResourceStatus @default(DRAFT)
-  content Json
+  id          String                  @id @default(cuid())
+  classId     String
+  classroom   Classroom               @relation(fields: [classId], references: [id], onDelete: Cascade)
+  kind        ClassResourceKind
+  title       String
+  lessonId    String?
+  lesson      Lesson?                 @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  version     Int                     @default(1)
+  status      ClassResourceStatus     @default(DRAFT)
+  content     Json
   createdById String
-  createdAt DateTime @default(now())
+  createdAt   DateTime                @default(now())
   publishedAt DateTime?
-  archivedAt DateTime?
-  practice ClassResourcePractice[]
+  archivedAt  DateTime?
+  practice    ClassResourcePractice[]
+
   @@unique([classId, kind, title, version])
   @@index([classId, status, kind, createdAt])
   @@index([lessonId])
 }
+
 /// Latest unscored practice state; deliberately contains no grade or verdict fields.
 model ClassResourcePractice {
-  id String @id @default(cuid())
+  id         String        @id @default(cuid())
   resourceId String
-  resource ClassResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-  studentId String
-  state Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  resource   ClassResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  studentId  String
+  state      Json
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
   @@unique([resourceId, studentId])
   @@index([studentId, updatedAt])
 }
+
 model Enrollment {
-  classId String
-  studentId String
-  classroom Classroom @relation(fields: [classId], references: [id], onDelete: Cascade)
-  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  status EnrollmentStatus @default(pending)
+  classId         String
+  studentId       String
+  classroom       Classroom        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student         User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status          EnrollmentStatus @default(pending)
   /// Deprecated mirror of `status = approved`, kept in sync until the contract migration.
-  approved Boolean @default(false)
-  joinedAt DateTime @default(now())
-  statusChangedAt DateTime @default(now())
+  approved        Boolean          @default(false)
+  joinedAt        DateTime         @default(now())
+  statusChangedAt DateTime         @default(now())
+
   @@id([classId, studentId])
   @@index([studentId, status])
 }
+
 model Subject {
-  id       String   @id
-  name     String
+  id                         String                       @id
+  name                       String
   /// Optional external ebook/reference URL; linking does not grant reproduction rights.
-  ebookUrl String?
-  lessons  Lesson[]
-  labs     Lab[]
-  ebookAnnotations EbookAnnotation[]
-  ebookEditions EbookEdition[]
+  ebookUrl                   String?
+  lessons                    Lesson[]
+  labs                       Lab[]
+  ebookAnnotations           EbookAnnotation[]
+  ebookEditions              EbookEdition[]
   foundationalCourseVersions FoundationalCourseVersion[]
-  curriculumFrameworks CurriculumFrameworkSubject[]
+  curriculumFrameworks       CurriculumFrameworkSubject[]
+  contentPacks               ContentPack[]
 }
 
 /// Versioned authoritative curriculum framework metadata, independent of source textbooks.
 model CurriculumFramework {
-  id String @id
+  id             String                       @id
   /// Stable NexaLab framework identity shared by its immutable versions.
-  frameworkKey String
-  title String
-  version String
+  frameworkKey   String
+  title          String
+  version        String
   /// Official source authority, URL, publication/access dates and source checksum.
   sourceMetadata Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-  subjects CurriculumFrameworkSubject[]
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @default(now()) @updatedAt
+  subjects       CurriculumFrameworkSubject[]
+
   @@unique([frameworkKey, version])
   @@index([title, version])
 }
@@ -248,11 +277,12 @@ model CurriculumFramework {
 /// Framework coverage of a subject at a grade; chapters/topics/outcomes remain in the existing taxonomy.
 model CurriculumFrameworkSubject {
   frameworkId String
-  framework CurriculumFramework @relation(fields: [frameworkId], references: [id], onDelete: Restrict)
-  subjectId String
-  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  grade Int
-  createdAt DateTime @default(now())
+  framework   CurriculumFramework @relation(fields: [frameworkId], references: [id], onDelete: Restrict)
+  subjectId   String
+  subject     Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  grade       Int
+  createdAt   DateTime            @default(now())
+
   @@id([frameworkId, subjectId, grade])
   @@index([subjectId, grade])
 }
@@ -279,767 +309,857 @@ model EbookAnnotation {
 }
 
 model Lesson {
-  id String @id @default(cuid())
-  subjectId String
-  subject Subject @relation(fields: [subjectId], references: [id])
-  authorId String
-  author User @relation(fields: [authorId], references: [id])
-  title String
-  chapter String
-  grade Int
-  topic String
-  learningObjective String
-  prerequisites String
-  curriculum String
-  content String
-  labId String?
-  status String @default("draft")
-  materials Json @default("[]")
-  questions Json @default("[]")
+  id                        String                     @id @default(cuid())
+  subjectId                 String
+  subject                   Subject                    @relation(fields: [subjectId], references: [id])
+  authorId                  String
+  author                    User                       @relation(fields: [authorId], references: [id])
+  title                     String
+  chapter                   String
+  grade                     Int
+  topic                     String
+  learningObjective         String
+  prerequisites             String
+  curriculum                String
+  content                   String
+  labId                     String?
+  status                    String                     @default("draft")
+  materials                 Json                       @default("[]")
+  questions                 Json                       @default("[]")
   /// TEACHER_PRIVATE (owner-only edit, self-review) or SHARED_LIBRARY (admin-managed baseline).
-  scope String @default("TEACHER_PRIVATE")
+  scope                     String                     @default("TEACHER_PRIVATE")
   /// Synthetic development/E2E fixture; never presented as released corpus.
-  synthetic Boolean @default(false)
-  clonedFromId String?
+  synthetic                 Boolean                    @default(false)
+  clonedFromId              String?
   /// Allowlisted self-review attestation required to publish teacher-private content.
-  review Json?
+  review                    Json?
   /// KHTN content strand (MATTER | ENERGY | LIVING | EARTH_SKY).
-  domain String?
+  domain                    String?
   /// CurriculumOutcome codes this lesson addresses.
-  outcomeCodes Json @default("[]")
+  outcomeCodes              Json                       @default("[]")
   /// Teacher-chosen challenge parameters, validated against the model's allowed ranges.
-  challengeParams Json?
+  challengeParams           Json?
   /// Named shared-library release reviews: { kind: { reviewerId, at, note? } }.
-  releaseReview Json?
+  releaseReview             Json?
   /// Released content-pack version this shared lesson materializes (CF-T1); null for authored lessons.
-  packVersionId String?
-  packVersion ContentPackVersion? @relation(fields: [packVersionId], references: [id], onDelete: Restrict)
-  classResources ClassResource[]
-  curriculumChapterCode String?
-  curriculumChapter CurriculumChapter? @relation(fields: [curriculumChapterCode], references: [code], onDelete: Restrict)
-  curriculumTopicCode String?
-  curriculumTopic CurriculumTopic? @relation(fields: [curriculumTopicCode], references: [code], onDelete: Restrict)
-  curriculumOrder Int?
+  packVersionId             String?
+  packVersion               ContentPackVersion?        @relation(fields: [packVersionId], references: [id], onDelete: Restrict)
+  classResources            ClassResource[]
+  curriculumChapterCode     String?
+  curriculumChapter         CurriculumChapter?         @relation(fields: [curriculumChapterCode], references: [code], onDelete: Restrict)
+  curriculumTopicCode       String?
+  curriculumTopic           CurriculumTopic?           @relation(fields: [curriculumTopicCode], references: [code], onDelete: Restrict)
+  curriculumOrder           Int?
   /// Admin quarantine (C2-T2): status becomes "quarantined"; the prior status is restored on release.
-  quarantinedAt DateTime?
-  quarantineReason String?
-  statusBeforeQuarantine String?
-  publishedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-  steps LessonStep[]
-  ebookLocators LessonEbookLocator[]
+  quarantinedAt             DateTime?
+  quarantineReason          String?
+  statusBeforeQuarantine    String?
+  publishedAt               DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @default(now()) @updatedAt
+  steps                     LessonStep[]
+  ebookLocators             LessonEbookLocator[]
   foundationalCourseLessons FoundationalCourseLesson[]
+
   @@index([scope, status, grade])
   @@index([authorId, status])
 }
+
 /// Grade 8–9 KHTN outcome map (Content Foundation). `synthetic` rows are dev fixtures and never count as released coverage.
 model CurriculumOutcome {
-  code String @id
-  grade Int
-  domain String
-  chapter String
-  statement String
+  code           String   @id
+  grade          Int
+  domain         String
+  chapter        String
+  statement      String
   /// Append-only source digests, locators, origin types and human review references for each import.
   sourceEvidence Json?
-  synthetic Boolean @default(false)
+  synthetic      Boolean  @default(false)
   /// active | archived. Archived outcomes stay traceable but cannot be newly mapped.
-  status String @default("active")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
   @@index([grade, domain])
 }
+
 /// Curriculum chapter (C2-T2). `code` is an immutable identifier; a duplicate conflicts instead of overwriting.
 model CurriculumChapter {
-  code String @id
-  subjectId String
-  grade Int
-  domain String
-  title String
+  code          String            @id
+  subjectId     String
+  grade         Int
+  domain        String
+  title         String
   /// active | archived
-  status String @default("active")
-  synthetic Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-  topics CurriculumTopic[]
-  lessons Lesson[]
-  officialOrder Int @default(0)
+  status        String            @default("active")
+  synthetic     Boolean           @default(false)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @default(now()) @updatedAt
+  topics        CurriculumTopic[]
+  lessons       Lesson[]
+  officialOrder Int               @default(0)
+
   @@index([grade, domain])
 }
+
 /// Topic inside a chapter, mapped to the outcomes it teaches.
 model CurriculumTopic {
-  code String @id
-  chapterCode String
-  chapter CurriculumChapter @relation(fields: [chapterCode], references: [code])
-  lessons Lesson[]
-  officialOrder Int @default(0)
-  title String
-  outcomeCodes Json @default("[]")
+  code          String            @id
+  chapterCode   String
+  chapter       CurriculumChapter @relation(fields: [chapterCode], references: [code])
+  lessons       Lesson[]
+  officialOrder Int               @default(0)
+  title         String
+  outcomeCodes  Json              @default("[]")
   /// active | archived
-  status String @default("active")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  status        String            @default("active")
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @default(now()) @updatedAt
+
   @@index([chapterCode])
 }
+
 model LessonStep {
-  id String @id @default(cuid())
-  lessonId String
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  type LessonStepType
-  position Int
-  required Boolean @default(true)
-  config Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  progress StepProgress[]
+  id                    String                 @id @default(cuid())
+  lessonId              String
+  lesson                Lesson                 @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  type                  LessonStepType
+  position              Int
+  required              Boolean                @default(true)
+  config                Json
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  progress              StepProgress[]
   basicExerciseAttempts BasicExerciseAttempt[]
+
   @@unique([lessonId, position])
   @@index([lessonId, type])
 }
+
 model StepProgress {
-  id String @id @default(cuid())
-  studentId String
-  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  stepId String
-  step LessonStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  id             String             @id @default(cuid())
+  studentId      String
+  student        User               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  stepId         String
+  step           LessonStep         @relation(fields: [stepId], references: [id], onDelete: Cascade)
   /// Null is retained only for legacy/free-practice evidence. Assigned writes must set this.
-  assignmentId String?
-  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  status StepProgressStatus @default(NOT_STARTED)
-  progressValue Int @default(0)
-  lastPosition Int?
-  visitedCardIds Json @default("[]")
-  startedAt DateTime?
-  completedAt DateTime?
-  updatedAt DateTime @updatedAt
+  assignmentId   String?
+  assignment     Assignment?        @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  status         StepProgressStatus @default(NOT_STARTED)
+  progressValue  Int                @default(0)
+  lastPosition   Int?
+  visitedCardIds Json               @default("[]")
+  startedAt      DateTime?
+  completedAt    DateTime?
+  updatedAt      DateTime           @updatedAt
+
   @@unique([studentId, assignmentId, stepId])
   @@index([studentId, stepId])
   @@index([assignmentId, studentId])
 }
+
 model QuizAttempt {
-  id String @id @default(cuid())
-  studentId String
-  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  lessonId String
-  stepId String
-  assignmentId String?
-  answers Json
+  id               String   @id @default(cuid())
+  studentId        String
+  student          User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId         String
+  stepId           String
+  assignmentId     String?
+  answers          Json
   questionSnapshot Json
-  correctCount Int
-  questionCount Int
-  score Float
-  passed Boolean
-  idempotencyKey String
-  createdAt DateTime @default(now())
+  correctCount     Int
+  questionCount    Int
+  score            Float
+  passed           Boolean
+  idempotencyKey   String
+  createdAt        DateTime @default(now())
+
   @@unique([studentId, idempotencyKey])
   @@index([studentId, lessonId, createdAt])
   @@index([lessonId, stepId, passed])
   @@index([studentId, createdAt, id])
 }
+
 model BasicExerciseAttempt {
-  id String @id @default(cuid())
-  studentId String
-  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  lessonId String
-  stepId String
-  step LessonStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  answers Json
-  score Int
-  passThreshold Int
-  passed Boolean
+  id             String     @id @default(cuid())
+  studentId      String
+  student        User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId       String
+  stepId         String
+  step           LessonStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  answers        Json
+  score          Int
+  passThreshold  Int
+  passed         Boolean
   idempotencyKey String
-  createdAt DateTime @default(now())
+  createdAt      DateTime   @default(now())
+
   @@unique([studentId, idempotencyKey])
   @@index([studentId, lessonId, stepId, createdAt])
   @@index([lessonId, stepId, passed])
 }
+
 model Lab {
-  id String @id
-  subjectId String
-  subject Subject @relation(fields: [subjectId], references: [id])
-  title String
-  grade Int @default(8)
-  topic String
-  learningObjective String
-  status String @default("published")
+  id                 String      @id
+  subjectId          String
+  subject            Subject     @relation(fields: [subjectId], references: [id])
+  title              String
+  grade              Int         @default(8)
+  topic              String
+  learningObjective  String
+  status             String      @default("published")
   /// Public discovery is opt-in after foundational release review.
-  scope String @default("CLASS_PRIVATE")
-  releaseCleared Boolean @default(false)
-  topicCode String?
-  synthetic Boolean @default(false)
+  scope              String      @default("CLASS_PRIVATE")
+  releaseCleared     Boolean     @default(false)
+  topicCode          String?
+  synthetic          Boolean     @default(false)
   simulationModelRef String
-  config Json @default("{}")
-  assets Json @default("[]")
-  challenges Challenge[]
+  config             Json        @default("{}")
+  assets             Json        @default("[]")
+  challenges         Challenge[]
 }
+
 model FoundationalCourseVersion {
-  id String @id
-  subjectId String
-  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  grade Int
-  version String
-  status String @default("draft")
+  id            String                     @id
+  subjectId     String
+  subject       Subject                    @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  grade         Int
+  version       String
+  status        String                     @default("draft")
   sourceVersion String
-  lessons FoundationalCourseLesson[]
-  createdAt DateTime @default(now())
+  lessons       FoundationalCourseLesson[]
+  createdAt     DateTime                   @default(now())
+
   @@unique([subjectId, grade, version])
   @@index([grade, status])
 }
+
 model FoundationalCourseLesson {
-  courseVersionId String
-  courseVersion FoundationalCourseVersion @relation(fields: [courseVersionId], references: [id], onDelete: Cascade)
-  lessonId String
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Restrict)
-  officialOrder Int
+  courseVersionId   String
+  courseVersion     FoundationalCourseVersion @relation(fields: [courseVersionId], references: [id], onDelete: Cascade)
+  lessonId          String
+  lesson            Lesson                    @relation(fields: [lessonId], references: [id], onDelete: Restrict)
+  officialOrder     Int
   foundationalLabId String?
+
   @@id([courseVersionId, lessonId])
   @@unique([courseVersionId, officialOrder])
 }
+
 model EbookEdition {
-  id String @id
-  subjectId String
-  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  url String
-  version String
-  fallbackPhysicalPage Int @default(1)
-  isCurrent Boolean @default(false)
-  locators LessonEbookLocator[]
-  createdAt DateTime @default(now())
+  id                   String               @id
+  subjectId            String
+  subject              Subject              @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  url                  String
+  version              String
+  fallbackPhysicalPage Int                  @default(1)
+  isCurrent            Boolean              @default(false)
+  locators             LessonEbookLocator[]
+  createdAt            DateTime             @default(now())
+
   @@unique([subjectId, version])
 }
+
 model LessonEbookLocator {
-  id String @id @default(cuid())
-  lessonId String
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  editionId String
-  edition EbookEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
-  printedPageLabel String?
-  physicalPageIndex Int
-  verificationStatus String @default("unverified")
-  provenance String
-  sourceMapVersion String
-  updatedAt DateTime @updatedAt
+  id                 String       @id @default(cuid())
+  lessonId           String
+  lesson             Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  editionId          String
+  edition            EbookEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  printedPageLabel   String?
+  physicalPageIndex  Int
+  verificationStatus String       @default("unverified")
+  provenance         String
+  sourceMapVersion   String
+  updatedAt          DateTime     @updatedAt
+
   @@unique([lessonId, editionId])
   @@index([editionId, verificationStatus])
 }
+
 model Challenge {
-  id String @id
-  labId String
-  lab Lab @relation(fields: [labId], references: [id])
-  objective String
+  id          String    @id
+  labId       String
+  lab         Lab       @relation(fields: [labId], references: [id])
+  objective   String
   constraints Json
-  difficulty String @default("intermediate")
-  attempts Attempt[]
+  difficulty  String    @default("intermediate")
+  attempts    Attempt[]
 }
+
 model Assignment {
-  id String @id @default(cuid())
-  classId String
-  classroom Classroom @relation(fields: [classId], references: [id], onDelete: Cascade)
-  contentId String
-  contentType String
-  title String
-  dueDate DateTime?
+  id                String                       @id @default(cuid())
+  classId           String
+  classroom         Classroom                    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  contentId         String
+  contentType       String
+  title             String
+  dueDate           DateTime?
   /// Deprecated mirror of the target snapshot; AssignmentTarget is authoritative.
-  studentIds Json @default("[]")
+  studentIds        Json                         @default("[]")
   /// CLASS (approved members at creation) or SUBSET (selected approved members).
-  audience String @default("CLASS")
+  audience          String                       @default("CLASS")
   /// sha256 of the sorted target student IDs, used by the active-duplicate rule.
-  targetHash String?
+  targetHash        String?
   /// Immutable content version at assignment time (lesson structure or lab model/config hash).
-  contentVersion String?
-  status String @default("ACTIVE")
-  createdById String?
-  archivedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  targets AssignmentTarget[]
+  contentVersion    String?
+  status            String                       @default("ACTIVE")
+  createdById       String?
+  archivedAt        DateTime?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  targets           AssignmentTarget[]
   deadlineRevisions AssignmentDeadlineRevision[]
-  submissions AssignmentSubmission[]
-  stepProgress StepProgress[]
+  submissions       AssignmentSubmission[]
+  stepProgress      StepProgress[]
+
   @@index([classId, status, dueDate])
   @@index([contentType, contentId, status])
 }
+
 model AssignmentTarget {
   assignmentId String
-  studentId String
-  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  studentId    String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student      User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
   @@id([assignmentId, studentId])
   @@index([studentId])
 }
+
 /// Immutable due-date history of a scored test assignment (I3). Revision 1 is written at creation;
 /// Assignment.dueDate mirrors the latest revision.
 model AssignmentDeadlineRevision {
-  id String @id @default(cuid())
-  assignmentId String
-  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  revision Int
-  dueAt DateTime
-  actorId String
-  note String?
+  id                      String                 @id @default(cuid())
+  assignmentId            String
+  assignment              Assignment             @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  revision                Int
+  dueAt                   DateTime
+  actorId                 String
+  note                    String?
   /// Late submission whose review triggered this revision; null for revision 1.
   triggeredBySubmissionId String?
-  createdAt DateTime @default(now())
-  submissions AssignmentSubmission[]
-  lateDecisions LateDecision[]
+  createdAt               DateTime               @default(now())
+  submissions             AssignmentSubmission[]
+  lateDecisions           LateDecision[]
+
   @@unique([assignmentId, revision])
 }
+
 /// Immutable test submission (I3 / 3.2). The server scores every submission; a late one stays
 /// pending until a LateDecision exists. The latest submission per student is current.
 model AssignmentSubmission {
-  id String @id @default(cuid())
-  assignmentId String
-  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  studentId String
-  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  id                 String                     @id @default(cuid())
+  assignmentId       String
+  assignment         Assignment                 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId          String
+  student            User                       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   /// Deadline revision in force when the server received the submission.
   deadlineRevisionId String
-  deadlineRevision AssignmentDeadlineRevision @relation(fields: [deadlineRevisionId], references: [id])
+  deadlineRevision   AssignmentDeadlineRevision @relation(fields: [deadlineRevisionId], references: [id])
   /// Resource version answered, so later test revisions never rescore history.
-  resourceVersion Int
-  answers Json
-  score Int
-  correctCount Int
-  questionCount Int
+  resourceVersion    Int
+  answers            Json
+  score              Int
+  correctCount       Int
+  questionCount      Int
   /// ON_TIME (submittedAt <= dueAt) or LATE.
-  timing String
-  lateReason String?
-  submittedAt DateTime @default(now())
-  decision LateDecision?
+  timing             String
+  lateReason         String?
+  submittedAt        DateTime                   @default(now())
+  decision           LateDecision?
+
   @@index([assignmentId, studentId, submittedAt])
   @@index([studentId, submittedAt])
 }
+
 /// Owning teacher's decision on one late submission (I3 / 3.3): REJECT_ZERO, or
 /// REVISE_DEADLINE_FOR_CLASS written for every pending submission when the deadline is revised.
 model LateDecision {
-  id String @id @default(cuid())
-  submissionId String @unique
-  submission AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  decision String
-  actorId String
-  note String?
+  id                 String                      @id @default(cuid())
+  submissionId       String                      @unique
+  submission         AssignmentSubmission        @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  decision           String
+  actorId            String
+  note               String?
   deadlineRevisionId String?
-  deadlineRevision AssignmentDeadlineRevision? @relation(fields: [deadlineRevisionId], references: [id])
-  createdAt DateTime @default(now())
+  deadlineRevision   AssignmentDeadlineRevision? @relation(fields: [deadlineRevisionId], references: [id])
+  createdAt          DateTime                    @default(now())
 }
+
 model TeacherGateOverride {
-  id String @id @default(cuid())
-  studentId String
+  id           String    @id @default(cuid())
+  studentId    String
   assignmentId String
-  stepId String
-  actorId String
-  reason String
-  createdAt DateTime @default(now())
-  revokedAt DateTime?
-  revokedById String?
+  stepId       String
+  actorId      String
+  reason       String
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+  revokedById  String?
+
   @@unique([studentId, assignmentId, stepId])
   @@index([assignmentId, studentId, revokedAt])
 }
+
 model Attempt {
-  id String @id @default(cuid())
-  studentId String
-  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  challengeId String
-  challenge Challenge @relation(fields: [challengeId], references: [id])
-  assignmentId String?
-  lessonStepId String?
-  labState Json
-  simulationResult Json
-  verdict String
-  durationMs Int
-  simulationModelVersion String @default("1.0.0")
+  id                     String    @id @default(cuid())
+  studentId              String
+  student                User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  challengeId            String
+  challenge              Challenge @relation(fields: [challengeId], references: [id])
+  assignmentId           String?
+  lessonStepId           String?
+  labState               Json
+  simulationResult       Json
+  verdict                String
+  durationMs             Int
+  simulationModelVersion String    @default("1.0.0")
   /// Simulation configuration version evaluated for this attempt (C2-T3); null before C2.
-  configVersionId String?
+  configVersionId        String?
   /// Topic simulation pack version active when the attempt was evaluated (CF-T4); null for earlier attempts.
-  packVersionId String?
-  idempotencyKey String?
-  createdAt DateTime @default(now())
-  hints HintLog[]
+  packVersionId          String?
+  idempotencyKey         String?
+  createdAt              DateTime  @default(now())
+  hints                  HintLog[]
+
   @@unique([studentId, idempotencyKey])
   @@index([studentId, challengeId, createdAt])
   @@index([studentId, lessonStepId, createdAt])
   @@index([studentId, createdAt, id])
 }
+
 model HintLog {
-  id String @id @default(cuid())
-  attemptId String
-  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  level Int
-  content String
+  id              String   @id @default(cuid())
+  attemptId       String
+  attempt         Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  level           Int
+  content         String
   contextSnapshot Json
-  triggeredBy String @default("student")
-  createdAt DateTime @default(now())
+  triggeredBy     String   @default("student")
+  createdAt       DateTime @default(now())
+
   @@unique([attemptId, level])
 }
+
 model Progress {
-  studentId String
-  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  contentId String
-  status String
-  attemptsCount Int @default(0)
-  lastHintLevel Int @default(0)
-  score Float @default(0)
-  updatedAt DateTime @updatedAt
+  studentId     String
+  student       User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  contentId     String
+  status        String
+  attemptsCount Int      @default(0)
+  lastHintLevel Int      @default(0)
+  score         Float    @default(0)
+  updatedAt     DateTime @updatedAt
+
   @@id([studentId, contentId])
 }
+
 model SavedExperiment {
-  id String @id @default(cuid())
-  studentId String
-  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  labId String
-  labState Json
+  id               String   @id @default(cuid())
+  studentId        String
+  student          User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  labId            String
+  labState         Json
   simulationResult Json
-  note String
-  createdAt DateTime @default(now())
+  note             String
+  createdAt        DateTime @default(now())
 }
+
 model AssetFile {
-  id String @id
-  ownerId String
-  name String
-  mime String
-  size Int
+  id               String    @id
+  ownerId          String
+  name             String
+  mime             String
+  size             Int
   /// Full SHA-256 of the stored bytes; null only for files uploaded before C2.
-  sha256 String?
+  sha256           String?
   /// TEACHER_PRIVATE | SHARED_LIBRARY
-  scope String @default("TEACHER_PRIVATE")
+  scope            String    @default("TEACHER_PRIVATE")
   /// READY | QUARANTINED. A quarantined file is served to admins only.
-  status String @default("READY")
-  source String?
-  license String?
-  quarantinedAt DateTime?
+  status           String    @default("READY")
+  source           String?
+  license          String?
+  quarantinedAt    DateTime?
   quarantineReason String?
-  createdAt DateTime @default(now())
+  createdAt        DateTime  @default(now())
+
   @@index([ownerId])
   @@index([status, scope])
 }
+
 /// Immutable simulation configuration for one lab (C2-T3). Activating a version
 /// affects future attempts only; attempts pin the version they were evaluated with.
 model SimulationConfigVersion {
-  id String @id @default(cuid())
-  labId String
-  version Int
+  id              String    @id @default(cuid())
+  labId           String
+  version         Int
   /// Allowlisted model reference, e.g. circuit@1.0.0.
-  modelRef String
+  modelRef        String
   /// Per base challenge: allowlisted parameters, validated against the model's ranges.
   challengeParams Json
   /// Golden cases verified by the server engine before the version is stored.
-  goldenCases Json
+  goldenCases     Json
   /// draft | active | retired
-  status String @default("draft")
-  reason String
-  createdById String
-  createdAt DateTime @default(now())
-  activatedAt DateTime?
-  retiredAt DateTime?
+  status          String    @default("draft")
+  reason          String
+  createdById     String
+  createdAt       DateTime  @default(now())
+  activatedAt     DateTime?
+  retiredAt       DateTime?
+
   @@unique([labId, version])
   @@index([labId, status])
 }
+
 model AuditLog {
-  id String @id @default(cuid())
-  actorId String?
-  actorRole String?
-  action String
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorRole  String?
+  action     String
   targetType String
-  targetId String?
+  targetId   String?
   /// success | denied | failure
-  outcome String
-  reason String?
+  outcome    String
+  reason     String?
   /// Allowlisted, redacted field diff only; never a full object snapshot.
-  before Json?
-  after Json?
-  createdAt DateTime @default(now())
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
   @@index([targetType, targetId, createdAt])
   @@index([actorId, createdAt])
   @@index([action, createdAt])
 }
+
 model IdempotencyRecord {
-  actorId String
-  key String
-  scope String
+  actorId     String
+  key         String
+  scope       String
   requestHash String
-  statusCode Int @default(201)
-  response Json?
-  createdAt DateTime @default(now())
-  expiresAt DateTime
+  statusCode  Int      @default(201)
+  response    Json?
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
   @@id([actorId, key])
   @@index([expiresAt])
 }
+
 /// Shared expiring limiter store; `key` is a sha256 digest, never a raw IP or username.
 model RateLimitBucket {
-  key String @id
-  count Int @default(0)
+  key         String    @id
+  count       Int       @default(0)
   windowStart DateTime
   lockedUntil DateTime?
-  expiresAt DateTime
+  expiresAt   DateTime
+
   @@index([expiresAt])
 }
+
 /// Logical media item (CF-T2). Binary bytes live only in object storage; every change is a new immutable AssetVersion.
 model Asset {
-  id String @id @default(cuid())
+  id               String         @id @default(cuid())
   /// TEACHER_PRIVATE | SHARED_LIBRARY
-  scope String @default("TEACHER_PRIVATE")
+  scope            String         @default("TEACHER_PRIVATE")
   /// Owning teacher/admin; null only for shared assets owned by the platform.
-  ownerId String?
-  title String
+  ownerId          String?
+  title            String
   /// pdf | image | video | caption | model
-  kind String
+  kind             String
   /// ACTIVE | QUARANTINED | ARCHIVED
-  status String @default("ACTIVE")
-  license String?
-  source String?
-  attribution String?
-  quarantinedAt DateTime?
+  status           String         @default("ACTIVE")
+  license          String?
+  source           String?
+  attribution      String?
+  quarantinedAt    DateTime?
   quarantineReason String?
   /// Set when imported from the pre-CF local AssetFile table.
-  legacyFileId String? @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-  versions AssetVersion[]
+  legacyFileId     String?        @unique
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now()) @updatedAt
+  versions         AssetVersion[]
+
   @@index([ownerId])
   @@index([status, scope])
 }
+
 /// Immutable stored object. Content and published lessons pin a READY version; replacement creates a new version and key.
 model AssetVersion {
-  id String @id @default(cuid())
-  assetId String
-  asset Asset @relation(fields: [assetId], references: [id])
-  version Int
+  id             String    @id @default(cuid())
+  assetId        String
+  asset          Asset     @relation(fields: [assetId], references: [id])
+  version        Int
   /// PENDING | READY | FAILED | QUARANTINED
-  status String @default("PENDING")
+  status         String    @default("PENDING")
   /// r2 | local
-  storage String
-  bucket String
+  storage        String
+  bucket         String
   /// Upload target; removed after finalize.
-  stagingKey String?
+  stagingKey     String?
   /// Released object key; set only once READY and never rewritten.
-  objectKey String? @unique
-  fileName String
-  mime String
-  declaredBytes Int
-  bytes Int?
+  objectKey      String?   @unique
+  fileName       String
+  mime           String
+  declaredBytes  Int
+  bytes          Int?
   /// Server-computed full-object SHA-256 (never the multipart ETag).
-  sha256 String?
+  sha256         String?
   /// Optional client claim, compared with the server value.
   expectedSha256 String?
-  etag String?
-  uploadId String?
-  multipart Boolean @default(false)
-  validation Json?
-  failureReason String?
+  etag           String?
+  uploadId       String?
+  multipart      Boolean   @default(false)
+  validation     Json?
+  failureReason  String?
   /// Pending uploads not finalized by then are aborted and cleaned up.
-  expiresAt DateTime?
-  createdById String
-  createdAt DateTime @default(now())
-  readyAt DateTime?
+  expiresAt      DateTime?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  readyAt        DateTime?
+
   @@unique([assetId, version])
   @@index([status, expiresAt])
 }
+
 /// Allowlisted source policy (CF-T3). Stores policy, never lessons; every change is a new SourcePolicyVersion.
 model SourcePolicy {
-  key String @id
-  title String
-  enabled Boolean @default(false)
+  key            String                @id
+  title          String
+  enabled        Boolean               @default(false)
   currentVersion Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-  versions SourcePolicyVersion[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @default(now()) @updatedAt
+  versions       SourcePolicyVersion[]
 }
+
 model SourcePolicyVersion {
-  id String @id @default(cuid())
-  key String
-  source SourcePolicy @relation(fields: [key], references: [key])
-  version Int
+  id          String       @id @default(cuid())
+  key         String
+  source      SourcePolicy @relation(fields: [key], references: [key])
+  version     Int
   /// accessMode, allowedHosts/paths/mime, maxBytes, licenseRule, storagePolicy, parser, rateLimitPerMinute, review dates.
-  policy Json
-  reason String
+  policy      Json
+  reason      String
   createdById String?
-  createdAt DateTime @default(now())
+  createdAt   DateTime     @default(now())
+
   @@unique([key, version])
 }
+
 /// One bounded ingestion pass; pins the exact policy version and parser.
 model IngestionRun {
-  id String @id @default(cuid())
-  sourceKey String
+  id              String          @id @default(cuid())
+  sourceKey       String
   policyVersionId String
-  connector String
-  parserVersion String
-  trigger String
+  connector       String
+  parserVersion   String
+  trigger         String
   /// RUNNING | COMPLETED | FAILED
-  status String @default("RUNNING")
-  counts Json?
-  error String?
-  startedById String?
-  startedAt DateTime @default(now())
-  finishedAt DateTime?
-  items IngestionItem[]
+  status          String          @default("RUNNING")
+  counts          Json?
+  error           String?
+  startedById     String?
+  startedAt       DateTime        @default(now())
+  finishedAt      DateTime?
+  items           IngestionItem[]
+
   @@index([sourceKey, startedAt])
 }
+
 /// Staging state of one candidate; never learning content and never auto-published.
 model IngestionItem {
-  id String @id @default(cuid())
-  runId String
-  run IngestionRun @relation(fields: [runId], references: [id])
-  externalId String
-  url String?
+  id                String       @id @default(cuid())
+  runId             String
+  run               IngestionRun @relation(fields: [runId], references: [id])
+  externalId        String
+  url               String?
   /// STAGED | DUPLICATE | REJECTED | NEEDS_REVIEW
-  status String
-  rejection String?
-  sha256 String?
+  status            String
+  rejection         String?
+  sha256            String?
   artifactVersionId String?
-  createdAt DateTime @default(now())
+  createdAt         DateTime     @default(now())
+
   @@index([runId])
 }
+
 model SourceArtifact {
-  id String @id @default(cuid())
-  sourceKey String
+  id         String                  @id @default(cuid())
+  sourceKey  String
   externalId String
-  title String?
-  createdAt DateTime @default(now())
-  versions SourceArtifactVersion[]
+  title      String?
+  createdAt  DateTime                @default(now())
+  versions   SourceArtifactVersion[]
+
   @@unique([sourceKey, externalId])
 }
+
 /// Snapshot of an external item: locator, checksum, license snapshot; raw bytes only when the policy allows storing them.
 model SourceArtifactVersion {
-  id String @id @default(cuid())
-  artifactId String
-  artifact SourceArtifact @relation(fields: [artifactId], references: [id])
-  version Int
-  canonicalUrl String
-  retrievedAt DateTime
-  sha256 String
-  mime String
-  bytes Int
+  id              String         @id @default(cuid())
+  artifactId      String
+  artifact        SourceArtifact @relation(fields: [artifactId], references: [id])
+  version         Int
+  canonicalUrl    String
+  retrievedAt     DateTime
+  sha256          String
+  mime            String
+  bytes           Int
   licenseSnapshot Json
-  locator String?
-  parserVersion String?
+  locator         String?
+  parserVersion   String?
   /// METADATA_ONLY | SNAPSHOT
-  storagePolicy String
-  rawObjectKey String?
-  normalized Json?
+  storagePolicy   String
+  rawObjectKey    String?
+  normalized      Json?
   /// STAGED | METADATA_VERIFIED | REJECTED
-  reviewStatus String @default("STAGED")
-  createdAt DateTime @default(now())
+  reviewStatus    String         @default("STAGED")
+  createdAt       DateTime       @default(now())
+
   @@unique([artifactId, version])
   @@unique([artifactId, sha256])
 }
+
 /// Curriculum-aligned content pack (CF-T1). `namespace` fixture packs never reach pilot/production.
 model ContentPack {
-  key String @id
-  grade Int
-  domain String
-  title String
+  key       String               @id
+  subjectId String
+  subject   Subject              @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  grade     Int
+  domain    String
+  title     String
   /// fixture | baseline
   namespace String
-  createdAt DateTime @default(now())
-  versions ContentPackVersion[]
+  createdAt DateTime             @default(now())
+  versions  ContentPackVersion[]
+
+  @@index([subjectId, grade])
 }
+
 /// Immutable pack version; a release materializes it as a shared-library lesson.
 model ContentPackVersion {
-  id String @id @default(cuid())
-  packKey String
-  pack ContentPack @relation(fields: [packKey], references: [key])
-  version Int
+  id                    String      @id @default(cuid())
+  packKey               String
+  pack                  ContentPack @relation(fields: [packKey], references: [key])
+  version               Int
   /// sha256 of the canonical manifest
-  digest String
-  manifest Json
+  digest                String
+  manifest              Json
   /// released | retired
-  status String
-  synthetic Boolean @default(false)
-  outcomeCodes Json @default("[]")
-  lessonId String?
-  releaseId String?
-  createdAt DateTime @default(now())
-  releasedAt DateTime?
-  retiredAt DateTime?
-  materializedLessons Lesson[]
+  status                String
+  synthetic             Boolean     @default(false)
+  outcomeCodes          Json        @default("[]")
+  curriculumChapterCode String?
+  curriculumTopicCode   String?
+  curriculumOrder       Int?
+  classificationReview  Json?
+  lessonId              String?
+  releaseId             String?
+  createdAt             DateTime    @default(now())
+  releasedAt            DateTime?
+  retiredAt             DateTime?
+  materializedLessons   Lesson[]
+
   @@unique([packKey, version])
   @@unique([packKey, digest])
+  @@index([curriculumChapterCode, curriculumTopicCode, curriculumOrder])
 }
+
 /// Deployment record of one approved content manifest in one environment.
 model ContentRelease {
-  id String @id @default(cuid())
-  environment String
-  name String
-  digest String
+  id              String               @id @default(cuid())
+  environment     String
+  name            String
+  digest          String
   importerVersion String
   /// APPLIED | RETIRED
-  status String
-  initiatedById String
-  approvedById String
-  summary Json
-  createdAt DateTime @default(now())
-  retiredAt DateTime?
-  items ContentReleaseItem[]
+  status          String
+  initiatedById   String
+  approvedById    String
+  summary         Json
+  createdAt       DateTime             @default(now())
+  retiredAt       DateTime?
+  items           ContentReleaseItem[]
+
   @@unique([environment, digest])
 }
+
 model ContentReleaseItem {
-  id String @id @default(cuid())
+  id        String         @id @default(cuid())
   releaseId String
-  release ContentRelease @relation(fields: [releaseId], references: [id])
+  release   ContentRelease @relation(fields: [releaseId], references: [id])
   /// source-policy | pack-version | lesson
-  kind String
-  refId String
+  kind      String
+  refId     String
   /// created | unchanged | superseded
-  action String
-  createdAt DateTime @default(now())
+  action    String
+  createdAt DateTime       @default(now())
+
   @@index([releaseId])
 }
+
 /// Immutable reviewed practical activity (CF-T4); a simulation pack cannot exist without one.
 model PracticalActivityVersion {
-  id String @id @default(cuid())
-  key String
-  version Int
-  digest String
+  id          String   @id @default(cuid())
+  key         String
+  version     Int
+  digest      String
   /// objective, materials, setup, procedure, variables, observations, expectedResult, explanation, safety, limitations, modality, outcomeCodes, sources
-  spec Json
+  spec        Json
   /// named subject/safety reviews
-  reviews Json
+  reviews     Json
   createdById String
-  createdAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
   @@unique([key, version])
   @@unique([key, digest])
 }
+
 /// Immutable topic simulation pack version (CF-T4): pins model, template, visual asset, semantic map, bindings and challenge templates.
 model SimulationPackVersion {
-  id String @id @default(cuid())
-  key String
-  version Int
-  labId String
-  modelRef String
-  engineVersion String
-  activityVersionId String
+  id                   String    @id @default(cuid())
+  key                  String
+  version              Int
+  labId                String
+  modelRef             String
+  engineVersion        String
+  activityVersionId    String
   /// units, ranges, initialState, limitations, goldenCases
-  template Json
+  template             Json
   visualAssetVersionId String?
-  semanticMap Json
-  bindings Json
-  challengeTemplates Json
-  reviews Json
+  semanticMap          Json
+  bindings             Json
+  challengeTemplates   Json
+  reviews              Json
   /// draft | active | retired
-  status String @default("draft")
-  validation Json?
-  reason String
-  createdById String
-  createdAt DateTime @default(now())
-  activatedAt DateTime?
-  retiredAt DateTime?
+  status               String    @default("draft")
+  validation           Json?
+  reason               String
+  createdById          String
+  createdAt            DateTime  @default(now())
+  activatedAt          DateTime?
+  retiredAt            DateTime?
+
   @@unique([key, version])
   @@index([labId, status])
 }
+
 /// In-app notification (acc-3, D-ACC-02): written in the same transaction as its domain event,
 /// or synced on read for time-based notices (due soon, overdue). dedupKey makes writers idempotent.
 model Notification {
-  id String @id @default(cuid())
+  id          String    @id @default(cuid())
   recipientId String
-  recipient User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  type String
-  title String
-  body String?
-  link String?
-  dedupKey String?
-  readAt DateTime?
-  createdAt DateTime @default(now())
+  recipient   User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  type        String
+  title       String
+  body        String?
+  link        String?
+  dedupKey    String?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
   @@unique([recipientId, dedupKey])
   @@index([recipientId, readAt, createdAt])
 }

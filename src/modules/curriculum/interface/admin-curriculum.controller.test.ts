@@ -13,8 +13,12 @@ const body = {
     publishedAt: "2018-12-26",
     accessedAt: "2026-10-24",
     sha256: "a".repeat(64),
+    checksumScope: "canonical_citation",
+    citation: "Official curriculum citation supplied by the project owner",
+    regulation: "Circular 32/2018",
+    textbook: { title: "Khoa học tự nhiên", publisher: "Education Publisher", gradeRange: "6-9" },
   },
-  subjects: [{ subjectId: "KHTN", grade: 8 }],
+  subjects: [{ subjectId: "khtn", grade: 8 }],
   reason: "Verified framework source and review",
 };
 
@@ -24,14 +28,14 @@ function harness(existing: any = null, existingOutcome: any = null) {
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn().mockResolvedValue(existing),
       findFirst: vi.fn().mockResolvedValue(null),
-      create: vi.fn().mockImplementation(async ({ data }) => ({ ...data, subjects: [{ subjectId: "KHTN", grade: 8 }] })),
+      create: vi.fn().mockImplementation(async ({ data }) => ({ ...data, subjects: [{ subjectId: "khtn", grade: 8 }] })),
     },
     curriculumOutcome: {
       findUnique: vi.fn().mockResolvedValue(existingOutcome),
       create: vi.fn().mockImplementation(async ({ data }) => data),
       update: vi.fn().mockImplementation(async ({ data }) => ({ ...existingOutcome, ...data })),
     },
-    subject: { findMany: vi.fn().mockResolvedValue([{ id: "KHTN" }]) },
+    subject: { findMany: vi.fn().mockResolvedValue([{ id: "khtn" }]) },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
     $queryRaw: vi.fn().mockResolvedValue([{ present: true }]),
   };
