@@ -72,7 +72,7 @@ async function gateContext(db: any, namespace: "fixture" | "baseline"): Promise<
   };
 }
 
-export async function planRelease(db: any, raw: unknown, target: string) {
+export async function planRelease(db: any, raw: unknown, target: string, options: { devSeed?: boolean } = {}) {
   const manifest = releaseManifestSchema.parse(raw);
   const digest = digestOf(manifest);
   const environment = storageEnv();
@@ -99,7 +99,7 @@ export async function planRelease(db: any, raw: unknown, target: string) {
   const packs = [];
   for (const m of manifest.packs) {
     const packDigest = digestOf(m);
-    const errors = packGateErrors(m, ctx);
+    const errors = packGateErrors(m, ctx, options);
     const pack = await db.contentPack.findUnique({
       where: { key: m.key },
       include: { versions: { orderBy: { version: "desc" } } },
@@ -155,6 +155,8 @@ async function materialize(tx: any, m: PackManifest, version: number, packVersio
     domain: m.domain,
     outcomeCodes: m.outcomeCodes,
     materials: body.materials,
+    videos: body.videos,
+    sections: body.sections,
     questions: body.questions,
     packVersionId,
     review: {
@@ -201,8 +203,9 @@ async function materialize(tx: any, m: PackManifest, version: number, packVersio
   return lessonId;
 }
 
-export async function applyRelease(db: any, raw: unknown, options: { target: string; initiatedById: string; approvedByEmail: string }) {
-  const plan = await planRelease(db, raw, options.target);
+export async function applyRelease(db: any, raw: unknown, options: { target: string; initiatedById: string; approvedByEmail: string; devSeed?: boolean }) {
+  if (options.devSeed && process.env.APP_ENV !== "development") throw new Error("DEV_SEED_REQUIRES_DEVELOPMENT");
+  const plan = await planRelease(db, raw, options.target, { devSeed: options.devSeed });
   if (plan.blocked) throw Object.assign(new Error("RELEASE_BLOCKED"), { plan });
   if (plan.alreadyApplied)
     return {
@@ -290,12 +293,13 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
           where: { key: m.key },
           create: {
             key: m.key,
+            subjectId: m.subjectId,
             grade: m.grade,
             domain: m.domain,
             title: m.title,
             namespace: manifest.namespace,
           },
-          update: { title: m.title },
+          update: { title: m.title, subjectId: m.subjectId },
         });
         const previous = await tx.contentPackVersion.findFirst({
           where: { packKey: m.key, status: "released" },
@@ -326,10 +330,7 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
             },
           });
           if (version.lessonId)
-            await tx.lesson.update({
-              where: { id: version.lessonId },
-              data: { status: "published" },
-            });
+            await materialize(tx, m, step.version, version.id, approver.id, reviewerIds, version.lessonId);
         } else {
           version = await tx.contentPackVersion.create({
             data: {

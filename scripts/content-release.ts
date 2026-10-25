@@ -6,6 +6,7 @@ import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
 import { applyRelease, planRelease, retireRelease } from "../src/modules/content/application/content-release";
+import { parseDevSeedArg } from "../src/modules/content/application/release-cli-options";
 
 const arg = (name: string) => {
   const i = process.argv.indexOf("--" + name);
@@ -26,8 +27,9 @@ async function main() {
   const target = arg("target");
   if (!file || !target) throw new Error("--manifest and --target are required");
   const manifest = JSON.parse(await readFile(file, "utf8"));
+  const devSeed = parseDevSeedArg(process.argv);
   if (!process.argv.includes("--apply")) {
-    const plan = await planRelease(db, manifest, target);
+    const plan = await planRelease(db, manifest, target, { devSeed });
     console.log(JSON.stringify(plan, null, 2));
     console.log(plan.blocked ? "PLAN blocked" : plan.alreadyApplied ? "PLAN already applied" : "PLAN ok (dry run; nothing written)");
     process.exitCode = plan.blocked ? 1 : 0;
@@ -40,6 +42,7 @@ async function main() {
       target,
       initiatedById: initiator.id,
       approvedByEmail: String(arg("approved-by") ?? ""),
+      devSeed,
     });
     console.log(
       JSON.stringify(

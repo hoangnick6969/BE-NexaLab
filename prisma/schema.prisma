@@ -325,6 +325,8 @@ model Lesson {
   labId                     String?
   status                    String                     @default("draft")
   materials                 Json                       @default("[]")
+  videos                    Json                       @default("[]")
+  sections                  Json                       @default("[]")
   questions                 Json                       @default("[]")
   /// TEACHER_PRIVATE (owner-only edit, self-review) or SHARED_LIBRARY (admin-managed baseline).
   scope                     String                     @default("TEACHER_PRIVATE")

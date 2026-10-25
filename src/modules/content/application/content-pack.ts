@@ -113,6 +113,8 @@ export const packManifestSchema = z
         learningObjective: z.string().trim().min(5).max(500),
         prerequisites: z.string().trim().max(500).default(""),
         content: z.string().trim().min(20).max(100000),
+        videos: z.array(z.object({ id: id.optional(), title: z.string().trim().min(1).max(200), url: z.string().url().max(1000), transcript: z.string().max(50000).optional(), captionUrl: z.string().url().max(1000).optional() }).strict()).max(20).optional(),
+        sections: z.array(z.object({ id, videos: z.array(z.object({ id: id.optional(), title: z.string().trim().min(1).max(200), url: z.string().url().max(1000), transcript: z.string().max(50000).optional(), captionUrl: z.string().url().max(1000).optional() }).strict()).max(20) }).strict()).max(100).optional(),
         materials: z
           .array(
             z
@@ -192,7 +194,8 @@ export type GateContext = {
 };
 
 /** Every reason the pack cannot be released; empty means every hard gate passes. */
-export function packGateErrors(m: PackManifest, ctx: GateContext) {
+export function packGateErrors(m: PackManifest, ctx: GateContext, options: { devSeed?: boolean } = {}) {
+  const devSeed = options.devSeed === true;
   const errors: string[] = [];
   const sources = new Map(m.sources.map((s) => [s.id, s]));
   const dup = (list: string[], label: string) => {
@@ -228,10 +231,11 @@ export function packGateErrors(m: PackManifest, ctx: GateContext) {
     }
   }
   // Rights
-  for (const s of m.sources) {
-    if (!EVIDENCE_LICENSES.has(s.license)) errors.push(`nguồn ${s.id} có giấy phép ${s.license} không được phép trong kho phát hành`);
-    if (s.license !== "ORIGINAL" && s.license !== "SCHOOL_OWNED" && !s.url) errors.push(`nguồn ${s.id} cần đường dẫn gốc`);
-  }
+  if (!devSeed)
+    for (const s of m.sources) {
+      if (!EVIDENCE_LICENSES.has(s.license)) errors.push(`nguồn ${s.id} có giấy phép ${s.license} không được phép trong kho phát hành`);
+      if (s.license !== "ORIGINAL" && s.license !== "SCHOOL_OWNED" && !s.url) errors.push(`nguồn ${s.id} cần đường dẫn gốc`);
+    }
   // Accuracy: claim-to-source links
   for (const unit of m.knowledgeUnits) {
     for (const code of unit.outcomeCodes)
@@ -239,7 +243,7 @@ export function packGateErrors(m: PackManifest, ctx: GateContext) {
     for (const claim of unit.claims) {
       const linked = claim.sourceIds.map((sid) => sources.get(sid));
       if (linked.some((s) => !s)) errors.push(`khẳng định ${claim.id} trích nguồn không tồn tại`);
-      if (claim.important) {
+      if (claim.important && !devSeed) {
         const distinct = new Set(linked.filter(Boolean).map((s) => s!.id));
         if (distinct.size < 2) errors.push(`khẳng định quan trọng ${claim.id} cần ít nhất hai nguồn độc lập`);
         if (!linked.some((s) => s?.authoritative)) errors.push(`khẳng định quan trọng ${claim.id} cần một nguồn có thẩm quyền`);
@@ -271,13 +275,13 @@ export function packGateErrors(m: PackManifest, ctx: GateContext) {
   }
   if (m.lesson.labId && !ctx.labs.has(m.lesson.labId)) errors.push(`phòng thực hành ${m.lesson.labId} chưa xuất bản`);
   // Named reviews: editorial, subject, rights, accessibility; subject ≠ rights
-  for (const kind of ["editorial", "subject", "rights", "accessibility"] as const) {
+  for (const kind of (devSeed ? [] : ["editorial", "subject", "rights", "accessibility"] as const)) {
     const r = m.reviews[kind];
     if (!r) errors.push(`thiếu duyệt ${kind}`);
     else if (ctx.namespace === "baseline" && !ctx.reviewers.has(r.email))
       errors.push(`người duyệt ${kind} (${r.email}) không phải tài khoản giáo viên/quản trị đang hoạt động`);
   }
-  if (m.reviews.subject && m.reviews.rights && m.reviews.subject.email === m.reviews.rights.email)
+  if (!devSeed && m.reviews.subject && m.reviews.rights && m.reviews.subject.email === m.reviews.rights.email)
     errors.push("người duyệt chuyên môn và người duyệt bản quyền phải khác nhau");
   return errors;
 }
@@ -294,6 +298,8 @@ export function lessonFromPack(m: PackManifest) {
     })),
     ...(m.lesson.basicExercises ? { basicExercises: m.lesson.basicExercises } : {}),
     labId: m.lesson.labId,
+    ...(m.lesson.videos ? { videos: m.lesson.videos } : {}),
+    ...(m.lesson.sections ? { sections: m.lesson.sections } : {}),
   };
 }
 

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { digestOf } from "./content-pack";
 import { planAdminDirectDraftRelease } from "./content-release";
+import { parseDevSeedArg } from "./release-cli-options";
+
+describe("content release CLI flags", () => {
+  it("preserves --dev-seed and requires development", () => {
+    expect(parseDevSeedArg(["node", "content-release", "--dev-seed"], "development")).toBe(true);
+    expect(() => parseDevSeedArg(["--dev-seed"], "production")).toThrow("DEV_SEED_REQUIRES_DEVELOPMENT");
+  });
+});
 
 function structuredLesson() {
   return {
