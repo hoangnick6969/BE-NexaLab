@@ -340,6 +340,8 @@ model CurriculumOutcome {
   domain String
   chapter String
   statement String
+  /// Append-only source digests, locators, origin types and human review references for each import.
+  sourceEvidence Json?
   synthetic Boolean @default(false)
   /// active | archived. Archived outcomes stay traceable but cannot be newly mapped.
   status String @default("active")

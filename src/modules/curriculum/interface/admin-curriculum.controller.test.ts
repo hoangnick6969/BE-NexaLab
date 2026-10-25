@@ -18,7 +18,7 @@ const body = {
   reason: "Verified framework source and review",
 };
 
-function harness(existing: any = null) {
+function harness(existing: any = null, existingOutcome: any = null) {
   const tx = {
     curriculumFramework: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -26,8 +26,14 @@ function harness(existing: any = null) {
       findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockImplementation(async ({ data }) => ({ ...data, subjects: [{ subjectId: "KHTN", grade: 8 }] })),
     },
+    curriculumOutcome: {
+      findUnique: vi.fn().mockResolvedValue(existingOutcome),
+      create: vi.fn().mockImplementation(async ({ data }) => data),
+      update: vi.fn().mockImplementation(async ({ data }) => ({ ...existingOutcome, ...data })),
+    },
     subject: { findMany: vi.fn().mockResolvedValue([{ id: "KHTN" }]) },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
+    $queryRaw: vi.fn().mockResolvedValue([{ present: true }]),
   };
   const db: any = { ...tx, $transaction: (callback: (client: typeof tx) => unknown) => callback(tx) };
   return { controller: new AdminCurriculumController(db), tx };
@@ -72,5 +78,56 @@ describe("AdminCurriculumController curriculum frameworks", () => {
     await expect(controller.createFramework({ user: { sub: "admin-1", role: "ADMIN" } }, body)).rejects.toBeInstanceOf(ConflictException);
     expect(tx.curriculumFramework.create).not.toHaveBeenCalled();
     expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+});
+
+const evidence = {
+  evidenceId: "b".repeat(64),
+  originType: "textbook_derived_internal",
+  sourceDigest: "a".repeat(64),
+  sourceIdentity: "book@edition:lesson-1",
+  sourceLocators: [{ sourceBlockId: "source-block-1", physicalPageIndex: 14, printedPageLabel: "12" }],
+  reviewReference: {
+    proposalVersion: "c".repeat(64),
+    reviewId: "review-1",
+    reviewerName: "Human Reviewer",
+    reviewerEmail: "reviewer@example.test",
+    reason: "Verified source statement and page evidence",
+    reviewedAt: "2026-10-25T00:00:00.000Z",
+    decision: "approved_internal",
+  },
+};
+
+describe("AdminCurriculumController outcome provenance", () => {
+  it("requires and stores source digest, block/page locator and human review reference", async () => {
+    const { controller, tx } = harness();
+    const req = { user: { sub: "admin-1", role: "ADMIN" } };
+    const body = { code: "NXO-0123456789ABCDEF0123", grade: 8, domain: "MATTER", chapter: "Chapter one", statement: "Describe the source-backed model.", sourceEvidence: [evidence], reason: "Human-reviewed internal outcome" };
+    await controller.createOutcome(req, body);
+    const { reason: _reason, ...outcomeData } = body;
+    expect(tx.curriculumOutcome.create).toHaveBeenCalledWith({ data: outcomeData });
+    await expect(controller.createOutcome(req, { ...body, sourceEvidence: undefined })).rejects.toThrow();
+  });
+
+  it("appends source evidence idempotently without replacing prior provenance", async () => {
+    const existing = { code: "NXO-0123456789ABCDEF0123", grade: 8, domain: "MATTER", chapter: "Chapter one", statement: "Describe the source-backed model.", status: "active", sourceEvidence: [evidence] };
+    const { controller, tx } = harness(null, existing);
+    const added = { ...evidence, evidenceId: "d".repeat(64), sourceIdentity: "other-book@edition:lesson-2" };
+    const request = { statement: existing.statement, status: "active", sourceEvidence: [added], reason: "Attach reviewed cross-book provenance" };
+    await controller.updateOutcome(existing.code, { user: { sub: "admin-1", role: "ADMIN" } }, request);
+    await controller.updateOutcome(existing.code, { user: { sub: "admin-1", role: "ADMIN" } }, {
+      statement: existing.statement, status: "active", sourceEvidence: [added], reason: "Attach reviewed cross-book provenance",
+    });
+    expect(tx.curriculumOutcome.update).toHaveBeenCalledWith({
+      where: { code: existing.code },
+      data: { statement: existing.statement, status: "active", sourceEvidence: [evidence, added] },
+    });
+  });
+
+  it("reports provenance persistence only when the additive migration column exists", async () => {
+    const { controller, tx } = harness();
+    tx.$queryRaw.mockResolvedValueOnce([{ present: false }]);
+    await expect(controller.curriculumTarget()).resolves.toMatchObject({ outcomeSourceEvidencePersisted: false });
+    await expect(controller.curriculumTarget()).resolves.toMatchObject({ outcomeSourceEvidencePersisted: true });
   });
 });

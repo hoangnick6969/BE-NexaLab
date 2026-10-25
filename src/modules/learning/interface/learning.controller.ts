@@ -44,6 +44,7 @@ export class LearningController {
       where: { id, status: "published", scope: "SHARED_LIBRARY", synthetic: false, packVersion: { status: "released", synthetic: false } },
       include: {
         subject: { select: { id: true, name: true, ebookUrl: true } },
+        packVersion: { select: { id: true, version: true, digest: true, manifest: true } },
         steps: { where: { type: { in: ["READING", "VIDEO", "BASIC_EXERCISE"] } }, orderBy: { position: "asc" }, include: { progress: { where: { studentId: req.user.sub, assignmentId: null } }, basicExerciseAttempts: { where: { studentId: req.user.sub }, orderBy: { createdAt: "desc" }, take: 1 } } },
         ebookLocators: { include: { edition: true } },
       },
@@ -74,6 +75,21 @@ export class LearningController {
       prerequisites: lesson.prerequisites,
       curriculum: lesson.curriculum,
       content: lesson.content,
+      structuredContent: (lesson.packVersion?.manifest as any)?.kind === "structured-lesson-candidate" ? {
+        versionId: lesson.packVersion.id,
+        version: lesson.packVersion.version,
+        digest: lesson.packVersion.digest,
+        book: {
+          title: (lesson.packVersion.manifest as any).book?.title,
+          author: (lesson.packVersion.manifest as any).book?.author,
+          version: (lesson.packVersion.manifest as any).book?.version,
+          sha256: (lesson.packVersion.manifest as any).book?.sha256,
+        },
+        pdfPageRange: (lesson.packVersion.manifest as any).pdfPageRange,
+        printedPageRange: (lesson.packVersion.manifest as any).printedPageRange,
+        sourceBlocks: ((lesson.packVersion.manifest as any).sourceBlocks ?? []).map((block: any) => ({ id: block.id, pdfPage: block.pdfPage ?? block.page ?? null })),
+        learningContent: (lesson.packVersion.manifest as any).learningContent,
+      } : null,
       materials: lesson.materials,
       steps: lesson.steps.map((step: any) => {
         const progress = step.progress[0];

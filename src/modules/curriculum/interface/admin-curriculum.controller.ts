@@ -8,6 +8,37 @@ import { Db } from "../../../db/db";
 import { DOMAINS, domainSchema } from "../../lessons/application/lesson-content";
 
 const ebookUrl = z.string().url().refine((value) => new URL(value).protocol === "https:", "Liên kết ebook phải dùng HTTPS").nullable().optional();
+const outcomeSourceEvidence = z.object({
+  evidenceId: z.string().regex(/^[a-fA-F0-9]{64}$/),
+  originType: z.enum(["textbook_derived_internal", "official_curriculum"]),
+  sourceDigest: z.string().regex(/^[a-fA-F0-9]{64}$/),
+  sourceIdentity: text,
+  sourceLocators: z.array(z.object({
+    sourceBlockId: text.optional(),
+    physicalPageIndex: z.number().int().positive().optional(),
+    printedPageLabel: z.string().trim().min(1).max(40).optional(),
+    locator: z.string().trim().min(1).max(500).optional(),
+  }).strict().refine((item) => Boolean(item.sourceBlockId || item.locator), "A source block or document locator is required")).min(1).max(500),
+  reviewReference: z.object({
+    proposalVersion: z.string().regex(/^[a-fA-F0-9]{64}$/),
+    reviewId: text,
+    reviewerName: text,
+    reviewerEmail: z.string().email().max(254),
+    reason: reason,
+    reviewedAt: z.string().datetime({ offset: true }),
+    decision: z.enum(["approved_internal", "approved_official", "reused_internal"]),
+  }).strict(),
+}).strict().superRefine((evidence, ctx) => {
+  if (evidence.originType === "textbook_derived_internal" && !evidence.sourceLocators.some((item) => item.sourceBlockId)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Textbook-derived evidence requires a source block locator" });
+  }
+  if (evidence.originType === "textbook_derived_internal" && !["approved_internal", "reused_internal"].includes(evidence.reviewReference.decision)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Textbook-derived provenance requires an internal approval or reuse decision" });
+  }
+  if (evidence.originType === "official_curriculum" && evidence.reviewReference.decision !== "approved_official") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Official curriculum provenance requires an official source review decision" });
+  }
+});
 
 export function curriculumTargetInfo(env: NodeJS.ProcessEnv = process.env) {
   const environment = env.APP_ENV ?? "";
@@ -75,8 +106,12 @@ export class AdminCurriculumController {
   }
   @Get("curriculum-target")
   @ApiOperation({ summary: "Return sanitized database target safety for local curriculum sync" })
-  curriculumTarget() {
-    return curriculumTargetInfo();
+  async curriculumTarget() {
+    const columns = await this.db.$queryRaw<Array<{ present: boolean }>>`SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = current_schema() AND table_name = 'CurriculumOutcome' AND column_name = 'sourceEvidence'
+    ) AS present`;
+    return { ...curriculumTargetInfo(), outcomeSourceEvidencePersisted: columns[0]?.present === true };
   }
   @Post("frameworks")
   @ApiOperation({ summary: "Create an immutable curriculum framework version with verified source provenance" })
@@ -319,6 +354,7 @@ export class AdminCurriculumController {
         domain: domainSchema,
         chapter: text,
         statement: z.string().trim().min(5).max(1000),
+        sourceEvidence: z.array(outcomeSourceEvidence).min(1).max(500),
         reason: reason.optional(),
       })
       .strict()
@@ -334,7 +370,7 @@ export class AdminCurriculumController {
         targetType: "CurriculumOutcome",
         targetId: b.code,
         reason: why,
-        after: { grade: b.grade, domain: b.domain },
+        after: { grade: b.grade, domain: b.domain, sourceEvidenceIds: b.sourceEvidence.map((item) => item.evidenceId) },
       });
       return outcome;
     });
@@ -343,12 +379,20 @@ export class AdminCurriculumController {
   @ApiOperation({ summary: "Archive/restore an outcome; its statement changes only while no lesson or topic maps it" })
   async updateOutcome(@Param("code") outcomeCode: string, @Req() req: any, @Body() body: unknown) {
     const b = z
-      .object({ statement: z.string().trim().min(5).max(1000), status: z.enum(["active", "archived"]), reason })
+      .object({ statement: z.string().trim().min(5).max(1000), status: z.enum(["active", "archived"]), sourceEvidence: z.array(outcomeSourceEvidence).min(1).max(500).optional(), reason })
       .strict()
       .parse(body);
     return this.db.$transaction(async (tx) => {
       const before = await tx.curriculumOutcome.findUnique({ where: { code: outcomeCode } });
       if (!before) throw notFound("yêu cầu cần đạt");
+      const existingEvidence = Array.isArray(before.sourceEvidence) ? before.sourceEvidence as Array<z.infer<typeof outcomeSourceEvidence>> : [];
+      const evidenceById = new Map(existingEvidence.map((item) => [item.evidenceId, item]));
+      for (const item of b.sourceEvidence ?? []) {
+        const prior = evidenceById.get(item.evidenceId);
+        if (prior && JSON.stringify(prior) !== JSON.stringify(item))
+          throw new ConflictException({ code: "OUTCOME_EVIDENCE_CONFLICT", message: "Source evidence ID already exists with different content" });
+        evidenceById.set(item.evidenceId, item);
+      }
       if (before.statement !== b.statement) {
         const [lessons, topics] = await Promise.all([
           tx.lesson.count({ where: { outcomeCodes: { array_contains: [outcomeCode] } } }),
@@ -363,7 +407,7 @@ export class AdminCurriculumController {
       }
       const outcome = await tx.curriculumOutcome.update({
         where: { code: outcomeCode },
-        data: { statement: b.statement, status: b.status },
+        data: { statement: b.statement, status: b.status, ...(b.sourceEvidence ? { sourceEvidence: [...evidenceById.values()] } : {}) },
       });
       await audit(tx, {
         actor: req.user,
@@ -372,7 +416,7 @@ export class AdminCurriculumController {
         targetId: outcomeCode,
         reason: b.reason,
         before: { status: before.status },
-        after: { status: outcome.status, statementChanged: before.statement !== outcome.statement },
+        after: { status: outcome.status, statementChanged: before.statement !== outcome.statement, sourceEvidenceIds: b.sourceEvidence?.map((item) => item.evidenceId) ?? [] },
       });
       return outcome;
     });
