@@ -285,7 +285,7 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
       }
       for (const [i, m] of manifest.packs.entries()) {
         const step = plan.packs[i];
-        if (step.action === "unchanged") {
+        if (step.action === "unchanged" && !options.devSeed) {
           await item("pack-version", `${m.key}@${step.version}`, "unchanged");
           continue;
         }
