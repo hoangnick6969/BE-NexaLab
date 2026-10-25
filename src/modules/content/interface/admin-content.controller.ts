@@ -5,8 +5,9 @@ import { notFound, reason, text } from "../../../common/admin-api";
 import { Roles } from "../../../common/decorators";
 import { audit } from "../../../common/audit";
 import { coverageReport } from "../application/content-pack";
-import { planRelease, retireRelease } from "../application/content-release";
+import { applyAdminDirectDraftRelease, planAdminDirectDraftRelease, planRelease, retireRelease } from "../application/content-release";
 import { preFetchProblems, runIngestion, sourcePolicySchema } from "../application/ingestion";
+import { importStructuredLessons as importStructuredLessonDrafts, structuredLessonSchema } from "../application/structured-lesson-import";
 import { Db } from "../../../db/db";
 import { storageEnv } from "../../storage/infrastructure/storage";
 
@@ -21,6 +22,56 @@ import { storageEnv } from "../../storage/infrastructure/storage";
 @Controller("admin")
 export class AdminContentController {
   constructor(@Inject(Db) private db: Db) {}
+
+  @Post("structured-lessons/import")
+  @ApiOperation({ summary: "Import Content Tool Structured Lesson candidates as private, idempotent drafts" })
+  async importStructuredLessons(@Body() body: unknown) {
+    const b = z.object({ lessons: z.array(structuredLessonSchema).min(1).max(100) }).strict().parse(body);
+    return importStructuredLessonDrafts(this.db, b.lessons);
+  }
+
+  @Get("structured-lessons/drafts")
+  @ApiOperation({ summary: "List private Structured Lesson drafts for ADMIN preview" })
+  async structuredLessonDrafts() {
+    const rows = await this.db.contentPackVersion.findMany({
+      where: { status: "draft", synthetic: true },
+      select: { id: true, packKey: true, version: true, digest: true, manifest: true, status: true, synthetic: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.flatMap((draft) => {
+      const parsed = structuredLessonSchema.safeParse(draft.manifest);
+      if (!parsed.success) return [];
+      const lesson = parsed.data;
+      return [{
+        id: draft.id,
+        packKey: draft.packKey,
+        version: draft.version,
+        digest: draft.digest,
+        status: draft.status,
+        synthetic: draft.synthetic,
+        createdAt: draft.createdAt,
+        book: { key: lesson.book.key, title: lesson.book.title },
+        chapter: { id: lesson.chapter.id, title: lesson.chapter.title },
+        sourceLesson: { id: lesson.sourceLesson.id, title: lesson.sourceLesson.title },
+        pdfPageRange: lesson.pdfPageRange,
+        warningCount: lesson.warnings.length,
+        contentReview: lesson.contentReview ?? null,
+      }];
+    });
+  }
+
+  @Get("structured-lessons/drafts/:id")
+  @ApiOperation({ summary: "Read back an imported private Structured Lesson draft" })
+  async structuredLessonDraft(@Param("id") id: string) {
+    const draft = await this.db.contentPackVersion.findUnique({
+      where: { id },
+      select: { id: true, packKey: true, version: true, digest: true, manifest: true, status: true, synthetic: true },
+    });
+    if (!draft || draft.status !== "draft" || !draft.synthetic) throw notFound("bản nháp Structured Lesson");
+    const manifest = structuredLessonSchema.safeParse(draft.manifest);
+    if (!manifest.success) throw notFound("bản nháp Structured Lesson");
+    return { ...draft, manifest: manifest.data };
+  }
 
   // ───────────────────────── C2-T5 sources and ingestion (CF-T3) ─────────────────────────
   @Get("sources")
@@ -141,7 +192,9 @@ export class AdminContentController {
       note: "Mẫu số của bản đồ chính thức để trống cho tới khi danh mục yêu cầu cần đạt lớp 8–9 được duyệt (CF-T5).",
       rows: coverageReport(
         outcomes,
-        versions.map((v) => ({ manifest: v.manifest as any, synthetic: v.synthetic })),
+        versions
+          .filter((v) => (v.manifest as any)?.kind !== "structured-lesson-candidate")
+          .map((v) => ({ manifest: v.manifest as any, synthetic: v.synthetic })),
         new Set(labs.map((l) => l.id)),
       ),
     };
@@ -157,6 +210,26 @@ export class AdminContentController {
     const plan = await planRelease(this.db, b.manifest, storageEnv());
     await this.db.$transaction((tx) => audit(tx, { actor: req.user, action: "content.release.plan", targetType: "ContentRelease", reason: plan.name, after: { status: plan.blocked ? "blocked" : "ok" } }));
     return plan;
+  }
+  @Post("releases/structured-drafts/plan")
+  @ApiOperation({ summary: "ADMIN_DIRECT dry run for publishing persisted Structured Lesson drafts" })
+  async planStructuredDrafts(@Req() req: any, @Body() body: unknown) {
+    const b = z.object({ policy: z.literal("ADMIN_DIRECT"), name: text, subjectId: text, draftIds: z.array(z.string().min(1).max(40)).min(1).max(47) }).strict().parse(body);
+    const plan = await planAdminDirectDraftRelease(this.db, b, storageEnv());
+    await this.db.$transaction((tx) => audit(tx, { actor: req.user, action: "content.release.plan.admin-direct", targetType: "ContentRelease", reason: plan.name, after: { policy: plan.policy, status: plan.blocked ? "blocked" : "ok", drafts: plan.draftCount, digest: plan.digest } }));
+    return plan;
+  }
+  @Post("releases/structured-drafts/apply")
+  @ApiOperation({ summary: "Apply an explicitly confirmed ADMIN_DIRECT release of persisted Structured Lesson drafts" })
+  async applyStructuredDrafts(@Req() req: any, @Body() body: unknown) {
+    const b = z.object({ request: z.object({ policy: z.literal("ADMIN_DIRECT"), name: text, subjectId: text, draftIds: z.array(z.string().min(1).max(40)).min(1).max(47) }).strict(), confirm: z.literal(true) }).strict().parse(body);
+    try {
+      return await applyAdminDirectDraftRelease(this.db, b.request, { target: storageEnv(), adminId: req.user.sub, confirm: b.confirm });
+    } catch (error: any) {
+      if (error?.message === "ADMIN_DIRECT_RELEASE_BLOCKED") throw new ConflictException({ code: error.message, plan: error.plan });
+      if (error?.message === "ADMIN_DIRECT_DRAFT_CHANGED") throw new ConflictException({ code: error.message, message: "Bản nháp đã thay đổi sau khi lập kế hoạch" });
+      throw error;
+    }
   }
   @Post("releases/:id/retire")
   @ApiOperation({ summary: "Retire a release: its lessons archive (evidence kept) and superseded versions return" })

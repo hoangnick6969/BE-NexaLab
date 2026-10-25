@@ -24,6 +24,28 @@ describe("lesson pathway", () => {
     ]);
   });
 
+  it("materializes authored basic exercises without creating a Quiz", () => {
+    const steps = materializeLegacySteps({
+      content: "Read",
+      materials: [],
+      questions: [],
+      basicExercises: {
+        id: "practice-series-current",
+        passThreshold: 60,
+        questions: [{
+          id: "practice-question-1",
+          prompt: "Current?",
+          options: [{ id: "same", text: "Same" }, { id: "different", text: "Different" }],
+          correctOptionId: "same",
+        }],
+      },
+    });
+    expect(steps.map((step) => [step.id, step.type, step.position, step.required])).toContainEqual([
+      "practice-series-current", "BASIC_EXERCISE", 30, true,
+    ]);
+    expect(steps.some((step) => step.type === "QUIZ")).toBe(false);
+  });
+
   it("rejects empty resources and duplicate positions", () => {
     expect(() => materializeLegacySteps({ content: " ", materials: [], questions: [] })).toThrow();
     expect(() => validateLessonSteps([
@@ -124,6 +146,37 @@ describe("lesson pathway", () => {
     expect(pathway.steps.map((step) => step.state)).toEqual(["IN_PROGRESS", "LOCKED", "LOCKED"]);
     expect(pathway.steps[1].resource).toBeNull();
     expect(JSON.stringify(pathway)).not.toContain("answer");
+  });
+
+  it("keeps required basic exercise as evidence without locking the following step", () => {
+    const pathway = buildPathwaySteps([
+      {
+        id: "exercise",
+        type: "BASIC_EXERCISE",
+        position: 30,
+        required: true,
+        config: {
+          passThreshold: 60,
+          questions: [{
+            id: "question-1",
+            prompt: "Current?",
+            options: [{ id: "same", text: "Same" }, { id: "different", text: "Different" }],
+            correctOptionId: "same",
+          }],
+        },
+      },
+      { id: "lab", type: "LAB", position: 50, required: true, config: { labId: "circuit" } },
+    ]);
+    expect(pathway.steps.map((step) => step.state)).toEqual(["IN_PROGRESS", "IN_PROGRESS"]);
+    expect(pathway.steps[0].resource).toEqual({
+      passThreshold: 60,
+      questions: [{
+        id: "question-1",
+        prompt: "Current?",
+        options: [{ id: "same", text: "Same" }, { id: "different", text: "Different" }],
+      }],
+    });
+    expect(JSON.stringify(pathway)).not.toContain("correctOptionId");
   });
 
   it("requires every published card and rejects forged indexes", () => {

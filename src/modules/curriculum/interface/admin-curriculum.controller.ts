@@ -8,6 +8,66 @@ import { Db } from "../../../db/db";
 import { DOMAINS, domainSchema } from "../../lessons/application/lesson-content";
 
 const ebookUrl = z.string().url().refine((value) => new URL(value).protocol === "https:", "Liên kết ebook phải dùng HTTPS").nullable().optional();
+const outcomeSourceEvidence = z.object({
+  evidenceId: z.string().regex(/^[a-fA-F0-9]{64}$/),
+  originType: z.enum(["textbook_derived_internal", "official_curriculum"]),
+  sourceDigest: z.string().regex(/^[a-fA-F0-9]{64}$/),
+  sourceIdentity: text,
+  sourceLocators: z.array(z.object({
+    sourceBlockId: text.optional(),
+    physicalPageIndex: z.number().int().positive().optional(),
+    printedPageLabel: z.string().trim().min(1).max(40).optional(),
+    locator: z.string().trim().min(1).max(500).optional(),
+  }).strict().refine((item) => Boolean(item.sourceBlockId || item.locator), "A source block or document locator is required")).min(1).max(500),
+  reviewReference: z.object({
+    proposalVersion: z.string().regex(/^[a-fA-F0-9]{64}$/),
+    reviewId: text,
+    reviewerName: text,
+    reviewerEmail: z.string().email().max(254),
+    reason: reason,
+    reviewedAt: z.string().datetime({ offset: true }),
+    decision: z.enum(["approved_internal", "approved_official", "reused_internal"]),
+  }).strict(),
+}).strict().superRefine((evidence, ctx) => {
+  if (evidence.originType === "textbook_derived_internal" && !evidence.sourceLocators.some((item) => item.sourceBlockId)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Textbook-derived evidence requires a source block locator" });
+  }
+  if (evidence.originType === "textbook_derived_internal" && !["approved_internal", "reused_internal"].includes(evidence.reviewReference.decision)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Textbook-derived provenance requires an internal approval or reuse decision" });
+  }
+  if (evidence.originType === "official_curriculum" && evidence.reviewReference.decision !== "approved_official") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Official curriculum provenance requires an official source review decision" });
+  }
+});
+
+export function curriculumTargetInfo(env: NodeJS.ProcessEnv = process.env) {
+  const environment = env.APP_ENV ?? "";
+  const values = [env.DATABASE_URL, env.DIRECT_URL];
+  const connections = values.map((value) => {
+    if (!value) return null;
+    try {
+      const url = new URL(value);
+      if (!["postgres:", "postgresql:"].includes(url.protocol)) return null;
+      const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+      const username = decodeURIComponent(url.username);
+      const projectRef = host.match(/^db\.([a-z0-9]+)\.supabase\.co$/)?.[1] ?? username.match(/^postgres\.([a-z0-9]+)$/)?.[1] ?? null;
+      return { host, projectRef };
+    } catch {
+      return null;
+    }
+  });
+  const loopback = new Set(["localhost", "127.0.0.1", "::1"]);
+  const projectRefs = connections.map((item) => item?.projectRef).filter((item): item is string => Boolean(item));
+  const projectRef = projectRefs.length === 2 && projectRefs[0] === projectRefs[1] ? projectRefs[0] : null;
+  const allowlistedRefs = new Set((env.CURRICULUM_REMOTE_DEVELOPMENT_PROJECT_REFS ?? "").split(",").map((item) => item.trim()).filter(Boolean));
+  return {
+    environment,
+    configuredConnections: connections.filter(Boolean).length,
+    localDevelopmentTarget: environment === "development" && connections.length === 2 && connections.every((item) => item !== null && loopback.has(item.host)),
+    remoteDevelopmentTarget: environment === "development" && projectRef !== null && allowlistedRefs.has(projectRef),
+    projectRef,
+  };
+}
 
 /**
  * Epic C2 admin console API. Every route is ADMIN-only (other roles get 403 from
@@ -25,7 +85,8 @@ export class AdminCurriculumController {
   @Get("taxonomy")
   @ApiOperation({ summary: "Subjects, chapters, topics and outcomes with usage counts" })
   async taxonomy() {
-    const [subjects, chapters, topics, outcomes, lessons] = await Promise.all([
+    const [frameworks, subjects, chapters, topics, outcomes, lessons] = await Promise.all([
+      this.db.curriculumFramework.findMany({ include: { subjects: { select: { subjectId: true, grade: true } } }, orderBy: [{ title: "asc" }, { version: "asc" }] }),
       this.db.subject.findMany({ include: { _count: { select: { lessons: true, labs: true } } }, orderBy: { id: "asc" } }),
       this.db.curriculumChapter.findMany({ orderBy: [{ grade: "asc" }, { code: "asc" }] }),
       this.db.curriculumTopic.findMany({ orderBy: { code: "asc" } }),
@@ -36,11 +97,60 @@ export class AdminCurriculumController {
     for (const lesson of lessons) for (const c of (lesson.outcomeCodes as string[]) ?? []) usage.set(c, (usage.get(c) ?? 0) + 1);
     return {
       domains: DOMAINS,
+      frameworks,
       subjects: subjects.map(({ _count, ...s }) => ({ ...s, lessons: _count.lessons, labs: _count.labs })),
       chapters,
       topics,
       outcomes: outcomes.map((o) => ({ ...o, lessons: usage.get(o.code) ?? 0 })),
     };
+  }
+  @Get("curriculum-target")
+  @ApiOperation({ summary: "Return sanitized database target safety for local curriculum sync" })
+  async curriculumTarget() {
+    const columns = await this.db.$queryRaw<Array<{ present: boolean }>>`SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = current_schema() AND table_name = 'CurriculumOutcome' AND column_name = 'sourceEvidence'
+    ) AS present`;
+    return { ...curriculumTargetInfo(), outcomeSourceEvidencePersisted: columns[0]?.present === true };
+  }
+  @Post("frameworks")
+  @ApiOperation({ summary: "Create an immutable curriculum framework version with verified source provenance" })
+  async createFramework(@Req() req: any, @Body() body: unknown) {
+    const b = z.object({
+      id: code,
+      frameworkKey: code,
+      title: text,
+      version: z.string().trim().min(1).max(40),
+      sourceMetadata: z.object({
+        authority: z.string().trim().min(2).max(200),
+        url: z.string().url().max(500).refine((value) => new URL(value).protocol === "https:", "Curriculum source must use HTTPS"),
+        publishedAt: z.string().trim().min(4).max(40),
+        accessedAt: z.string().trim().min(4).max(40),
+        sha256: z.string().regex(/^[a-fA-F0-9]{64}$/),
+      }).strict(),
+      subjects: z.array(z.object({ subjectId: text, grade: z.number().int().min(8).max(9) }).strict()).min(1).max(50),
+      reason: reason.optional(),
+    }).strict().parse(body);
+    if (new Set(b.subjects.map((item) => `${item.subjectId}:${item.grade}`)).size !== b.subjects.length)
+      throw new BadRequestException({ code: "DUPLICATE_FRAMEWORK_SUBJECT", message: "Framework subject/grade entries must be unique" });
+    return this.db.$transaction(async (tx) => {
+      if (await tx.curriculumFramework.findUnique({ where: { id: b.id } }) || await tx.curriculumFramework.findFirst({ where: { frameworkKey: b.frameworkKey, version: b.version } }))
+        throw new ConflictException({ code: "FRAMEWORK_EXISTS", message: `Mã framework "${b.id}" đã tồn tại; không ghi đè` });
+      const available = await tx.subject.findMany({ where: { id: { in: b.subjects.map((item) => item.subjectId) } }, select: { id: true } });
+      const missing = b.subjects.map((item) => item.subjectId).filter((id) => !available.some((item) => item.id === id));
+      if (missing.length) throw notFound(`môn học: ${missing.join(", ")}`);
+      const { reason: why, ...data } = b;
+      const framework = await tx.curriculumFramework.create({ data: { ...data, subjects: { create: b.subjects } }, include: { subjects: { select: { subjectId: true, grade: true } } } });
+      await audit(tx, {
+        actor: req.user,
+        action: "curriculumFramework.create",
+        targetType: "CurriculumFramework",
+        targetId: b.id,
+        reason: why,
+        after: { title: b.title, version: b.version, sourceMetadata: b.sourceMetadata, subjects: b.subjects },
+      });
+      return framework;
+    });
   }
   @Post("subjects")
   async createSubject(@Req() req: any, @Body() body: unknown) {
@@ -96,11 +206,12 @@ export class AdminCurriculumController {
         tx.lab.count({ where: { subjectId: id } }),
         tx.curriculumChapter.count({ where: { subjectId: id } }),
       ]);
-      if (lessons + labs + chapters)
+      const frameworks = await tx.curriculumFrameworkSubject.count({ where: { subjectId: id } });
+      if (lessons + labs + chapters + frameworks)
         throw new ConflictException({
           code: "SUBJECT_IN_USE",
           message: "Môn học còn bài học, phòng thực hành hoặc chương; không thể xóa",
-          details: { lessons, labs, chapters },
+          details: { lessons, labs, chapters, frameworks },
         });
       await tx.subject.delete({ where: { id } });
       await audit(tx, {
@@ -243,6 +354,7 @@ export class AdminCurriculumController {
         domain: domainSchema,
         chapter: text,
         statement: z.string().trim().min(5).max(1000),
+        sourceEvidence: z.array(outcomeSourceEvidence).min(1).max(500),
         reason: reason.optional(),
       })
       .strict()
@@ -258,7 +370,7 @@ export class AdminCurriculumController {
         targetType: "CurriculumOutcome",
         targetId: b.code,
         reason: why,
-        after: { grade: b.grade, domain: b.domain },
+        after: { grade: b.grade, domain: b.domain, sourceEvidenceIds: b.sourceEvidence.map((item) => item.evidenceId) },
       });
       return outcome;
     });
@@ -267,12 +379,20 @@ export class AdminCurriculumController {
   @ApiOperation({ summary: "Archive/restore an outcome; its statement changes only while no lesson or topic maps it" })
   async updateOutcome(@Param("code") outcomeCode: string, @Req() req: any, @Body() body: unknown) {
     const b = z
-      .object({ statement: z.string().trim().min(5).max(1000), status: z.enum(["active", "archived"]), reason })
+      .object({ statement: z.string().trim().min(5).max(1000), status: z.enum(["active", "archived"]), sourceEvidence: z.array(outcomeSourceEvidence).min(1).max(500).optional(), reason })
       .strict()
       .parse(body);
     return this.db.$transaction(async (tx) => {
       const before = await tx.curriculumOutcome.findUnique({ where: { code: outcomeCode } });
       if (!before) throw notFound("yêu cầu cần đạt");
+      const existingEvidence = Array.isArray(before.sourceEvidence) ? before.sourceEvidence as Array<z.infer<typeof outcomeSourceEvidence>> : [];
+      const evidenceById = new Map(existingEvidence.map((item) => [item.evidenceId, item]));
+      for (const item of b.sourceEvidence ?? []) {
+        const prior = evidenceById.get(item.evidenceId);
+        if (prior && JSON.stringify(prior) !== JSON.stringify(item))
+          throw new ConflictException({ code: "OUTCOME_EVIDENCE_CONFLICT", message: "Source evidence ID already exists with different content" });
+        evidenceById.set(item.evidenceId, item);
+      }
       if (before.statement !== b.statement) {
         const [lessons, topics] = await Promise.all([
           tx.lesson.count({ where: { outcomeCodes: { array_contains: [outcomeCode] } } }),
@@ -287,7 +407,7 @@ export class AdminCurriculumController {
       }
       const outcome = await tx.curriculumOutcome.update({
         where: { code: outcomeCode },
-        data: { statement: b.statement, status: b.status },
+        data: { statement: b.statement, status: b.status, ...(b.sourceEvidence ? { sourceEvidence: [...evidenceById.values()] } : {}) },
       });
       await audit(tx, {
         actor: req.user,
@@ -296,7 +416,7 @@ export class AdminCurriculumController {
         targetId: outcomeCode,
         reason: b.reason,
         before: { status: before.status },
-        after: { status: outcome.status, statementChanged: before.statement !== outcome.statement },
+        after: { status: outcome.status, statementChanged: before.statement !== outcome.statement, sourceEvidenceIds: b.sourceEvidence?.map((item) => item.evidenceId) ?? [] },
       });
       return outcome;
     });

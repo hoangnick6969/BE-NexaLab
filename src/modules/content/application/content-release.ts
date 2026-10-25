@@ -4,6 +4,7 @@ import { audit } from "../../../common/audit";
 import { storageEnv } from "../../storage/infrastructure/storage";
 import { sourcePolicySchema } from "./ingestion";
 import { GateContext, PackManifest, digestOf, lessonFromPack, packGateErrors, packManifestSchema } from "./content-pack";
+import { structuredLessonSchema } from "./structured-lesson-import";
 
 /**
  * Content Release Importer (CF-T3). The only path for baseline content and
@@ -154,7 +155,12 @@ async function materialize(
   const steps = materializeLegacySteps(body as any, lessonId);
   for (const step of steps)
     await tx.lessonStep.create({
-      data: { ...step, id: `step-${lessonId}-${step.type.toLowerCase().replace("_", "-")}`, lessonId, config: step.config as any },
+      data: {
+        ...step,
+        id: `step-${lessonId}-${step.id ?? step.type.toLowerCase().replace("_", "-")}`,
+        lessonId,
+        config: step.config as any,
+      },
     });
   return lessonId;
 }
@@ -264,6 +270,229 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
     },
     { timeout: 60000 },
   );
+  return { receipt, plan, idempotent: false };
+}
+
+/** ADMIN_DIRECT is the development publishing policy for source-grounded Structured Lesson drafts.
+ * It keeps the normal release receipt, transaction, audit log and retry semantics while leaving
+ * curriculum outcomes and independent review decisions outside this publishing operation.
+ */
+const adminDirectRequestSchema = z.object({
+  policy: z.literal("ADMIN_DIRECT"),
+  name: z.string().trim().min(3).max(120),
+  subjectId: z.string().trim().min(1).max(60),
+  draftIds: z.array(z.string().trim().min(1).max(40)).min(1).max(47),
+}).strict().superRefine((value, ctx) => {
+  if (new Set(value.draftIds).size !== value.draftIds.length)
+    ctx.addIssue({ code: "custom", path: ["draftIds"], message: "Bản nháp bị lặp" });
+});
+
+const directLessonId = (packKey: string, version: number) => lessonIdFor(packKey, version);
+const pageNumber = (value: unknown) => {
+  if (!value || typeof value !== "object") return Number.MAX_SAFE_INTEGER;
+  const start = Number((value as any).start);
+  return Number.isFinite(start) && start > 0 ? start : Number.MAX_SAFE_INTEGER;
+};
+const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+const sourceLabel = (sourceIds: unknown, pages: Map<string, number>) => {
+  if (!Array.isArray(sourceIds) || !sourceIds.length) return "";
+  const ids = sourceIds.filter((id): id is string => typeof id === "string");
+  if (!ids.length) return "";
+  const pageLabels = [...new Set(ids.map((id) => pages.get(id)).filter((page): page is number => Number.isFinite(page)))].sort((a, b) => a - b);
+  return `<small class="lesson-source-note">Nguồn: ${pageLabels.length ? `trang PDF ${pageLabels.join(", ")} · ` : ""}${ids.map(escapeHtml).join(", ")}</small>`;
+};
+
+/** Render only source-backed Structured Lesson fields. The original JSON stays on the version row. */
+function structuredLessonHtml(lesson: z.infer<typeof structuredLessonSchema>) {
+  const content: any = lesson.learningContent;
+  const blockPages = new Map<string, number>();
+  for (const block of lesson.sourceBlocks as any[]) {
+    if (typeof block?.id === "string") {
+      const page = Number(block.pdfPage ?? block.page ?? block.pageNumber);
+      if (Number.isFinite(page)) blockPages.set(block.id, page);
+    }
+  }
+  const parts = [`<p>${escapeHtml(content.summary)}</p>`];
+  for (const section of content.sections as any[]) {
+    const heading = typeof section?.heading === "string" ? section.heading : "";
+    const text = typeof section?.content === "string" ? section.content : "";
+    parts.push(`<section>${heading ? `<h2>${escapeHtml(heading)}</h2>` : ""}${text ? `<p>${escapeHtml(text).replace(/\\n/g, "<br>")}</p>` : ""}${sourceLabel(section?.sourceBlockIds, blockPages)}</section>`);
+  }
+  for (const unit of content.knowledgeUnits as any[]) {
+    const claims = Array.isArray(unit?.claims) ? unit.claims : [];
+    parts.push(`<section><h2>${escapeHtml(unit?.title || "Đơn vị kiến thức")}</h2>${claims.map((claim: any) => `<p>${escapeHtml(claim?.text)}</p>${sourceLabel(claim?.sourceBlockIds ?? unit?.sourceBlockIds, blockPages)}`).join("")}</section>`);
+  }
+  const definitions = content.definitions as any[];
+  if (definitions.length) parts.push(`<section><h2>Khái niệm</h2>${definitions.map((item) => `<p>${escapeHtml(item?.text ?? item)}</p>${sourceLabel(item?.sourceBlockIds, blockPages)}`).join("")}</section>`);
+  const formulas = content.formulas as any[];
+  if (formulas.length) parts.push(`<section><h2>Công thức</h2>${formulas.map((item) => `<p class="lesson-formula"><code>${escapeHtml(item?.latex ?? item?.text ?? item)}</code></p>${sourceLabel(item?.sourceBlockIds, blockPages)}`).join("")}</section>`);
+  const renderTable = (table: any) => {
+    const headers = Array.isArray(table?.headers) ? table.headers : Array.isArray(table?.columns) ? table.columns : [];
+    const rows = Array.isArray(table?.rows) ? table.rows : [];
+    if (headers.length && rows.every((row: any) => Array.isArray(row)))
+      return `<table><thead><tr>${headers.map((cell: unknown) => `<th>${escapeHtml(cell)}</th>`).join("")}</tr></thead><tbody>${rows.map((row: unknown[]) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    return `<pre>${escapeHtml(JSON.stringify(table, null, 2))}</pre>`;
+  };
+  const tables = content.tables as any[];
+  if (tables.length) parts.push(`<section><h2>Bảng</h2>${tables.map((table) => `${renderTable(table)}${sourceLabel(table?.sourceBlockIds, blockPages)}`).join("")}</section>`);
+  const examples = content.examples as any[];
+  if (examples.length) parts.push(`<section><h2>Ví dụ</h2>${examples.map((item) => `<p>${escapeHtml(item?.text ?? item?.content ?? item)}</p>${sourceLabel(item?.sourceBlockIds, blockPages)}`).join("")}</section>`);
+  const exercises = content.basicExercises as any[];
+  if (exercises.length) parts.push(`<section><h2>Luyện tập trong nguồn</h2>${exercises.map((item) => `<p>${escapeHtml(item?.prompt ?? item?.text ?? item)}</p>${sourceLabel(item?.sourceBlockIds, blockPages)}`).join("")}</section>`);
+  return parts.join("\n");
+}
+
+async function planAdminDirectDrafts(db: any, raw: unknown, target: string) {
+  const request = adminDirectRequestSchema.parse(raw);
+  const subject = await db.subject.findUnique({ where: { id: request.subjectId }, select: { id: true, name: true } });
+  const rows = await db.contentPackVersion.findMany({
+    where: { id: { in: request.draftIds } },
+    include: { pack: true },
+  });
+  const byId = new Map(rows.map((row: any) => [row.id, row]));
+  const drafts = request.draftIds.map((id) => byId.get(id)).filter(Boolean) as any[];
+  const errors: Array<{ draftId: string | null; errors: string[] }> = [];
+  const sourceIds = new Set<string>();
+  if (!subject) errors.push({ draftId: null, errors: [`subjectId không tồn tại: ${request.subjectId}`] });
+  if (drafts.length !== request.draftIds.length) errors.push({ draftId: null, errors: [`Không tìm thấy đủ bản nháp: nhận ${drafts.length}/${request.draftIds.length}`] });
+  const ordered = drafts.map((row) => {
+    const parsed = structuredLessonSchema.safeParse(row.manifest);
+    const itemErrors: string[] = [];
+    if (!parsed.success) itemErrors.push("Structured Lesson không khớp schema hiện tại");
+    const lesson = parsed.success ? parsed.data : null;
+    if (lesson) {
+      const identity = `${lesson.book.key}:${lesson.chapter.id}:${lesson.sourceLesson.id}`;
+      if (sourceIds.has(identity)) itemErrors.push(`Trùng source identity ${identity}`);
+      sourceIds.add(identity);
+      if (row.digest !== digestOf(lesson)) itemErrors.push("Digest không khớp nội dung nguồn");
+      if (!lesson.learningContent.summary.trim() && !lesson.learningContent.sections.length)
+        itemErrors.push("Lesson không có nội dung đọc được");
+      if (!lesson.pdfPageRange || pageNumber(lesson.pdfPageRange) === Number.MAX_SAFE_INTEGER)
+        itemErrors.push("Thiếu trang PDF bắt đầu để sắp thứ tự Lesson");
+      const lessonId = directLessonId(row.packKey, row.version);
+      return { row, lesson, identity, lessonId, order: pageNumber(lesson?.pdfPageRange), errors: itemErrors };
+    }
+    return { row, lesson: null, identity: row.id, lessonId: directLessonId(row.packKey, row.version), order: Number.MAX_SAFE_INTEGER, errors: itemErrors };
+  });
+  const validLessonIds = ordered.map((item) => item.lessonId);
+  const collisions = await db.lesson.findMany({ where: { id: { in: validLessonIds } }, select: { id: true, packVersionId: true } });
+  const collisionsById = new Map(collisions.map((row: any) => [row.id, row]));
+  for (const item of ordered) {
+    const collision: any = collisionsById.get(item.lessonId);
+    if (collision && collision.packVersionId !== item.row.id) item.errors.push(`Lesson ID bị chiếm bởi dữ liệu khác: ${item.lessonId}`);
+    if (item.errors.length) errors.push({ draftId: item.row.id, errors: item.errors });
+  }
+  const sorted = ordered.sort((a, b) => a.order - b.order || a.row.id.localeCompare(b.row.id));
+  const digest = digestOf({ policy: request.policy, name: request.name, subjectId: request.subjectId, drafts: sorted.map(({ row }) => ({ id: row.id, digest: row.digest })) });
+  const existingRelease = await db.contentRelease.findUnique({ where: { environment_digest: { environment: storageEnv(), digest } }, select: { id: true, status: true } });
+  for (const item of sorted) {
+    const exactRetry = existingRelease?.status === "APPLIED"
+      && item.row.status === "released"
+      && item.row.synthetic === false
+      && item.row.lessonId === item.lessonId
+      && item.row.releaseId === existingRelease.id
+      && item.row.pack?.namespace === "baseline";
+    if (!exactRetry && (item.row.status !== "draft" || !item.row.synthetic || item.row.lessonId || item.row.releaseId))
+      item.errors.push("Bản nháp không còn ở trạng thái riêng tư chưa phát hành");
+    if (item.errors.length) errors.push({ draftId: item.row.id, errors: item.errors });
+  }
+  return {
+    policy: "ADMIN_DIRECT" as const,
+    name: request.name,
+    namespace: "baseline" as const,
+    environment: storageEnv(),
+    target,
+    subject,
+    digest,
+    alreadyApplied: existingRelease?.status === "APPLIED" ? existingRelease.id : null,
+    draftCount: sorted.length,
+    blocked: errors.length > 0 || target !== storageEnv(),
+    blockers: [...(target !== storageEnv() ? [`đích ${target} khác môi trường đang chạy ${storageEnv()}`] : []), ...errors.flatMap((entry) => entry.errors.map((message) => `${entry.draftId ?? "request"}: ${message}`))],
+    drafts: sorted.map(({ row, lesson, identity, lessonId, order }) => ({ id: row.id, packKey: row.packKey, version: row.version, digest: row.digest, sourceIdentity: identity, sourceLessonId: lesson?.sourceLesson.id ?? null, title: lesson?.sourceLesson.title ?? null, chapter: lesson?.chapter.title ?? null, subjectId: request.subjectId, lessonId, order, pdfPageRange: lesson?.pdfPageRange ?? null, warningCount: lesson?.warnings.length ?? 0 })),
+  };
+}
+
+export async function planAdminDirectDraftRelease(db: any, raw: unknown, target: string) {
+  return planAdminDirectDrafts(db, raw, target);
+}
+
+export async function applyAdminDirectDraftRelease(db: any, raw: unknown, options: { target: string; adminId: string; confirm: true }) {
+  if (options.confirm !== true) throw new Error("ADMIN_DIRECT_CONFIRMATION_REQUIRED");
+  const plan = await planAdminDirectDrafts(db, raw, options.target);
+  if (plan.blocked) throw Object.assign(new Error("ADMIN_DIRECT_RELEASE_BLOCKED"), { plan });
+  const prior = await db.contentRelease.findUnique({ where: { environment_digest: { environment: plan.environment, digest: plan.digest } }, include: { items: true } });
+  if (prior?.status === "APPLIED") return { receipt: prior, plan, idempotent: true };
+  const admin = await db.user.findUnique({ where: { id: options.adminId }, select: { id: true, role: true, status: true } });
+  if (!admin || admin.role !== "ADMIN" || admin.status !== "active") throw new Error("ADMIN_NOT_ACTIVE");
+  const draftIds = new Set(plan.drafts.map((item) => item.id));
+  const rows = await db.contentPackVersion.findMany({ where: { id: { in: [...draftIds] } }, include: { pack: true } });
+  const orderedRows = new Map(rows.map((row: any) => [row.id, row]));
+  const receipt = await db.$transaction(async (tx: any) => {
+    const release = await tx.contentRelease.create({ data: {
+      environment: plan.environment,
+      name: plan.name,
+      digest: plan.digest,
+      importerVersion: `${IMPORTER_VERSION}+ADMIN_DIRECT`,
+      status: "APPLIED",
+      initiatedById: admin.id,
+      approvedById: admin.id,
+      summary: { policy: "ADMIN_DIRECT", actorId: admin.id, subjectId: plan.subject!.id, subjectName: plan.subject!.name, drafts: plan.drafts.map((draft) => ({ id: draft.id, sourceIdentity: draft.sourceIdentity, digest: draft.digest, sourceLessonId: draft.sourceLessonId, lessonId: draft.lessonId, warningCount: draft.warningCount })) },
+    } });
+    for (const planned of plan.drafts) {
+      const row: any = orderedRows.get(planned.id);
+      if (!row || row.status !== "draft" || !row.synthetic || row.lessonId || row.releaseId) throw new Error(`ADMIN_DIRECT_DRAFT_CHANGED:${planned.id}`);
+      const source = structuredLessonSchema.parse(row.manifest);
+      const html = structuredLessonHtml(source);
+      const createdLesson = await tx.lesson.create({ data: {
+        id: planned.lessonId,
+        subjectId: plan.subject!.id,
+        authorId: admin.id,
+        title: source.sourceLesson.title,
+        chapter: source.chapter.title,
+        grade: 8,
+        topic: source.sourceLesson.title,
+        learningObjective: source.learningContent.summary.slice(0, 500) || source.sourceLesson.title,
+        prerequisites: "",
+        curriculum: "GDPT 2018 – Khoa học tự nhiên (nội dung SGK; đối chiếu outcomes riêng)",
+        content: html,
+        labId: null,
+        status: "published",
+        scope: "SHARED_LIBRARY",
+        synthetic: false,
+        domain: row.pack.domain,
+        outcomeCodes: [],
+        materials: [],
+        questions: [],
+        packVersionId: row.id,
+        curriculumOrder: planned.order,
+        review: {
+          publicationPolicy: "ADMIN_DIRECT",
+          publishedById: admin.id,
+          publisher: source.book.author,
+          sourceBookKey: source.book.key,
+          sourceBookTitle: source.book.title,
+          sourceBookVersion: source.book.version,
+          sourceBookSha256: source.book.sha256,
+          sourceDigest: row.digest,
+          sourceIdentity: planned.sourceIdentity,
+          sourceLessonId: source.sourceLesson.id,
+          chapterId: source.chapter.id,
+          pdfPageRange: source.pdfPageRange,
+          printedPageRange: source.printedPageRange,
+          sourceBlocks: source.sourceBlocks.map((block: any) => ({ id: block.id, pdfPage: block.pdfPage ?? block.page ?? null })),
+          warnings: source.warnings,
+        },
+        publishedAt: new Date(),
+      } });
+      await tx.lessonStep.create({ data: { id: `step-${createdLesson.id}-reading`, lessonId: createdLesson.id, type: "READING", position: 10, required: true, config: { html } } });
+      await tx.contentPackVersion.update({ where: { id: row.id }, data: { status: "released", synthetic: false, outcomeCodes: [], lessonId: createdLesson.id, releaseId: release.id, releasedAt: new Date(), retiredAt: null } });
+      await tx.contentPack.update({ where: { key: row.packKey }, data: { namespace: "baseline" } });
+      await tx.contentReleaseItem.create({ data: { releaseId: release.id, kind: "lesson", refId: createdLesson.id, action: "created" } });
+      await tx.contentReleaseItem.create({ data: { releaseId: release.id, kind: "pack-version", refId: row.id, action: "created" } });
+    }
+    await audit(tx, { actor: { sub: admin.id, role: "ADMIN" }, action: "content.release.apply.admin-direct", targetType: "ContentRelease", targetId: release.id, reason: plan.name, after: { policy: "ADMIN_DIRECT", status: "APPLIED", lessons: plan.draftCount, digests: plan.drafts.map((draft) => draft.digest) } });
+    return tx.contentRelease.findUnique({ where: { id: release.id }, include: { items: true } });
+  }, { timeout: 120000 });
   return { receipt, plan, idempotent: false };
 }
 

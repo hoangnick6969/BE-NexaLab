@@ -236,9 +236,10 @@ export function materializeLegacySteps(lesson: {
   content: string;
   materials: Array<{ type: "video" | "pdf" | "image"; url: string; title: string; transcript?: string }>;
   questions: unknown[];
+  basicExercises?: { id: string; questions: unknown[]; passThreshold: number };
   labId?: string | null;
 }, namespace?: string) {
-  const result: Array<{ type: StepType; position: number; required: boolean; config: unknown }> = [];
+  const result: Array<{ id?: string; type: StepType; position: number; required: boolean; config: unknown }> = [];
   result.push({ type: "READING", position: 10, required: true, config: { html: lesson.content } });
   const videoMaterial = lesson.materials.find((item) => item.type === "video");
   result.push({
@@ -249,6 +250,17 @@ export function materializeLegacySteps(lesson: {
       ? videoMaterial
       : { title: "Nội dung thay thế", equivalentText: lesson.content },
   });
+  if (lesson.basicExercises)
+    result.push({
+      id: lesson.basicExercises.id,
+      type: "BASIC_EXERCISE",
+      position: 30,
+      required: true,
+      config: {
+        questions: lesson.basicExercises.questions,
+        passThreshold: lesson.basicExercises.passThreshold,
+      },
+    });
   if (lesson.questions.length)
     result.push({ type: "QUIZ", position: 40, required: true, config: { questions: materializeQuizQuestions(lesson.questions, namespace) } });
   if (lesson.labId)
@@ -271,6 +283,7 @@ export function validateLessonSteps<T extends { type: StepType; position: number
 function resource(step: StoredStep) {
   const config = stepConfigSchemas[step.type].parse(step.config);
   if (step.type === "QUIZ") return sanitizeQuizConfig(config);
+  if (step.type === "BASIC_EXERCISE") return sanitizeBasicExerciseConfig(config);
   return step.type === "READING" || step.type === "VIDEO" || step.type === "STUDY_CARDS" || step.type === "LAB" || step.type === "CHALLENGE" ? config : null;
 }
 
@@ -302,7 +315,7 @@ export function buildPathwaySteps(steps: StoredStep[]) {
           : blocker === "LAB" && step.type === "CHALLENGE"
             ? "PRACTICE_NOT_PASSED"
             : "PREREQUISITE_INCOMPLETE";
-    if (step.required && !completed && blocker === null) blocker = step.type;
+    if (step.required && !completed && step.type !== "BASIC_EXERCISE" && blocker === null) blocker = step.type;
     return {
       id: step.id,
       type: step.type,

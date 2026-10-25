@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { coverageReport, digestOf, packGateErrors, packManifestSchema, type GateContext } from "./content-pack";
+import { coverageReport, digestOf, lessonFromPack, packGateErrors, packManifestSchema, type GateContext } from "./content-pack";
 import { boundedFetch, preFetchProblems, robotsAllows, sourcePolicySchema, urlProblem } from "./ingestion";
 import { inspectGlb, inspectVtt, mediaTypeFor, uploadsEnabled } from "../../assets/application/media";
 
@@ -57,12 +57,73 @@ describe("content pack gates (CF-T1)", () => {
     expect(errors).toContain('video "Video" thiếu phụ đề WebVTT đã kiểm tra');
     expect(errors).toContain('học liệu "Video" không trỏ tới phiên bản tệp sẵn sàng');
   });
+  it("accepts a pinned ready shared-library video with transcript and checked caption", () => {
+    const m = pack();
+    m.lesson.materials = [{
+      type: "video",
+      url: "assetv:videoversion00000001",
+      title: "Reviewed video",
+      transcript: "Reviewed transcript",
+      captionUrl: "assetv:captionversion0000001",
+    }];
+    const assetVersions = new Map([
+      ["videoversion00000001", { kind: "video", scope: "SHARED_LIBRARY", assetStatus: "ACTIVE", status: "READY" }],
+      ["captionversion0000001", { kind: "caption", scope: "SHARED_LIBRARY", assetStatus: "ACTIVE", status: "READY" }],
+    ]);
+    expect(packGateErrors(m, ctx({ assetVersions })).filter((error) => error.includes("học liệu") || error.includes("video"))).toEqual([]);
+  });
   it("digests ignore key order and change with content", () => {
     expect(digestOf({ a: 1, b: [1, { c: 2, d: 3 }] })).toBe(digestOf({ b: [1, { d: 3, c: 2 }], a: 1 }));
     const m = pack();
     const before = digestOf(m);
     m.title += " v2";
     expect(digestOf(m)).not.toBe(before);
+  });
+  it("keeps the legacy pack digest and maps authored basic-exercise IDs unchanged", () => {
+    expect(digestOf(pack())).toBe("7bb327dd47bf38b06784610c3964904c00a9995782e192a11c4b95d4dc005df9");
+    const raw = structuredClone(fixture.packs[0]);
+    raw.lesson.basicExercises = {
+      id: "practice-series-current",
+      passThreshold: 60,
+      questions: [{
+        id: "practice-question-1",
+        prompt: "Dòng điện trong mạch nối tiếp có đặc điểm gì?",
+        options: [
+          { id: "same-current", text: "Bằng nhau tại mọi điểm" },
+          { id: "lower-current", text: "Giảm dần qua mỗi bóng" },
+        ],
+        correctOptionId: "same-current",
+      }],
+    };
+    const parsed = packManifestSchema.parse(raw);
+    expect(lessonFromPack(parsed).basicExercises).toEqual(raw.lesson.basicExercises);
+    expect(() => packManifestSchema.parse({
+      ...raw,
+      lesson: {
+        ...raw.lesson,
+        basicExercises: {
+          ...raw.lesson.basicExercises,
+          questions: [{ ...raw.lesson.basicExercises.questions[0], id: "Generated ID" }],
+        },
+      },
+    })).toThrow();
+    expect(() => packManifestSchema.parse({
+      ...raw,
+      lesson: {
+        ...raw.lesson,
+        basicExercises: {
+          ...raw.lesson.basicExercises,
+          questions: [{
+            ...raw.lesson.basicExercises.questions[0],
+            correctOptionId: "missing-option",
+            options: [
+              { id: "same-current", text: "Same" },
+              { id: "same-current", text: "Duplicate" },
+            ],
+          }],
+        },
+      },
+    })).toThrow();
   });
   it("coverage keeps five dimensions apart and never counts synthetic packs as released", () => {
     const rows = coverageReport(

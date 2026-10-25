@@ -34,7 +34,8 @@ export class CatalogController {
         ...subject,
         grades: grades.map((grade) => ({
           grade,
-          chapters: chapters
+          chapters: [
+            ...chapters
             .filter((chapter: any) => chapter.subjectId === subject.id && chapter.grade === grade)
             .map((chapter: any) => {
               const chapterLessons = lessons.filter((l: any) => l.subjectId === subject.id && l.grade === grade && l.curriculumChapterCode === chapter.code).sort((a: any, b: any) => (a.curriculumOrder ?? Number.MAX_SAFE_INTEGER) - (b.curriculumOrder ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id));
@@ -53,6 +54,30 @@ export class CatalogController {
               };
             })
             .filter((chapter: any) => chapter.lessonCount > 0),
+            // Textbook source chapters can be published before an official curriculum
+            // crosswalk exists. Keep them visible under their source title without
+            // presenting a textbook locator as an official curriculum code.
+            ...(() => {
+              const officialCodes = new Set(chapters.filter((chapter: any) => chapter.subjectId === subject.id && chapter.grade === grade).map((chapter: any) => chapter.code));
+              const sourceGroups = new Map<string, any[]>();
+              for (const lesson of lessons.filter((item: any) => item.subjectId === subject.id && item.grade === grade && (!item.curriculumChapterCode || !officialCodes.has(item.curriculumChapterCode)))) {
+                const title = lesson.chapter?.trim() || "Nội dung theo sách giáo khoa";
+                sourceGroups.set(title, [...(sourceGroups.get(title) ?? []), lesson]);
+              }
+              return [...sourceGroups.entries()].map(([title, sourceLessons]) => ({
+                id: `source:${title}`,
+                title,
+                displayOrder: Math.min(...sourceLessons.map((lesson: any) => lesson.curriculumOrder ?? Number.MAX_SAFE_INTEGER)),
+                lessonCount: sourceLessons.length,
+                topics: [],
+                lessons: sourceLessons.sort((a: any, b: any) => (a.curriculumOrder ?? Number.MAX_SAFE_INTEGER) - (b.curriculumOrder ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id)),
+              }));
+            })(),
+          ].sort((a: any, b: any) => {
+            const aOrder = a.officialOrder ?? a.displayOrder ?? Number.MAX_SAFE_INTEGER;
+            const bOrder = b.officialOrder ?? b.displayOrder ?? Number.MAX_SAFE_INTEGER;
+            return aOrder - bOrder || a.title.localeCompare(b.title, "vi");
+          }),
         })),
       };
     });
