@@ -227,6 +227,10 @@ describe("lesson pathway", () => {
       lastPosition: null,
     });
     expect(() => reconcileVideoProgress({ title: "Watch", url: "https://example.test/video.mp4" }, undefined, { action: "complete-fallback" }, now)).toThrow("VIDEO_EQUIVALENT_UNAVAILABLE");
+    expect(() => reconcileVideoProgress({ ...config, videoId: "olm-video-1" }, undefined, {
+      action: "heartbeat", positionSeconds: 95, durationSeconds: 100,
+    }, now)).toThrow("VIDEO_SESSION_REQUIRED");
+    expect(reconcileVideoProgress({ ...config, videoId: "olm-video-1" }, undefined, { action: "complete-fallback" }, now).status).toBe("COMPLETED");
   });
 
   it("returns only the first core step as actionable and hides locked resources", () => {

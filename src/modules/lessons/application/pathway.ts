@@ -211,6 +211,8 @@ export function reconcileVideoProgress(
   now: Date,
 ) {
   const parsedConfig = video.parse(config);
+  if (config && typeof config === "object" && "videoId" in config && config.videoId && action.action !== "complete-fallback")
+    throw new Error("VIDEO_SESSION_REQUIRED");
   if (action.action === "complete-fallback" && !parsedConfig.equivalentText)
     throw new Error("VIDEO_EQUIVALENT_UNAVAILABLE");
 
@@ -257,7 +259,7 @@ export function materializeLegacySteps(lesson: {
     required: true,
     config: { ...item, videoId: item.id },
   }));
-  else result.push({
+  else if (!Object.prototype.hasOwnProperty.call(lesson, "videos")) result.push({
     type: "VIDEO",
     position: 20,
     required: true,

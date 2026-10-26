@@ -181,13 +181,23 @@ async function materialize(tx: any, m: PackManifest, version: number, packVersio
   const steps = materializeLegacySteps(body as any, lessonId);
   const existingSteps = existingLessonId ? await tx.lessonStep.findMany({ where: { lessonId } }) : [];
   const claimed = new Set<string>();
-  for (const step of steps) {
+  const resolved = steps.map((step) => {
     const stepId = `step-${lessonId}-${step.id ?? step.type.toLowerCase().replace("_", "-")}`;
     const prior = existingSteps.find((item: any) => item.id === stepId) ??
-      existingSteps.find((item: any) => item.type === step.type && !claimed.has(item.id) && !(step.id && step.type === "VIDEO"));
-    if (prior)
-      {
-      claimed.add(prior.id);
+      // Legacy releases did not have deterministic VIDEO IDs. Reuse their
+      // first VIDEO row so historic progress survives; further mapped videos
+      // receive their own stable rows after the temporary-position pass.
+      existingSteps.find((item: any) => item.type === step.type && !claimed.has(item.id));
+    if (prior) claimed.add(prior.id);
+    return { step, stepId, prior };
+  });
+  // `@@unique([lessonId, position])` means any stale row can temporarily block
+  // a new step's final slot. Move every existing row out of the way first;
+  // their IDs/progress remain intact unless the row is an obsolete fallback.
+  for (const [index, existing] of existingSteps.entries())
+    await tx.lessonStep.update({ where: { id: existing.id }, data: { position: -100000 - index } });
+  for (const { step, stepId, prior } of resolved) {
+    if (prior) {
       await tx.lessonStep.update({
         where: { id: prior.id },
         data: {
@@ -207,6 +217,13 @@ async function materialize(tx: any, m: PackManifest, version: number, packVersio
         },
       });
   }
+  // A P2 pack that explicitly supplies `videos: []` has no video for that
+  // lesson. Remove only unmatched legacy VIDEO fallbacks; other step types and
+  // their learner progress remain intact.
+  if (Object.prototype.hasOwnProperty.call(body as object, "videos"))
+    for (const existing of existingSteps)
+      if (existing.type === "VIDEO" && !claimed.has(existing.id))
+        await tx.lessonStep.delete({ where: { id: existing.id } });
   return lessonId;
 }
 
@@ -374,7 +391,10 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
         include: { items: true },
       });
     },
-    { timeout: 60000 },
+    // A whole-grade P2 release can update 51 lessons and materialize dozens
+    // of independent video steps. Keep it transactional, but allow the
+    // controlled integration batch to finish instead of expiring mid-release.
+    { timeout: 300000 },
   );
   return { receipt, plan, idempotent: false };
 }

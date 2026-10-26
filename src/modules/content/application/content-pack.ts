@@ -37,6 +37,9 @@ const videoProvenanceSchema = z.object({
   availability: z.enum(["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]),
   rightsStatus: z.enum(["APPROVED", "NEEDS_REVIEW", "REJECTED"]).default("NEEDS_REVIEW"),
   accessibilityStatus: z.enum(["APPROVED", "NEEDS_REVIEW", "REJECTED"]).default("NEEDS_REVIEW"),
+  transcriptSource: z.enum(["human_vtt", "youtube_auto_caption", "lesson_equivalent_summary"]).optional(),
+  reviewedBy: z.string().trim().min(2).max(120).optional(),
+  reviewedAt: z.string().datetime().optional(),
 }).strict();
 export const packVideoSchema = z.object({
   id,
@@ -48,7 +51,7 @@ export const packVideoSchema = z.object({
   equivalentText: z.string().trim().min(20).max(50000).optional(),
   captionUrl: z.string().url().max(1000).nullable().optional(),
   completionThresholdPercent: z.number().int().min(50).max(100).default(90),
-  reviewStatus: z.enum(["REVIEWED", "NEEDS_REVIEW", "REJECTED"]),
+  reviewStatus: z.enum(["APPROVED", "REVIEWED", "NEEDS_REVIEW", "REJECTED"]),
   provenance: videoProvenanceSchema,
 }).strict().superRefine((video, ctx) => {
   if (!video.transcript && !video.equivalentText)
@@ -264,7 +267,7 @@ export function packGateErrors(m: PackManifest, ctx: GateContext, options: { dev
   const videos = [...(m.lesson.videos ?? []), ...(m.lesson.sections ?? []).flatMap((section) => section.videos)];
   dup(videos.map((video) => video.id), "video");
   for (const video of videos) {
-    if (!devSeed && video.reviewStatus !== "REVIEWED") errors.push(`video "${video.title}" chưa được duyệt`);
+    if (!devSeed && !["APPROVED", "REVIEWED"].includes(video.reviewStatus)) errors.push(`video "${video.title}" chưa được duyệt`);
     if (!devSeed && video.provenance.availability !== "AVAILABLE") errors.push(`video "${video.title}" chưa xác nhận khả dụng`);
     if (!devSeed && video.provenance.rightsStatus !== "APPROVED") errors.push(`video "${video.title}" chưa duyệt bản quyền`);
     if (!devSeed && video.provenance.accessibilityStatus !== "APPROVED") errors.push(`video "${video.title}" chưa duyệt khả năng tiếp cận`);
