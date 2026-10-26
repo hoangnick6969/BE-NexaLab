@@ -70,6 +70,7 @@ async function jsonRequest(url, init = {}) {
   return { response, body: await response.json() };
 }
 
+const logs = [];
 try {
   const proxyPort = await startProxy();
   const apiPort = await availablePort();
@@ -79,7 +80,6 @@ try {
   proxiedUrl.searchParams.set("connect_timeout", "2");
   const apiOrigin = `http://127.0.0.1:${apiPort}/api`;
   const tsxCli = resolve("node_modules", "tsx", "dist", "cli.mjs");
-  const logs = [];
   api = spawn(process.execPath, [tsxCli, "src/main.ts"], {
     cwd: process.cwd(),
     env: { ...process.env, DATABASE_URL: proxiedUrl.toString(), PORT: String(apiPort), HOST: "127.0.0.1" },
@@ -104,14 +104,20 @@ try {
   const headers = { authorization: `Bearer ${login.body.accessToken}` };
   assert.equal((await fetch(`${apiOrigin}/me/progress`, { headers })).status, 200, "progress must be healthy before interruption");
 
+  assert.equal((await jsonRequest(`${apiOrigin}/health`)).body.database, "up", "health must report the database before the interruption");
   await stopProxy();
+  const unhealthy = await jsonRequest(`${apiOrigin}/health`);
+  assert.equal(unhealthy.response.status, 503, "health must fail while PostgreSQL is unreachable");
+  assert.equal(unhealthy.body.code, "DATABASE_UNAVAILABLE", "health names the database as the failing dependency");
   const interrupted = await jsonRequest(`${apiOrigin}/me/progress`, { headers });
-  assert.equal(interrupted.response.status, 500, "database interruption must reach the real API as a controlled 500");
-  assert.deepEqual(interrupted.body, { message: "Lỗi hệ thống" }, "database details must not leak to the client");
+  assert.equal(interrupted.response.status, 503, "database interruption must reach the real API as a controlled 503");
+  assert.deepEqual(interrupted.body, { statusCode: 503, code: "DEPENDENCY_FAILURE", message: "Dịch vụ tạm thời không khả dụng, thử lại sau" }, "database details must not leak to the client");
 
   await startProxy(proxyPort);
   await waitFor(`${apiOrigin}/me/progress`, (response) => response.status === 200, 60, { headers });
-  console.log("PASS real PostgreSQL interruption returns a private system error");
+  assert.equal((await jsonRequest(`${apiOrigin}/health`)).response.status, 200, "health recovers with PostgreSQL");
+  console.log("PASS /health reports 503 DATABASE_UNAVAILABLE while PostgreSQL is down and 200 after recovery");
+  console.log("PASS real PostgreSQL interruption returns a private 503 DEPENDENCY_FAILURE");
   console.log("PASS API reconnects and serves official progress after PostgreSQL recovery");
 } catch (error) {
   if (api && logs.length) process.stderr.write(logs.slice(-5).join(""));
