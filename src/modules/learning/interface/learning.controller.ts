@@ -54,6 +54,17 @@ export class LearningController {
     const structuredManifest = packVersion?.manifest as any;
     const isStructuredLesson = packVersion && structuredManifest?.kind === "structured-lesson-candidate";
     const bookSha256 = typeof structuredManifest?.book?.sha256 === "string" ? structuredManifest.book.sha256.toLowerCase() : null;
+    const sourceAssets = isStructuredLesson && bookSha256 ? await this.db.assetVersion.findMany({
+      where: {
+        sha256: bookSha256,
+        status: "READY",
+        mime: "application/pdf",
+        objectKey: { not: null },
+        asset: { scope: "SHARED_LIBRARY", status: "ACTIVE", kind: "pdf" },
+      },
+      select: { id: true, bytes: true },
+      take: 2,
+    }) : [];
     const ebookEditions = lesson.ebookLocators
       .filter((item: any) => item.edition.subjectId === lesson.subjectId && item.edition.isCurrent && item.edition.url.startsWith("https://"))
       .map((item: any) => ({
@@ -103,6 +114,11 @@ export class LearningController {
           return { id: block.id, physicalPageIndex, printedPageLabel };
         }),
         learningContent: structuredManifest.learningContent,
+      } : null,
+      sourceDocument: sourceAssets.length === 1 ? {
+        assetVersionId: sourceAssets[0].id,
+        sourceDigest: bookSha256,
+        bytes: sourceAssets[0].bytes,
       } : null,
       materials: lesson.materials,
       steps: lesson.steps.map((step: any) => {

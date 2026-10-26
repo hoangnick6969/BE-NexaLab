@@ -9,7 +9,9 @@ import { Db } from "../../../db/db";
 export class CatalogController {
   constructor(@Inject(Db) private db: Db) {}
   @Get("subjects") subjects() {
-    return this.db.subject.findMany();
+    return this.db.subject.findMany({
+      include: { ebookEditions: { orderBy: [{ version: "asc" }, { id: "asc" }] } },
+    });
   }
   @Roles("STUDENT")
   @Get("open-curriculum") async openCurriculum() {
@@ -22,7 +24,15 @@ export class CatalogController {
     });
     if (!lessons.length) return { subjects: [] };
     const [subjects, chapters] = await Promise.all([
-      this.db.subject.findMany({ where: { id: { in: [...new Set(lessons.map((l: any) => l.subjectId))] } }, select: { id: true, name: true, ebookUrl: true } }),
+      this.db.subject.findMany({
+        where: { id: { in: [...new Set(lessons.map((l: any) => l.subjectId))] } },
+        select: {
+          id: true,
+          name: true,
+          ebookUrl: true,
+          ebookEditions: { select: { id: true, version: true, url: true, fallbackPhysicalPage: true }, orderBy: [{ version: "asc" }, { id: "asc" }] },
+        },
+      }),
       this.db.curriculumChapter.findMany({
         where: { status: "active", synthetic: false, OR: [...new Map(lessons.map((l: any) => [`${l.subjectId}:${l.grade}`, { subjectId: l.subjectId, grade: l.grade }])).values()] },
         include: { topics: { where: { status: "active" }, orderBy: [{ officialOrder: "asc" }, { code: "asc" }] } }, orderBy: [{ officialOrder: "asc" }, { code: "asc" }],

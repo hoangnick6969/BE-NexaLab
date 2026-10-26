@@ -359,12 +359,26 @@ async function main() {
     create: {
       id: "khtn",
       name: "Khoa học tự nhiên",
-      ebookUrl: "https://eiotlkegrejjhldsvaqp.supabase.co/storage/v1/object/public/lesson-media/sgk-khtn.pdf",
+      ebookUrl: "https://eiotlkegrejjhldsvaqp.supabase.co/storage/v1/object/public/lesson-media/ebook/sgk-khtn8.pdf",
     },
     update: {
-      ebookUrl: "https://eiotlkegrejjhldsvaqp.supabase.co/storage/v1/object/public/lesson-media/sgk-khtn.pdf",
+      ebookUrl: "https://eiotlkegrejjhldsvaqp.supabase.co/storage/v1/object/public/lesson-media/ebook/sgk-khtn8.pdf",
     },
   });
+  await db.ebookEdition.updateMany({
+    where: { subjectId: "khtn", isCurrent: true, version: { not: "sgk-khtn8" } },
+    data: { isCurrent: false },
+  });
+  for (const edition of [
+    { id: "ebook-khtn8-supabase", version: "sgk-khtn8", url: "https://eiotlkegrejjhldsvaqp.supabase.co/storage/v1/object/public/lesson-media/ebook/sgk-khtn8.pdf", isCurrent: true },
+    { id: "ebook-khtn9-supabase", version: "sgk-khtn9", url: "https://eiotlkegrejjhldsvaqp.supabase.co/storage/v1/object/public/lesson-media/ebook/sgk-khtn9.pdf", isCurrent: false },
+  ]) {
+    await db.ebookEdition.upsert({
+      where: { subjectId_version: { subjectId: "khtn", version: edition.version } },
+      create: { ...edition, subjectId: "khtn", fallbackPhysicalPage: 1 },
+      update: { url: edition.url, fallbackPhysicalPage: 1, isCurrent: edition.isCurrent },
+    });
+  }
   const demoLessonId = "lesson-khtn6-introduction";
   const demoReading =
     "Khoa học tự nhiên giúp chúng ta quan sát thế giới, đặt câu hỏi, đo đạc và dùng bằng chứng để giải thích hiện tượng. Một bài tìm hiểu thường bắt đầu từ câu hỏi, tiếp tục bằng quan sát hoặc thí nghiệm an toàn, rồi kết thúc bằng kết luận có thể kiểm tra lại.";

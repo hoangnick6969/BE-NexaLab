@@ -154,4 +154,12 @@ describe("content versions and attribution (B1-T4/T5)", () => {
       note: expect.stringMatching(/minh họa/),
     });
   });
+
+  it("records publisher permission as owner-attested authorization, not an open license", () => {
+    const ownerAttestedReview = { ...review, license: "PUBLISHER_PERMISSION" as const };
+    expect(attribution({ review: ownerAttestedReview })).toMatchObject({
+      license: "PUBLISHER_PERMISSION",
+      licenseLabel: "Được nhà xuất bản cho phép",
+    });
+  });
 });

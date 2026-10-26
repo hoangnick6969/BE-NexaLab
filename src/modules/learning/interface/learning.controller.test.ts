@@ -58,6 +58,7 @@ describe("LearningController Open Curriculum basic exercises", () => {
           ebookLocators: [],
         }),
       },
+      assetVersion: { findMany: vi.fn().mockResolvedValue([]) },
     };
     const controller = new LearningController(db as any, {} as any);
 
@@ -75,6 +76,70 @@ describe("LearningController Open Curriculum basic exercises", () => {
       },
     });
     expect(JSON.stringify(result.steps[0].resource)).not.toContain("correctOptionId");
+  });
+
+  it("exposes one digest-matched source PDF and suppresses invalid source pages", async () => {
+    const digest = "a".repeat(64);
+    const db = {
+      lesson: { findFirst: vi.fn().mockResolvedValue({
+        id: "lesson-source", subjectId: "science", subject: { id: "science", name: "Khoa học tự nhiên", ebookUrl: null },
+        title: "Nguồn", chapter: "Chương 1", grade: 8, topic: "", learningObjective: "", prerequisites: "", curriculum: "", content: "", materials: [], steps: [], ebookLocators: [],
+        packVersion: { id: "pack-v1", version: 1, digest: "pack-digest", manifest: {
+          kind: "structured-lesson-candidate", book: { title: "KHTN 8", sha256: digest },
+          sourceBlocks: [
+            { id: "valid", physicalPageIndex: 13, printedPageLabel: "11", sourceSha256: digest },
+            { id: "wrong-digest", physicalPageIndex: 14, sourceSha256: "b".repeat(64) },
+            { id: "zero", physicalPageIndex: 0, sourceSha256: digest },
+          ], learningContent: { sections: [] },
+        } },
+      }) },
+      assetVersion: { findMany: vi.fn().mockResolvedValue([{ id: "assetversion1234567890", bytes: 25_151_587 }]) },
+    };
+    const result = await new LearningController(db as any, {} as any).openCurriculumLesson("lesson-source", { user: { sub: "student-1" } });
+    expect(result.sourceDocument).toEqual({ assetVersionId: "assetversion1234567890", sourceDigest: digest, bytes: 25_151_587 });
+    expect(db.assetVersion.findMany).toHaveBeenCalledWith({
+      where: {
+        sha256: digest,
+        status: "READY",
+        mime: "application/pdf",
+        objectKey: { not: null },
+        asset: { scope: "SHARED_LIBRARY", status: "ACTIVE", kind: "pdf" },
+      },
+      select: { id: true, bytes: true },
+      take: 2,
+    });
+    expect(result.structuredContent?.sourceBlocks).toEqual([
+      { id: "valid", physicalPageIndex: 13, printedPageLabel: "11" },
+      { id: "wrong-digest", physicalPageIndex: null, printedPageLabel: null },
+      { id: "zero", physicalPageIndex: null, printedPageLabel: null },
+    ]);
+  });
+
+  it("does not look up source documents for a non-structured lesson manifest", async () => {
+    const db = {
+      lesson: { findFirst: vi.fn().mockResolvedValue({
+        id: "lesson-other", subjectId: "science", subject: { id: "science", name: "Khoa học tự nhiên", ebookUrl: null },
+        title: "Khác", chapter: "", grade: 8, topic: "", learningObjective: "", prerequisites: "", curriculum: "", content: "", materials: [], steps: [], ebookLocators: [],
+        packVersion: { id: "pack-v1", version: 1, digest: "pack", manifest: { kind: "other", book: { sha256: "a".repeat(64) }, sourceBlocks: [] } },
+      }) },
+      assetVersion: { findMany: vi.fn() },
+    };
+    const result = await new LearningController(db as any, {} as any).openCurriculumLesson("lesson-other", { user: { sub: "student-1" } });
+    expect(result.sourceDocument).toBeNull();
+    expect(db.assetVersion.findMany).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when more than one shared PDF has the source digest", async () => {
+    const digest = "a".repeat(64);
+    const db = {
+      lesson: { findFirst: vi.fn().mockResolvedValue({
+        id: "lesson-source", subjectId: "science", subject: { id: "science", name: "Khoa học tự nhiên", ebookUrl: null }, title: "Nguồn", chapter: "", grade: 8, topic: "", learningObjective: "", prerequisites: "", curriculum: "", content: "", materials: [], steps: [], ebookLocators: [],
+        packVersion: { id: "pack-v1", version: 1, digest: "pack", manifest: { kind: "structured-lesson-candidate", book: { sha256: digest }, sourceBlocks: [], learningContent: {} } },
+      }) },
+      assetVersion: { findMany: vi.fn().mockResolvedValue([{ id: "one", bytes: 1 }, { id: "two", bytes: 1 }]) },
+    };
+    const result = await new LearningController(db as any, {} as any).openCurriculumLesson("lesson-source", { user: { sub: "student-1" } });
+    expect(result.sourceDocument).toBeNull();
   });
 });
 

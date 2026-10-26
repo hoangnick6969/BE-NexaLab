@@ -299,6 +299,24 @@ export const localStorage = () => {
   const s = storage();
   return s.kind === "local" ? (s as LocalStorage) : null;
 };
+
+export function parseByteRange(value: unknown, size: number): { start: number; end: number } | "invalid" | null {
+  if (value === undefined) return null;
+  if (typeof value !== "string" || !Number.isSafeInteger(size) || size <= 0) return "invalid";
+  const suffix = /^bytes=-(\d+)$/.exec(value.trim());
+  if (suffix) {
+    const length = Number(suffix[1]);
+    if (!Number.isSafeInteger(length) || length <= 0) return "invalid";
+    return { start: Math.max(0, size - length), end: size - 1 };
+  }
+  const match = /^bytes=(\d+)-(\d*)$/.exec(value.trim());
+  if (!match) return "invalid";
+  const start = Number(match[1]);
+  const requestedEnd = match[2] ? Number(match[2]) : size - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd) || start < 0 || start >= size || requestedEnd < start)
+    return "invalid";
+  return { start, end: Math.min(requestedEnd, size - 1) };
+}
 /** Test hook. */
 export const resetStorage = () => {
   cached = null;

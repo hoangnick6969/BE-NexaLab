@@ -8,13 +8,14 @@ import { reactions } from "../../../../packages/sim";
  * self-reviewed against this checklist before it can be published; shared
  * baseline content is admin-managed and read-only to teachers.
  */
-export const LICENSES = ["ORIGINAL", "CC0", "CC_BY", "CC_BY_SA", "SCHOOL_OWNED"] as const;
+export const LICENSES = ["ORIGINAL", "CC0", "CC_BY", "CC_BY_SA", "SCHOOL_OWNED", "PUBLISHER_PERMISSION"] as const;
 export const LICENSE_LABELS: Record<(typeof LICENSES)[number], string> = {
   ORIGINAL: "Tự biên soạn",
   CC0: "CC0",
   CC_BY: "CC BY 4.0",
   CC_BY_SA: "CC BY-SA 4.0",
   SCHOOL_OWNED: "Tài liệu thuộc nhà trường",
+  PUBLISHER_PERMISSION: "Được nhà xuất bản cho phép",
 };
 
 /** GDPT 2018 KHTN content strands used as library domain tags. */
