@@ -82,8 +82,11 @@ export class StudentAccessService {
         learningObjective: lesson.learningObjective,
         prerequisites: lesson.prerequisites,
         curriculum: lesson.curriculum,
+        sgkReference: lesson.sgkReference,
         content: lesson.content,
         materials: lesson.materials,
+        videos: lesson.videos,
+        sections: lesson.sections,
       },
       attribution: attribution(lesson),
       assignment: {

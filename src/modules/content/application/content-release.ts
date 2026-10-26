@@ -157,6 +157,7 @@ async function materialize(tx: any, m: PackManifest, version: number, packVersio
     materials: body.materials,
     videos: body.videos,
     sections: body.sections,
+    sgkReference: body.sgkReference,
     questions: body.questions,
     packVersionId,
     review: {
@@ -179,9 +180,14 @@ async function materialize(tx: any, m: PackManifest, version: number, packVersio
   else await tx.lesson.create({ data: { id: lessonId, ...lessonData } });
   const steps = materializeLegacySteps(body as any, lessonId);
   const existingSteps = existingLessonId ? await tx.lessonStep.findMany({ where: { lessonId } }) : [];
+  const claimed = new Set<string>();
   for (const step of steps) {
-    const prior = existingSteps.find((item: any) => item.type === step.type);
+    const stepId = `step-${lessonId}-${step.id ?? step.type.toLowerCase().replace("_", "-")}`;
+    const prior = existingSteps.find((item: any) => item.id === stepId) ??
+      existingSteps.find((item: any) => item.type === step.type && !claimed.has(item.id) && !(step.id && step.type === "VIDEO"));
     if (prior)
+      {
+      claimed.add(prior.id);
       await tx.lessonStep.update({
         where: { id: prior.id },
         data: {
@@ -190,11 +196,12 @@ async function materialize(tx: any, m: PackManifest, version: number, packVersio
           config: step.config as any,
         },
       });
+      }
     else
       await tx.lessonStep.create({
         data: {
           ...step,
-          id: `step-${lessonId}-${step.id ?? step.type.toLowerCase().replace("_", "-")}`,
+          id: stepId,
           lessonId,
           config: step.config as any,
         },
@@ -683,6 +690,16 @@ export async function applyAdminDirectDraftRelease(db: any, raw: unknown, option
             outcomeCodes: row.outcomeCodes,
             materials: [],
             questions: [],
+            sgkReference: {
+              bookKey: source.book.key,
+              bookVersion: source.book.version,
+              sourceSha256: source.book.sha256,
+              sourceLessonId: source.sourceLesson.id,
+              chapterId: source.chapter.id,
+              pdfPageRange: source.pdfPageRange,
+              printedPageRange: source.printedPageRange,
+              sourceBlockIds: source.sourceBlocks.map((block: any) => block.id),
+            },
             packVersionId: row.id,
             curriculumChapterCode: row.curriculumChapterCode,
             curriculumTopicCode: row.curriculumTopicCode,

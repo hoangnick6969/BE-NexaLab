@@ -30,6 +30,49 @@ const id = z
   .string()
   .trim()
   .regex(/^[a-z0-9][a-z0-9._-]{1,79}$/, "ID ổn định: chữ thường, số, dấu chấm, gạch ngang, gạch dưới");
+const videoProvenanceSchema = z.object({
+  sourceUrl: z.string().url().max(1000),
+  sourceLabel: z.string().trim().min(2).max(300),
+  checkedAt: z.string().datetime(),
+  availability: z.enum(["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]),
+  rightsStatus: z.enum(["APPROVED", "NEEDS_REVIEW", "REJECTED"]).default("NEEDS_REVIEW"),
+  accessibilityStatus: z.enum(["APPROVED", "NEEDS_REVIEW", "REJECTED"]).default("NEEDS_REVIEW"),
+}).strict();
+export const packVideoSchema = z.object({
+  id,
+  title: z.string().trim().min(1).max(200),
+  url: z.string().url().max(1000),
+  provider: z.enum(["YOUTUBE", "DIRECT"]),
+  providerVideoId: z.string().trim().min(1).max(200),
+  transcript: z.string().trim().min(20).max(50000).optional(),
+  equivalentText: z.string().trim().min(20).max(50000).optional(),
+  captionUrl: z.string().url().max(1000).nullable().optional(),
+  completionThresholdPercent: z.number().int().min(50).max(100).default(90),
+  reviewStatus: z.enum(["REVIEWED", "NEEDS_REVIEW", "REJECTED"]),
+  provenance: videoProvenanceSchema,
+}).strict().superRefine((video, ctx) => {
+  if (!video.transcript && !video.equivalentText)
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["transcript"], message: "Video cần transcript hoặc nội dung tương đương đã duyệt" });
+  if (video.transcript && /^video minh họa/i.test(video.transcript))
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["transcript"], message: "Mô tả video không phải transcript" });
+  if (video.provider === "YOUTUBE") {
+    const parsed = new URL(video.url);
+    const host = parsed.hostname.replace(/^www\./, "");
+    const fromUrl = host === "youtu.be" ? parsed.pathname.slice(1).split("/")[0] : parsed.searchParams.get("v") ?? (parsed.pathname.startsWith("/embed/") ? parsed.pathname.split("/")[2] : null);
+    if (!fromUrl || fromUrl !== video.providerVideoId)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["providerVideoId"], message: "providerVideoId không khớp URL YouTube" });
+  }
+});
+const sgkReferenceSchema = z.object({
+  bookKey: id,
+  bookVersion: z.string().trim().min(1).max(100),
+  sourceSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  sourceLessonId: id,
+  chapterId: id,
+  pdfPageRange: z.object({ start: z.number().int().positive(), end: z.number().int().positive() }).strict(),
+  printedPageRange: z.object({ start: z.union([z.string(), z.number()]), end: z.union([z.string(), z.number()]) }).strict().optional(),
+  sourceBlockIds: z.array(id).max(1000).default([]),
+}).strict().refine((value) => value.pdfPageRange.end >= value.pdfPageRange.start, { message: "Khoảng trang SGK không hợp lệ", path: ["pdfPageRange"] });
 const basicExercises = basicExerciseConfigSchema
   .extend({ id })
   .strict()
@@ -113,8 +156,9 @@ export const packManifestSchema = z
         learningObjective: z.string().trim().min(5).max(500),
         prerequisites: z.string().trim().max(500).default(""),
         content: z.string().trim().min(20).max(100000),
-        videos: z.array(z.object({ id: id.optional(), title: z.string().trim().min(1).max(200), url: z.string().url().max(1000), transcript: z.string().max(50000).optional(), captionUrl: z.string().url().max(1000).optional() }).strict()).max(20).optional(),
-        sections: z.array(z.object({ id, videos: z.array(z.object({ id: id.optional(), title: z.string().trim().min(1).max(200), url: z.string().url().max(1000), transcript: z.string().max(50000).optional(), captionUrl: z.string().url().max(1000).optional() }).strict()).max(20) }).strict()).max(100).optional(),
+        videos: z.array(packVideoSchema).max(20).optional(),
+        sections: z.array(z.object({ id, videos: z.array(packVideoSchema).max(20) }).strict()).max(100).optional(),
+        sgkReference: sgkReferenceSchema.optional(),
         materials: z
           .array(
             z
@@ -217,6 +261,14 @@ export function packGateErrors(m: PackManifest, ctx: GateContext, options: { dev
     m.lesson.questions.map((q) => q.id),
     "câu hỏi",
   );
+  const videos = [...(m.lesson.videos ?? []), ...(m.lesson.sections ?? []).flatMap((section) => section.videos)];
+  dup(videos.map((video) => video.id), "video");
+  for (const video of videos) {
+    if (!devSeed && video.reviewStatus !== "REVIEWED") errors.push(`video "${video.title}" chưa được duyệt`);
+    if (!devSeed && video.provenance.availability !== "AVAILABLE") errors.push(`video "${video.title}" chưa xác nhận khả dụng`);
+    if (!devSeed && video.provenance.rightsStatus !== "APPROVED") errors.push(`video "${video.title}" chưa duyệt bản quyền`);
+    if (!devSeed && video.provenance.accessibilityStatus !== "APPROVED") errors.push(`video "${video.title}" chưa duyệt khả năng tiếp cận`);
+  }
   if (m.synthetic && ctx.namespace !== "fixture") errors.push("gói minh họa (synthetic) chỉ được nằm trong namespace fixture");
   if (!m.synthetic && ctx.namespace === "fixture") errors.push("namespace fixture chỉ chứa gói minh họa");
   // Curriculum mapping
@@ -300,6 +352,7 @@ export function lessonFromPack(m: PackManifest) {
     labId: m.lesson.labId,
     ...(m.lesson.videos ? { videos: m.lesson.videos } : {}),
     ...(m.lesson.sections ? { sections: m.lesson.sections } : {}),
+    ...(m.lesson.sgkReference ? { sgkReference: m.lesson.sgkReference } : {}),
   };
 }
 

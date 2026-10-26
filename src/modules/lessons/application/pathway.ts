@@ -6,10 +6,16 @@ const url = z.string().refine((value) =>
 );
 const reading = z.object({ html: z.string().trim().min(1) });
 const video = z.object({
+  videoId: z.string().trim().min(1).max(80).optional(),
   url: z.preprocess((value) => value === null ? undefined : value, url.optional()),
   title: z.string().trim().min(1),
+  provider: z.enum(["YOUTUBE", "DIRECT"]).optional(),
+  providerVideoId: z.string().trim().min(1).max(200).optional(),
   transcript: z.string().trim().min(1).optional(),
   equivalentText: z.string().trim().min(1).optional(),
+  captionUrl: z.string().url().nullable().optional(),
+  completionThresholdPercent: z.number().int().min(50).max(100).optional(),
+  provenance: z.record(z.unknown()).optional(),
 }).refine((value) => value.url || value.equivalentText, {
   message: "Video requires a URL or approved equivalent text",
 });
@@ -218,8 +224,7 @@ export function reconcileVideoProgress(
   const completed =
     saved?.status === "COMPLETED" ||
     action.action === "complete-fallback" ||
-    action.action === "ended" ||
-    (action.durationSeconds > 0 && action.positionSeconds / action.durationSeconds >= 0.9);
+    (action.durationSeconds > 0 && action.positionSeconds / action.durationSeconds >= (action.durationSeconds <= 30 ? 1 : (parsedConfig.completionThresholdPercent ?? 90) / 100));
 
   return {
     status: completed ? "COMPLETED" as const : "IN_PROGRESS" as const,
@@ -238,23 +243,32 @@ export function materializeLegacySteps(lesson: {
   questions: unknown[];
   basicExercises?: { id: string; questions: unknown[]; passThreshold: number };
   labId?: string | null;
+  videos?: Array<{ id: string; title: string; url: string; provider: "YOUTUBE" | "DIRECT"; providerVideoId: string; transcript?: string; equivalentText?: string; captionUrl?: string | null; completionThresholdPercent?: number; provenance?: Record<string, unknown> }>;
+  sections?: Array<{ id: string; videos: Array<{ id: string; title: string; url: string; provider: "YOUTUBE" | "DIRECT"; providerVideoId: string; transcript?: string; equivalentText?: string; captionUrl?: string | null; completionThresholdPercent?: number; provenance?: Record<string, unknown> }> }>;
 }, namespace?: string) {
   const result: Array<{ id?: string; type: StepType; position: number; required: boolean; config: unknown }> = [];
   result.push({ type: "READING", position: 10, required: true, config: { html: lesson.content } });
+  const mappedVideos = [...(lesson.videos ?? []), ...(lesson.sections ?? []).flatMap((section) => section.videos)];
   const videoMaterial = lesson.materials.find((item) => item.type === "video");
-  result.push({
+  if (mappedVideos.length) mappedVideos.forEach((item, index) => result.push({
+    id: `video-${item.id}`,
+    type: "VIDEO",
+    position: 20 + index * 10,
+    required: true,
+    config: { ...item, videoId: item.id },
+  }));
+  else result.push({
     type: "VIDEO",
     position: 20,
     required: true,
-    config: videoMaterial
-      ? videoMaterial
-      : { title: "Nội dung thay thế", equivalentText: lesson.content },
+    config: videoMaterial ? videoMaterial : { title: "Nội dung thay thế", equivalentText: lesson.content },
   });
+  const afterVideos = 20 + Math.max(1, mappedVideos.length) * 10;
   if (lesson.basicExercises)
     result.push({
       id: lesson.basicExercises.id,
       type: "BASIC_EXERCISE",
-      position: 30,
+      position: afterVideos,
       required: true,
       config: {
         questions: lesson.basicExercises.questions,
@@ -262,9 +276,9 @@ export function materializeLegacySteps(lesson: {
       },
     });
   if (lesson.questions.length)
-    result.push({ type: "QUIZ", position: 40, required: true, config: { questions: materializeQuizQuestions(lesson.questions, namespace) } });
+    result.push({ type: "QUIZ", position: afterVideos + 10, required: true, config: { questions: materializeQuizQuestions(lesson.questions, namespace) } });
   if (lesson.labId)
-    result.push({ type: "LAB", position: 50, required: true, config: { labId: lesson.labId } });
+    result.push({ type: "LAB", position: afterVideos + 20, required: true, config: { labId: lesson.labId } });
   return validateLessonSteps(result);
 }
 

@@ -175,7 +175,7 @@ describe("lesson pathway", () => {
     });
   });
 
-  it("completes media at the precise 90 percent threshold or ended and gates fallback", () => {
+  it("uses configured coverage threshold, requires full short-video coverage, and gates fallback", () => {
     const now = new Date("2026-01-01T00:00:00.000Z");
     const config = {
       title: "Watch",
@@ -204,8 +204,8 @@ describe("lesson pathway", () => {
           durationSeconds: 10,
         },
         now,
-      ).status,
-    ).toBe("COMPLETED");
+    ).status,
+    ).toBe("IN_PROGRESS");
     expect(
       reconcileVideoProgress(
         config,
@@ -218,8 +218,8 @@ describe("lesson pathway", () => {
         now,
       ),
     ).toMatchObject({
-      status: "COMPLETED",
-      progressValue: 100,
+      status: "IN_PROGRESS",
+      progressValue: 10,
       lastPosition: 1,
     });
     expect(reconcileVideoProgress(config, undefined, { action: "complete-fallback" }, now)).toMatchObject({

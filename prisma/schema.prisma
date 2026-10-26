@@ -67,29 +67,29 @@ enum EbookAnnotationKind {
 }
 
 model User {
-  id                         String                 @id @default(cuid())
-  username                   String?                @unique
-  email                      String?                @unique
+  id                         String                  @id @default(cuid())
+  username                   String?                 @unique
+  email                      String?                 @unique
   passwordHash               String
   fullName                   String
   role                       Role
-  grade                      Int                    @default(8)
-  studentLevel               String                 @default("beginner")
-  status                     String                 @default("active")
-  mustChangePassword         Boolean                @default(false)
+  grade                      Int                     @default(8)
+  studentLevel               String                  @default("beginner")
+  status                     String                  @default("active")
+  mustChangePassword         Boolean                 @default(false)
   temporaryPasswordExpiresAt DateTime?
   consentAt                  DateTime?
   emailVerifiedAt            DateTime?
-  linkCode                   String?                @unique
+  linkCode                   String?                 @unique
   /// Set when an admin disables the account (C2-T1); cleared on reactivation.
   disabledAt                 DateTime?
   /// Private avatar object key in object storage (D-ACC-03); read only through short presigned URLs.
   avatarKey                  String?
   avatarUpdatedAt            DateTime?
   /// UI preferences (acc-4, acc-5): { theme?: "system" | "light" | "dark", locale?: "vi" | "en" }; read through users/preferences.ts.
-  preferences                Json                   @default("{}")
-  createdAt                  DateTime               @default(now())
-  updatedAt                  DateTime               @updatedAt
+  preferences                Json                    @default("{}")
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
   sessions                   Session[]
   attempts                   Attempt[]
   enrollments                Enrollment[]
@@ -97,11 +97,13 @@ model User {
   lessons                    Lesson[]
   progress                   Progress[]
   stepProgress               StepProgress[]
+  videoProgressEvidence      VideoProgressEvidence[]
+  videoPlaybackSessions      VideoPlaybackSession[]
   quizAttempts               QuizAttempt[]
   basicExerciseAttempts      BasicExerciseAttempt[]
   saved                      SavedExperiment[]
-  parents                    ParentLink[]           @relation("student")
-  children                   ParentLink[]           @relation("parent")
+  parents                    ParentLink[]            @relation("student")
+  children                   ParentLink[]            @relation("parent")
   assignmentTargets          AssignmentTarget[]
   assignmentSubmissions      AssignmentSubmission[]
   notifications              Notification[]
@@ -327,6 +329,8 @@ model Lesson {
   materials                 Json                       @default("[]")
   videos                    Json                       @default("[]")
   sections                  Json                       @default("[]")
+  /// Compact textbook alignment (book/version/hash and Lesson page ranges); full OCR blocks stay in Content Tool.
+  sgkReference              Json?
   questions                 Json                       @default("[]")
   /// TEACHER_PRIVATE (owner-only edit, self-review) or SHARED_LIBRARY (admin-managed baseline).
   scope                     String                     @default("TEACHER_PRIVATE")
@@ -422,16 +426,18 @@ model CurriculumTopic {
 }
 
 model LessonStep {
-  id                    String                 @id @default(cuid())
+  id                    String                  @id @default(cuid())
   lessonId              String
-  lesson                Lesson                 @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lesson                Lesson                  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   type                  LessonStepType
   position              Int
-  required              Boolean                @default(true)
+  required              Boolean                 @default(true)
   config                Json
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
   progress              StepProgress[]
+  videoProgressEvidence VideoProgressEvidence[]
+  videoPlaybackSessions VideoPlaybackSession[]
   basicExerciseAttempts BasicExerciseAttempt[]
 
   @@unique([lessonId, position])
@@ -457,6 +463,61 @@ model StepProgress {
 
   @@unique([studentId, assignmentId, stepId])
   @@index([studentId, stepId])
+  @@index([assignmentId, studentId])
+}
+
+model VideoProgressEvidence {
+  id               String                 @id @default(cuid())
+  studentId        String
+  student          User                   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  stepId           String
+  step             LessonStep             @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  assignmentId     String?
+  assignment       Assignment?            @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  /// "self" or "assignment:<id>" avoids PostgreSQL NULL uniqueness ambiguity.
+  scopeKey         String
+  durationSeconds  Int
+  watchedRanges    Json                   @default("[]")
+  watchedSeconds   Int                    @default(0)
+  replaySeconds    Int                    @default(0)
+  coveragePercent  Int                    @default(0)
+  lastPosition     Int                    @default(0)
+  completionMethod String?
+  startedAt        DateTime               @default(now())
+  completedAt      DateTime?
+  lastObservedAt   DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  sessions         VideoPlaybackSession[]
+
+  @@unique([studentId, stepId, scopeKey])
+  @@index([assignmentId, studentId])
+  @@index([stepId, coveragePercent])
+}
+
+model VideoPlaybackSession {
+  id                   String                @id @default(cuid())
+  evidenceId           String
+  evidence             VideoProgressEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  studentId            String
+  student              User                  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  stepId               String
+  step                 LessonStep            @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  assignmentId         String?
+  assignment           Assignment?           @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  provider             String
+  clientSessionId      String
+  startedAt            DateTime              @default(now())
+  lastSequence         Int                   @default(0)
+  lastPosition         Int                   @default(0)
+  lastClientObservedAt DateTime?
+  lastResult           Json?
+  endedAt              DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@unique([studentId, stepId, clientSessionId])
+  @@index([evidenceId, updatedAt])
   @@index([assignmentId, studentId])
 }
 
@@ -590,30 +651,32 @@ model Challenge {
 }
 
 model Assignment {
-  id                String                       @id @default(cuid())
-  classId           String
-  classroom         Classroom                    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  contentId         String
-  contentType       String
-  title             String
-  dueDate           DateTime?
+  id                    String                       @id @default(cuid())
+  classId               String
+  classroom             Classroom                    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  contentId             String
+  contentType           String
+  title                 String
+  dueDate               DateTime?
   /// Deprecated mirror of the target snapshot; AssignmentTarget is authoritative.
-  studentIds        Json                         @default("[]")
+  studentIds            Json                         @default("[]")
   /// CLASS (approved members at creation) or SUBSET (selected approved members).
-  audience          String                       @default("CLASS")
+  audience              String                       @default("CLASS")
   /// sha256 of the sorted target student IDs, used by the active-duplicate rule.
-  targetHash        String?
+  targetHash            String?
   /// Immutable content version at assignment time (lesson structure or lab model/config hash).
-  contentVersion    String?
-  status            String                       @default("ACTIVE")
-  createdById       String?
-  archivedAt        DateTime?
-  createdAt         DateTime                     @default(now())
-  updatedAt         DateTime                     @updatedAt
-  targets           AssignmentTarget[]
-  deadlineRevisions AssignmentDeadlineRevision[]
-  submissions       AssignmentSubmission[]
-  stepProgress      StepProgress[]
+  contentVersion        String?
+  status                String                       @default("ACTIVE")
+  createdById           String?
+  archivedAt            DateTime?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  targets               AssignmentTarget[]
+  deadlineRevisions     AssignmentDeadlineRevision[]
+  submissions           AssignmentSubmission[]
+  stepProgress          StepProgress[]
+  videoProgressEvidence VideoProgressEvidence[]
+  videoPlaybackSessions VideoPlaybackSession[]
 
   @@index([classId, status, dueDate])
   @@index([contentType, contentId, status])

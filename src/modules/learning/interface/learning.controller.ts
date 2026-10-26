@@ -16,6 +16,7 @@ import { lock } from "../../classes/application/class-common";
 import { audit } from "../../../common/audit";
 import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { notify } from "../../notifications/application/notify";
+import { observeVideoSession, startVideoSession, startVideoSessionSchema, videoObservationSchema } from "../../lessons/application/video-progress";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -114,6 +115,7 @@ export class LearningController {
       learningObjective: lesson.learningObjective,
       prerequisites: lesson.prerequisites,
       curriculum: lesson.curriculum,
+      sgkReference: lesson.sgkReference,
       content: lesson.content,
       structuredContent:
         packVersion && structuredManifest?.kind === "structured-lesson-candidate"
@@ -702,6 +704,48 @@ export class LearningController {
       })),
     };
   }
+  @Roles("STUDENT")
+  @Post("lessons/:lessonId/steps/:stepId/video-sessions")
+  async startVideoPlaybackSession(@Param("lessonId") lessonId: string, @Param("stepId") stepId: string, @Body() body: unknown, @Query() rawQuery: unknown, @Req() req: any) {
+    const assignmentId = parseAssignmentIdQuery(rawQuery);
+    const input = startVideoSessionSchema.parse(body);
+    return this.db.$transaction(async (tx) => {
+      if (assignmentId) {
+        const assignment = await this.access.applicableLessonAssignment(lessonId, req.user.sub, tx, assignmentId);
+        if (!assignment) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
+      }
+      const step = await tx.lessonStep.findFirst({
+        where: {
+          id: stepId,
+          lessonId,
+          type: "VIDEO",
+          lesson: assignmentId
+            ? { status: { in: ["published", "archived"] } }
+            : { status: "published", scope: "SHARED_LIBRARY", synthetic: false },
+        },
+      });
+      if (!step) throw new NotFoundException("Bước video không còn khả dụng");
+      try {
+        return await startVideoSession(tx, { studentId: req.user.sub, step: step as any, assignmentId: assignmentId ?? null, input });
+      } catch (error) {
+        throw new BadRequestException(error instanceof Error ? error.message : "VIDEO_SESSION_INVALID");
+      }
+    });
+  }
+
+  @Roles("STUDENT")
+  @Put("video-sessions/:sessionId/observations")
+  async observeVideoPlayback(@Param("sessionId") sessionId: string, @Body() body: unknown, @Req() req: any) {
+    const input = videoObservationSchema.parse(body);
+    try {
+      return await this.db.$transaction((tx) => observeVideoSession(tx, { studentId: req.user.sub, sessionId, input }), { isolationLevel: "Serializable" });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "VIDEO_OBSERVATION_INVALID";
+      if (code === "VIDEO_SESSION_NOT_FOUND") throw new NotFoundException("Phiên video không tồn tại");
+      throw new BadRequestException(code);
+    }
+  }
+
   @Roles("STUDENT")
   @Put("lessons/:lessonId/steps/:stepId/progress")
   async updateStepProgress(@Param("lessonId") lessonId: string, @Param("stepId") stepId: string, @Body() body: unknown, @Query() rawQuery: unknown, @Req() req: any) {
