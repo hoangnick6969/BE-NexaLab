@@ -286,6 +286,16 @@ increment_account_notifications_r2:
     - 'FIXED in acc-1: GET /me/foundational-progress always returned no courses because the auth guard never set req.user.grade.'
     - 'FIXED in acc-2: student settings "Tạo mã liên kết" called POST /parent-code, which does not exist.'
 
+backlog_fixes_2026_10_26:
+  status: review
+  branch: 'BE fix/health-db-sim-1-1-0 and FE fix/backlog-ebook-sim-tests (both from origin/main; FE also carries the vite proxy fix bbcf4d1 as 232dd7c)'
+  health_db: 'Closes OBS-07. GET /health runs SELECT 1 with a 3 s timeout: 200 {status, version, database: "up", databaseLatencyMs} or 503 DATABASE_UNAVAILABLE (details.database "down"; only the error class is logged). scripts/a5-database-interruption.mjs now asserts /health 503 while PostgreSQL is cut and 200 after recovery; it also had a ReferenceError (logs declared inside try) hiding failures and a stale 500 expectation from before DEPENDENCY_FAILURE (503).'
+  sim_sync: 'packages/sim 1.1.0 (package version only; engine VERSION stays 1.0.0 because the pH sample mode is additive). FE vendor tarball 1.0.0 lacked the pH mode, so the client preview returned null for the litmus experiment; FE now installs 1.1.0 and node_modules/@nexalab/sim/index.ts is byte-identical to packages/sim/index.ts.'
+  fe_tests: 'A1-BUG-001..003 were already fixed in FE eb63182; AGENTS.md updated. tests/a1-acceptance.cjs no longer pins a Windows Chrome path (CHROME_PATH or the Chrome channel). Not run: it creates a student and assignment in class-pilot-a without cleanup.'
+  fe_ebook_video: 'EbookReader.tsx split into reader shell + ebookText, annotations, EbookCompanionPage, EbookAnnotationPanel, usePdfDocument; reader CSS moved to ebook.css (11.8 kB lazy chunk; global CSS 135 kB). assetv: videos stream from /assets/versions/:id/access signed URLs instead of a full blob download, re-signing at most twice on a media error and resuming in place; legacy asset: disk files keep the blob path.'
+  verification: 'BE lint, check:layers, Vitest 221/221 (3 new health tests), test:a5:db-interruption passed against a proxied shared development database; the running dev API served the new /health (database up). FE lint/build; Playwright video-completion 4/4 (1 new), flagship 2 passed + 3 env-gated skips, acc-notifications-live untouched; ebook reader screenshots (single, spread, notes panel, 390 px) pixel-identical before/after outside the topbar, using the local sgk-khtn.pdf through a Playwright route.'
+  open: 'The khtn subject ebookUrl points at a Supabase object that does not exist (lesson-media/sgk-khtn.pdf returns 404 NoSuchKey), so the reader shows its load error in the dev database. styles.css is still one global sheet apart from the ebook reader. B1 live suites were not rerun after the sim sync.'
+
 execution:
   current_story: refactor-be-module-layers
   next_story: 'acc-1..acc-6 and the module-layer refactor are on main (BE PR #28, FE PR #23); they stay review until the post-merge Playwright/integration rerun, the R2 dashboard actions and PO acceptance. Open PRs for the remaining feat/content-foundation commits. No task from next-development-plan.md is assigned yet; it needs PO approval (section 8 Q-1..Q-10) first.'
