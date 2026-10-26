@@ -11,6 +11,7 @@ import {
   Post,
   Query,
   Req,
+  Res,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
@@ -18,7 +19,7 @@ import { canReadVersion, finalizeVersion, initSchema, startVersion } from "../ap
 import { PART_SIZE } from "../application/media";
 import { Roles } from "../../../common/decorators";
 import { Db } from "../../../db/db";
-import { objectKeys, readTtl, storage, uploadTtl } from "../../storage/infrastructure/storage";
+import { objectKeys, parseByteRange, readTtl, storage, uploadTtl } from "../../storage/infrastructure/storage";
 
 @ApiTags("Assets")
 @ApiBearerAuth()
@@ -152,6 +153,26 @@ export class AssetsController {
       fileName: v.fileName,
       bytes: v.bytes,
     };
+  }
+
+  @Get("versions/:id/content")
+  @ApiOperation({ summary: "Authorized byte-range read for viewers that cannot use storage CORS" })
+  async content(@Param("id") id: string, @Req() req: any, @Res() res: any) {
+    const v = await this.db.assetVersion.findUnique({ where: { id }, include: { asset: true } });
+    if (!v || !(await canReadVersion(this.db, req.user, v)) || !v.objectKey || !v.bytes)
+      throw new ForbiddenException({ code: "ASSET_ACCESS_DENIED", message: "Không có quyền mở tệp này hoặc tệp đang bị cách ly" });
+    const range = parseByteRange(req.headers.range, v.bytes);
+    res.setHeader("Accept-Ranges", "bytes");
+    if (!range || range === "invalid") {
+      res.setHeader("Content-Range", `bytes */${v.bytes}`);
+      return res.status(416).end();
+    }
+    const body = await storage().readRange(v.objectKey, range.start, range.end);
+    res.status(206);
+    res.setHeader("Content-Type", v.mime);
+    res.setHeader("Content-Range", `bytes ${range.start}-${range.end}/${v.bytes}`);
+    res.setHeader("Content-Length", String(body.length));
+    return res.end(body);
   }
 
   @Roles("TEACHER", "ADMIN")

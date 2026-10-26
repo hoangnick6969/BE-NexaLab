@@ -165,6 +165,30 @@ export async function canReadVersion(db: any, user: { sub: string; role: string 
   if (version.status !== "READY" || version.asset.status !== "ACTIVE") return false;
   if (version.asset.ownerId === user.sub) return true;
   if (version.asset.scope === "SHARED_LIBRARY" && ["TEACHER", "ADMIN"].includes(user.role)) return true;
+  if (version.asset.scope === "SHARED_LIBRARY" && version.asset.kind === "pdf" && version.sha256) {
+    const matchingAssets = await db.assetVersion.count({
+      where: {
+        sha256: version.sha256,
+        status: "READY",
+        mime: "application/pdf",
+        objectKey: { not: null },
+        asset: { scope: "SHARED_LIBRARY", status: "ACTIVE", kind: "pdf" },
+      },
+    });
+    if (matchingAssets !== 1) return false;
+    const sourceLessons = await db.$queryRaw`SELECT 1
+      FROM "Lesson" l
+      JOIN "ContentPackVersion" p ON p.id = l."packVersionId"
+      WHERE l.status = 'published'
+        AND l.scope = 'SHARED_LIBRARY'
+        AND l.synthetic = false
+        AND p.status = 'released'
+        AND p.synthetic = false
+        AND p.manifest #>> '{kind}' = 'structured-lesson-candidate'
+        AND lower(p.manifest #>> '{book,sha256}') = lower(${version.sha256})
+      LIMIT 1`;
+    if ((sourceLessons as any[]).length) return true;
+  }
   const needle = `%assetv:${version.id}%`;
   const [lessons, labs] = await Promise.all([
     db.$queryRaw`SELECT 1 FROM "Lesson" l LEFT JOIN "LessonStep" s ON s."lessonId" = l.id

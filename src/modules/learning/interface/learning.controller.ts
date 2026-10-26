@@ -52,6 +52,19 @@ export class LearningController {
     if (!lesson) throw new NotFoundException({ code: "CURRICULUM_LESSON_NOT_FOUND", message: "Không tìm thấy bài học" });
     const packVersion = lesson.packVersion;
     const structuredManifest = packVersion?.manifest as any;
+    const isStructuredLesson = packVersion && structuredManifest?.kind === "structured-lesson-candidate";
+    const bookSha256 = typeof structuredManifest?.book?.sha256 === "string" ? structuredManifest.book.sha256.toLowerCase() : null;
+    const sourceAssets = isStructuredLesson && bookSha256 ? await this.db.assetVersion.findMany({
+      where: {
+        sha256: bookSha256,
+        status: "READY",
+        mime: "application/pdf",
+        objectKey: { not: null },
+        asset: { scope: "SHARED_LIBRARY", status: "ACTIVE", kind: "pdf" },
+      },
+      select: { id: true, bytes: true },
+      take: 2,
+    }) : [];
     const ebookEditions = lesson.ebookLocators
       .filter((item: any) => item.edition.subjectId === lesson.subjectId && item.edition.isCurrent && item.edition.url.startsWith("https://"))
       .map((item: any) => ({
@@ -73,11 +86,12 @@ export class LearningController {
       chapter: lesson.chapter,
       grade: lesson.grade,
       topic: lesson.topic,
-      learningObjective: lesson.learningObjective,
+      // Structured imports currently have no objective field; their DB value is a summary fallback.
+      learningObjective: isStructuredLesson ? null : lesson.learningObjective,
       prerequisites: lesson.prerequisites,
       curriculum: lesson.curriculum,
       content: lesson.content,
-      structuredContent: packVersion && structuredManifest?.kind === "structured-lesson-candidate" ? {
+      structuredContent: isStructuredLesson ? {
         versionId: packVersion.id,
         version: packVersion.version,
         digest: packVersion.digest,
@@ -89,8 +103,22 @@ export class LearningController {
         },
         pdfPageRange: structuredManifest.pdfPageRange,
         printedPageRange: structuredManifest.printedPageRange,
-        sourceBlocks: (structuredManifest.sourceBlocks ?? []).map((block: any) => ({ id: block.id, pdfPage: block.pdfPage ?? block.page ?? null })),
+        sourceBlocks: (structuredManifest.sourceBlocks ?? []).map((block: any) => {
+          const sourceMatchesBook = Boolean(bookSha256 && typeof block.sourceSha256 === "string" && block.sourceSha256.toLowerCase() === bookSha256);
+          const physicalPageIndex = sourceMatchesBook && Number.isInteger(block.physicalPageIndex) && block.physicalPageIndex > 0
+            ? block.physicalPageIndex
+            : null;
+          const printedPageLabel = sourceMatchesBook && typeof block.printedPageLabel === "string" && block.printedPageLabel.trim()
+            ? block.printedPageLabel.trim()
+            : null;
+          return { id: block.id, physicalPageIndex, printedPageLabel };
+        }),
         learningContent: structuredManifest.learningContent,
+      } : null,
+      sourceDocument: sourceAssets.length === 1 ? {
+        assetVersionId: sourceAssets[0].id,
+        sourceDigest: bookSha256,
+        bytes: sourceAssets[0].bytes,
       } : null,
       materials: lesson.materials,
       steps: lesson.steps.map((step: any) => {
