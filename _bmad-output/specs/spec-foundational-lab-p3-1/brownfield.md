@@ -16,7 +16,7 @@ The snapshot below was read from the configured pilot database and current BE/FE
 | --- | --- | --- |
 | Deterministic scientific engine | `packages/sim/index.ts`; `circuit@1.0.0`, `chemistry@1.0.0`, `eye@1.0.0` | Reuse package and add a versioned circuit successor only where this definition differs |
 | Server-authoritative result | `POST /simulate/:labId` resolves allowlisted `simulationModelRef`; `POST /attempts` recomputes results | Reuse unchanged behavior |
-| Idempotent attempts and evidence | Attempts optionally record idempotency, config and pack IDs; selected model/config/pack are not resolved as one immutable bundle | Reuse the evidence flow after fixing and verifying exact pinning and standalone idempotency |
+| Idempotent attempts and evidence | Attempts optionally record idempotency, config and pack IDs. The scoped fix evaluates the pack model, validates numeric config ranges/model compatibility and records an execution snapshot | Reuse this verified submission-time tuple; standalone idempotency and launch-time selection remain open |
 | Student release gate | Published + `SHARED_LIBRARY` + `releaseCleared` + non-synthetic + `topicCode` | Reuse; do not bypass |
 | Open Foundational practice | Existing attempt logic distinguishes open released foundational practice from assignment-gated Lesson activity | Reuse |
 | Class/Lesson practical gate | Lesson `LAB`/`CHALLENGE` step, assignment, pathway, and progress reconciliation already exist | Reuse |
@@ -57,9 +57,11 @@ B21–B25 currently have only `READING` steps and `labId = null`. The pilot shou
 
 The data is useful for reuse forecasting, but the sampled manifest/review shape is inconsistent with KHTN 8 source-block/page provenance, and the `ORIGINAL` rights label is not adequate evidence for a publisher textbook. This does not invalidate the KHTN 9 curriculum topics; it blocks only treating them as verified Lab release bindings here.
 
-### GAP-8 — Recorded pack does not necessarily determine evaluation or reproduction
+### GAP-8 — Pack/config consistency and historical reproduction
 
-`POST /attempts` reads an active config and an active pack separately, selects only the pack ID, and evaluates `Lab.simulationModelRef`. Reproduction looks up the config but falls back to the model selected by Lab ID. A synthetic controller fixture demonstrates that a recorded pack can differ from the model used for the result; it does not prove that live records currently diverge. Add a failing contract test before the fix, then resolve and persist one coherent version bundle and verify historical reproduction. Determine whether this needs an additive migration instead of assuming it does not.
+Before the fix, `POST /attempts` read active config and pack independently and evaluated `Lab.simulationModelRef`. An isolated PostgreSQL controller/Prisma integration test reproduced an out-of-range config being accepted under the pack. The scoped fix evaluates the pack model, rejects mismatched model/numeric ranges, and snapshots the actual model/config/pack/params in the existing result JSON; reproduce uses that snapshot and reports output comparison with numeric tolerance. Existing results without the snapshot are retained and explicitly labelled `legacy_unverified`.
+
+Pack and config can still be independently activated: compatibility within a pack's numeric ranges is not evidence of individual approval for that exact pair, and the pack does not define allowed string choices. Submission now shares both activation advisory locks; the isolated PostgreSQL test verifies the wait for each. Selection is still at submission rather than at launch; a stricter pair/launch contract remains a separate decision. The integration test did not exercise HTTP or a live environment.
 
 ## Items that are not gaps
 

@@ -16,15 +16,16 @@ This is a plan, not authorization to publish or to claim that a human review has
 ### Track A — Platform and contract
 
 - [x] Add a reproducible pinning regression test before changing production logic. `labs-pinning.test.ts` characterizes a synthetic divergent fixture; its expected-failure case is a pending contract assertion, not a green release gate or live-database proof.
-- [ ] After the fix, convert the expected-failure case to a normal passing assertion and add an integration test using the actual version activation and persistence path.
+- [x] Convert the expected-failure case to a normal passing assertion and add an isolated PostgreSQL controller/Prisma integration test using the actual version activation and persistence path. This is not HTTP or live-environment evidence.
 - [ ] Version contract v1: Lab/activity/pack/model identity, input and output schema versions, allowed ranges, units, errors, verdict and versioned fixtures. Each scientific model owns its state/output schema; renderer modality is independent.
-- [ ] Resolve and validate one immutable pack and the actual model, configuration and activity it references for launch, submit and reproduction. Preserve historical attempts across activation of a later pack. Determine whether an additive migration is necessary; do not assume current ID columns prove exact pinning.
+- [x] For submission and reproduction, evaluate the pack model and reject incompatible config model/numeric ranges; record the actual version tuple and parameters without a Prisma schema migration. Preserve historical attempts and label unsnapshotted replay `legacy_unverified`.
+- [ ] Decide whether a reviewed pack must pin an exact configuration and whether pack selection must be fixed at launch. Current code permits independently activated compatible configurations and selects the pack at submission; it does not prove individual pair approval.
 - [ ] Require idempotency for standalone submissions and persist recoverable local drafts across refresh, keyed by user, Lab, learning context and compatible model/schema version. Drafts never count as evidence.
 - [ ] Replace the FE three-ID dispatch with a small allowlisted renderer registry and a common launch/submit envelope. Do not execute arbitrary manifest code or require 3D.
 
 ### Track B — Curriculum and activity
 
-- [ ] Inventory the KHTN8–9 Outcome Register at a source/coverage level using the Content Tool. Continue the rest incrementally; do not wait for every ambiguous mapping before the pilot.
+- [ ] Inventory the KHTN8–9 Outcome Register at a source/coverage level using the Content Tool. The KHTN8 electricity cluster now has 13 proposed source-text candidates and six proposed B20–B25 mappings; the rest remains to be inventoried and no human approval is implied.
 - [ ] In parallel, prioritize the KHTN 8 Circuit cluster and obtain a qualified human's source-grounded approval for one Outcome and Lesson mapping. Do not promote textbook-derived proposal handles to official codes.
 - [ ] Prepare one 2D activity with pupil action, expected observation, pass criteria, valid states, assumptions, safety, source locators and scientific golden/invalid cases. Review LED polarity, ranges and branch results where the selected activity requires them.
 - [ ] Treat KHTN 9 as discovery-only until source provenance, mapping and reviews meet the accepted standard.
