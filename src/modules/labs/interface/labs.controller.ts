@@ -10,7 +10,7 @@ import { text } from "../../../common/validation";
 import { requestHint } from "../application/hint";
 import { explain } from "../infrastructure/llm";
 import { resolveModel } from "../application/sim-packs";
-import { ENGINE as SIMULATION_ENGINE, evaluate, versionParams } from "../application/simulation-versions";
+import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
 
@@ -152,23 +152,7 @@ export class LabsController {
       }
     }
 
-    // C2-T3: a base challenge is evaluated with the lab's active configuration
-    // version, which the attempt pins; a teacher variant keeps its own reviewed
-    // parameters. Either way the scientific model is unchanged.
     const isVariant = c.id.includes("_v-");
-    const configVersion = isVariant
-      ? null
-      : await this.db.simulationConfigVersion.findFirst({ where: { labId: c.labId, status: "active" } });
-    const params = (isVariant ? null : versionParams(configVersion, c.id)) ?? (c.constraints as any)?.params;
-    const activePack = await this.db.simulationPackVersion.findFirst({ where: { labId: c.labId, status: "active" }, select: { id: true } });
-    let result: any;
-    let normalizedVerdict: string;
-    try {
-      ({ result, verdict: normalizedVerdict } = evaluate(c.labId, b.labState, params, c.lab.simulationModelRef));
-    } catch (e: any) {
-      throw new BadRequestException(e.message);
-    }
-
     return this.db.$transaction(async (tx) => {
       // The supplied ID narrows the server-side eligibility check; only the
       // authorized pathway supplies the assignment ID persisted as evidence.
@@ -182,13 +166,36 @@ export class LabsController {
       // and is never gated by an assignment's quiz (spec §2b, FR-13).
       const openFoundational = !b.lessonStepId && c.lab.scope === "SHARED_LIBRARY" && c.lab.releaseCleared && !c.lab.synthetic && Boolean(c.lab.topicCode);
       if (!labAssignment && !openFoundational) await this.assertPracticalGate(c.labId, req.user.sub, tx);
+      // Share activation locks so both selected versions were active together.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-version:" + c.labId}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-pack-lab:" + c.labId}))`;
+      const configVersion = isVariant
+        ? null
+        : await tx.simulationConfigVersion.findFirst({ where: { labId: c.labId, status: "active" } });
+      const params = (isVariant ? null : versionParams(configVersion, c.id)) ?? (c.constraints as any)?.params;
+      const activePack = await tx.simulationPackVersion.findFirst({ where: { labId: c.labId, status: "active" } });
+      if (activePack) {
+        const errors = packConfigurationErrors(c.labId, activePack, configVersion, params);
+        if (errors.length) throw new ConflictException({ code: "SIM_PACK_CONFIG_INCOMPATIBLE", message: errors.join("; ") });
+      }
+      const modelRef = activePack?.modelRef ?? configVersion?.modelRef ?? c.lab.simulationModelRef;
+      let result: any;
+      let normalizedVerdict: string;
+      let engineVersion: string;
+      try {
+        engineVersion = resolveModel(modelRef).engineVersion;
+        ({ result, verdict: normalizedVerdict } = evaluate(c.labId, b.labState, params, modelRef));
+        result = { ...result, _execution: { modelRef, packVersionId: activePack?.id ?? null, configVersionId: configVersion?.id ?? null, params: params ?? null } };
+      } catch (e: any) {
+        throw new BadRequestException(e.message);
+      }
       const a = await tx.attempt.create({
         data: {
           studentId: req.user.sub,
           challengeId: c.id,
           assignmentId: link?.assignmentId ?? labAssignment?.id ?? null,
           lessonStepId: link?.stepId ?? null,
-          simulationModelVersion: SIMULATION_ENGINE,
+          simulationModelVersion: engineVersion,
           configVersionId: configVersion?.id ?? null,
           packVersionId: activePack?.id ?? null,
           idempotencyKey: b.idempotencyKey ?? null,
