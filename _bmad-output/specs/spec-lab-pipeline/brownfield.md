@@ -1,3 +1,5 @@
+> Historical evidence snapshot from its stated date and branches. As of the checked-out ba4d3b1 baseline the P3.1 spec and pinning fix are incorporated in main; E-02/E-03 branch comparisons and unmerged references below describe the earlier snapshot, not current status. Launch-time pinning, run persistence, class assignment policy and release are still target designs; recheck implementation and target DB at Build time.
+
 # Current State Evidence (2026-10-28)
 
 Read from BE `main` (= `DongResearch`), FE `main` (= `DongResearch`) and BE `origin/codex/foundational-lab-platform` (“fl”, 4 commits not on main).

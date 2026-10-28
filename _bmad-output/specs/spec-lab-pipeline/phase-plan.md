@@ -1,81 +1,50 @@
-# Phase Plan P3.1–P3.7
+# Canonical roadmap and first Build backlog
 
-The P3.1 implementation-plan steps 0–4 were implicit sub-phases. This plan makes them explicit phases with gates. P1 (SGK viewer) and P2 (video evidence) are upstream content phases. P2 has code on `origin/p2-vid` but no spec file. P3.4 needs P2 merged if the pilot runs a "Lesson/video → Lab" path.
+This file is the sole authority for P3.x phase names and gates. Stages in pipeline.md are process stages, not phase numbers. Work can overlap when dependencies allow.
 
-| Phase | Goal | Inputs | Outputs | Roles | Starts when | Gate (done when) | Evidence |
-|---|---|---|---|---|---|---|---|
-| **P3.1 DEFINE** | Decide pipeline, contract, phases | P3.1 spec set (unmerged branch), this spec | ADR-LAB-01 accepted. Contract v1 + fixtures (circuit + mock). Rubric + blueprint template. Updated P3.1 brownfield/memlog. Open decisions with owners | PM (owner), architect, curriculum lead, science lead | now | DEFINE exit list below | Reviewed docs. Fixture JSON files. No code |
-| **P3.2 Platform contract v1** | Make versions exact and runs resilient | ADR, contract v1 | LabRelease + receipts schema, launch routes, contract-v1 `POST /attempts`, FE renderer host + registry + draft, release/activate/quarantine API, Open Curriculum LAB step (D-LP-06) | Platform integrator, BE, FE | P3.1 gate | `contract-v1.md` acceptance 1–3 on isolated DB | CI contract + integration runs. Unit/integration test files |
-| **P3.3 Outcome Register** | Provenance-backed outcomes and mapping | Authority document (C-1), taxonomy, Content Tool outputs | Register for KHTN 8 Circuit cluster first, then the remaining chapters. Register defects fixed (`lab-catalog-khtn8-9.md` §1). Reviewed P/S/N classification of the 30-candidate catalog (CAT-1). Mapping rows. One pilot outcome with curriculum receipt | Curriculum lead, named reviewer | P3.1 gate (runs ‖ P3.2) | Every Circuit-cluster outcome has a review state. Pilot outcome ACTIVE with receipt. Coverage report counts only ACTIVE | Register export + receipts |
-| **P3.4 Pilot LED Circuit** | First real released Foundational Lab | P3.2 gate, P3.3 pilot outcome, approved blueprint | `circuit@1.1.0` (+ fixtures GC-01…GC-15 incl. `SHORT_CIRCUIT`), `circuit-2d` renderer, activity/pack/LabRelease, staging release, one real attempt | Lab team, subject + model reviewers (distinct), QA, release manager | P3.2 + P3.3 gates + blueprint receipts | Real attempt on staging pins and replays the reviewed release. QA matrix pass. Release recorded with receipts | Staging logs, replay report, QA report |
-| **P3.5 Second-model gate** | Prove the contract generalises | P3.4 | Fixture-only second model through BE registry **and** FE renderer registry | Platform integrator | P3.4 gate | Mock model passes the same contract suite end to end. Decision to open ≤2 Labs | CI run |
-| **P3.6 Lab factory & operations** | Repeatable per-Lab delivery and maintenance | P3.5, catalog | Runbook, monitoring dashboards/queries, update/quarantine/rollback procedures, engine-retention policy. Next Labs (≤2 concurrent) | Release manager, platform, Lab teams | P3.5 gate | Each new Lab passes stages 4–9. One rollback drill on staging | Release records, drill log |
-| **P3.7 Class Lab** | Teacher configuration on ACTIVE release (D-LP-01) | ≥1 ACTIVE release (P3.4), P-5/P-6 decisions | ClassResource `LAB`, validator, launch route, `class_lab` assignments, teacher UI, legacy variant freeze | BE, FE, teacher-UX | P3.4 gate (design can start ‖ P3.4) | `class-lab-track.md` acceptance 1–5 | Integration tests for the access matrix, replay of Class Lab attempts |
+| Phase | Goal / deliverable | Gate |
+|---|---|---|
+| P3.1 Define | Master spec, proposed portfolio, minimal contract, Circuit blueprint, Build backlog | DONE for technical Build; no human approval or release implied |
+| P3.2 Platform Build | Launch-bound LabRun and server evaluation, shared host/registry, draft and idempotency; isolated fixtures | Contract integration checks pass; no public release required |
+| P3.3 Curriculum and science | Source inventory and Circuit mapping; blueprint scientific review; portfolio refinement | Technical work does not wait; real curriculum and scientific/model approvals gate reviewed pilot and production claims |
+| P3.4 Technical pilot | Internal Circuit activity, FE → BE → isolated DB → result, recovery and authorization | Real persisted test attempt and replay of the same tuple; independently assess actual reviewer status |
+| P3.5 Compatibility gate | Different-model fixture through BE dispatch and FE renderer host | P3.4 persisted attempt + versioned contract + second-model fixture pass, and real curriculum/scientific-model reviewers approve the exact pilot mapping and model. Then at most two Lab implementation tracks |
+| P3.6 Independent release and Class Lab | Reviewed per-Lab activation/operations; future Class Lab on active release | Exact tuple evidence and real review for each release; Class implementation needs an active release and access/assignment policy |
+| P3.7 Portfolio expansion | Build and release prioritised Labs incrementally | Per-Lab blueprint, tests, reviewers and release evidence; ≤2 initial concurrent tracks |
 
-## Parallel / blocked
+### Numbering reconciliation
 
-```mermaid
-gantt
-  dateFormat  X
-  axisFormat  %s
-  section DEFINE
-  P3.1 DEFINE                 :d1, 0, 2
-  section Parallel after DEFINE
-  P3.2 Platform contract v1   :p2, after d1, 4
-  P3.3 Outcome Register       :p3, after d1, 4
-  P3.7 Class Lab design only  :c0, after d1, 2
-  section Gated
-  P3.4 Pilot LED              :p4, after p2, 3
-  P3.5 Second-model gate      :p5, after p4, 1
-  P3.6 Lab factory (≤2 Labs)  :p6, after p5, 4
-  P3.7 Class Lab build        :p7, after p4, 3
-```
+| Earlier reference | Canonical interpretation |
+|---|---|
+| Original P3.1 steps 0–4 | P3.1 Define; P3.2/P3.3 preparation; P3.4 pilot; P3.5 compatibility; P3.6 release |
+| Earlier pipeline P3.1 Define, P3.2 platform, P3.3 register, P3.4 pilot, P3.5 gate | Same identifiers; P3.4 is technical verification, with approval/release separated |
+| Earlier pipeline P3.6 factory, P3.7 Class Lab | P3.6 release operations and Class Lab; P3.7 portfolio expansion |
+| Alternative proposal P3.1 Discovery, P3.2 Define, P3.3 Platform, P3.4 Pilot, P3.5 Parallel, P3.6 Release/Class, P3.7 Expansion | Discovery + Define are canonical P3.1; Platform is P3.2; parallel production follows P3.5 gate. Other phase names retain their intended ordering |
 
-Units are relative ordering, not estimates.
+## First Build slice: P3.2a BE launch-bound pinning
 
-## DEFINE exit (P3.1 gate)
+**Ownership: BE platform agent.** Own BE labs API/application, model dispatch, the additive Prisma migration for LabRun, and isolated BE tests. Do not edit FE, published Lessons, seed data, historical attempts or public release flags. Shared integrator owns contract and reviews this slice.
 
-- [ ] ADR-LAB-01 accepted: D-LP-02…D-LP-05 (D-LP-06 needs the PO).
-- [ ] `contract-v1.md` reviewed. `fixtures/circuit@1.1.0.json` and `fixtures/mock-slider@1.0.0.json` drafted.
-- [ ] P3.1 spec corrected:
-  - memlog no-migration line marked superseded;
-  - brownfield adds E-02, E-04, E-05, E-07, E-08, E-09, E-10, E-11, E-12, E-15, E-16, E-17 from `brownfield.md`;
-  - implementation-plan steps 1–4 point to P3.2–P3.6.
-- [ ] Unmerged branch `origin/codex/foundational-lab-platform`: decide to merge the spec commits separately from the pinning fix, and review the fix (it becomes the base for P3.2).
-- [ ] Open decisions P-1, P-2, T-1…T-4 decided. All others have an owner and the phase they block.
-- [ ] No Lab approval or release is required to exit DEFINE.
+1. Add a durable LabRun row with authenticated student, context/challenge, createdAt, expiresAt, revocation status and immutable JSON execution tuple/digest; snapshot pack/config/model/engine, activity/rubric identifier, effective params and state schema. Use existing version IDs as components; snapshot exact values needed for replay. Restrict mutation to revocation and expiry lifecycle. Existing attempt records remain untouched.
+2. Add an authenticated launch operation for the existing standalone context. Reuse current access checks and activation advisory locks; atomically resolve one compatible active pack/config/model and capture the exact tuple. Fail closed if a required component is absent, invalid or mismatched. Use an isolated private, assignment-authorized fixture under current access checks; do not expose private prototypes publicly. The fixture activity/rubric is server allowlisted and versioned, never arbitrary client code.
+3. Add an opt-in run-bound submission path with required run ID and idempotency key. Derive user/context from the server. Load and evaluate only the stored tuple; store the run ID and exact execution evidence on the new attempt, atomically with applicable progress. Keep the legacy API path unchanged.
+4. Same key and same canonical payload returns the original attempt, including concurrent requests; same key and different payload returns 409. Canonical payload binds run ID, challenge/context and checkpoint evidence; timing/transport metadata does not change identity. Check committed idempotency result before expiry/revocation so a lost response is recoverable. An expired/revoked run cannot create a new attempt. No launch or local draft creates learning evidence.
+5. Isolated PostgreSQL integration: activate tuple A, launch, activate compatible B, submit A and verify persisted/replayed A; mismatch/absent component; cross-user and unauthorized run; sequential and concurrent duplicate; changed payload; expiry; revocation versus concurrent submit with transaction ordering; legacy attempt and existing route compatibility. Assert actual persisted records and numeric outputs. Test runner must not silently skip when configured for CI.
 
-## First implementation step after DEFINE
+Deliverable is a private engineering slice, not the full P3.2 gate and not a student release. If the existing Prisma model cannot reference the run without an additive nullable attempt field, add it in this migration. The immutable tuple may be duplicated in existing simulationResult for backward compatibility; document the single canonical source. No fabricated release or review receipt.
 
-In P3.2, write the **contract-v1 integration tests first** (isolated PostgreSQL, not skipped in CI):
-- activation mid-session within/after grace;
-- concurrent duplicate submit;
-- legacy client window;
-- replay of a new attempt;
-- legacy attempt label;
-- mock second model.
+## Subsequent ownership and dependencies
 
-Then add the `LabRelease`/receipt schema and route `POST /attempts` through release resolution.
+| Work | Owner / boundaries | Dependency / handoff |
+|---|---|---|
+| P3.2b FE renderer host, run launch/submit, local IndexedDB draft | FE platform agent; owns FE host and small registry | P3.2a envelope; coordinate fixtures with BE. Draft key includes user/context/run/schema and restoration is explicit; never evidence |
+| P3.2c bulb model + checkpoint/rubric evaluation | Circuit agent owns model module and tests; no shared registry edits without integrator | Blueprint in P3.1; a stub may prove contract before review |
+| Curriculum | Content/curriculum agent owns source register and mapping proposal; no published Lesson changes | Source authority, edition/locator and qualified reviewer; parallel with P3.2 |
+| Science | Subject reviewer and distinct model reviewer | Review bulb assumptions, valid states, rubric and cases before reviewed pilot/release; real names and receipts required |
+| P3.4 integration | Integrator owns small BE/FE registry changes and end-to-end tests | Platform + Circuit fixtures; verify launch, retry, F5, invalid state, mismatch and stored result |
+| P3.5 second-model fixture | Platform integrator | P3.4 technical attempt + versioned contract; distinct model state/output; actual pilot curriculum and scientific/model approval before opening second implementation track; no full second Lab required |
+| Class Lab and release | Separate future owner | Independent production release evidence, active Foundational release and explicit class access/version implementation |
 
-## Open decisions
+## Define exit and outstanding reviews
 
-| ID | Type | Question | Blocks | Proposed default |
-|---|---|---|---|---|
-| P-1 | Product | Foundational Lab inside an Open Curriculum Lesson: `LAB` step with `LESSON_STEP` context (D-LP-06) or link-out to the standalone Lab? | P3.2 | `LAB` step, `assignmentId=null` |
-| P-2 | Product | Do passes on SUPERSEDED releases keep counting toward foundational progress? | P3.2 | Yes. A new release never removes past progress |
-| P-3 | Product | Order relative to the Content Tool "Lab GO after Lesson pilot" (`spec-nexalab-content-tool-mvp/master-plan.md:124`) | P3.4 | Platform (P3.2) may proceed; pilot release waits for the Lesson pilot |
-| P-4 | Product | Device matrix and 2D/3D budgets | P3.4 | Budgets in `foundational-lab-track.md` §6 |
-| P-5 | Product | Deadlines/late handling for `class_lab` assignments | P3.7 | Due date only, no late decision in v1 |
-| P-6 | Product | Retirement window for legacy `_v-` challenge variants | P3.7 | Freeze now, retire after P3.7 ships |
-| C-1 | Curriculum | Which official KHTN program document/version is authoritative? | P3.3 | — (must be named) |
-| C-2 | Curriculum | Pilot outcome and named curriculum reviewer | P3.4 | Candidate from the B22 cluster |
-| C-3 | Curriculum | KHTN 9 provenance standard | KHTN 9 bindings | Same as KHTN 8 |
-| S-1 | Scientific | LED polarity vs "pre-oriented" label. 2.0 V drop. 1–20 mA band. Ranges U/R/N/B | P3.4 | — (reviewer) |
-| S-2 | Scientific | `SHORT_CIRCUIT` status. Meaning of `partial` on overload | P3.4 | Separate status. Overload = needs_practice with explanation |
-| S-3 | Scientific | Named subject and model reviewers, conflict-of-interest rule | P3.4 | — |
-| T-1 | Technical | LabRelease table vs JSON on Lab | P3.2 | Table (FK + replay queries) |
-| T-2 | Technical | Grace window length | P3.2 | 2 h |
-| T-3 | Technical | Reviewer role model for authenticated receipts | P3.2 | Admin-granted reviewer roles, audited |
-| T-4 | Technical | Per-model engine version and fixture-digest lock; treatment of `chemistry@1.0.0` pH change | P3.2 | Register pH as `chemistry-ph@1.0.0` for new releases; legacy stays readable |
-| T-5 | Technical | Merge strategy for the unmerged pinning fix | P3.1 exit | Review and merge the fix first; P3.2 builds on it |
-| T-6 | Technical | How long retired engines remain executable for replay | P3.6 | Keep code for all models ever released; replay is admin-only |
+Define exit is met: one canonical roadmap, reusable contract, version and assignment policy, documented first model/activity, nonblocking portfolio and actionable P3.2a exist. There are no unresolved high-level architecture decisions blocking P3.2a. The exact official authority document, approved Outcome/lesson mapping, bulb model and safety review, reviewer identities, production release evidence, device budgets, operational long-term retention and KHTN9 provenance remain open dependencies for later phases. They must not be fabricated or silently treated as complete.

@@ -5,6 +5,50 @@
 - No Lab here is approved, scheduled or released.
 - This document replaces neither the P3.1 candidate catalog nor its LED decision. It extends that catalog to the whole KHTN 8–9 register, following `pipeline.md` stages 1–3.
 
+## Portfolio v1 — provisional disposition
+
+This table is the current triage view over the 30 discovery IDs below. It proposes 20 candidate slots for prioritisation, **not 20 approved or fixed Lab identities**. SHARE keeps identities separate unless a later explicitly reviewed MERGE says otherwise. SPLIT may increase the number of identities. No candidate has an approved Outcome or scientific model by virtue of this table. The legacy scores, waves, P/S/N and coverage numbers below are historical discovery estimates, not verified educational coverage, staffing commitments or release evidence. P3.2 and the first Circuit pilot do not wait for this portfolio to be complete.
+
+Decision meanings: KEEP = distinct proposed identity; SHARE = retain identity but propose reuse at the named layer; MERGE = combine identities only with demonstrated shared learning scope, model and workspace plus explicit mapping; SPLIT = boundaries too broad, produce separate scoped proposals; DEFER = insufficient evidence, tractability, rights or reviewer capacity; NO LAB = current candidate is better represented as another learning resource (reviewable decision, not deletion). Sharing only equipment, an engine library or a renderer never implies identity merging.
+
+| Discovery ID | Decision | Proposed v1 slot | Reason and exact reuse boundary |
+|---|---|---:|---|
+| FL-01 | SHARE | 1 | Circuit family: K8 bulb first; K9 and LED are separate unapproved activities/models or versions as needed; share host and topology concepts, not automatic bindings |
+| FL-02 | DEFER | — | Qualitative charging model and instructional gain need stronger evidence |
+| FL-03 | SHARE | 2 | Density Lab: share fluid workspace/widgets with FL-04/05; retain distinct model/activity/identity |
+| FL-04 | SHARE | 3 | Pressure Lab: share fluid workspace/widgets; preserve distinct model/activity and inspect B15 source gap |
+| FL-05 | SHARE | 4 | Buoyancy Lab: share fluid workspace/widgets; may consume reviewed density data, distinct model/activity |
+| FL-06 | KEEP | 5 | Lever equilibrium has a bounded interactive objective |
+| FL-07 | SHARE | 6 | Calorimetry: share graph/measurement widgets with FL-08, not scientific model or identity |
+| FL-08 | SHARE | 7 | Heat transfer: shared graph/measurement widgets with FL-07; review distinct modes |
+| FL-09 | DEFER | — | Expansion has narrower coverage; review value after early thermal Labs |
+| FL-10 | SPLIT | 8 | Scope mol/stoichiometry versus equation/yield activities before identity/model count is fixed; chemistry code is only reuse evidence |
+| FL-11 | KEEP | 9 | Solution/concentration work has distinct experimental activity |
+| FL-12 | KEEP | 10 | Reaction-rate model requires reviewed assumptions and fixtures |
+| FL-13 | SHARE | 11 | Indicator/acid-base shares only reviewed bench components with other chemistry; separate model/rubric from FL-10 |
+| FL-14 | SPLIT | 12 | Broad reaction family needs narrower modes and curated reaction data before model/identity decisions |
+| FL-15 | KEEP | 13 | Safety scenarios need a separate safety review and evidence rubric |
+| FL-16 | NO LAB | — | Current eye/anatomy labelling is provisionally a Lesson resource; reconsider a Lab only if interaction yields distinct learning evidence |
+| FL-17 | DEFER | — | Circulation/respiration model tractability and health framing unresolved |
+| FL-18 | DEFER | — | Nutrition table rights, child-facing framing and reviewer need unresolved |
+| FL-19 | DEFER | — | Physiological feedback assumptions and tractability unresolved |
+| FL-20 | KEEP | 14 | Ecology/tolerance activity proposed; review model assumptions |
+| FL-21 | KEEP | 15 | Food web has distinct dependency interactions; share diagrams with FL-20 only if useful |
+| FL-22 | DEFER | — | Climate model tractability and non-misleading abstraction need review |
+| FL-23 | SPLIT | 16 | Optics combines refraction, prism and lenses; define bounded modes/models before final identity count; K9 provenance conditional |
+| FL-24 | KEEP | 17 | Mechanical energy candidate is bounded; K9 provenance conditional |
+| FL-25 | KEEP | 18 | Electromagnetic induction candidate; K9 provenance and qualitative model require review |
+| FL-26 | KEEP | 19 | Genetics cross activity: review independent/linkage scope and K9 provenance |
+| FL-27 | KEEP | 20 | Gene-to-protein candidate: review model data and K9 provenance |
+| FL-28 | DEFER | — | Cell division learning interaction and evidence require review |
+| FL-29 | DEFER | — | Selection dynamics model tractability and assumptions unresolved |
+| FL-30 | DEFER | — | Molecular/polymer scope, 2D/3D value and reviewed valence data need definition |
+
+No MERGE is asserted yet: the current source does not prove a shared model, workspace and learning scope for a safe identity merge. The decision remains available after review. The 20-slot view includes conditional KHTN9 exploration only; it never authorizes binding or release. Reviewers may change any disposition, keep fewer or more, or reorder work. Preserve lineage from each original FL ID to any later split/merge and give each eventual model and activity an independent version.
+
+## Historical discovery data
+
+The remainder is retained for provenance. Its W1 LED pilot and phase references are superseded by the bulb blueprint and canonical phase-plan.md. Its outcome statements are truncated, may contain OCR errors and do not themselves prove virtual assessment of real practical skills.
 ## 1. Input actually used
 
 Read-only query on 2026-10-28 against the database configured in BE `.env` (development):

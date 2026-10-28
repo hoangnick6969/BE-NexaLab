@@ -1,106 +1,31 @@
-# Class Lab Track (D-LP-01: configuration on an active LabRelease)
+# Class Lab track: future teacher configuration
 
-## Definition
+A Class Lab is a class-private, versioned teacher resource referencing an approved Foundational release and activity. A teacher selects an approved challenge, adds instructions and narrows approved parameter ranges; they cannot change model equations, constants, scientific outputs, rubric semantics, assets, release status or approve curriculum mappings. The future ClassResource LAB extension is a reuse candidate, not implemented capability.
 
-A Class Lab is a versioned Class Space resource owned by the class-owner teacher. It contains:
+## Access and evidence
 
-```ts
-type ClassLabContent = {
-  labReleaseId: string;                 // must be ACTIVE when the Class Lab version is published
-  challengeTemplateId: string;          // one of release.challengeTemplates
-  params: Record<string, number|string>;// each within release.params (number: min/max/step; choice: subset)
-  stateConstraints?: Constraint[];      // optional narrowing of release.stateConstraints, never widening
-  instructions: string;                 // teacher prompt (≤ 2000 chars, plain text/markdown, no URLs to scripts)
-  lessonId: string;                     // class lesson context, required
-  taxonomy: { subjectId, grade, chapterCode, topicCode };  // copied from lesson, validated, not editable
-};
-```
+Active approved class members may practice a published Class Lab; the owner may preview/manage it. A scored attempt requires a snapshotted assignment target and server-side membership/assignment eligibility. Parents see only the existing authorized child summary. Other users cannot enumerate it. Class practice and assignment evidence never enter the public catalog or official Foundational course denominator. Access is checked again on launch and submit.
 
-What a teacher **cannot** set: model, equations, constants, units, release state, ranges outside the release, assets, scoring map, verdict normalization, outcome approval.
+## Version and retention policy
 
-## Why `ClassResource` kind `LAB` (D-LP-05, proposed)
+At Class Lab publication pin its exact approved release and permitted configuration. When an assignment is published, pin the exact Class Lab version, release, activity/rubric, effective params and target snapshot. Later teacher edits create a new version and do not alter existing assignments.
 
-The existing `ClassResource` already provides what a Class Lab needs, so this reuses it instead of a new table (`brownfield.md` E-16):
-- owner-only teacher access and member-only `PUBLISHED` reads (`src/modules/classes/application/class-resources.service.ts:22-46`);
-- idempotent create (`:54-59`);
-- immutable revisions as new rows with `version + 1` under a lock (`:97-108`);
-- a lesson link and status `DRAFT/PUBLISHED/ARCHIVED` (`prisma/schema.prisma:174-193`).
+A newer Foundational release marks an old Class Lab stale and offers an explicit teacher update. Existing published class practice and assignments may continue using their pinned version while the class resource and assignment remain eligible under their respective close/archive rules; open practice runs still expire after 24 hours. New standalone Foundational launches use the current release. Assignment submissions remain eligible while class/assignment and membership/target are active; due date marks lateness but does not close Lab submission, and no due date gives no automatic cutoff. Explicit close/archive, withdrawal, membership removal or revocation stops new submissions. No universal two-hour replacement grace. Retain model and tuple needed to reproduce historical submissions. Do not infer assignment deadlines from a Lab release activation time.
 
-Proposed additive changes:
-- add `LAB` to `ClassResourceKind` (`prisma/schema.prisma:33-37`);
-- add a content validator for `ClassLabContent`;
-- add Attempt context columns (see `data-model-and-api.md`).
+Emergency scientific/safety revocation overrides the above: block new launches and evaluations immediately, show an actionable notice to the teacher and preserve drafts and historical records for review. Already committed idempotent submissions can still return the existing receipt. A reassign or replacement is an explicit teacher operation, never silent rescoring.
 
-`ClassResourcePractice` (unscored latest state, `prisma/schema.prisma:194-205`) can hold the member's last practice workspace. It must never hold verdicts.
+## Future implementation gate
 
-## Lifecycle
+Reuse existing ClassResource ownership, revision and membership facilities if the actual implementation satisfies this contract; add schema/API only where demonstrated necessary. Class Lab implementation begins after an approved, active Foundational release exists. Test member/nonmember/teacher/parent access, resource versions, assignment snapshots, old-version retention, revocation, replay and isolation from Foundational progress. Do not represent engineering fixtures or a teacher's typed identity as review approval.
 
-```mermaid
-stateDiagram-v2
-  [*] --> DRAFT: teacher creates from ACTIVE release
-  DRAFT --> DRAFT: edit (validated on every save)
-  DRAFT --> PUBLISHED: publish (release still ACTIVE, params within release)
-  PUBLISHED --> DRAFT_NEXT: revise → new row version+1 (DRAFT)
-  PUBLISHED --> ARCHIVED: archive / class archived
-  PUBLISHED --> STALE: pinned release SUPERSEDED or RETIRED
-  STALE --> DRAFT_NEXT: teacher "update to latest release" (revalidated)
-  ARCHIVED --> [*]
-```
+## Access matrix for future acceptance
 
-`STALE` is a derived flag, not a stored status. Existing practice and assignments keep working on the pinned release while it is `ACTIVE` or `SUPERSEDED`. Once the pinned release is `RETIRED` or `QUARANTINED`:
-- new launches stop with `CLASS_LAB_UNAVAILABLE`;
-- the teacher is notified;
-- history remains readable.
-
-## Access and scoring matrix
-
-| Operation | Class-owner teacher | Active approved member | Assignment target | Pending/removed/non-member/other teacher | Parent |
+| Operation | Owner teacher | Approved active member | Assignment target | Other teacher, pending, removed or non-member | Parent |
 |---|---|---|---|---|---|
-| List/detail DRAFT | ✓ | ✗ | ✗ | ✗ (non-enumerating) | ✗ |
-| List/detail PUBLISHED | ✓ | ✓ | ✓ | ✗ | ✗ |
-| Launch practice (`CLASS_PRACTICE`) | preview only | ✓ unscored | ✓ unscored | ✗ | ✗ |
-| Submit practice attempt | ✗ | ✓ recorded, no assignment evidence | ✓ | ✗ | ✗ |
-| Launch/submit scored (`ASSIGNMENT`) | ✗ | ✗ unless target | ✓ | ✗ | ✗ |
-| Read scored results | ✓ own class | own only | own only | ✗ | linked child, assignment summary only (existing C1 rules) |
+| Draft list/detail | own class only | denied | denied | denied, non-enumerating | denied |
+| Published list/detail | own class | allowed | allowed | denied, non-enumerating | denied |
+| Class practice launch and submit | preview only | allowed, unscored | allowed, unscored | denied | denied |
+| Assignment launch and scored submit | preview only | denied unless target | allowed if eligible | denied | denied |
+| Assignment results | own class | own result only | own result only | denied | authorized child summary only |
 
-Every operation re-checks on the server: class `ACTIVE`, membership `approved` (`applicableAssignmentWhere` / `assertMember` patterns already exist), resource `PUBLISHED` and pinned release launchable.
-
-## Assignment
-
-- New `Assignment.contentType = "class_lab"`. `contentId` = the ClassResource row ID (a version-specific row). `contentVersion` = the ClassLab content digest, which includes `labReleaseId`.
-  - Today `contentType` allows `lesson | lab | test` (`src/modules/classes/application/assignments.service.ts:13,35`).
-  - Today the lab `contentVersion` hashes only `simulationModelRef + config` (`src/modules/lessons/application/lesson-content.ts:256-261`). That is insufficient, because activating a pack does not change it.
-- Targets use the existing immutable `AssignmentTarget` snapshot.
-- Scored attempt: context `ASSIGNMENT`, `assignmentId`, `classResourceId` and `labReleaseId` of the Class Lab version.
-- Scoring = release scoring map + Class Lab params, evaluated on the server exactly as the foundational path.
-- High-water evidence ("later failure never undoes a pass") follows the existing step-progress rule (`src/modules/labs/interface/labs.controller.ts:213-235`).
-- Late/deadline rules: reuse the I3 assignment lifecycle for tests where applicable. Labs have no late-decision workflow today, so this is open decision P-5.
-
-## Relation to existing teacher variants
-
-Today a teacher "challenge variant" is a `Challenge` row `${labId}_v-${lessonId}` with `constraints.params`. It is **upserted in place** when the lesson is saved (`src/modules/lessons/interface/lessons.controller.ts:199-207`; `lesson-content.ts:264`). Attempts made earlier keep only the `challengeCheck.params` copy inside `simulationResult`.
-
-Migration proposal:
-- Freeze existing variants. Any edit creates a Class Lab (or a new variant ID) instead of updating the row.
-- Keep old variant attempts readable as `legacy_unverified`.
-- New teacher customisation goes only through Class Lab.
-- Teacher-private Lessons that embed a `CHALLENGE` step keep working until the PO decides the retirement window (open decision P-6).
-
-## Boundaries
-
-| Flow | Foundational Lab | Class Lab |
-|---|---|---|
-| Discovery | Open catalog by topic (students: released only) | Class Space only |
-| Access | Any authenticated student | Active approved class members |
-| Evidence | `FOUNDATIONAL` / `LESSON_STEP` (assignmentId null) → foundational progress | `CLASS_PRACTICE` (no score evidence) / `ASSIGNMENT` (scored, teacher reports) |
-| Course denominator | Yes, if `FoundationalCourseLesson.foundationalLabId` marks it required | Never |
-| Science | Release | Same release, narrowed |
-| Who changes it | NexaLab release process | Owner teacher (new version) |
-
-## Class Lab acceptance (P3.7 gate)
-
-1. A teacher cannot create a Class Lab on a non-ACTIVE release, nor with params or constraints outside the release. Server tests cover each param kind and boundary.
-2. Members/non-members/pending/removed/other-teacher/parent each receive the matrix result on list, detail, launch, submit and result read. Denials are non-enumerating.
-3. Revision creates a new version. Earlier assignments and attempts still evaluate and replay on their pinned release.
-4. Superseding the release marks the Class Lab stale and keeps existing assignments working within policy. Quarantine blocks new launches.
-5. Class Lab attempts never appear in foundational progress or the open catalog.
+A later assignment update or teacher edit never rewrites attempts, snapshots or past progress. A Class Lab result never contributes to Foundational course progress. The matrix is a target contract and must be verified against actual implementation before release.
