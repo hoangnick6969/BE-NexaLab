@@ -36,6 +36,47 @@ export const versionInputSchema = z
   .strict();
 export type VersionInput = z.infer<typeof versionInputSchema>;
 
+/** Check that the configuration actually used by an attempt fits its reviewed pack. */
+export function packConfigurationErrors(
+  labId: string,
+  pack: { labId: string; modelRef: string; engineVersion: string; template: unknown },
+  config: { labId: string; modelRef: string } | null,
+  params: ChallengeParams | null | undefined,
+): string[] {
+  const errors: string[] = [];
+  if (pack.labId !== labId || (config && (config.labId !== labId || config.modelRef !== pack.modelRef))) {
+    errors.push("Phiên bản cấu hình không khớp mô hình của gói mô phỏng");
+  }
+  try {
+    const model = resolveModel(pack.modelRef);
+    if (model.labId !== labId) errors.push("Mô hình không thuộc phòng thực hành");
+    if (model.engineVersion !== pack.engineVersion) errors.push("Phiên bản engine không khớp gói mô phỏng");
+  } catch {
+    errors.push("Mô hình của gói mô phỏng không còn khả dụng");
+  }
+  const template = pack.template as { ranges?: Record<string, { min: number; max: number }> } | null;
+  const ranges = template?.ranges ?? {};
+  if (params) {
+    errors.push(...challengeParamErrors(labId, params));
+    for (const [name, value] of Object.entries(params)) {
+      if (typeof value !== "number") continue;
+      const range = ranges[name];
+      if (!range || !Number.isFinite(range.min) || !Number.isFinite(range.max) || value < range.min || value > range.max) {
+        errors.push(`Tham số ${name} nằm ngoài khoảng được duyệt của gói`);
+      }
+    }
+  }
+  // The model/evaluator also applies defaults when a configuration omits parameters.
+  for (const [name, spec] of Object.entries(CHALLENGE_PARAMETERS[labId]?.params ?? {})) {
+    const range = ranges[name];
+    if (spec.kind === "number" && !(params && name in params) &&
+      ((params && !range) || (range && (!Number.isFinite(range.min) || !Number.isFinite(range.max) || spec.default < range.min || spec.default > range.max)))) {
+      errors.push(`Giá trị mặc định ${name} nằm ngoài khoảng được duyệt của gói`);
+    }
+  }
+  return errors;
+}
+
 /** Server-side evaluation shared by attempts, golden cases and reproduction. */
 export function evaluate(labId: string, labState: unknown, params: ChallengeParams | null | undefined, modelRef?: string | null) {
   // CF-T4: allowlisted model resolution; a lab without a registered model fails closed.
@@ -69,11 +110,11 @@ export function versionErrors(labId: string, baseChallengeIds: string[], input: 
 }
 
 /** Runs every golden case with the candidate parameters on the server engine. */
-export function goldenCaseResults(labId: string, input: VersionInput) {
+export function goldenCaseResults(labId: string, input: VersionInput, modelRef?: string | null) {
   return input.goldenCases.map((golden) => {
     let actual: string;
     try {
-      actual = evaluate(labId, golden.labState, input.challengeParams[golden.challengeId] ?? null).verdict;
+      actual = evaluate(labId, golden.labState, input.challengeParams[golden.challengeId] ?? null, modelRef).verdict;
     } catch {
       actual = "invalid";
     }

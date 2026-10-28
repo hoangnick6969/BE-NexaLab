@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { evaluate, goldenCaseResults, goldenTemplates, versionErrors, versionInputSchema, versionParams } from "./simulation-versions";
+import { evaluate, goldenCaseResults, goldenTemplates, packConfigurationErrors, versionErrors, versionInputSchema, versionParams } from "./simulation-versions";
 import { validateContentStudioBlueprint } from "./content-studio-validation";
+import { MODEL_REGISTRY } from "./sim-packs";
 
 const circuit = goldenTemplates("circuit");
 const input = (overrides: Record<string, unknown> = {}) =>
@@ -15,6 +16,27 @@ const input = (overrides: Record<string, unknown> = {}) =>
   });
 
 describe("simulation configuration versions (C2-T3)", () => {
+  it("accepts only compatible model and parameter values within reviewed pack ranges", () => {
+    const pack = { labId: "circuit", modelRef: "circuit@1.0.0", engineVersion: "1.0.0", template: { ranges: {
+      maxCurrentMa: { min: 5, max: 10 }, minLitLeds: { min: 1, max: 3 },
+    } } };
+    const config = { labId: "circuit", modelRef: "circuit@1.0.0" };
+    expect(packConfigurationErrors("circuit", pack, config, { maxCurrentMa: 10, minLitLeds: 1 })).toEqual([]);
+    expect(packConfigurationErrors("circuit", pack, config, { maxCurrentMa: 20, minLitLeds: 1 })).toEqual(
+      expect.arrayContaining([expect.stringContaining("maxCurrentMa")]),
+    );
+    expect(packConfigurationErrors("circuit", pack, config, null)).toEqual(
+      expect.arrayContaining([expect.stringContaining("mặc định maxCurrentMa")]),
+    );
+    const missingDefaultRange = { ...pack, template: { ranges: { maxCurrentMa: { min: 5, max: 20 } } } };
+    expect(packConfigurationErrors("circuit", missingDefaultRange, config, { maxCurrentMa: 10 })).toEqual(
+      expect.arrayContaining([expect.stringContaining("mặc định minLitLeds")]),
+    );
+    expect(packConfigurationErrors("circuit", pack, { ...config, modelRef: "circuit@2.0.0" }, null)).toEqual(
+      expect.arrayContaining([expect.stringContaining("không khớp")]),
+    );
+  });
+
   it("accepts allowlisted in-range parameters whose golden cases reproduce", () => {
     const candidate = input();
     expect(versionErrors("circuit", ["circuit_001"], candidate)).toEqual([]);
@@ -63,5 +85,18 @@ describe("simulation configuration versions (C2-T3)", () => {
     expect(validateContentStudioBlueprint({ labId: "circuit", modelRef: "chemistry@1.0.0", challengeIds: ["circuit_001"], config })).toEqual(
       expect.objectContaining({ ok: false, errors: expect.arrayContaining([expect.stringContaining("does not match")]) }),
     );
+  });
+
+  it("validates a registered successor with that exact model, not the first Lab model", () => {
+    const ref = "circuit@fixture-2.0.0";
+    MODEL_REGISTRY[ref] = { ...MODEL_REGISTRY["circuit@1.0.0"], simulate: () => ({ verdict: "not_passed" }) };
+    try {
+      const config = input({ goldenCases: [{ challengeId: "circuit_001", label: "fixture", labState: circuit[2].labState, expectedVerdict: "needs_practice" }] });
+      expect(validateContentStudioBlueprint({ labId: "circuit", modelRef: ref, challengeIds: ["circuit_001"], config })).toEqual(
+        expect.objectContaining({ ok: true, errors: [], golden: [expect.objectContaining({ actual: "needs_practice", ok: true })] }),
+      );
+    } finally {
+      delete MODEL_REGISTRY[ref];
+    }
   });
 });

@@ -30,6 +30,20 @@ import {
 } from "../application/simulation-versions";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 
+/** PostgreSQL JSON numbers can round at the last floating-point digits. */
+function sameStoredResult(actual: any, expected: any): boolean {
+  if (typeof actual === "number" && typeof expected === "number")
+    return Number.isFinite(actual) && Number.isFinite(expected) && Math.abs(actual - expected) <= 1e-12 * Math.max(1, Math.abs(actual), Math.abs(expected));
+  if (Array.isArray(actual) || Array.isArray(expected))
+    return Array.isArray(actual) && Array.isArray(expected) && actual.length === expected.length && actual.every((value, index) => sameStoredResult(value, expected[index]));
+  if (actual && expected && typeof actual === "object" && typeof expected === "object") {
+    const actualKeys = Object.keys(actual).sort();
+    const expectedKeys = Object.keys(expected).sort();
+    return actualKeys.length === expectedKeys.length && actualKeys.every((key, index) => key === expectedKeys[index] && sameStoredResult(actual[key], expected[key]));
+  }
+  return actual === expected;
+}
+
 /**
  * Epic C2 admin console API. Every route is ADMIN-only (other roles get 403 from
  * the guard), every mutation and every audit read writes an AuditLog row in the
@@ -117,9 +131,14 @@ export class AdminLabsController {
     );
     if (spec && lab.simulationModelRef && !spec.modelRef.startsWith(lab.simulationModelRef.split("@")[0]))
       errors.push(`Mô hình của phòng (${lab.simulationModelRef}) không khớp danh sách cho phép (${spec.modelRef})`);
+    try {
+      if (resolveModel(lab.simulationModelRef).labId !== labId) errors.push("Mô hình không thuộc phòng thực hành");
+    } catch {
+      errors.push("Mô hình của phòng không nằm trong danh sách cho phép");
+    }
     if (errors.length)
       throw new UnprocessableEntityException({ code: "INVALID_SIMULATION_CONFIG", message: errors.join("; "), details: { errors } });
-    const golden = goldenCaseResults(labId, input);
+    const golden = goldenCaseResults(labId, input, lab.simulationModelRef);
     if (golden.some((g) => !g.ok))
       throw new UnprocessableEntityException({
         code: "GOLDEN_CASE_MISMATCH",
@@ -137,7 +156,7 @@ export class AdminLabsController {
         data: {
           labId,
           version: (last?.version ?? 0) + 1,
-          modelRef: spec!.modelRef,
+          modelRef: lab.simulationModelRef,
           challengeParams: input.challengeParams,
           goldenCases: input.goldenCases.map((g, i) => ({ ...g, actual: golden[i].actual })) as any,
           reason: input.reason,
@@ -196,24 +215,63 @@ export class AdminLabsController {
     const version = attempt.configVersionId
       ? await this.db.simulationConfigVersion.findUnique({ where: { id: attempt.configVersionId } })
       : null;
-    const params =
-      (attempt.challenge.id.includes("_v-") ? null : versionParams(version, attempt.challengeId)) ??
-      (attempt.challenge.constraints as any)?.params;
+    const pack = attempt.packVersionId
+      ? await this.db.simulationPackVersion.findUnique({ where: { id: attempt.packVersionId } })
+      : null;
+    if ((attempt.configVersionId && !version) || (attempt.packVersionId && !pack))
+      throw new ConflictException({ code: "PINNED_VERSION_MISSING", message: "Không tìm thấy phiên bản đã ghi trong lần thực hành" });
+    if ((version && version.labId !== attempt.challenge.labId) || (pack && pack.labId !== attempt.challenge.labId))
+      throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID", message: "Phiên bản đã ghi không thuộc phòng thực hành" });
+    const originalResult = attempt.simulationResult as any;
+    const rawExecution = originalResult?._execution;
+    const executionSchema = z.object({
+      modelRef: z.string().min(1),
+      packVersionId: z.string().nullable(),
+      configVersionId: z.string().nullable(),
+      params: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
+    }).strict();
+    const execution = rawExecution == null ? null : executionSchema.safeParse(rawExecution);
+    if (execution && (!execution.success || execution.data.packVersionId !== attempt.packVersionId || execution.data.configVersionId !== attempt.configVersionId ||
+      (pack && execution.data.modelRef !== pack.modelRef) || (version && execution.data.modelRef !== version.modelRef)))
+      throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID", message: "Bằng chứng phiên bản của lần thực hành không nhất quán" });
+    const modelRef = execution?.success ? execution.data.modelRef : pack?.modelRef ?? version?.modelRef;
+    if (execution?.success) {
+      let availableEngine: string;
+      try { availableEngine = resolveModel(execution.data.modelRef).engineVersion; }
+      catch { throw new ConflictException({ code: "PINNED_MODEL_UNAVAILABLE", message: "Mô hình đã ghi không còn khả dụng để tái lập" }); }
+      if (availableEngine !== attempt.simulationModelVersion || (pack && pack.engineVersion !== availableEngine))
+        throw new ConflictException({ code: "PINNED_MODEL_UNAVAILABLE", message: "Phiên bản engine đã ghi không còn khả dụng để tái lập" });
+    }
+    const params = execution?.success
+      ? execution.data.params
+      : originalResult?.challengeCheck?.params ??
+        (attempt.challenge.id.includes("_v-") ? null : versionParams(version, attempt.challengeId)) ??
+        (attempt.challenge.constraints as any)?.params;
     let reproduced: string;
+    let reproducedResult: any = null;
     try {
-      reproduced = evaluate(attempt.challenge.labId, attempt.labState, params).verdict;
+      const evaluated = evaluate(attempt.challenge.labId, attempt.labState, params, modelRef);
+      reproduced = evaluated.verdict;
+      reproducedResult = evaluated.result;
     } catch {
       reproduced = "invalid";
     }
+    const { _execution, ...originalOutput } = originalResult && typeof originalResult === "object" ? originalResult : {};
+    const verdictMatches = reproducedResult !== null && reproduced === attempt.verdict;
+    const resultMatches = reproducedResult !== null && sameStoredResult(JSON.parse(JSON.stringify(reproducedResult)), originalOutput);
     return {
       attemptId: id,
       challengeId: attempt.challengeId,
       engineVersion: attempt.simulationModelVersion,
       configVersion: version ? { id: version.id, version: version.version, status: version.status } : null,
       packVersionId: attempt.packVersionId,
+      modelRef: modelRef ?? null,
+      reproductionBasis: execution?.success ? "pinned_execution" : "legacy_unverified",
       originalVerdict: attempt.verdict,
       reproducedVerdict: reproduced,
-      matches: reproduced === attempt.verdict,
+      matches: verdictMatches && (execution?.success ? resultMatches : true),
+      verdictMatches,
+      resultMatches,
     };
   }
 

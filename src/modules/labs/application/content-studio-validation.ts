@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { goldenCaseResults, versionErrors, versionInputSchema } from "./simulation-versions";
-import { modelRefForLab, resolveModel } from "./sim-packs";
+import { resolveModel } from "./sim-packs";
 
 const requestSchema = z.object({
   labId: z.string().trim().min(1).max(80),
@@ -16,12 +16,11 @@ export function validateContentStudioBlueprint(value: unknown) {
   const input = parsed.data;
   const errors = versionErrors(input.labId, input.challengeIds, input.config);
   try {
-    resolveModel(input.modelRef);
-    if (modelRefForLab(input.labId) !== input.modelRef) errors.push("Blueprint modelRef does not match the existing BE Lab capability");
+    if (resolveModel(input.modelRef).labId !== input.labId) errors.push("Blueprint modelRef does not match the existing BE Lab capability");
   } catch (error) {
     errors.push(error instanceof Error ? error.message : "Unsupported simulation model");
   }
-  const golden = errors.length ? [] : goldenCaseResults(input.labId, input.config);
+  const golden = errors.length ? [] : goldenCaseResults(input.labId, input.config, input.modelRef);
   if (golden.some((item) => !item.ok)) errors.push("One or more golden cases do not reproduce on the server simulation engine");
   return { ok: errors.length === 0, errors, golden };
 }
