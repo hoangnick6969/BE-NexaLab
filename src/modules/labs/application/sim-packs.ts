@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, circuit, chemistry, eye, eyeParts } from "../../../../packages/sim";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, eye, eyeParts } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -34,6 +34,13 @@ export const MODEL_REGISTRY: Record<string, Model> = {
       verdict: "string",
     },
     requiredSemanticIds: ["battery", "resistor", "led"],
+  },
+  "circuit-bulb@1.0.0": {
+    labId: "circuit",
+    engineVersion: ENGINE_VERSION,
+    simulate: circuitBulb,
+    outputs: { circuitPath: "string", bulbState: "string" },
+    requiredSemanticIds: ["battery", "bulb", "switch"],
   },
   "chemistry@1.0.0": {
     labId: "chemistry",

@@ -1,5 +1,5 @@
 import { ConflictException } from "@nestjs/common";
-import { assignmentExecutionSchema, canonical, digest } from "./lab-run";
+import { assignmentExecutionSchema, canonical, digest, rubricRefForActivity } from "./lab-run";
 import { resolveModel } from "./sim-packs";
 import { packConfigurationErrors, versionParams } from "./simulation-versions";
 
@@ -32,17 +32,21 @@ export async function snapshotAssignmentLab(tx: any, labId: string) {
   const effectiveParams = Object.fromEntries(baseChallenges.map((challenge) => [
     challenge.id, versionParams(config, challenge.id) ?? (challenge.constraints as any)?.params ?? null,
   ]));
+  let rubricRef: string;
+  try { rubricRef = rubricRefForActivity(activity.key, activity.version, pack.modelRef); }
+  catch { throw new ConflictException({ code: "LAB_TUPLE_INCOMPATIBLE", message: "Activity và scientific model không khớp phiên bản" }); }
   const parsed = assignmentExecutionSchema.safeParse({
     labId, modelRef: pack.modelRef, engineVersion: pack.engineVersion, packVersionId: pack.id,
     configVersionId: config.id, activityVersionId: activity.id, activityDigest: activity.digest,
-    activityKey: activity.key, activityVersion: activity.version, rubricRef: "legacy-challenge@1.0.0",
+    activityKey: activity.key, activityVersion: activity.version,
+    rubricRef,
     stateSchemaVersion: 1, evidenceSchemaVersion: 1, template: pack.template,
     challengeParams: config.challengeParams, effectiveParams,
   });
   if (!parsed.success) throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
   const checks = Object.values(parsed.data.effectiveParams);
   for (const params of checks.length ? checks : [null]) {
-    const errors = packConfigurationErrors(labId, pack, config, params);
+    const errors = packConfigurationErrors(labId, pack, config, params as any);
     if (errors.length) throw new ConflictException({ code: "SIM_PACK_CONFIG_INCOMPATIBLE", message: errors.join("; ") });
   }
   return parsed.data;

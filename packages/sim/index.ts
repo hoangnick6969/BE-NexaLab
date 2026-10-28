@@ -135,6 +135,39 @@ export function circuit(raw: unknown) {
     branches,
   };
 }
+
+/** Ideal continuity model for the versioned CLOSED/OPEN bulb activity. */
+export const circuitBulbSchema = z.object({
+  nodes: z.array(z.object({
+    id: z.string().min(1).max(60),
+    type: z.enum(["battery", "bulb", "switch"]),
+    closed: z.boolean().optional(),
+  }).strict()).length(3),
+  edges: z.array(z.object({ source: z.string(), target: z.string() }).strict()).length(3),
+}).strict();
+
+export function circuitBulb(raw: unknown) {
+  const state = circuitBulbSchema.parse(raw);
+  const byType = Object.fromEntries(state.nodes.map((node) => [node.type, node]));
+  if (new Set(state.nodes.map((node) => node.id)).size !== 3 ||
+      !byType.battery || !byType.bulb || !byType.switch ||
+      typeof byType.switch.closed !== "boolean" ||
+      state.nodes.some((node) => node.type !== "switch" && node.closed !== undefined))
+    throw new Error("Cần đúng một nguồn, một bóng đèn và một công tắc có trạng thái");
+
+  const ids = state.nodes.map((node) => node.id);
+  const expected = new Set(ids.map((id, index) => [id, ids[(index + 1) % ids.length]].sort().join("|")));
+  const actual = new Set(state.edges.map((edge) => [edge.source, edge.target].sort().join("|")));
+  if (actual.size !== 3 || [...actual].some((edge) => !expected.has(edge)))
+    throw new Error("Mạch phải là một vòng kín gồm nguồn, bóng đèn và công tắc");
+
+  return {
+    version: "1.0.0",
+    circuitPath: byType.switch.closed ? "CLOSED" : "OPEN",
+    bulbState: byType.switch.closed ? "ON" : "OFF",
+  };
+}
+
 export const reactions = [
   {
     id: "mg-hcl",

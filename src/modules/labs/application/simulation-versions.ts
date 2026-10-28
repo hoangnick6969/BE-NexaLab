@@ -56,6 +56,10 @@ export function packConfigurationErrors(
   }
   const template = pack.template as { ranges?: Record<string, { min: number; max: number }> } | null;
   const ranges = template?.ranges ?? {};
+  if (pack.modelRef === "circuit-bulb@1.0.0") {
+    if (params && Object.keys(params).length) errors.push("Mô hình bóng đèn không dùng tham số thử thách LED");
+    return errors;
+  }
   if (params) {
     errors.push(...challengeParamErrors(labId, params));
     for (const [name, value] of Object.entries(params)) {

@@ -19,17 +19,42 @@ export const launchSchema = z.object({
   assignmentId: z.string().min(1).max(100).optional(),
 }).strict();
 
-export const runSubmissionSchema = z.object({
+const runSubmissionBase = z.object({
   contract: z.literal("lab-contract/1"),
   runId: z.string().min(1).max(100),
   idempotencyKey: z.string().uuid(),
   stateSchemaVersion: z.literal(1),
   evidenceSchemaVersion: z.literal(1),
-  labState: z.unknown().refine((v) => v !== undefined && JSON.stringify(v).length <= 20000),
   durationMs: z.number().int().min(0).max(86400000),
 }).strict();
+const boundedState = z.unknown().refine((v) => v !== undefined && JSON.stringify(v).length <= 20000);
+const checkpointSchema = z.object({
+  id: z.enum(["CLOSED", "OPEN"]),
+  state: boundedState,
+  prediction: z.enum(["ON", "OFF"]),
+}).strict();
+export const runSubmissionSchema = z.union([
+  runSubmissionBase.extend({ labState: boundedState }).strict(),
+  runSubmissionBase.extend({
+    checkpoints: z.array(checkpointSchema).length(2),
+    explanation: z.enum(["A", "B", "C"]),
+  }).strict()
+    .refine(({ checkpoints }) => checkpoints[0].id === "CLOSED" && checkpoints[1].id === "OPEN", "Circuit checkpoints must be ordered CLOSED then OPEN")
+    .refine((evidence) => JSON.stringify({ checkpoints: evidence.checkpoints, explanation: evidence.explanation }).length <= 20000, "Evidence is too large"),
+]);
 
-export const executionSchema = z.object({
+export const CIRCUIT_BULB_ACTIVITY_KEY = "circuit-bulb-checkpoints";
+export const CIRCUIT_BULB_RUBRIC = "circuit-bulb-checkpoints@1.0.0";
+export function rubricRefForActivity(activityKey: string, activityVersion: number, modelRef: string) {
+  if (activityKey === CIRCUIT_BULB_ACTIVITY_KEY || modelRef === "circuit-bulb@1.0.0") {
+    if (activityKey !== CIRCUIT_BULB_ACTIVITY_KEY || activityVersion !== 1 || modelRef !== "circuit-bulb@1.0.0")
+      throw new Error("Circuit bulb model and activity versions are incompatible");
+    return CIRCUIT_BULB_RUBRIC;
+  }
+  return "legacy-challenge@1.0.0";
+}
+
+const executionFieldsSchema = z.object({
   modelRef: z.string().min(1),
   engineVersion: z.string().min(1),
   packVersionId: z.string().min(1),
@@ -38,19 +63,28 @@ export const executionSchema = z.object({
   activityDigest: z.string().min(1),
   activityKey: z.string().min(1),
   activityVersion: z.number().int().positive(),
-  rubricRef: z.literal("legacy-challenge@1.0.0"),
+  rubricRef: z.enum(["legacy-challenge@1.0.0", CIRCUIT_BULB_RUBRIC]),
   params: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
   stateSchemaVersion: z.literal(1),
   evidenceSchemaVersion: z.literal(1),
   template: z.unknown(),
   binding: z.enum(["ASSIGNMENT_PINNED", "LEGACY_UNPINNED_LAUNCH", "FOUNDATIONAL_LAUNCH"]).optional(),
 }).strict();
+const compatibleActivityTuple = <T extends z.ZodTypeAny>(schema: T) => schema.superRefine((tuple: any, ctx) => {
+  try {
+    if (rubricRefForActivity(tuple.activityKey, tuple.activityVersion, tuple.modelRef) !== tuple.rubricRef)
+      ctx.addIssue({ code: "custom", message: "Activity rubric does not match the pinned model" });
+  } catch (error) {
+    ctx.addIssue({ code: "custom", message: error instanceof Error ? error.message : "Invalid activity tuple" });
+  }
+});
+export const executionSchema = compatibleActivityTuple(executionFieldsSchema);
 
-export const assignmentExecutionSchema = executionSchema.omit({ params: true, binding: true }).extend({
+export const assignmentExecutionSchema = compatibleActivityTuple(executionFieldsSchema.omit({ params: true, binding: true }).extend({
   labId: z.string().min(1),
   challengeParams: z.record(z.string(), z.record(z.string(), z.union([z.number(), z.string()]))),
   effectiveParams: z.record(z.string(), z.record(z.string(), z.union([z.number(), z.string()])).nullable()),
-}).strict();
+}).strict());
 /**
  * Frozen compatibility rubric. Its identity is recorded on LabRun; new
  * assessment behavior must use another implementation and version.
@@ -87,4 +121,38 @@ export function evaluateRunV1(labId: string, state: any, params: ChallengeParams
     result = { ...result, verdict, challengeCheck: { params, unmet } };
   }
   return { result, verdict: normalizeVerdict(result.verdict) };
+}
+
+/** Pinned Circuit bulb activity; model observations and learning rubric stay separate. */
+export function evaluateCircuitBulbActivity(checkpoints: Array<{ id: "CLOSED" | "OPEN"; state: unknown; prediction: "ON" | "OFF" }>, explanation: string) {
+  const byId = new Map(checkpoints.map((checkpoint) => [checkpoint.id, checkpoint]));
+  const evaluated = (["CLOSED", "OPEN"] as const).map((id) => {
+    const checkpoint = byId.get(id);
+    if (!checkpoint) throw new Error("Both Circuit checkpoints are required");
+    const observation = resolveModel("circuit-bulb@1.0.0").simulate(checkpoint.state);
+    const expectedCircuitPath = id === "CLOSED" ? "CLOSED" : "OPEN";
+    if (observation.circuitPath !== expectedCircuitPath)
+      throw new Error(`Trạng thái mạch không khớp checkpoint ${id}`);
+    return {
+      id,
+      scientificObservation: observation,
+      prediction: checkpoint.prediction,
+      predictionCorrect: checkpoint.prediction === observation.bulbState,
+    };
+  });
+  const unmetCriteria = [
+    ...evaluated.filter((checkpoint) => !checkpoint.predictionCorrect).map((checkpoint) => `prediction:${checkpoint.id}`),
+    ...(explanation === "A" ? [] : ["explanation"]),
+  ];
+  const score = 3 - unmetCriteria.length;
+  const rawVerdict = score === 3 ? "passed" : "not_passed";
+  return {
+    result: {
+      version: "1.0.0",
+      observations: evaluated,
+      assessment: { score, maximumScore: 3, unmetCriteria, passed: score === 3 },
+      verdict: rawVerdict,
+    },
+    verdict: normalizeVerdict(rawVerdict),
+  };
 }

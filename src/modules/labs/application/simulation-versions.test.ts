@@ -16,6 +16,15 @@ const input = (overrides: Record<string, unknown> = {}) =>
   });
 
 describe("simulation configuration versions (C2-T3)", () => {
+  it("keeps the bulb activity independent of the legacy LED parameter ranges", () => {
+    const pack = { labId: "circuit", modelRef: "circuit-bulb@1.0.0", engineVersion: "1.0.0", template: { ranges: {} } };
+    const config = { labId: "circuit", modelRef: "circuit-bulb@1.0.0" };
+    expect(packConfigurationErrors("circuit", pack, config, null)).toEqual([]);
+    expect(packConfigurationErrors("circuit", pack, config, { maxCurrentMa: 10 })).toEqual(
+      expect.arrayContaining([expect.stringContaining("không dùng tham số")]),
+    );
+  });
+
   it("accepts only compatible model and parameter values within reviewed pack ranges", () => {
     const pack = { labId: "circuit", modelRef: "circuit@1.0.0", engineVersion: "1.0.0", template: { ranges: {
       maxCurrentMa: { min: 5, max: 10 }, minLitLeds: { min: 1, max: 3 },
