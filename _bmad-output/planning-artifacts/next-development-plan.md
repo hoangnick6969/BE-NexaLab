@@ -91,7 +91,7 @@ SRS xếp R1-later/Future nhưng code đã có, chưa có acceptance; **Khác SR
 | AI | UC-AI-01..04 ngữ cảnh, gợi ý 4 mức, leo mức, HintLog (Future) | Đã làm sớm | `labs/hint.ts` (mức 1–4, provider ngoài transaction, fallback template), `HintLog`; **cần kiểm BR-06** — code tăng mức theo lịch sử gợi ý, SRS chỉ cho leo mức khi học sinh đã đổi `labState` và chạy lại |
 | AI | UC-AI-05 phát hiện hiểu lầm | Đã làm sớm | `labs/tutor.ts` `misconceptions()` (3 attempt gần nhất), hiện ở báo cáo giáo viên; BR-09 (không hiện cho học sinh) cần kiểm |
 | AI | UC-AI-06..09 tổng hợp lớp, truy vết, chặn ngoài chương trình, rate limit/cache | Chưa xác minh | Không có bằng chứng riêng; cần R.02 |
-| AI | Teacher AI Content Assistant (FR-21) | Thiếu | Future |
+| AI | Teacher AI Content Assistant (FR-21) | Thiếu | Future — spec nháp `_bmad-output/specs/spec-teacher-ai-authoring/` (TAI-01, chờ TAI-T0 duyệt scope) |
 | NS | NS-13 lưu giữ 12 tháng (Foundation) | **Thiếu** | Không có job |
 | NS | NS-17 rebuild/check projection | Có | `progress:check`, `progress:rebuild` |
 | CR | CR-01 lỗi một định dạng; MSG-01..47 | **Một phần** | Envelope có (B0-T1); 111 mã, message viết thẳng, không map MSG |
