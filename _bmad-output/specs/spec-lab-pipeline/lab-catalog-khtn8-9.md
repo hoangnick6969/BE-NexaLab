@@ -1,0 +1,437 @@
+# Lab Catalog from KHTN 8–9 Outcomes (DEFINE)
+
+**Status:** proposal for curriculum/science review. It is not an approved catalog.
+- Every outcome cited below is `PROPOSED_UNAPPROVED`.
+- No Lab here is approved, scheduled or released.
+- This document replaces neither the P3.1 candidate catalog nor its LED decision. It extends that catalog to the whole KHTN 8–9 register, following `pipeline.md` stages 1–3.
+
+## 1. Input actually used
+
+Read-only query on 2026-10-28 against the database configured in BE `.env` (development):
+
+| Item | Value | Label |
+|---|---|---|
+| `CurriculumOutcome` non-synthetic, grade 8 | 157 rows, codes `KHTN8-Bxx-Oyy`, all `sourceEvidence.originType = textbook_derived_internal` | verified (DB) |
+| `CurriculumOutcome` non-synthetic, grade 9 | 135 rows. 102 have `sourceEvidence` (`textbook_derived_internal`). 33 have **no** `sourceEvidence` and duplicate a statement under a longer slug (e.g. `ethylic-alcohol-va-acetic-acid/1` vs `ethylic-alcohol-va-acetic/1`) | verified (DB) |
+| Shared released Lessons | KHTN 8: 47 published/released. KHTN 9: 51 published/released (+2 archived/retired). **No Lesson has `labId`** | verified (DB) |
+| Labs | `circuit`, `chemistry`, `eye`: `CLASS_PRIVATE`, `releaseCleared=false`, `topicCode=null` | verified (DB) |
+| Version tables | `SimulationConfigVersion`, `PracticalActivityVersion`, `SimulationPackVersion`, `FoundationalCourseVersion`: 0 rows each | verified (DB) |
+
+This confirms the P3.1 snapshot claims that `brownfield.md` E-20 had marked unverified, at least for this database. The official curriculum authority document is still not identified (open decision C-1). The register is therefore SGK-derived, and none of its rows can become `ACTIVE` without a curriculum receipt.
+
+### Register defects found (input for P3.3)
+
+1. **OCR errors in statements.** Examples:
+   - `KHTN8-B02-O03` "phần ứng" for "phản ứng";
+   - `B13-O01`, `B18-O02` "Nếu được" for "Nêu được";
+   - `B19-O01` "đơn bảy" for "đòn bẩy";
+   - `B42-O01` "quản thể" for "quần thể";
+   - `B25-O02` "vốn kế" for "vôn kế".
+
+   They must be corrected against the source before any review.
+2. **Bullet split.** `KHTN8-B07-O03` is the heading "Tiến hành được thí nghiệm và quan sát thực tiễn:" and `O04`–`O06` are its bullets. Merge them or re-parent them.
+3. **B15 (Áp suất trên một bề mặt)** has only unit and discussion outcomes. No row states the pressure definition `p = F/S`. This is a likely extraction gap (inference), so check SGK p. 64.
+4. **KHTN 9 duplicates.** 33 rows without evidence duplicate canonical rows. Archive them or merge them before mapping. This catalog uses only the 102 canonical rows.
+5. **KHTN 9 provenance** is still `CONDITIONAL` per P3.1. KHTN 9 Labs below are reuse/expansion candidates, not release bindings.
+
+## 2. Method
+
+For each outcome (157 + 102):
+1. Classify its evidence need.
+   - **P** (primary): the Lab can produce the outcome's evidence: the student acts, observes, measures or predicts and the server evaluates it.
+   - **S** (supporting): the Lab helps, but the outcome also needs explanation, recall or real practice.
+   - **N** (no Foundational Lab), with a reason:
+
+   | Code | Reason |
+   |---|---|
+   | R | concept/recall |
+   | H | health/behaviour |
+   | D | project/survey/discussion |
+   | A | real-world application/reading |
+   | X | a real practical or video fits better |
+   | K | sensitive/child-safety topic |
+
+2. Group P/S outcomes by **one bounded scientific model** (rule from `SPEC.md`: Lab = model, not Lesson).
+3. Score each candidate on the rubric from `foundational-lab-track.md` §3.
+   - Gates: interaction value I ≥ 3, tractability T ≥ 3, virtual-only safety framing possible.
+   - Other dimensions: outcome coverage C, reuse R, implementation leverage L, modality cost M (2D = 5).
+4. Assign a wave, respecting the cap of ≤ 2 concurrent Labs after the P3.5 gate.
+
+The full per-outcome table is the **Appendix**. It was generated from the DB export by a script, so the counts below are exact for this mapping.
+
+## 3. Coverage summary
+
+| Grade | Outcomes | P | S | Lab-touched (P+S) | No Lab |
+|---|---:|---:|---:|---:|---:|
+| KHTN 8 | 157 | 51 | 47 | **98 (62 %)** | 59 |
+| KHTN 9 (canonical) | 102 | 43 | 25 | **68 (67 %)** | 34 |
+
+"No Lab" reasons:
+
+| Grade | R | H | D | A | X | K |
+|---|---:|---:|---:|---:|---:|---:|
+| KHTN 8 | 16 | 15 | 9 | 10 | 4 | 5 |
+| KHTN 9 | 26 | 0 | 4 | 2 | 0 | 2 |
+
+"No Lab" does not mean "no learning resource". These outcomes are served by Lesson content, video, basic exercises or teacher projects. Health/behaviour (H) and sensitive (K) outcomes are deliberately kept out of simulations, to avoid implying medical or personal advice to children.
+
+## 4. Catalog (30 candidates)
+
+Notation used in the tables:
+- Outcome codes are short: `B22-O01` = `KHTN8-B22-O01`, `9/dien/2` = `KHTN-L9/dien/2`.
+- Score = I + T + C + R + L + M, each 0–5, out of 30.
+- Wave: **W1** pilot, **W2–W4** after the P3.5 gate, **BL** backlog (fails a gate until the model is reduced or reviewed).
+- "K9 cond." means it depends on KHTN 9 provenance.
+
+### 4.1 Physics / ENERGY
+
+| ID | Lab | Primary outcomes (P) | Supporting (S) | Model sketch | Mod. | I/T/C/R/L/M = Σ | Wave |
+|---|---|---|---|---|---|---|---|
+| FL-01 | **Mạch điện một chiều** (LED, đo I/U, Ohm, nối tiếp/song song, công suất) | B22-O01, B22-O02, B24-O01, B24-O02, B25-O01, B25-O02. K9 cond.: 9/dien/1, 2, 3, 4, 6 | B21-O01, B23-O01, B24-O03. K9: 9/dien/5 | Existing `circuit@1.0.0` → successor: ideal source, R, variable resistor, LED (polarity/fixed drop), ammeter/voltmeter readings, series/parallel. K9 adds `P = U·I`, `A = P·t` in a reviewed successor | 2D | 5/4/5/5/5/5 = **29** | **W1** (P3.1 pilot) |
+| FL-02 | Nhiễm điện do cọ xát | B20-O01 | B20-O02 | Qualitative: triboelectric order table, charge sign, attract/repel rule; no Coulomb numerics | 2D | 3/3/1/1/1/5 = 14 | W4 |
+| FL-03 | Khối lượng riêng | B13-O01, B14-O01 | B13-O02 | `D = m/V`. Virtual balance + graduated cylinder displacement; regular box and irregular object. Measurement resolution as reviewed constant | 2D | 4/5/2/3/1/5 = 20 | W2 (fluid family) |
+| FL-04 | Áp suất chất lỏng, khí quyển | B16-O01, B16-O02, B16-O03 | B15-O01, B15-O02, B16-O05 | `p = F/S`, `p = d·h`, Pascal transmission, atmospheric pressure demo (qualitative). Needs register fix for B15 | 2D | 4/4/3/2/1/5 = 19 | W2 (fluid family) |
+| FL-05 | Lực đẩy Archimedes, nổi/chìm | B17-O01 | (reuses FL-03 density) | `F_A = d·V`, float/sink by comparing weight and `F_A` (or densities). Dynamometer reading in and out of liquid | 2D | 5/4/1/3/1/5 = 19 | W2 (fluid family) |
+| FL-06 | Moment lực và đòn bẩy | B18-O01, B18-O02, B19-O02 | B19-O01, B31-O02 (skeletal lever) | `M = F·d`, balance `F1·d1 = F2·d2`, three lever classes; ideal rigid bar | 2D | 5/5/3/3/1/5 = 22 | W3 |
+| FL-07 | Năng lượng nhiệt (joulemeter) | B27-O01 | B26-O01, B26-O02 | Heater energy `Q = P·t` read by joulemeter, temperature rise `ΔT = Q/(m·c)` with reviewed c table and declared heat-loss assumption; particle-speed visual is illustrative only | 2D | 4/4/1/2/1/5 = 17 | W3 |
+| FL-08 | Sự truyền nhiệt | B28-O01, B28-O02 | B28-O04 | Comparative conduction along rods of different materials (1-D model, reviewed conductivity ranking), insulation comparison; convection/radiation qualitative modes | 2D | 4/3/2/2/1/5 = 17 | W4 |
+| FL-09 | Sự nở vì nhiệt | B29-O01 | B29-O02, B29-O03 | `ΔL = α·L0·ΔT` for solids, bimetal strip bend direction, liquids/gases qualitative ranking | 2D | 3/5/1/1/1/5 = 16 | W4 |
+| FL-23 | **Quang học: khúc xạ, phản xạ toàn phần, lăng kính, thấu kính** (K9) | 9/anh-sang/1, 2, 3, 4, 7, 8, 9, 10 | 9/anh-sang/5, 6. K8 context B37-O04 | Snell `n1 sin i = n2 sin r`, `n = c/v`, critical angle, prism ray path, thin-lens ray construction and `1/f = 1/d + 1/d'` (or geometric construction only, decided in review), magnifier. Dispersion as qualitative mode | 2D | 5/5/5/3/1/5 = 24 | W3, K9 cond. |
+| FL-24 | **Cơ năng, công, công suất** (K9) | 9/nang-luong-co-hoc/1, 2, 4, 5, 6 | 9/nang-luong-co-hoc/3 | `Wđ = ½mv²`, `Wt = P·h` (P = 10m per SGK convention, to be confirmed by reviewer), conservation on frictionless ramp/pendulum, `A = F·s`, `P = A/t` | 2D | 5/5/4/3/1/5 = 23 | W3, K9 cond. |
+| FL-25 | Cảm ứng điện từ, dòng xoay chiều (K9) | 9/dien-tu/1 | 9/dien-tu/2 | Qualitative: induced current appears when the magnetic field through a coil changes; direction reverses with motion direction; rotating-coil generator gives alternating current. No Faraday numerics | 2D (3D optional) | 4/3/1/1/1/4 = 14 | W4, K9 cond. |
+
+### 4.2 Chemistry / MATTER
+
+| ID | Lab | P | S | Model sketch | Mod. | I/T/C/R/L/M = Σ | Wave |
+|---|---|---|---|---|---|---|---|
+| FL-10 | **Mol, bảo toàn khối lượng, tính theo PTHH** | B03-O01, B03-O02, B03-O04, B05-O01, B05-O03, B06-O01, B06-O03. K9: 9/hydrocarbon-va-nguon-nhien/2 | B03-O03, B05-O02, B05-O04, B06-O02. K9: 9/khai-thac-tai-nguyen-tu-vo/4 | Existing `chemistry@1.0.0` stoichiometry → reviewed successor: molar mass table, `n = m/M`, `n = V/24.79` (1 bar, 25 °C), equation balancing check, limiting/excess, yield `H = actual/theoretical`, gas density ratio `d = M_A/M_B` | 2D | 4/5/5/5/4/5 = **28** | **W2** (P3.1 rank 2) |
+| FL-11 | Dung dịch và nồng độ | B04-O03, B04-O04 | B04-O01, B04-O02. K9: 9/ethylic-alcohol-va-acetic/2 (độ cồn) | Solubility table vs temperature (reviewed), saturation, `C% = m_ct/m_dd·100`, `CM = n/V`, preparing a target solution; alcohol degree as volume-% mode | 2D | 4/5/2/3/1/5 = 20 | W3 |
+| FL-12 | Tốc độ phản ứng và chất xúc tác | B07-O02, B07-O03, B07-O04, B07-O05 | B07-O01, B07-O06 | Semi-quantitative: reviewed relative-rate rules for concentration, temperature, surface area, catalyst; gas-volume-vs-time curve from an explicit simplified rate law. Model choice needs model review | 2D | 5/3/4/3/1/5 = 21 | W3 |
+| FL-13 | **Acid – base, chất chỉ thị, thang pH** | B08-O02, B09-O02 | B08-O01, B09-O01 | Indicator colour by pH band (litmus, phenolphthalein; reviewed bands), unknown-sample identification, neutralisation `n(H⁺) = n(OH⁻)`. Existing pH mode was added in place to `chemistry@1.0.0`: register it as its own model version | 2D | 5/4/2/3/3/5 = 22 | W2 |
+| FL-14 | Bàn phản ứng: oxide, acid, base, muối, dãy hoạt động kim loại | B10-O03, B11-O02, B11-O03. K9: 9/kim-loai/2, 3, 4 | B02-O05, B10-O01, B10-O02, B11-O01, B11-O04. K9: 9/kim-loai/5 | Rule-based reaction outcome from a **reviewed reaction database** (reagents → occurs?/products/phenomenon: gas, precipitate, colour), solubility table, metal activity series displacement. Database curation and safety framing are the main cost | 2D | 4/3/4/5/2/5 = 23 | W3 |
+| FL-15 | An toàn phòng thí nghiệm | B01-O01 | B01-O02. K9: 9/mo-dau/1 | Rule-based scenario checker: hazard symbols, equipment choice, safe/unsafe actions. Virtual only; safety reviewer mandatory | 2D | 3/3/1/4/1/5 = 17 | W4 |
+| FL-30 | Lắp ráp phân tử hữu cơ & polymer (K9) | 9/ethylic-alcohol-va-acetic/1, 9/hydrocarbon-va-nguon-nhien/1, 3, 9/lipid-carbohydrate-protein/9, 10 | 9/ethylic-alcohol-va-acetic/4, 9/gioi-thieu-ve-chat-huu-co/1, 2, 9/lipid-carbohydrate-protein/1, 7 | Valence-rule builder (C 4, H 1, O 2), formula/structure check, alkane vs alkene, functional group recognition, monomer → polymer repeat unit (PE, PP), ester formation as template | 3D + 2D fallback | 4/4/4/3/1/3 = 19 | W4, K9 cond. |
+
+### 4.3 Biology / LIVING (and cross-cutting)
+
+| ID | Lab | P | S | Model sketch | Mod. | I/T/C/R/L/M = Σ | Wave |
+|---|---|---|---|---|---|---|---|
+| FL-16 | Cấu tạo – chức năng cơ thể người (generalises `eye@1.0.0`) | B37-O04, B37-O05 | B30-O01, B31-O01, B32-O02, B35-O01, B37-O01, B38-O01, B39-O01 | Labelling + structure→function matching per organ system; light path to retina, sound path to cochlea as ordered-step model. Not a physiology simulation | 3D + 2D fallback | 3/4/2/4/3/2 = 18 | W4 |
+| FL-17 | Tuần hoàn và hô hấp | B33-O05, B34-O01 | B33-O01, B33-O02 (ABO compatibility rule) | Flow-path ordering through heart/vessels, ventilation/gas-exchange compartment model, ABO transfusion compatibility rule. Must avoid individual/medical claims | 2D + 3D | 4/**2**/2/3/1/3 = 15 | **BL** (T < 3 until model reduced) |
+| FL-18 | Xây dựng khẩu phần ăn | B32-O03 | — | Sum energy/nutrients from a reviewed, licensed food table vs age-group requirement; balance check. Needs data rights | 2D | 4/4/1/1/1/5 = 16 | W4 |
+| FL-19 | Cân bằng môi trường trong, điều hoà thân nhiệt | B39-O05 | B36-O01, B36-O02 | Negative-feedback toy model (set point, sweating/shivering responses). Qualitative only | 2D | 3/**2**/1/1/1/5 = 13 | **BL** |
+| FL-20 | Nhân tố sinh thái, giới hạn sinh thái, quần thể | B41-O03, B42-O02 | B41-O02 | Tolerance curve (min/optimum/max per factor, reviewed example species), population density = N/area, age-structure pyramid classification | 2D | 4/4/2/2/1/5 = 18 | W4 |
+| FL-21 | Lưới thức ăn và cân bằng tự nhiên | B44-O02, B44-O03, B46-O02 | B43-O02, B46-O01, B46-O03 | Deterministic food-web builder; remove/add a species → qualitative effect; energy pyramid with declared transfer efficiency (~10 %). No stochastic population dynamics in v1 | 2D | 5/3/3/3/1/5 = 20 | W4 |
+| FL-22 | Hiệu ứng nhà kính và chu trình carbon (K8 + K9) | B28-O03. K9: 9/khai-thac-tai-nguyen-tu-vo/8 | B47-O03. K9: 9/khai-thac-tai-nguyen-tu-vo/7, 9/nang-luong-voi-cuoc-song/1, 2 | Qualitative energy-flow diagram (incoming/outgoing radiation, greenhouse gas trapping), carbon reservoirs/fluxes. Any numeric climate model is out of scope | 2D | 4/**2**/2/4/1/5 = 18 | **BL** |
+| FL-26 | **Lai Mendel, xác định giới tính, di truyền liên kết** (K9) | 9/hien-tuong-di-truyen-mendel/1, 2, 9/di-truyen-nhiem-sac-the/4, 5 | 9/di-truyen-hoc-voi-con-nguoi/1 | Punnett squares for monohybrid/dihybrid crosses, expected ratios (deterministic), optional seeded sampling of offspring counts; XY sex determination; complete linkage vs independent assortment | 2D | 5/5/3/3/1/5 = 22 | W3, K9 cond. |
+| FL-27 | Từ gene đến protein (K9) | 9/tu-gene-den-protein/2, 4, 5, 6, 7 | 9/hien-tuong-di-truyen/2, 9/tu-gene-den-protein/8 | Base pairing (A–T, G–C; A–U in RNA), replication, transcription, translation with the standard codon table, point mutation → codon/amino-acid change | 2D | 4/5/4/2/1/5 = 21 | W4, K9 cond. |
+| FL-28 | Nhiễm sắc thể, nguyên phân, giảm phân (K9) | 9/di-truyen-nhiem-sac-the/1, 9/nhiem-sac-the/2 | 9/di-truyen-nhiem-sac-the/3, 9/nhiem-sac-the/1, 3 | Stage ordering, chromosome count 2n → 2n (mitosis) / 2n → n (meiosis), diploid vs haploid, structural mutation examples | 2D (3D optional) | 4/4/2/2/1/4 = 17 | W4, K9 cond. |
+| FL-29 | Chọn lọc tự nhiên và nhân tạo (K9) | 9/tien-hoa/2, 3, 6 | 9/tien-hoa/1, 5 | Population of variants under a selection rule over generations, seeded deterministic. Growth/selection law choice is review-sensitive | 2D | 5/**2**/3/2/1/5 = 18 | **BL** |
+
+## 5. Rollout by wave
+
+| Wave | Labs | Condition |
+|---|---|---|
+| W1 | FL-01 (K8 scope only) | P3.4 pilot as already defined in P3.1 |
+| W2 | FL-10 and FL-13 (split the current `chemistry` engine into two reviewed models), then the **fluid family** FL-03 / FL-04 / FL-05 sharing one `fluid-bench-2d` renderer kit | P3.5 gate passed. ≤ 2 concurrent |
+| W3 | FL-06, FL-12, FL-14, FL-11, FL-07. K9 (if provenance standard met): FL-01 K9 extension, FL-23, FL-24, FL-26 | Reviewer capacity for each subject area. KHTN 9 register deduplicated |
+| W4 | FL-02, FL-08, FL-09, FL-15, FL-16, FL-18, FL-20, FL-21, FL-25, FL-27, FL-28, FL-30 | Lower coverage or extra data/rights work |
+| BL | FL-17, FL-19, FL-22, FL-29 | Fail tractability gate until a reduced model passes model review |
+
+Rationale:
+- W1+W2 (6 Labs) cover **21 of the 51 KHTN 8 primary outcomes (41 %)**: FL-01 6, FL-10 7, FL-13 2, FL-03 2, FL-04 3, FL-05 1. Their supporting outcomes come on top of that.
+- Chemistry and physics are front-loaded because their models are bounded and reviewable.
+- Biology Labs carry more model-choice and health-framing risk.
+
+## 6. 2D / 3D decision
+
+- **2D** for 25 of 30 candidates. These outcomes are about quantities, graphs, circuits, rays, ratios or rules, which 2D shows as well as SGK diagrams do, at the lowest device/performance cost.
+- **3D with a 2D fallback** for FL-16 (organ structures), FL-30 (molecular geometry) and FL-17 (heart chambers, backlog).
+- **3D optional** for FL-25 and FL-28. Adopt it only after a 2D version passes QA.
+
+Budgets as in `foundational-lab-track.md` §6.
+
+## 7. Decisions needed from reviewers
+
+| ID | Type | Question |
+|---|---|---|
+| CAT-1 | Curriculum | Accept the P/S/N classification per outcome (Appendix) or change it. Every row needs a decision before P3.3 can mark mappings `REVIEWED` |
+| CAT-2 | Curriculum | Fix register defects §1 (OCR, B07 split, B15 gap, KHTN 9 duplicates) before review |
+| CAT-3 | Product | Confirm wave order and the "fluid family" grouping (3 Labs, one renderer kit) vs one Lab with 3 modes |
+| CAT-4 | Science | For each W2 Lab: reviewed constants/tables (molar masses, indicator pH bands, densities, `g` or `P = 10m` convention) and their sources |
+| CAT-5 | Science | Whether FL-23 uses the thin-lens formula or geometric construction only at KHTN 9 level |
+| CAT-6 | Product/safety | Confirm H/K outcomes stay out of simulations (B31–B40 health, B40 reproduction) |
+| CAT-7 | Technical | Split `chemistry@1.0.0` into `stoichiometry@…` and `acid-base@…` models before FL-10/FL-13 releases (relates to T-4) |
+
+## Appendix — per-outcome mapping
+
+Generated from the DB export (2026-10-28). "Statement" is truncated and keeps the register's OCR errors.
+
+### KHTN 8
+
+| Outcome | Chương | Lab | Vai trò | Statement (rút gọn) |
+|---|---|---|---|---|
+| `B01-O01` | Mở đầu | FL-15 | chính | Nhận biết được một số dụng cụ, hoá chất và nêu được quy tắc sử dụng hoá chất an toàn. |
+| `B01-O02` | Mở đầu | FL-15 | hỗ trợ | Nhận biết được các thiết bị điện trong môn Khoa học tự nhiên 8 và trình bày được cách sử dụng điện an toàn. |
+| `B02-O01` | Chương I. Phản ứng hoá học | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm, đưa ra được ví dụ minh hoạ và phân biệt được biến đổi vật lí, biến đổi hoá học. |
+| `B02-O02` | Chương I. Phản ứng hoá học | — | không cần Lab: thực hành thật/video phù hợp hơn | Tiến hành được một số thí nghiệm về biến đổi vật lí và biến đổi hoá học. |
+| `B02-O03` | Chương I. Phản ứng hoá học | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm phần ứng hoá học, chất đầu và sản phẩm. |
+| `B02-O04` | Chương I. Phản ứng hoá học | — | không cần Lab: khái niệm/ghi nhớ | Nêu được sự sắp xếp khác nhau của các nguyên tử trong phân tử chất đầu và sản phẩm. |
+| `B02-O05` | Chương I. Phản ứng hoá học | FL-14 | hỗ trợ | Chỉ ra được một số dấu hiệu chứng tổ có phần ứng hoá học xảy ra. |
+| `B02-O06` | Chương I. Phản ứng hoá học | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm, đưa ra được ví dụ minh hoạ về phần ứng toả nhiệt, thu nhiệt và trình bày được các ứng dụng |
+| `B03-O01` | Chương I. Phản ứng hoá học | FL-10 | chính | Nêu được khái niệm mol, tính được khối lượng mol và chuyển đổi được giữa số mol và khối lượng. |
+| `B03-O02` | Chương I. Phản ứng hoá học | FL-10 | chính | Nêu được khái niệm tỉ khối, viết được công thức tính tỉ khối của chất khí và so sánh được chất khí này nặng ha |
+| `B03-O03` | Chương I. Phản ứng hoá học | FL-10 | hỗ trợ | Nêu được khái niệm thể tích mol của chất khí ở áp suất 1 bar và 25 °C. |
+| `B03-O04` | Chương I. Phản ứng hoá học | FL-10 | chính | Sử dụng được công thức n(mol) = $\frac{V(L)}{24,79(L/mol)}$ để chuyển đổi giữa số mol và thể tích chất khí ở đ |
+| `B04-O01` | Chương I. Phản ứng hoá học | FL-11 | hỗ trợ | Nêu được dung dịch là hỗn hợp lồng đồng nhất của các chất đã tan trong nhau. |
+| `B04-O02` | Chương I. Phản ứng hoá học | FL-11 | hỗ trợ | Nêu được định nghĩa độ tan của một chất trong nước, nông độ phần trăm, nông độ mol. |
+| `B04-O03` | Chương I. Phản ứng hoá học | FL-11 | chính | Tính được độ tan, nông độ phần trăm; nông độ mol theo công thức. |
+| `B04-O04` | Chương I. Phản ứng hoá học | FL-11 | chính | Tiến hành được thí nghiệm pha một dung dịch theo một nóng độ cho trước. |
+| `B05-O01` | Chương I. Phản ứng hoá học | FL-10 | chính | Tiến hành được thí nghiệm để chứng minh: trong phần ứng hoá học khối lượng được bảo toàn. |
+| `B05-O02` | Chương I. Phản ứng hoá học | FL-10 | hỗ trợ | Phát biểu được định luật bảo toàn khối lượng. |
+| `B05-O03` | Chương I. Phản ứng hoá học | FL-10 | chính | Nếu được khái niệm phương trình hoá học và các bước lập phương trình hoá học. |
+| `B05-O04` | Chương I. Phản ứng hoá học | FL-10 | hỗ trợ | Trình bày được ý nghĩa của phương trình hoá học. |
+| `B06-O01` | Chương I. Phản ứng hoá học | FL-10 | chính | Tính được lượng chất trong phương trình hoá học theo số mol, khối lượng hoặc thể tích ở điều kiện 1 bar và 25  |
+| `B06-O02` | Chương I. Phản ứng hoá học | FL-10 | hỗ trợ | Nêu được khái niệm hiệu suất của phần ứng. |
+| `B06-O03` | Chương I. Phản ứng hoá học | FL-10 | chính | Tính được hiệu suất của một phần ứng dựa vào lượng sản phẩm thu được theo lí thuyết và lượng sản phẩm thu được |
+| `B07-O01` | Chương I. Phản ứng hoá học | FL-12 | hỗ trợ | Nêu được khái niệm về tốc độ phần ứng (chỉ mức độ nhanh hay chậm của phần ứng hoá học). |
+| `B07-O02` | Chương I. Phản ứng hoá học | FL-12 | chính | Trình bày được một số yếu tố ảnh hưởng đến tốc độ phần ứng và nêu được một số ứng dụng thực tế. |
+| `B07-O03` | Chương I. Phản ứng hoá học | FL-12 | chính | Tiến hành được thí nghiệm và quan sát thực tiễn: |
+| `B07-O04` | Chương I. Phản ứng hoá học | FL-12 | chính | + So sánh được tốc độ một số phần ứng hoá học; |
+| `B07-O05` | Chương I. Phản ứng hoá học | FL-12 | chính | + Nếu được các yếu tố làm thay đổi tốc độ phần ứng; |
+| `B07-O06` | Chương I. Phản ứng hoá học | FL-12 | hỗ trợ | + Nêu được khái niệm về chất xúc tác. |
+| `B08-O01` | Chương II. Một số hợp chất thông | FL-13 | hỗ trợ | Nêu được khái niệm acid (tạo ra ion H⁺). |
+| `B08-O02` | Chương II. Một số hợp chất thông | FL-13 | chính | Tiến hành được thí nghiệm của hydrochloric acid (làm đổi màu chất chỉ thị; phần ứng với kim loại), nêu và giải |
+| `B08-O03` | Chương II. Một số hợp chất thông | — | không cần Lab: ứng dụng/đọc hiểu | Trình bày được một số ứng dụng của một số acid thông dụng (HCl, H₂SO₄, CH₃COOH). |
+| `B09-O01` | Chương II. Một số hợp chất thông | FL-13 | hỗ trợ | Nêu được khái niệm base (tạo ra ion OH $^{-}$ ), kiểm là các hydroxide tan tốt trong nước. |
+| `B09-O02` | Chương II. Một số hợp chất thông | FL-13 | chính | Tiến hành được các thí nghiệm của base (làm đối màu chất chỉ thị, phần ứng với acid tạo muối); nêu và giải thí |
+| `B10-O01` | Chương II. Một số hợp chất thông | FL-14 | hỗ trợ | Nêu được khái niệm oxide và phân loại được các oxide theo khả năng phản ứng với acid/base. |
+| `B10-O02` | Chương II. Một số hợp chất thông | FL-14 | hỗ trợ | Viết được phương trình hoá học tạo oxide từ kim loại/phi kim với oxygen. |
+| `B10-O03` | Chương II. Một số hợp chất thông | FL-14 | chính | Tiến hành được thí nghiệm oxide kim loại phần ứng với acid; oxide phi kim phần ứng với base; nêu và giải thích |
+| `B11-O01` | Chương II. Một số hợp chất thông | FL-14 | hỗ trợ | Nêu được khái niệm về muối, đọc được tên một số loại muối thông dụng và trình bày được một số phương pháp điều |
+| `B11-O02` | Chương II. Một số hợp chất thông | FL-14 | chính | Chỉ ra được một số muối tan và muối không tan từ bằng tính tan. |
+| `B11-O03` | Chương II. Một số hợp chất thông | FL-14 | chính | Tiến hành được thí nghiệm muối phản ứng với kim loại, acid, base, muối; nêu và giải thích được hiện tượng xảy  |
+| `B11-O04` | Chương II. Một số hợp chất thông | FL-14 | hỗ trợ | Trình bày được mối quan hệ giữa acid, base, oxide và muối và rút ra được kết luận về tính chất hoá học của aci |
+| `B12-O01` | Chương II. Một số hợp chất thông | — | không cần Lab: ứng dụng/đọc hiểu | Trình bày được vai trò của phân bón đối với cây trồng. |
+| `B12-O02` | Chương II. Một số hợp chất thông | — | không cần Lab: khái niệm/ghi nhớ | Nêu được thành phần và tác dụng cơ bản của một số loại phần bón hoá học đối với cây trồng. |
+| `B12-O03` | Chương II. Một số hợp chất thông | — | không cần Lab: dự án/điều tra/thảo luận | Trình bày được ảnh hưởng của việc sử dụng phân bón hoá học đến môi trường của đất, nước và sức khoẻ của con ng |
+| `B13-O01` | Chương III. Khối lượng riêng và  | FL-03 | chính | Nếu được định nghĩa khối lượng riêng, xác định được khối lượng riêng qua khối lượng và thể tích tương ứng. Khố |
+| `B13-O02` | Chương III. Khối lượng riêng và  | FL-03 | hỗ trợ | Liệt kê được một số đơn vị đo khối lượng riêng thường dùng. |
+| `B14-O01` | Chương III. Khối lượng riêng và  | FL-03 | chính | Thực hiện thí nghiệm để xác định được khối lượng riêng của một khối hộp chữ nhật, của một vật có hình dạng bắt |
+| `B15-O01` | Chương III. Khối lượng riêng và  | FL-04 | hỗ trợ | Liệt kê được một số đơn vị đo áp suất thông dụng. |
+| `B15-O02` | Chương III. Khối lượng riêng và  | FL-04 | hỗ trợ | Thảo luận được công dụng của việc tăng, giảm áp suất qua một số hiện tượng thực tế. |
+| `B16-O01` | Chương III. Khối lượng riêng và  | FL-04 | chính | Thực hiện thí nghiệm khảo sát tác dụng của chất lỏng lên vật đặt trong chất lỏng. |
+| `B16-O02` | Chương III. Khối lượng riêng và  | FL-04 | chính | Nếu được áp suất tác dụng vào chất lỏng sẽ được chất lỏng truyền đi nguyên vẹn theo mọi hướng. Lấy ví dụ minh  |
+| `B16-O03` | Chương III. Khối lượng riêng và  | FL-04 | chính | Thực hiện được thí nghiệm để chứng tổ tổn tại áp suất khí quyền và áp suất này tác dụng theo mọi phương. |
+| `B16-O04` | Chương III. Khối lượng riêng và  | — | không cần Lab: khái niệm/ghi nhớ | Mô tả được sự tạo thành tiếng động trong tai khi tai chịu sự thay đổi áp suất đột ngọt. |
+| `B16-O05` | Chương III. Khối lượng riêng và  | FL-04 | hỗ trợ | Giải thích được một số ứng dụng về áp suất không khí trong đời sống (ví dụ như: giác mút, bình xịt, tàu đêm kh |
+| `B17-O01` | Chương III. Khối lượng riêng và  | FL-05 | chính | Thực hiện thí nghiệm khảo sát tác dụng của chất lỏng lên vật đặt trong chất lỏng, rút ra được: điều kiện định  |
+| `B18-O01` | Chương IV. Tác dụng làm quay của | FL-06 | chính | Thực hiện thí nghiệm để mô tả được tác dụng làm quay của lực. |
+| `B18-O02` | Chương IV. Tác dụng làm quay của | FL-06 | chính | Nếu được: tác dụng làm quay của lực lên một vật quanh một điểm hoặc một trực được đặc trưng bằng moment lực. |
+| `B19-O01` | Chương IV. Tác dụng làm quay của | FL-06 | hỗ trợ | Lấy được ví dụ về một số loại đơn bảy khác nhau trong thực tiễn. |
+| `B19-O02` | Chương IV. Tác dụng làm quay của | FL-06 | chính | Sử dụng kiến thức, kĩ năng về dòn bảy để giải quyết được một số vấn đề thực tiễn. |
+| `B20-O01` | Chương V. Điện | FL-02 | chính | Giải thích được sơ lược nguyên nhân một vật cách điện nhiễm điện do cơ xát. |
+| `B20-O02` | Chương V. Điện | FL-02 | hỗ trợ | Giải thích được một vài hiện tượng thực tế liên quan đến sự nhiễm điện do cơ xát. |
+| `B21-O01` | Chương V. Điện | FL-01 | hỗ trợ | Nếu được định nghĩa dòng điện là dòng chuyển dồi có hướng của các hạt mang điện; phân loại được vật dẫn điện,  |
+| `B21-O02` | Chương V. Điện | — | không cần Lab: khái niệm/ghi nhớ | Nếu được nguồn điện có khả năng cung cấp năng lượng điện và liệt kê được một số nguồn điện thông dụng trong đờ |
+| `B22-O01` | Chương V. Điện | FL-01 | chính | Vẽ được sơ đồ mạch điện với các kí hiệu mô tả: điện trở, biến trở, chương điện, ampe kê, vốn kê, diốt và diốt  |
+| `B22-O02` | Chương V. Điện | FL-01 | chính | Mắc được mạch điện đơn giản với: pin, công tắc, dây nổi, bóng đèn. |
+| `B22-O03` | Chương V. Điện | — | không cần Lab: khái niệm/ghi nhớ | Mô tả được sơ lược công dụng của cấu chỉ, rôle, cấu dao tự động, chương điện. |
+| `B23-O01` | Chương V. Điện | FL-01 | hỗ trợ | Thực hiện thí nghiệm để minh hoạ được các tác dụng cơ bản của dòng điện: nhiệt, phát sáng, hoá học, sinh lí. |
+| `B24-O01` | Chương V. Điện | FL-01 | chính | Thực hiện thí nghiệm để nêu được số chỉ của ampe kế là giá trị của cường độ dòng điện. |
+| `B24-O02` | Chương V. Điện | FL-01 | chính | Thực hiện thí nghiệm để nêu được khả năng sinh ra dòng điện của pin (hay acquy) được đo bằng hiệu điện thế (cò |
+| `B24-O03` | Chương V. Điện | FL-01 | hỗ trợ | Nếu được đơn vị đo cường độ dòng điện và đơn vị đo hiệu điện thể. |
+| `B25-O01` | Chương V. Điện | FL-01 | chính | Đo được cường độ dòng điện và hiệu điện thế bằng dụng cụ thực hành. |
+| `B25-O02` | Chương V. Điện | FL-01 | chính | Vẽ được sơ đồ mạch điện với các kí hiệu mô tả ampe kế và vốn kế. |
+| `B26-O01` | Chương VI. Nhiệt | FL-07 | hỗ trợ | Nêu được khái niệm năng lượng nhiệt; khái niệm nội năng. |
+| `B26-O02` | Chương VI. Nhiệt | FL-07 | hỗ trợ | Nêu được: Khi một vật được làm nóng, các phân tử của vật chuyển động nhanh lên và nội năng của vật tăng. |
+| `B27-O01` | Chương VI. Nhiệt | FL-07 | chính | Đo được năng lượng nhiệt mà vật nhận được khi bị đun nóng. |
+| `B28-O01` | Chương VI. Nhiệt | FL-08 | chính | Lấy được ví dụ về hiện tượng dẫn nhiệt, đối lưu, bức xạ nhiệt và mô tả sơ lược sự truyền năng lượng trong mỗi  |
+| `B28-O02` | Chương VI. Nhiệt | FL-08 | chính | Phân tích được một số ví dụ về công dụng của vật dẫn nhiệt tốt, công dụng của vật cách nhiệt tốt. |
+| `B28-O03` | Chương VI. Nhiệt | FL-22 | chính | Mô tả được sự truyền năng lượng trong hiệu ứng nhà kính. |
+| `B28-O04` | Chương VI. Nhiệt | FL-08 | hỗ trợ | Vận dụng kiến thức về sự truyền nhiệt giải thích một số hiện tượng đơn giản thường gặp. |
+| `B29-O01` | Chương VI. Nhiệt | FL-09 | chính | Thực hiện thí nghiệm để chứng tỏ được các chất khác nhau nở vì nhiệt khác nhau. |
+| `B29-O02` | Chương VI. Nhiệt | FL-09 | hỗ trợ | Lấy được một số ví dụ về công dụng và tác hại của sự nở vì nhiệt. |
+| `B29-O03` | Chương VI. Nhiệt | FL-09 | hỗ trợ | Vận dụng kiến thức về sự nở vì nhiệt, giải thích một số hiện tượng đơn giản thường gặp trong thực tế. |
+| `B30-O01` | Chương VII. Sinh học cơ thể ngườ | FL-16 | hỗ trợ | Nêu được tên và vai trò chính của các cơ quan, hệ cơ quan trong cơ thể người. |
+| `B31-O01` | Chương VII. Sinh học cơ thể ngườ | FL-16 | hỗ trợ | Nêu được cấu tạo, chức năng và phân tích được sự phù hợp giữa cấu tạo với chức năng của hệ vận động. |
+| `B31-O02` | Chương VII. Sinh học cơ thể ngườ | FL-06 | hỗ trợ | Mô tả được cấu tạo sơ lược các cơ quan của hệ vận động. Liên hệ được kiến thức đơn bảy vào hệ vận động. Giải t |
+| `B31-O03` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Trình bày được một số bệnh, tật và bệnh học đường liên quan đến hệ vận động. Nêu được biện pháp bảo vệ các cơ  |
+| `B31-O04` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Nêu được ý nghĩa của tập thể dục, thể thao và chọn phương pháp luyện tập thể thao phù hợp. Vận dụng hiểu biết  |
+| `B32-O01` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm dinh dưỡng, chất dinh dưỡng và mối quan hệ giữa tiêu hoá, dinh dưỡng. |
+| `B32-O02` | Chương VII. Sinh học cơ thể ngườ | FL-16 | hỗ trợ | Trình bày được chức năng của hệ tiêu hoá; kể tên được các cơ quan của hệ tiêu hoá, nêu được chức năng của mối  |
+| `B32-O03` | Chương VII. Sinh học cơ thể ngườ | FL-18 | chính | Trình bày được chế độ dinh dưỡng của con người ở các độ tuổi; nêu được nguyên tắc lập khẩu phần ăn cho con ngư |
+| `B32-O04` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Nêu được một số bệnh về đường tiêu hoá và cách phòng chống các bệnh đó; vận dụng để phòng chống các bệnh về ti |
+| `B32-O05` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Trình bày được một số vấn đề về an toàn thực phẩm. |
+| `B32-O06` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Vận dụng được hiểu biết về an toàn vệ sinh thực phẩm để để xuất các biện pháp lựa chọn, bảo quản, chế biến, ch |
+| `B32-O07` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: dự án/điều tra/thảo luận | Thực hiện được dự án điều tra về vệ sinh an toàn thực phẩm tại địa phương; dự án điều tra một số bệnh đường ti |
+| `B33-O01` | Chương VII. Sinh học cơ thể ngườ | FL-17 | hỗ trợ | Nêu được chức năng của máu; nêu tên các thành phần của máu và chức năng của mỗi thành phần. |
+| `B33-O02` | Chương VII. Sinh học cơ thể ngườ | FL-17 | hỗ trợ | Nêu được khái niệm nhóm máu; phân tích được vai trò của việc hiểu biết về nhóm máu trong thực tiễn. |
+| `B33-O03` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm miễn dịch, kháng nguyên, kháng thể; vai trò của vaccine và tiêm vaccine trong việc phòng bệ |
+| `B33-O04` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Nếu được một số bệnh về máu, tìm mạch và cách phòng chống; vận dụng được hiểu biết về máu và tuần hoàn để bảo  |
+| `B33-O05` | Chương VII. Sinh học cơ thể ngườ | FL-17 | chính | Kế tên được các cơ quan của hệ tuần hoàn; nêu được chức năng của mối cơ quan và sự phối hợp các cơ quan thể hi |
+| `B33-O06` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: thực hành thật/video phù hợp hơn | Thực hiện được tình hướng giả định cấp cứu người bị chảy máu, tai biến, đột quy; bằng bó vết thương khi bị chả |
+| `B33-O07` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: dự án/điều tra/thảo luận | Thực hiện được dự án, bài tập: Điều tra một số bệnh liên quan đến máu và hệ tuần hoàn; tìm hiểu được phong trà |
+| `B34-O01` | Chương VII. Sinh học cơ thể ngườ | FL-17 | chính | Nêu được cấu tạo và chức năng của hệ hô hấp; nêu được chức năng của mối cơ quan và sự phối hợp các cơ quan thể |
+| `B34-O02` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Nêu được một số bệnh về phối, đường hô hấp và cách phòng chống bệnh; vận dụng được hiểu biết về hô hấp để bảo  |
+| `B34-O03` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Trình bày được vai trò của việc chống ô nhiễm không khí liên quan đến các bệnh về hô hấp. |
+| `B34-O04` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: dự án/điều tra/thảo luận | Điều tra được một số bệnh về đường hô hấp trong trường học hoặc tại địa phương, nêu được nguyên nhân và cách p |
+| `B34-O05` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: thực hành thật/video phù hợp hơn | Thực hiện được tình huống giả định hô hấp nhân tạo, cấp cứu người đuôi nước; thiết kế được áp phích tuyên truy |
+| `B35-O01` | Chương VII. Sinh học cơ thể ngườ | FL-16 | hỗ trợ | Nêu được chức năng của hệ bài tiết; kể tên được các cơ quan của hệ bài tiết nước tiểu và các bộ phận chủ yếu c |
+| `B35-O02` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Trình bày được một số bệnh về hệ bài tiết và cách phòng chống bệnh; vận dụng kiến thức về hệ bài tiết để bảo v |
+| `B35-O03` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: ứng dụng/đọc hiểu | Tím hiểu được một số thành tựu: ghép thận, chạy thận nhân tạo. |
+| `B35-O04` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: dự án/điều tra/thảo luận | Thực hiện được dự án, bài tập: Điều tra bệnh về thận như sỏi thận, viêm thận,... trong trường học hoặc địa phư |
+| `B36-O01` | Chương VII. Sinh học cơ thể ngườ | FL-19 | hỗ trợ | Nêu được khái niệm môi trường trong của cơ thể. |
+| `B36-O02` | Chương VII. Sinh học cơ thể ngườ | FL-19 | hỗ trợ | Nêu được khái niệm cân bằng môi trường trong và vai trò của sự duy trì ổn định môi trường trong của cơ thể (ví |
+| `B36-O03` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: ứng dụng/đọc hiểu | Đọc và hiểu được thông tin một ví dụ cụ thể về kết quả xét nghiệm nông độ glucose và uric acid trong máu. |
+| `B37-O01` | Chương VII. Sinh học cơ thể ngườ | FL-16 | hỗ trợ | Nêu được cấu tạo và chức năng của hệ thần kinh; nêu được chức năng của các giác quan, giác quan thị giác và th |
+| `B37-O02` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Trình bày được một số bệnh về hệ thần kinh và cách phòng chống các bệnh đó. |
+| `B37-O03` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Nếu được tác hại của các chất gây nghiên đối với hệ thần kinh; không sử dụng các chất gây nghiên và tuyên truy |
+| `B37-O04` | Chương VII. Sinh học cơ thể ngườ | FL-16 | chính | Kế tên được các bộ phận của mắt và sơ đồ đơn giản quá trình thu nhận ánh sáng; liên hệ được kiến thức truyền á |
+| `B37-O05` | Chương VII. Sinh học cơ thể ngườ | FL-16 | chính | Kể tên được các bộ phận của tai và sơ đồ đơn giản quá trình thu nhận âm thanh; liên hệ được cơ chế truyền âm t |
+| `B37-O06` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Trình bày được một số bệnh về thị giác, thính giác, cách phòng chống các bệnh đó; vận dụng để bảo vệ bản thân  |
+| `B37-O07` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: dự án/điều tra/thảo luận | Tìm hiểu được các bệnh và tật về mắt trong trường học, tuyên truyền chăm sóc và bảo vệ đôi mắt. |
+| `B38-O01` | Chương VII. Sinh học cơ thể ngườ | FL-16 | hỗ trợ | Kế được tên và nêu được chức năng của các tuyến nội tiết. |
+| `B38-O02` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Nêu được một số bệnh liên quan đến hệ nội tiết và cách phòng chống các bệnh đó; vận dụng được hiểu biết về các |
+| `B38-O03` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: dự án/điều tra/thảo luận | Tím hiểu được các bệnh nội tiết ở địa phương (tiểu đường, buóu cổ do thiếu iodine,...). |
+| `B39-O01` | Chương VII. Sinh học cơ thể ngườ | FL-16 | hỗ trợ | Nêu được cấu tạo sơ lược và chức năng của da. |
+| `B39-O02` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Trình bày được một số bệnh về da và các biện pháp chăm sóc, bảo vệ, làm đẹp da an toàn; vận dụng được hiểu biế |
+| `B39-O03` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: dự án/điều tra/thảo luận | Tím hiểu được một số thành tựu ghép da trong y học, các bệnh về da trong trường học hoặc trong khu dân cư. |
+| `B39-O04` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: thực hành thật/video phù hợp hơn | Nêu được khái niệm thân nhiệt; thực hành được cách đo thân nhiệt và nêu được ý nghĩa của việc đo thân nhiệt. |
+| `B39-O05` | Chương VII. Sinh học cơ thể ngườ | FL-19 | chính | Nêu được vai trò và cơ chế duy trì thân nhiệt ổn định ở người; vai trò của da và hệ thần kinh trong điều hoà t |
+| `B39-O06` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: sức khoẻ/hành vi | Trình bày được một số phương pháp chống nóng, lạnh cho cơ thể; nêu được một số biện pháp chống cảm lạnh, cảm n |
+| `B40-O01` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: nhạy cảm/an toàn trẻ em | Nếu được chức năng của hệ sinh dục; kể tên và trình bày được chức năng của các cơ quan sinh dục nam, cơ quan s |
+| `B40-O02` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: nhạy cảm/an toàn trẻ em | Nêu được khái niệm thụ tỉnh và thụ thai; nêu được hiện tượng kinh nguyệt và cách phòng tránh thai. |
+| `B40-O03` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: nhạy cảm/an toàn trẻ em | Kế tên và trình bày được cách phòng chống một số bệnh lây truyền qua đường sinh dục. |
+| `B40-O04` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: nhạy cảm/an toàn trẻ em | Nếu được ý nghĩa và các biện pháp bảo vệ sức khoẻ sinh sản vị thành niên; vận dụng được hiểu biết về sinh sản  |
+| `B40-O05` | Chương VII. Sinh học cơ thể ngườ | — | không cần Lab: nhạy cảm/an toàn trẻ em | Điều tra được sự hiểu biết của học sinh trong trường học về sức khoẻ sinh sản vị thành niên (an toàn tình dục) |
+| `B41-O01` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm môi trường sống của sinh vật; phân biệt được bốn loại môi trường sống chủ yếu và lấy được v |
+| `B41-O02` | Chương VIII. Sinh vật và môi trư | FL-20 | hỗ trợ | Nêu được khái niệm nhân tố sinh thái; phân biệt được nhân tố vô sinh và hữu sinh; lấy được ví dụ minh hoạ các  |
+| `B41-O03` | Chương VIII. Sinh vật và môi trư | FL-20 | chính | Trình bày được khái niệm và lấy được ví dụ về giới hạn sinh thái. |
+| `B42-O01` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: khái niệm/ghi nhớ | Phát biểu được khái niệm quản thể sinh vật. |
+| `B42-O02` | Chương VIII. Sinh vật và môi trư | FL-20 | chính | Nêu được các đặc trưng cơ bản của quản thể sinh vật và lấy được ví dụ minh hoạ. |
+| `B42-O03` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: ứng dụng/đọc hiểu | Nêu được một số biện pháp bảo vệ quản thể. |
+| `B43-O01` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: khái niệm/ghi nhớ | Phát biểu được khái niệm quân xã sinh vật. |
+| `B43-O02` | Chương VIII. Sinh vật và môi trư | FL-21 | hỗ trợ | Nêu được một số đặc trưng cơ bản của quản xã. Lấy được ví dụ minh hoạ. |
+| `B43-O03` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: ứng dụng/đọc hiểu | Nếu được một số biện pháp bảo vệ đa dạng sinh học trong quân xã. |
+| `B44-O01` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: khái niệm/ghi nhớ | Phát biểu được khái niệm hệ sinh thái. Lấy được ví dụ về các kiểu hệ sinh thái. |
+| `B44-O02` | Chương VIII. Sinh vật và môi trư | FL-21 | chính | Nêu được khái niệm chuỗi, lưới thức ăn; sinh vật sản xuất, sinh vật tiêu thụ, sinh vật phân giải, thấp sinh th |
+| `B44-O03` | Chương VIII. Sinh vật và môi trư | FL-21 | chính | Trình bày được khái quát quá trình trao đổi chất và chuyển hoá năng lượng trong hệ sinh thái. |
+| `B44-O04` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: ứng dụng/đọc hiểu | Nêu được tấm quan trọng của việc bảo vệ một số hệ sinh thái diễn hình tại Việt Nam. |
+| `B45-O01` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm sinh quyền. |
+| `B45-O02` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: khái niệm/ghi nhớ | Nhận biết được các khu sinh học trên Trái Đất. |
+| `B46-O01` | Chương VIII. Sinh vật và môi trư | FL-21 | hỗ trợ | Nêu được khái niệm cân bằng tự nhiên. |
+| `B46-O02` | Chương VIII. Sinh vật và môi trư | FL-21 | chính | Trình bày được các nguyên nhân gây mất cân bằng tự nhiên. |
+| `B46-O03` | Chương VIII. Sinh vật và môi trư | FL-21 | hỗ trợ | Phân tích được một số biện pháp bảo vệ, duy trì cân bằng tự nhiên. |
+| `B47-O01` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: ứng dụng/đọc hiểu | Trình bày được tác động của con người đối với môi trường qua các thời kì phát triển xã hội; tác động của con n |
+| `B47-O02` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: ứng dụng/đọc hiểu | Nêu được khái niệm ô nhiễm môi trường. Trình bày được một số nguyên nhân và biện pháp hạn chế ô nhiễm môi trườ |
+| `B47-O03` | Chương VIII. Sinh vật và môi trư | FL-22 | hỗ trợ | Nêu được khái niệm khái quát về biến đổi khí hậu và biện pháp thích ứng. |
+| `B47-O04` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: ứng dụng/đọc hiểu | Trình bày được sự cần thiết phải bảo vệ động vật hoang đã có nguy cơ tuyệt chủng. |
+| `B47-O05` | Chương VIII. Sinh vật và môi trư | — | không cần Lab: dự án/điều tra/thảo luận | Điều tra được hiện trạng ô nhiễm môi trường ở địa phương. |
+
+### KHTN 9
+
+| Outcome | Chương | Lab | Vai trò | Statement (rút gọn) |
+|---|---|---|---|---|
+| `9/anh-sang/1` | Ánh sáng | FL-23 | chính | Thực hiện được thí nghiệm để rút ra và phát biểu được định luật khúc xạ ánh sáng. |
+| `9/anh-sang/10` | Ánh sáng | FL-23 | chính | Vẽ được sơ đồ tỉ lệ để giải các bài tập đơn giản về thấu kính hội tụ. |
+| `9/anh-sang/2` | Ánh sáng | FL-23 | chính | Nêu được chiết suất có giá trị bằng tỉ số tốc độ ánh sáng trong không khí (hoặc chân không) với tốc độ ánh sán |
+| `9/anh-sang/3` | Ánh sáng | FL-23 | chính | Thực hiện thí nghiệm để rút ra được điều kiện xảy ra phản xạ toàn phần và xác định được góc tới hạn. |
+| `9/anh-sang/4` | Ánh sáng | FL-23 | chính | Vẽ được sơ đồ đường truyền của tia sáng qua lăng kính. |
+| `9/anh-sang/5` | Ánh sáng | FL-23 | hỗ trợ | Giải thích được một cách định tính sự tán sắc ánh sáng Mặt Trời qua lăng kính. |
+| `9/anh-sang/6` | Ánh sáng | FL-23 | hỗ trợ | Nêu được các khái niệm: quang tâm, trục chính, tiêu điểm chính và tiêu cự của thấu kính. |
+| `9/anh-sang/7` | Ánh sáng | FL-23 | chính | Vẽ được ảnh qua thấu kính. |
+| `9/anh-sang/8` | Ánh sáng | FL-23 | chính | Đo được tiêu cự của thấu kính hội tụ bằng dụng cụ thực hành. |
+| `9/anh-sang/9` | Ánh sáng | FL-23 | chính | Mô tả được cấu tạo và sử dụng được kính lúp. |
+| `9/di-truyen-hoc-voi-con-nguoi/1` | Di truyền học với con người | FL-26 | hỗ trợ | Nêu được một số ví dụ về tính trạng ở người. |
+| `9/di-truyen-hoc-voi-con-nguoi/2` | Di truyền học với con người | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm về bệnh và tật di truyền ở người. |
+| `9/di-truyen-hoc-voi-con-nguoi/3` | Di truyền học với con người | — | không cần Lab: nhạy cảm/an toàn trẻ em | Nêu được vai trò của di truyền học với hôn nhân và trình bày được quan điểm về lựa chọn giới tính trong sinh s |
+| `9/di-truyen-nhiem-sac-the/1` | Di truyền nhiễm sắc thể | FL-28 | chính | Phân biệt được nguyên phân và giảm phân; nêu được ý nghĩa của nguyên phân, giảm phân trong di truyền và mối qu |
+| `9/di-truyen-nhiem-sac-the/2` | Di truyền nhiễm sắc thể | — | không cần Lab: ứng dụng/đọc hiểu | Trình bày được các ứng dụng và lấy được ví dụ của nguyên phân và giảm phân trong thực tiễn. |
+| `9/di-truyen-nhiem-sac-the/3` | Di truyền nhiễm sắc thể | FL-28 | hỗ trợ | Nêu khái niệm nhiễm sắc thể giới tính và nhiễm sắc thể thường. |
+| `9/di-truyen-nhiem-sac-the/4` | Di truyền nhiễm sắc thể | FL-26 | chính | Trình bày được cơ chế xác định giới tính. |
+| `9/di-truyen-nhiem-sac-the/5` | Di truyền nhiễm sắc thể | FL-26 | chính | Dựa vào sơ đồ phép lai trình bày được khái niệm di truyền liên kết và phân biệt với quy luật phân li độc lập. |
+| `9/dien-tu/1` | Điện từ | FL-25 | chính | Thực hiện thí nghiệm để nêu được nguyên tắc tạo ra dòng điện xoay chiều (dòng điện luân – Tác dụng của dòng đi |
+| `9/dien-tu/2` | Điện từ | FL-25 | hỗ trợ | Lấy được ví dụ chứng tỏ dòng điện xoay chiều có tác dụng nhiệt, phát sáng, tác dụng từ, tác dụng sinh lí. |
+| `9/dien/1` | Điện | FL-01 | chính | Thực hiện thí nghiệm đơn giản để nêu được điện trở có tác dụng cản trở dòng điện trong mạch. |
+| `9/dien/2` | Điện | FL-01 | chính | Thực hiện thí nghiệm để xây dựng được định luật Ohm: cường độ dòng điện đi qua một đoạn dây dẫn tỉ lệ thuận vớ |
+| `9/dien/3` | Điện | FL-01 | chính | Thực hiện thí nghiệm để rút ra được: Trong đoạn mạch điện mắc nối tiếp, cường độ dòng điện là như nhau cho mọi |
+| `9/dien/4` | Điện | FL-01 | chính | Tính được cường độ dòng điện trong đoạn mạch một chiều mắc nối tiếp, mắc song song, trong một số trường hợp đơ |
+| `9/dien/5` | Điện | FL-01 | hỗ trợ | Nêu được công suất điện định mức của dụng cụ điện (công suất mà dụng cụ tiêu thụ khi hoạt động bình thường). |
+| `9/dien/6` | Điện | FL-01 | chính | Tính được năng lượng của dòng điện và công suất điện trong trường hợp đơn giản. |
+| `9/ethylic-alcohol-va-acetic/1` | Ethylic alcohol và acetic acid | FL-30 | chính | Viết được công thức phân tử, công thức cấu tạo và nêu được đặc điểm cấu tạo của ethylic alcohol. |
+| `9/ethylic-alcohol-va-acetic/2` | Ethylic alcohol và acetic acid | FL-11 | hỗ trợ | Nêu được khái niệm và ý nghĩa của độ cồn. |
+| `9/ethylic-alcohol-va-acetic/3` | Ethylic alcohol và acetic acid | — | không cần Lab: khái niệm/ghi nhớ | Trình bày được phương pháp điều chế acetic acid bằng cách lên men ethylic alcohol. |
+| `9/ethylic-alcohol-va-acetic/4` | Ethylic alcohol và acetic acid | FL-30 | hỗ trợ | Nêu được khái niệm ester và phản ứng ester hoá. |
+| `9/gioi-thieu-ve-chat-huu-co/1` | Giới thiệu về chất hữu cơ | FL-30 | hỗ trợ | Nêu được khái niệm hợp chất hữu cơ, hoá học hữu cơ. |
+| `9/gioi-thieu-ve-chat-huu-co/2` | Giới thiệu về chất hữu cơ | FL-30 | hỗ trợ | Trình bày được sự phân loại sơ bộ hợp chất hữu cơ gồm hydrocarbon (hiđrocacbon) và dẫn xuất của hydrocarbon. |
+| `9/hien-tuong-di-truyen-mendel/1` | Hiện tượng di truyền (Mendel và  | FL-26 | chính | Dựa vào công thức lai 1 cặp tính trạng và kết quả lai trong thí nghiệm của Mendel, phát biểu được quy luật phâ |
+| `9/hien-tuong-di-truyen-mendel/2` | Hiện tượng di truyền (Mendel và  | FL-26 | chính | Dựa vào công thức lai 2 cặp tính trạng và kết quả lai trong thí nghiệm của Mendel, phát biểu được quy luật phâ |
+| `9/hien-tuong-di-truyen/1` | Hiện tượng di truyền | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm di truyền, khái niệm biến dị. |
+| `9/hien-tuong-di-truyen/2` | Hiện tượng di truyền | FL-27 | hỗ trợ | Nêu được gene quy định di truyền và biến dị ở sinh vật, qua đó gene được xem là trung tâm – Gene của di truyền |
+| `9/hydrocarbon-va-nguon-nhien/1` | Hydrocarbon và nguồn nhiên liệu | FL-30 | chính | Nêu được khái niệm hydrocarbon, alkane. |
+| `9/hydrocarbon-va-nguon-nhien/2` | Hydrocarbon và nguồn nhiên liệu | FL-10 | chính | Viết được phương trình hoá học phản ứng đốt cháy của butane. |
+| `9/hydrocarbon-va-nguon-nhien/3` | Hydrocarbon và nguồn nhiên liệu | FL-30 | chính | Nêu được khái niệm về alkene. |
+| `9/hydrocarbon-va-nguon-nhien/4` | Hydrocarbon và nguồn nhiên liệu | — | không cần Lab: ứng dụng/đọc hiểu | Trình bày được một số ứng dụng của ethylene: tổng hợp ethylic alcohol, tổng hợp nhựa polyethylene (PE). |
+| `9/hydrocarbon-va-nguon-nhien/5` | Hydrocarbon và nguồn nhiên liệu | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm, thành phần, trạng thái tự nhiên của dầu mỏ, khí thiên nhiên và khí mỏ dầu. |
+| `9/hydrocarbon-va-nguon-nhien/6` | Hydrocarbon và nguồn nhiên liệu | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm về nhiên liệu, các dạng nhiên liệu phổ biến (rắn, lỏng, khí). |
+| `9/khai-thac-tai-nguyen-tu-vo/1` | Khai thác tài nguyên từ vỏ Trái  | — | không cần Lab: khái niệm/ghi nhớ | Nêu được hàm lượng các nguyên tố hoá học chủ yếu trong vỏ Trái Đất. |
+| `9/khai-thac-tai-nguyen-tu-vo/2` | Khai thác tài nguyên từ vỏ Trái  | — | không cần Lab: khái niệm/ghi nhớ | Phân loại được các dạng chất chủ yếu trong vỏ Trái Đất (oxide, muối, ...). |
+| `9/khai-thac-tai-nguyen-tu-vo/3` | Khai thác tài nguyên từ vỏ Trái  | — | không cần Lab: dự án/điều tra/thảo luận | Trình bày được những lợi ích cơ bản về kinh tế, xã hội từ việc khai thác vỏ Trái Đất (nhiên liệu, vật liệu, ng |
+| `9/khai-thac-tai-nguyen-tu-vo/4` | Khai thác tài nguyên từ vỏ Trái  | FL-10 | hỗ trợ | Trình bày được nguồn đá vôi, thành phần chính của đá vôi trong tự nhiên; các ứng dụng từ đá vôi: sản phẩm đá v |
+| `9/khai-thac-tai-nguyen-tu-vo/5` | Khai thác tài nguyên từ vỏ Trái  | — | không cần Lab: khái niệm/ghi nhớ | Trình bày được sơ lược ngành công nghiệp silicate. |
+| `9/khai-thac-tai-nguyen-tu-vo/6` | Khai thác tài nguyên từ vỏ Trái  | — | không cần Lab: khái niệm/ghi nhớ | Mô tả được các công đoạn chính sản xuất đồ gốm, thuỷ tinh, xi măng. |
+| `9/khai-thac-tai-nguyen-tu-vo/7` | Khai thác tài nguyên từ vỏ Trái  | FL-22 | hỗ trợ | Nêu được khái niệm nhiên liệu hoá thạch. |
+| `9/khai-thac-tai-nguyen-tu-vo/8` | Khai thác tài nguyên từ vỏ Trái  | FL-22 | chính | Nêu được khí carbon dioxide và methane là nguyên nhân chính gây hiệu ứng nhà kính, sự ấm lên toàn cầu |
+| `9/kim-loai/1` | Kim loại | — | không cần Lab: khái niệm/ghi nhớ | Nêu được tính chất vật lí của kim loại. |
+| `9/kim-loai/2` | Kim loại | FL-14 | chính | Trình bày được tính chất hoá học cơ bản của kim loại: Tác dụng với phi kim (oxygen, lưu huỳnh, chlorine), nước |
+| `9/kim-loai/3` | Kim loại | FL-14 | chính | Nêu được dãy hoạt động hoá học (K, Na, Ca, Mg, Al, Zn, Fe, Pb, H, Cu, Ag, Au). |
+| `9/kim-loai/4` | Kim loại | FL-14 | chính | Trình bày được ý nghĩa của dãy hoạt động hoá học. |
+| `9/kim-loai/5` | Kim loại | FL-14 | hỗ trợ | Nêu được phương pháp tách kim loại theo mức độ hoạt động hoá học của chúng. |
+| `9/kim-loai/6` | Kim loại | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm hợp kim. |
+| `9/kim-loai/7` | Kim loại | — | không cần Lab: khái niệm/ghi nhớ | Trình bày được các giai đoạn cơ bản sản xuất gang và thép trong lò cao từ nguồn quặng chứa iron (III) oxide. |
+| `9/lipid-carbohydrate-protein/1` | Lipid – Carbohydrate – Protein;  | FL-30 | hỗ trợ | Nêu được khái niệm lipid, khái niệm chất béo, trạng thái thiên nhiên, công thức tổng quát của chất béo đơn giả |
+| `9/lipid-carbohydrate-protein/10` | Lipid – Carbohydrate – Protein;  | FL-30 | chính | Viết được các phương trình hoá học của phản ứng điều chế PE, PP từ các monomer. |
+| `9/lipid-carbohydrate-protein/2` | Lipid – Carbohydrate – Protein;  | — | không cần Lab: khái niệm/ghi nhớ | Nêu được vai trò của lipid tham gia vào cấu tạo tế bào và tích lũy năng lượng trong cơ thể. |
+| `9/lipid-carbohydrate-protein/3` | Lipid – Carbohydrate – Protein;  | — | không cần Lab: khái niệm/ghi nhớ | Nêu được thành phần nguyên tố, công thức chung của carbohydrate. |
+| `9/lipid-carbohydrate-protein/4` | Lipid – Carbohydrate – Protein;  | — | không cần Lab: khái niệm/ghi nhớ | Trình bày được tính chất hoá học của glucose (phản ứng tráng bạc, phản ứng lên men rượu), của saccharose (phản |
+| `9/lipid-carbohydrate-protein/5` | Lipid – Carbohydrate – Protein;  | — | không cần Lab: khái niệm/ghi nhớ | Nêu được trạng thái tự nhiên, tính chất vật lí của tinh bột và cellulose. |
+| `9/lipid-carbohydrate-protein/6` | Lipid – Carbohydrate – Protein;  | — | không cần Lab: khái niệm/ghi nhớ | Nêu được tầm quan trọng của sự tạo thành tinh bột, cellulose trong cây xanh. |
+| `9/lipid-carbohydrate-protein/7` | Lipid – Carbohydrate – Protein;  | FL-30 | hỗ trợ | Nêu được khái niệm, đặc điểm cấu tạo phân tử (do nhiều amino acid tạo nên, liên kết peptit) và khối lượng phân |
+| `9/lipid-carbohydrate-protein/8` | Lipid – Carbohydrate – Protein;  | — | không cần Lab: khái niệm/ghi nhớ | Trình bày được vai trò của protein đối với cơ thể con người. |
+| `9/lipid-carbohydrate-protein/9` | Lipid – Carbohydrate – Protein;  | FL-30 | chính | Nêu được khái niệm polymer, monomer, mắt xích..., cấu tạo, phân loại polymer (polymer thiên nhiên và polymer t |
+| `9/mo-dau/1` | Mở đầu | FL-15 | hỗ trợ | Nhận biết được một số dụng cụ và hoá chất sử dụng trong dạy học môn Khoa học tự nhiên 9. |
+| `9/mo-dau/2` | Mở đầu | — | không cần Lab: dự án/điều tra/thảo luận | Trình bày được các bước viết và trình bày báo cáo; làm được bài thuyết trình một vấn đề khoa học. |
+| `9/nang-luong-co-hoc/1` | Năng lượng cơ học | FL-24 | chính | Viết được biểu thức tính động năng của vật. |
+| `9/nang-luong-co-hoc/2` | Năng lượng cơ học | FL-24 | chính | Viết được biểu thức tính thế năng của vật ở gần mặt đất. |
+| `9/nang-luong-co-hoc/3` | Năng lượng cơ học | FL-24 | hỗ trợ | Nêu được cơ năng là tổng động năng và thế năng của vật. |
+| `9/nang-luong-co-hoc/4` | Năng lượng cơ học | FL-24 | chính | Vận dụng khái niệm cơ năng phân tích được sự chuyển hoá năng lượng trong một số trường hợp đơn giản. |
+| `9/nang-luong-co-hoc/5` | Năng lượng cơ học | FL-24 | chính | Phân tích ví dụ cụ thể để rút ra được: công có giá trị bằng lực nhân với quãng đường dịch chuyển theo hướng củ |
+| `9/nang-luong-co-hoc/6` | Năng lượng cơ học | FL-24 | chính | Tính được công và công suất trong một số trường hợp đơn giản. |
+| `9/nang-luong-voi-cuoc-song/1` | Năng lượng với cuộc sống | FL-22 | hỗ trợ | Nêu được sơ lược ưu điểm và nhược điểm của năng lượng hoá thạch. |
+| `9/nang-luong-voi-cuoc-song/2` | Năng lượng với cuộc sống | FL-22 | hỗ trợ | Lấy được ví dụ chứng tỏ việc đốt cháy các nhiên liệu hoá thạch có thể gây ô nhiễm môi trường. |
+| `9/nang-luong-voi-cuoc-song/3` | Năng lượng với cuộc sống | — | không cần Lab: dự án/điều tra/thảo luận | Nêu được sơ lược ưu điểm và nhược điểm của một số dạng năng lượng tái tạo (năng lượng Mặt Trời, năng lượng từ  |
+| `9/nang-luong-voi-cuoc-song/4` | Năng lượng với cuộc sống | — | không cần Lab: dự án/điều tra/thảo luận | Thảo luận để nêu được một số biện pháp sử dụng hiệu quả năng lượng và bảo vệ môi trường. |
+| `9/nhiem-sac-the/1` | Nhiễm sắc thể | FL-28 | hỗ trợ | Nêu được khái niệm nhiễm sắc thể. |
+| `9/nhiem-sac-the/2` | Nhiễm sắc thể | FL-28 | chính | Phân biệt được bộ nhiễm sắc thể lưỡng bội, đơn bội. |
+| `9/nhiem-sac-the/3` | Nhiễm sắc thể | FL-28 | hỗ trợ | Nêu được khái niệm đột biến nhiễm sắc thể. |
+| `9/su-khac-nhau-co-ban-giua-phi/1` | Sự khác nhau cơ bản giữa phi kim | — | không cần Lab: khái niệm/ghi nhớ | Nêu được ứng dụng của một số đơn chất phi kim thiết thực trong cuộc sống (than, lưu phi kim và kim loại huỳnh, |
+| `9/su-khac-nhau-co-ban-giua-phi/2` | Sự khác nhau cơ bản giữa phi kim | — | không cần Lab: khái niệm/ghi nhớ | Chỉ ra được sự khác nhau cơ bản về một số tính chất giữa phi kim và kim loại: Khả năng dẫn điện, nhiệt độ nóng |
+| `9/tien-hoa/1` | Tiến hoá | FL-29 | hỗ trợ | Phát biểu được khái niệm tiến hoá. |
+| `9/tien-hoa/2` | Tiến hoá | FL-29 | chính | Phát biểu được khái niệm chọn lọc nhân tạo. |
+| `9/tien-hoa/3` | Tiến hoá | FL-29 | chính | Phát biểu được khái niệm chọn lọc tự nhiên. |
+| `9/tien-hoa/4` | Tiến hoá | — | không cần Lab: khái niệm/ghi nhớ | Nêu được quan điểm của Lamark về cơ chế tiến hoá. |
+| `9/tien-hoa/5` | Tiến hoá | FL-29 | hỗ trợ | Trình bày được quan điểm của Darwin về cơ chế tiến hoá. |
+| `9/tien-hoa/6` | Tiến hoá | FL-29 | chính | Trình bày được một số luận điểm về tiến hoá theo quan niệm của thuyết tiến hoá tổng hợp hiện đại (cụ thể: nguồ |
+| `9/tien-hoa/7` | Tiến hoá | — | không cần Lab: khái niệm/ghi nhớ | Dựa vào sơ đồ, trình bày được khái quát sự phát triển của thế giới sinh vật trên Trái Đất; sự sống trên Trái Đ |
+| `9/tien-hoa/8` | Tiến hoá | — | không cần Lab: khái niệm/ghi nhớ | Dựa vào sơ đồ, trình bày được khái quát sự hình thành loài người. |
+| `9/tu-gene-den-protein/1` | Từ gene đến protein | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm nucleic acid. |
+| `9/tu-gene-den-protein/2` | Từ gene đến protein | FL-27 | chính | Thông qua hình ảnh, mô tả được DNA có cấu trúc xoắn kép, gồm các đơn phân là 4 loại nucleotide, các nucleotide |
+| `9/tu-gene-den-protein/3` | Từ gene đến protein | — | không cần Lab: khái niệm/ghi nhớ | Nêu được khái niệm gene. |
+| `9/tu-gene-den-protein/4` | Từ gene đến protein | FL-27 | chính | Quan sát hình ảnh (hoặc sơ đồ), mô tả sơ lược quá trình tái bản của DNA gồm các giai đoạn: tháo xoắn tách hai  |
+| `9/tu-gene-den-protein/5` | Từ gene đến protein | FL-27 | chính | Dựa vào sơ đồ, hình ảnh quá trình phiên mã, nêu được khái niệm phiên mã. |
+| `9/tu-gene-den-protein/6` | Từ gene đến protein | FL-27 | chính | Nêu được khái niệm mã di truyền, giải thích được từ 4 loại nucleotide tạo ra được sự đa dạng của mã di truyền; |
+| `9/tu-gene-den-protein/7` | Từ gene đến protein | FL-27 | chính | Dựa vào sơ đồ, nêu được mối quan hệ giữa DNA – RNA – protein – tính trạng thông qua phiên mã, dịch mã và ý ngh |
+| `9/tu-gene-den-protein/8` | Từ gene đến protein | FL-27 | hỗ trợ | Phát biểu được khái niệm đột biến gene. |
+| `9/ung-dung-cong-nghe-di-truyen/1` | Ứng dụng công nghệ di truyền vào | — | không cần Lab: khái niệm/ghi nhớ | Nêu được một số ứng dụng công nghệ di truyền trong y học, pháp y, làm sạch môi trường, truyền vào đời sống nôn |
+| `9/ung-dung-cong-nghe-di-truyen/2` | Ứng dụng công nghệ di truyền vào | — | không cần Lab: nhạy cảm/an toàn trẻ em | Nêu được một số vấn đề về đạo đức sinh học trong nghiên cứu và ứng dụng công nghệ di truyền. |
