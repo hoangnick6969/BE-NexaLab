@@ -10,6 +10,7 @@ import { StudentAccessService } from "../../progress/application/student-access.
 import { MODEL_REGISTRY } from "../application/sim-packs";
 import { AdminLabsController } from "./admin-labs.controller";
 import { LabsController } from "./labs.controller";
+import { LabReleaseService } from "../application/lab-release.service";
 
 const testUrl = process.env.NEXALAB_PINNING_TEST_URL;
 if (process.env.CI && !testUrl) throw new Error("CI requires NEXALAB_PINNING_TEST_URL for LabRun integration");
@@ -81,6 +82,7 @@ describe.skipIf(!db)("isolated LabRun integration", () => {
           { provide: Db, useValue: p },
           { provide: StudentAccessService, useValue: new StudentAccessService(p as any) },
           { provide: RequestRateLimiter, useValue: new RequestRateLimiter() },
+          { provide: LabReleaseService, useValue: new LabReleaseService(p as any) },
           { provide: APP_GUARD, useClass: AuthGuard },
         ],
       })

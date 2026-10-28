@@ -13,7 +13,7 @@ import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
 import { canonical, digest, evaluateCircuitBulbActivity, evaluateRunV1, executionSchema, launchSchema, rubricRefForActivity, runSubmissionSchema, CIRCUIT_BULB_RUBRIC } from "../application/lab-run";
 import { StudentAccessService } from "../../progress/application/student-access.service";
-import { resolvePinnedAssignmentLab } from "../application/assignment-lab-execution";
+import { resolveFoundationalLabRelease, resolvePinnedAssignmentLab } from "../application/assignment-lab-execution";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
 
 @ApiTags("NexaLab")
@@ -290,7 +290,11 @@ export class LabsController {
       let execution: any;
       if (assignment?.labExecution !== null && assignment?.labExecution !== undefined) {
         execution = await resolvePinnedAssignmentLab(tx, assignment, labId, challenge.id);
-      } else {
+      } else if (!assignment) {
+        const activeRelease = await tx.labRelease.findFirst({ where: { labId, status: "ACTIVE" } });
+        if (activeRelease) execution = await resolveFoundationalLabRelease(tx, activeRelease, labId, challenge.id);
+      }
+      if (!execution) {
         // Old assignments remain usable, without claiming a publication-time pin.
         const config = await tx.simulationConfigVersion.findFirst({ where: { labId, status: "active" } });
         const pack = await tx.simulationPackVersion.findFirst({ where: { labId, status: "active" } });

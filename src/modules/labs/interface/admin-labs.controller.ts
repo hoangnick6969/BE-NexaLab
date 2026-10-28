@@ -17,6 +17,7 @@ import { notFound, reason, text } from "../../../common/admin-api";
 import { Roles } from "../../../common/decorators";
 import { audit, changedFields } from "../../../common/audit";
 import { Db } from "../../../db/db";
+import { LabReleaseService } from "../application/lab-release.service";
 import { storageEnv } from "../../storage/infrastructure/storage";
 import { MODEL_REGISTRY, activityDigest, activitySpecSchema, packInputSchema, packValidation, resolveModel } from "../application/sim-packs";
 import {
@@ -55,7 +56,36 @@ function sameStoredResult(actual: any, expected: any): boolean {
 @Roles("ADMIN")
 @Controller("admin")
 export class AdminLabsController {
-  constructor(@Inject(Db) private db: Db) {}
+  constructor(@Inject(Db) private db: Db, @Inject(LabReleaseService) private releases: LabReleaseService) {}
+
+  @Put("lab-reviewers/:userId")
+  @ApiOperation({ summary: "Authorize or revoke a named teacher's Lab release review duty" })
+  authorizeLabReviewer(@Param("userId") userId: string, @Req() req: any, @Body() body: unknown) {
+    return this.releases.authorizeReviewer(userId, req, body);
+  }
+
+  @Get("labs/:id/releases")
+  listLabReleases(@Param("id") labId: string) {
+    return this.releases.list(labId);
+  }
+
+  @Post("labs/:id/releases")
+  @ApiOperation({ summary: "Snapshot a validated active Lab tuple into an immutable release draft" })
+  createLabRelease(@Param("id") labId: string, @Req() req: any, @Body() body: unknown) {
+    return this.releases.createDraft(labId, req, body);
+  }
+
+  @Post("labs/:id/releases/:releaseId/activate")
+  @ApiOperation({ summary: "Activate a release with complete authenticated approvals for its exact digest" })
+  activateLabRelease(@Param("id") labId: string, @Param("releaseId") releaseId: string, @Req() req: any, @Body() body: unknown) {
+    return this.releases.activate(labId, releaseId, req, body);
+  }
+
+  @Post("labs/:id/releases/:releaseId/quarantine")
+  @ApiOperation({ summary: "Quarantine a release and revoke new evaluations using its pinned pack" })
+  quarantineLabRelease(@Param("id") labId: string, @Param("releaseId") releaseId: string, @Req() req: any, @Body() body: unknown) {
+    return this.releases.quarantine(labId, releaseId, req, body);
+  }
 
   // ───────────────────────── C2-T3 simulation versions ─────────────────────────
   @Get("labs")
@@ -83,6 +113,12 @@ export class AdminLabsController {
     return this.db.$transaction(async (tx) => {
       const before = await tx.lab.findUnique({ where: { id } });
       if (!before) throw notFound("phòng thực hành");
+      const [activeRelease, anyRelease] = await Promise.all([
+        tx.labRelease.findFirst({ where: { labId: id, status: "ACTIVE" }, select: { id: true } }),
+        tx.labRelease.findFirst({ where: { labId: id }, select: { id: true } }),
+      ]);
+      if (activeRelease || (anyRelease && b.status === "published"))
+        throw new ConflictException({ code: "LAB_RELEASE_REQUIRED", message: "Lab có hồ sơ release; hãy dùng quy trình review, activate hoặc quarantine để thay đổi trạng thái công khai" });
       const { reason: why, ...data } = b;
       const lab = await tx.lab.update({ where: { id }, data });
       const diff = changedFields(before, lab);
@@ -219,6 +255,13 @@ export class AdminLabsController {
       const existing = await tx.labPackRevocation.findUnique({ where: { packVersionId: packId } });
       if (existing) return existing;
       const revoked = await tx.labPackRevocation.create({ data: { packVersionId: packId, labId, reason: b.reason, revokedById: req.user.sub } });
+      const activeRelease = await tx.labRelease.findFirst({ where: { labId, status: "ACTIVE" } });
+      const activeSnapshot = activeRelease?.snapshot as any;
+      if (activeRelease && activeSnapshot?.execution?.packVersionId === packId) {
+        await tx.labRelease.update({ where: { id: activeRelease.id }, data: { status: "QUARANTINED", quarantinedAt: new Date() } });
+        await tx.lab.update({ where: { id: labId }, data: { releaseCleared: false } });
+        await audit(tx, { actor: req.user, action: "lab_release.quarantine_dependency", targetType: "LabRelease", targetId: activeRelease.id, reason: b.reason, before: { status: "ACTIVE" }, after: { status: "QUARANTINED", packVersionId: packId } });
+      }
       await audit(tx, { actor: req.user, action: "lab.pack.revoke_runs", targetType: "SimulationPackVersion", targetId: packId, reason: b.reason, after: { labId, packVersionId: packId } });
       return revoked;
     });

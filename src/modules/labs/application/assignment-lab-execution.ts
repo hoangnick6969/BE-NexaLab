@@ -3,14 +3,12 @@ import { assignmentExecutionSchema, canonical, digest, rubricRefForActivity } fr
 import { resolveModel } from "./sim-packs";
 import { packConfigurationErrors, versionParams } from "./simulation-versions";
 
-/**
- * Called inside assignment publication's transaction. New assignments require
- * a complete compatible tuple. Existing unpinned assignments are never
- * backfilled and continue through the legacy compatibility path.
- */
-export async function snapshotAssignmentLab(tx: any, labId: string) {
+const lockLabVersions = async (tx: any, labId: string) => {
   await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-version:" + labId);
   await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
+};
+
+async function currentLabExecutionLocked(tx: any, labId: string) {
   const config = await tx.simulationConfigVersion.findFirst({ where: { labId, status: "active" } });
   const pack = await tx.simulationPackVersion.findFirst({ where: { labId, status: "active" } });
   if (!config || !pack) throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE", message: "Lab chưa có pack và cấu hình tương thích để giao bài mới" });
@@ -51,6 +49,33 @@ export async function snapshotAssignmentLab(tx: any, labId: string) {
   }
   return parsed.data;
 }
+
+/** Capture the active technical tuple even when a previous public release is active. */
+export async function captureCurrentLabExecution(tx: any, labId: string) {
+  await lockLabVersions(tx, labId);
+  return currentLabExecutionLocked(tx, labId);
+}
+
+/**
+ * Called inside assignment publication's transaction. New assignments require
+ * a complete compatible tuple. Existing unpinned assignments are never
+ * backfilled and continue through the legacy compatibility path.
+ */
+export async function snapshotAssignmentLab(tx: any, labId: string) {
+  await lockLabVersions(tx, labId);
+  const activeRelease = await tx.labRelease.findFirst({ where: { labId, status: "ACTIVE" } });
+  if (activeRelease) {
+    const snapshot = activeRelease.snapshot as any;
+    const parsed = assignmentExecutionSchema.safeParse(snapshot?.execution);
+    if (!snapshot?.lab || snapshot.lab.id !== labId || digest(snapshot) !== activeRelease.digest || !parsed.success)
+      throw new ConflictException({ code: "LAB_RELEASE_INVALID" });
+    const firstChallengeId = Object.keys(parsed.data.effectiveParams)[0];
+    if (!firstChallengeId) throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
+    await resolvePinnedAssignmentLab(tx, { labExecution: parsed.data, labExecutionDigest: digest(parsed.data) }, labId, firstChallengeId);
+    return { ...parsed.data, releaseId: activeRelease.id };
+  }
+  return currentLabExecutionLocked(tx, labId);
+}
 /** Resolve only the immutable publication snapshot; active versions are irrelevant. */
 export async function resolvePinnedAssignmentLab(tx: any, assignment: { labExecution: unknown; labExecutionDigest: string | null }, labId: string, challengeId: string) {
   const pin = assignmentExecutionSchema.safeParse(assignment.labExecution);
@@ -79,4 +104,19 @@ export async function resolvePinnedAssignmentLab(tx: any, assignment: { labExecu
     throw new ConflictException({ code: "PINNED_MODEL_UNAVAILABLE" });
   const { labId: _pinnedLab, challengeParams: _allParams, effectiveParams: _effective, ...components } = snapshot;
   return { ...components, params: snapshot.effectiveParams[challengeId], binding: "ASSIGNMENT_PINNED" as const };
+}
+
+/** Resolve the current public release's immutable tuple for one open-curriculum launch. */
+export async function resolveFoundationalLabRelease(tx: any, release: any, labId: string, challengeId: string) {
+  const snapshot = release.snapshot as any;
+  const execution = snapshot?.execution;
+  if (!snapshot?.lab || snapshot.lab.id !== labId || digest(snapshot) !== release.digest || !execution)
+    throw new ConflictException({ code: "LAB_RELEASE_INVALID" });
+  const resolved = await resolvePinnedAssignmentLab(
+    tx,
+    { labExecution: execution, labExecutionDigest: digest(execution) },
+    labId,
+    challengeId,
+  );
+  return { ...resolved, binding: "FOUNDATIONAL_RELEASE" as const, releaseId: release.id };
 }
