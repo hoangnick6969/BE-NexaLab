@@ -9,6 +9,8 @@ import { labVersion, lessonVersion } from "../../lessons/application/lesson-cont
 import { assertTestAssignmentUpdate, deadlineRevisionSchema, latestSubmission, rejectLateSchema, requireTestDueDate, submissionStatus, TEST_CONTENT_TYPE, } from "./assignment-test-contract";
 import { currentDeadlines, testStates } from "./assignment-test-state";
 import { notify } from "../../notifications/application/notify";
+import { snapshotAssignmentLab } from "../../labs/application/assignment-lab-execution";
+import { digest as labExecutionDigest } from "../../labs/application/lab-run";
 
 type ContentType = "lesson" | "lab" | "test";
 
@@ -478,6 +480,7 @@ export class AssignmentsService {
     return idempotent(this.db, ctx, async (tx) => {
       await lock(tx, "class-assign:" + id);
       const content = await this.assignableContentOrThrow(tx, id, b.contentType, b.contentId, req.user.sub);
+      const labExecution = b.contentType === "lab" ? await snapshotAssignmentLab(tx, b.contentId) : null;
       const targets = await this.resolveTargets(tx, id, b.studentIds);
       const hash = targetHash(targets);
       await this.assertNotDuplicate(tx, {
@@ -499,6 +502,7 @@ export class AssignmentsService {
           audience,
           targetHash: hash,
           contentVersion: content.version,
+          ...(labExecution ? { labExecution, labExecutionDigest: labExecutionDigest(labExecution) } : {}),
           // Deprecated mirror for older deployments: [] meant "whole class".
           studentIds: audience === "SUBSET" ? targets : [],
           createdById: req.user.sub,

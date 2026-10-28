@@ -13,6 +13,7 @@ import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
 import { canonical, digest, evaluateRunV1, executionSchema, launchSchema, runSubmissionSchema } from "../application/lab-run";
 import { StudentAccessService } from "../../progress/application/student-access.service";
+import { resolvePinnedAssignmentLab } from "../application/assignment-lab-execution";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
 
 @ApiTags("NexaLab")
@@ -171,25 +172,33 @@ export class LabsController {
       // Share activation locks so both selected versions were active together.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-version:" + c.labId}))`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-pack-lab:" + c.labId}))`;
-      const configVersion = isVariant
-        ? null
+      const pinnedAssignment = labAssignment?.labExecution != null
+        ? await resolvePinnedAssignmentLab(tx, labAssignment, c.labId, c.id) : null;
+      const configVersion = pinnedAssignment
+        ? await tx.simulationConfigVersion.findUnique({ where: { id: pinnedAssignment.configVersionId } })
+        : isVariant ? null
         : await tx.simulationConfigVersion.findFirst({ where: { labId: c.labId, status: "active" } });
-      const params = (isVariant ? null : versionParams(configVersion, c.id)) ?? (c.constraints as any)?.params;
-      const activePack = await tx.simulationPackVersion.findFirst({ where: { labId: c.labId, status: "active" } });
+      const params = pinnedAssignment ? pinnedAssignment.params
+        : (isVariant ? null : versionParams(configVersion, c.id)) ?? (c.constraints as any)?.params;
+      const activePack = pinnedAssignment
+        ? await tx.simulationPackVersion.findUnique({ where: { id: pinnedAssignment.packVersionId } })
+        : await tx.simulationPackVersion.findFirst({ where: { labId: c.labId, status: "active" } });
       if (activePack) {
         if (await tx.labPackRevocation.findUnique({ where: { packVersionId: activePack.id } }))
           throw new ConflictException({ code: "RUN_REVOKED" });
-        const errors = packConfigurationErrors(c.labId, activePack, configVersion, params);
+        const errors = pinnedAssignment ? [] : packConfigurationErrors(c.labId, activePack, configVersion, params);
         if (errors.length) throw new ConflictException({ code: "SIM_PACK_CONFIG_INCOMPATIBLE", message: errors.join("; ") });
       }
-      const modelRef = activePack?.modelRef ?? configVersion?.modelRef ?? c.lab.simulationModelRef;
+      const modelRef = pinnedAssignment?.modelRef ?? activePack?.modelRef ?? configVersion?.modelRef ?? c.lab.simulationModelRef;
       let result: any;
       let normalizedVerdict: string;
       let engineVersion: string;
       try {
         engineVersion = resolveModel(modelRef).engineVersion;
-        ({ result, verdict: normalizedVerdict } = evaluate(c.labId, b.labState, params, modelRef));
-        result = { ...result, _execution: { modelRef, packVersionId: activePack?.id ?? null, configVersionId: configVersion?.id ?? null, params: params ?? null } };
+        ({ result, verdict: normalizedVerdict } = pinnedAssignment
+          ? evaluateRunV1(c.labId, b.labState, params, modelRef)
+          : evaluate(c.labId, b.labState, params, modelRef));
+        result = { ...result, _execution: { modelRef, packVersionId: activePack?.id ?? null, configVersionId: configVersion?.id ?? null, params: params ?? null, ...(pinnedAssignment ? { rubricRef: pinnedAssignment.rubricRef } : {}) } };
       } catch (e: any) {
         throw new BadRequestException(e.message);
       }
@@ -278,38 +287,46 @@ export class LabsController {
         throw new NotFoundException({ code: "LAB_NOT_FOUND" });
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-version:" + labId);
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
-      const config = await tx.simulationConfigVersion.findFirst({ where: { labId, status: "active" } });
-      const pack = await tx.simulationPackVersion.findFirst({ where: { labId, status: "active" } });
-      if (!config || !pack) throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
-      const configured = config.challengeParams as Record<string, unknown>;
-      if (!configured || !Object.prototype.hasOwnProperty.call(configured, challenge.id))
-        throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
-      const activity = await tx.practicalActivityVersion.findUnique({ where: { id: pack.activityVersionId } });
-      if (!activity) throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
-      const params = versionParams(config, challenge.id);
-      const errors = packConfigurationErrors(labId, pack, config, params);
-      if (errors.length) throw new ConflictException({ code: "SIM_PACK_CONFIG_INCOMPATIBLE", message: errors.join("; ") });
-      if (await tx.labPackRevocation.findUnique({ where: { packVersionId: pack.id } }))
+      let execution: any;
+      if (assignment?.labExecution !== null && assignment?.labExecution !== undefined) {
+        execution = await resolvePinnedAssignmentLab(tx, assignment, labId, challenge.id);
+      } else {
+        // Old assignments remain usable, without claiming a publication-time pin.
+        const config = await tx.simulationConfigVersion.findFirst({ where: { labId, status: "active" } });
+        const pack = await tx.simulationPackVersion.findFirst({ where: { labId, status: "active" } });
+        if (!config || !pack) throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
+        const configured = config.challengeParams as Record<string, unknown>;
+        if (!configured || !Object.prototype.hasOwnProperty.call(configured, challenge.id))
+          throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
+        const activity = await tx.practicalActivityVersion.findUnique({ where: { id: pack.activityVersionId } });
+        if (!activity) throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
+        const params = versionParams(config, challenge.id);
+        const errors = packConfigurationErrors(labId, pack, config, params);
+        if (errors.length) throw new ConflictException({ code: "SIM_PACK_CONFIG_INCOMPATIBLE", message: errors.join("; ") });
+        execution = {
+          modelRef: pack.modelRef, engineVersion: pack.engineVersion, packVersionId: pack.id,
+          configVersionId: config.id, activityVersionId: activity.id, activityDigest: activity.digest,
+          activityKey: activity.key, activityVersion: activity.version, rubricRef: "legacy-challenge@1.0.0",
+          params, stateSchemaVersion: 1, evidenceSchemaVersion: 1, template: pack.template,
+          binding: assignment ? "LEGACY_UNPINNED_LAUNCH" : "FOUNDATIONAL_LAUNCH",
+        };
+      }
+      if (await tx.labPackRevocation.findUnique({ where: { packVersionId: execution.packVersionId } }))
         throw new ConflictException({ code: "RUN_REVOKED" });
-      const execution = {
-        modelRef: pack.modelRef, engineVersion: pack.engineVersion, packVersionId: pack.id,
-        configVersionId: config.id, activityVersionId: activity.id, activityDigest: activity.digest,
-        activityKey: activity.key, activityVersion: activity.version, rubricRef: "legacy-challenge@1.0.0" as const,
-        params, stateSchemaVersion: 1 as const, evidenceSchemaVersion: 1 as const, template: pack.template,
-      };
       const now = new Date();
       const run = await tx.labRun.create({ data: {
         studentId: req.user.sub, labId, challengeId: challenge.id, assignmentId: assignment?.id ?? null,
         context: assignment ? "ASSIGNMENT" : "FOUNDATIONAL", execution: execution as any,
         executionDigest: digest(execution), expiresAt: assignment ? null : new Date(now.getTime() + 86400000),
       } });
-      const template = pack.template as any;
+      const template = execution.template as any;
       return {
         contract: "lab-contract/1", runId: run.id, labId, challengeId: challenge.id,
-        modelRef: execution.modelRef, engineVersion: execution.engineVersion, activityVersionId: activity.id,
-        activityVersion: activity.version, rubricVersion: execution.rubricRef, stateSchemaVersion: 1,
+        modelRef: execution.modelRef, engineVersion: execution.engineVersion, activityVersionId: execution.activityVersionId,
+        activityVersion: execution.activityVersion, rubricVersion: execution.rubricRef, stateSchemaVersion: 1,
         evidenceSchemaVersion: 1, constraints: template?.ranges ?? {}, initialState: template?.initialState ?? null,
-        rendererKey: null, expiresAt: run.expiresAt, context: run.context,
+        rendererKey: null, expiresAt: run.expiresAt, context: run.context, assignmentId: run.assignmentId,
+        versionBinding: execution.binding,
       };
     }, { timeout: 20000 });
   }

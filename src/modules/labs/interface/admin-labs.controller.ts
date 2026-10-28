@@ -238,6 +238,7 @@ export class AdminLabsController {
       throw new ConflictException({ code: "PINNED_VERSION_MISSING", message: "Không tìm thấy phiên bản đã ghi trong lần thực hành" });
     if ((version && version.labId !== attempt.challenge.labId) || (pack && pack.labId !== attempt.challenge.labId))
       throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID", message: "Phiên bản đã ghi không thuộc phòng thực hành" });
+    let runBinding: string | null = null;
     if (attempt.labRunId) {
       const run = await this.db.labRun.findUnique({ where: { id: attempt.labRunId } });
       const parsed = run ? labRunExecutionSchema.safeParse(run.execution) : null;
@@ -246,6 +247,7 @@ export class AdminLabsController {
           parsed.data.packVersionId !== attempt.packVersionId || parsed.data.configVersionId !== attempt.configVersionId ||
           parsed.data.engineVersion !== attempt.simulationModelVersion)
         throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID", message: "Bằng chứng phiên chạy không nhất quán" });
+      runBinding = parsed.data.binding ?? null;
       const resultExecution = (attempt.simulationResult as any)?._execution;
       if (!resultExecution || resultExecution.modelRef !== parsed.data.modelRef ||
           canonical(resultExecution.params) !== canonical(parsed.data.params))
@@ -257,6 +259,7 @@ export class AdminLabsController {
       packVersionId: z.string().nullable(),
       configVersionId: z.string().nullable(),
       params: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
+      rubricRef: z.literal("legacy-challenge@1.0.0").optional(),
     }).strict();
     const execution = rawExecution == null ? null : executionSchema.safeParse(rawExecution);
     if (execution && (!execution.success || execution.data.packVersionId !== attempt.packVersionId || execution.data.configVersionId !== attempt.configVersionId ||
@@ -278,7 +281,7 @@ export class AdminLabsController {
     let reproduced: string;
     let reproducedResult: any = null;
     try {
-      const evaluated = attempt.labRunId
+      const evaluated = attempt.labRunId || (execution?.success && execution.data.rubricRef === "legacy-challenge@1.0.0")
         ? evaluateRunV1(attempt.challenge.labId, attempt.labState, params ?? null, modelRef!)
         : evaluate(attempt.challenge.labId, attempt.labState, params, modelRef);
       reproduced = evaluated.verdict;
@@ -297,6 +300,9 @@ export class AdminLabsController {
       packVersionId: attempt.packVersionId,
       modelRef: modelRef ?? null,
       reproductionBasis: execution?.success ? "pinned_execution" : "legacy_unverified",
+      assignmentVersionBinding: attempt.assignmentId
+        ? runBinding ?? (execution?.success && execution.data.rubricRef ? "ASSIGNMENT_PINNED" : "LEGACY_UNPINNED")
+        : null,
       originalVerdict: attempt.verdict,
       reproducedVerdict: reproduced,
       matches: verdictMatches && (execution?.success ? resultMatches : true),

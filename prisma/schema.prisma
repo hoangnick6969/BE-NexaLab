@@ -547,6 +547,9 @@ model Assignment {
   targetHash String?
   /// Immutable content version at assignment time (lesson structure or lab model/config hash).
   contentVersion String?
+  /// Null for legacy assignments; never backfilled from current active versions.
+  labExecution Json?
+  labExecutionDigest String?
   status String @default("ACTIVE")
   createdById String?
   archivedAt DateTime?

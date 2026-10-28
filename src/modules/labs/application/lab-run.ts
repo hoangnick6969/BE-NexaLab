@@ -43,6 +43,13 @@ export const executionSchema = z.object({
   stateSchemaVersion: z.literal(1),
   evidenceSchemaVersion: z.literal(1),
   template: z.unknown(),
+  binding: z.enum(["ASSIGNMENT_PINNED", "LEGACY_UNPINNED_LAUNCH", "FOUNDATIONAL_LAUNCH"]).optional(),
+}).strict();
+
+export const assignmentExecutionSchema = executionSchema.omit({ params: true, binding: true }).extend({
+  labId: z.string().min(1),
+  challengeParams: z.record(z.string(), z.record(z.string(), z.union([z.number(), z.string()]))),
+  effectiveParams: z.record(z.string(), z.record(z.string(), z.union([z.number(), z.string()])).nullable()),
 }).strict();
 /**
  * Frozen compatibility rubric. Its identity is recorded on LabRun; new
