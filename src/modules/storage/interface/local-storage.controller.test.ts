@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const storageMocks = vi.hoisted(() => ({ localStorage: vi.fn(), verifyLocalGrant: vi.fn() }));
-vi.mock("../infrastructure/storage", () => storageMocks);
+// Keep the real parseByteRange (the controller re-exports it); mock only the storage driver and grants.
+vi.mock("../infrastructure/storage", async (importOriginal) => ({ ...(await importOriginal<object>()), ...storageMocks }));
 
 import { LocalStorageController, parseByteRange } from "./local-storage.controller";
 
