@@ -29,6 +29,7 @@ import {
   versionParams,
 } from "../application/simulation-versions";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
+import { canonical, digest, evaluateRunV1, executionSchema as labRunExecutionSchema } from "../application/lab-run";
 
 /** PostgreSQL JSON numbers can round at the last floating-point digits. */
 function sameStoredResult(actual: any, expected: any): boolean {
@@ -207,6 +208,21 @@ export class AdminLabsController {
       return active;
     });
   }
+  /** Emergency block: serialized with pack selection and run submission. */
+  @Post("labs/:id/packs/:packId/revoke-runs")
+  async revokePackRuns(@Param("id") labId: string, @Param("packId") packId: string, @Req() req: any, @Body() body: unknown) {
+    const b = z.object({ reason }).strict().parse(body);
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
+      const pack = await tx.simulationPackVersion.findUnique({ where: { id: packId } });
+      if (!pack || pack.labId !== labId) throw notFound("gói mô phỏng");
+      const existing = await tx.labPackRevocation.findUnique({ where: { packVersionId: packId } });
+      if (existing) return existing;
+      const revoked = await tx.labPackRevocation.create({ data: { packVersionId: packId, labId, reason: b.reason, revokedById: req.user.sub } });
+      await audit(tx, { actor: req.user, action: "lab.pack.revoke_runs", targetType: "SimulationPackVersion", targetId: packId, reason: b.reason, after: { labId, packVersionId: packId } });
+      return revoked;
+    });
+  }
   @Get("attempts/:id/reproduce")
   @ApiOperation({ summary: "Re-evaluate a historical attempt with the version it pinned" })
   async reproduce(@Param("id") id: string) {
@@ -222,7 +238,19 @@ export class AdminLabsController {
       throw new ConflictException({ code: "PINNED_VERSION_MISSING", message: "Không tìm thấy phiên bản đã ghi trong lần thực hành" });
     if ((version && version.labId !== attempt.challenge.labId) || (pack && pack.labId !== attempt.challenge.labId))
       throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID", message: "Phiên bản đã ghi không thuộc phòng thực hành" });
-    const originalResult = attempt.simulationResult as any;
+    if (attempt.labRunId) {
+      const run = await this.db.labRun.findUnique({ where: { id: attempt.labRunId } });
+      const parsed = run ? labRunExecutionSchema.safeParse(run.execution) : null;
+      if (!run || run.studentId !== attempt.studentId || run.challengeId !== attempt.challengeId ||
+          !parsed?.success || digest(run.execution) !== run.executionDigest ||
+          parsed.data.packVersionId !== attempt.packVersionId || parsed.data.configVersionId !== attempt.configVersionId ||
+          parsed.data.engineVersion !== attempt.simulationModelVersion)
+        throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID", message: "Bằng chứng phiên chạy không nhất quán" });
+      const resultExecution = (attempt.simulationResult as any)?._execution;
+      if (!resultExecution || resultExecution.modelRef !== parsed.data.modelRef ||
+          canonical(resultExecution.params) !== canonical(parsed.data.params))
+        throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID", message: "Kết quả không khớp phiên chạy" });
+    }    const originalResult = attempt.simulationResult as any;
     const rawExecution = originalResult?._execution;
     const executionSchema = z.object({
       modelRef: z.string().min(1),
@@ -250,7 +278,9 @@ export class AdminLabsController {
     let reproduced: string;
     let reproducedResult: any = null;
     try {
-      const evaluated = evaluate(attempt.challenge.labId, attempt.labState, params, modelRef);
+      const evaluated = attempt.labRunId
+        ? evaluateRunV1(attempt.challenge.labId, attempt.labState, params ?? null, modelRef!)
+        : evaluate(attempt.challenge.labId, attempt.labState, params, modelRef);
       reproduced = evaluated.verdict;
       reproducedResult = evaluated.result;
     } catch {

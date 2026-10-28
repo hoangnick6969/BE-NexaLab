@@ -636,6 +636,34 @@ model TeacherGateOverride {
   @@unique([studentId, assignmentId, stepId])
   @@index([assignmentId, studentId, revokedAt])
 }
+/// Emergency block for new runs and submissions using a pack version.
+model LabPackRevocation {
+  packVersionId String @id
+  labId String
+  reason String
+  revokedById String
+  revokedAt DateTime @default(now())
+  @@index([labId])
+}
+/// Server-created, immutable launch tuple. Revocation never deletes historical evidence.
+model LabRun {
+  id String @id @default(cuid())
+  studentId String
+  labId String
+  challengeId String
+  assignmentId String?
+  context String
+  execution Json
+  executionDigest String
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  revokedAt DateTime?
+  revokedById String?
+  revocationReason String?
+  attempts Attempt[]
+  @@index([studentId, createdAt])
+  @@index([labId, revokedAt])
+}
 model Attempt {
   id String @id @default(cuid())
   studentId String
@@ -654,6 +682,8 @@ model Attempt {
   /// Topic simulation pack version active when the attempt was evaluated (CF-T4); null for earlier attempts.
   packVersionId String?
   idempotencyKey String?
+  labRunId String?
+  labRun LabRun? @relation(fields: [labRunId], references: [id], onDelete: Restrict)
   createdAt DateTime @default(now())
   hints HintLog[]
   @@unique([studentId, idempotencyKey])
