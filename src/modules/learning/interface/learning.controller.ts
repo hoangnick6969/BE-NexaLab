@@ -577,7 +577,17 @@ export class LearningController {
       ? preloadedContent ?? null
       : a.contentType === "lesson"
         ? await this.db.lesson.findUnique({ where: { id: a.contentId }, include: { subject: true } })
-        : await this.db.lab.findUnique({ where: { id: a.contentId }, include: { subject: true } });
+        : await this.db.lab.findUnique({
+            where: { id: a.contentId },
+            include: {
+              subject: true,
+              challenges: {
+                where: { NOT: { id: { contains: "_v-" } } },
+                orderBy: { id: "asc" },
+                take: 1,
+              },
+            },
+          });
     if (!content || !["published", "archived"].includes(content.status)) return { state: "UNAVAILABLE" as const, content: null };
     if (content.status === "published") return { state: "AVAILABLE" as const, content };
     const started =
@@ -714,6 +724,9 @@ export class LearningController {
         topic: content.topic,
         learningObjective: content.learningObjective,
         prerequisites: "prerequisites" in content ? content.prerequisites : "",
+        ...(a.contentType === "lab"
+          ? { challengeId: content.challenges?.[0]?.id ?? null }
+          : {}),
         ...(a.contentType !== "lesson" && "content" in content
           ? { content: content.content }
           : {}),
