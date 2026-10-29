@@ -1,0 +1,226 @@
+{
+  "contentDigest": "fe8f3954e37675790f39f5024976910dbc89196530d6dbe0c764be64b869eee0",
+  "candidate": {
+    "kind": "circuit-content-review-candidate/v1",
+    "status": "NEEDS_GENUINE_REVIEW",
+    "modelRef": "circuit-bulb@1.0.0",
+    "engineVersion": "1.0.0",
+    "renderer": "circuit-bulb",
+    "labId": "circuit",
+    "source": {
+      "chapter": "KHTN8-CH05",
+      "topic": "KHTN8-L22",
+      "sourceLessonId": "src-lesson-2d84bedccb86",
+      "lessonId": "pack-structured-38f03d31878e58fc0d8a31b8c8aa9fab4af866f7-v1",
+      "lessonPackId": "cmvmmp8fo000hlw142uxqx2lr",
+      "lessonPackVersion": 1,
+      "lessonPackDigest": "47ff7ffca8749f9cd7970ff177d6c6b2f306481ca74e9ea4ad320db1c6c21af3",
+      "textbookDigest": "6dcda104a5b09d1395417afef9ac48630843e57dc53938412eada13a6fdfdbf1",
+      "curriculumDigest": "4d8098825841e7de430c298cd76b9e93310682949d92b21d1440c54b75ffa14a",
+      "sourceBlock": "sgk-khtn8-nxbgd-2026-p0093-b0005",
+      "existingReview": "approved_internal; not a Lab release approval",
+      "mappingRole": "SUPPORTING_ONLY",
+      "sourceCorrectionPending": "DB dây nổi; official source dây nối"
+    },
+    "activity": {
+      "key": "circuit-bulb-checkpoints",
+      "outcomeCodes": [
+        "KHTN8-B22-O02"
+      ],
+      "objective": "Dự đoán, quan sát và giải thích bóng đèn sáng khi mạch kín, tắt khi công tắc mở.",
+      "materials": [
+        "Nguồn điện mô phỏng",
+        "Bóng đèn mô phỏng",
+        "Công tắc và dây nối cố định"
+      ],
+      "setup": "Một vòng mạch lý tưởng đã nối sẵn; không tự lắp hoặc vẽ mạch.",
+      "procedure": [
+        "Dự đoán CLOSED",
+        "Đóng công tắc và quan sát",
+        "Dự đoán OPEN",
+        "Mở công tắc và quan sát",
+        "Chọn giải thích và nộp"
+      ],
+      "variables": [
+        {
+          "name": "switch",
+          "unit": "state",
+          "role": "independent"
+        },
+        {
+          "name": "bulb",
+          "unit": "state",
+          "role": "dependent"
+        }
+      ],
+      "observations": [
+        "CLOSED/OPEN",
+        "ON/OFF"
+      ],
+      "expectedResult": "CLOSED → ON; OPEN → OFF.",
+      "explanation": "Mở công tắc làm gián đoạn đường dẫn kín.",
+      "safety": "Chỉ thao tác mô phỏng. Không thực hành với điện lưới hoặc thiết bị điện thật theo mô hình này. Thí nghiệm vật lý cần giáo viên hướng dẫn.",
+      "limitations": "Chỉ hỗ trợ một phần Outcome lắp mạch; không chứng minh năng lực tự mắc mạch hoặc vẽ sơ đồ. Không tính I/U, độ sáng, LED, nhiệt, phân nhánh, ngắn mạch hoặc an toàn điện thực.",
+      "modality": "deterministic-simulation",
+      "sources": [
+        {
+          "title": "MOET KHTN 2018, Điện lớp 8, pp.48–49",
+          "url": "https://boiduonghanoi.edu.vn/pluginfile.php/45/mod_folder/content/0/11-CT-Khoa-hoc-tu-nhien.pdf",
+          "license": "PENDING_RIGHTS_REVIEW"
+        }
+      ]
+    },
+    "rubric": {
+      "ref": "circuit-bulb-checkpoints@1.0.0",
+      "criteria": [
+        "CLOSED prediction ON",
+        "OPEN prediction OFF",
+        "explanation A"
+      ],
+      "maximum": 3,
+      "passScore": 3,
+      "invalidEvidence": "reject without Attempt"
+    },
+    "proposedConfig": {
+      "challengeId": "circuit-bulb-b22",
+      "challengeParams": {},
+      "stateSchemaVersion": 1,
+      "evidenceSchemaVersion": 1
+    },
+    "proposedPack": {
+      "visualAssetVersionId": null,
+      "semanticMap": {
+        "battery": "battery",
+        "bulb": "bulb",
+        "switch": "switch"
+      },
+      "bindings": [],
+      "challengeTemplates": [],
+      "units": {},
+      "ranges": {},
+      "initialState": {
+        "nodes": [
+          {
+            "id": "battery",
+            "type": "battery"
+          },
+          {
+            "id": "bulb",
+            "type": "bulb"
+          },
+          {
+            "id": "switch",
+            "type": "switch",
+            "closed": true
+          }
+        ],
+        "edges": [
+          {
+            "source": "battery",
+            "target": "bulb"
+          },
+          {
+            "source": "bulb",
+            "target": "switch"
+          },
+          {
+            "source": "switch",
+            "target": "battery"
+          }
+        ]
+      }
+    },
+    "goldenCases": [
+      {
+        "id": "CLOSED",
+        "state": {
+          "nodes": [
+            {
+              "id": "battery",
+              "type": "battery"
+            },
+            {
+              "id": "bulb",
+              "type": "bulb"
+            },
+            {
+              "id": "switch",
+              "type": "switch",
+              "closed": true
+            }
+          ],
+          "edges": [
+            {
+              "source": "battery",
+              "target": "bulb"
+            },
+            {
+              "source": "bulb",
+              "target": "switch"
+            },
+            {
+              "source": "switch",
+              "target": "battery"
+            }
+          ]
+        },
+        "expected": {
+          "circuitPath": "CLOSED",
+          "bulbState": "ON"
+        }
+      },
+      {
+        "id": "OPEN",
+        "state": {
+          "nodes": [
+            {
+              "id": "battery",
+              "type": "battery"
+            },
+            {
+              "id": "bulb",
+              "type": "bulb"
+            },
+            {
+              "id": "switch",
+              "type": "switch",
+              "closed": false
+            }
+          ],
+          "edges": [
+            {
+              "source": "battery",
+              "target": "bulb"
+            },
+            {
+              "source": "bulb",
+              "target": "switch"
+            },
+            {
+              "source": "switch",
+              "target": "battery"
+            }
+          ]
+        },
+        "expected": {
+          "circuitPath": "OPEN",
+          "bulbState": "OFF"
+        }
+      }
+    ],
+    "rights": {
+      "status": "PENDING",
+      "sourceAttribution": "recorded; permission not inferred from public URL",
+      "assets": "Existing 2D code renderer; no GLB or new assets",
+      "required": "Review programme/textbook usage and repository/dependency licenses"
+    },
+    "reviews": [],
+    "databaseVersionIds": null,
+    "releaseDigest": null,
+    "codeSha256": {
+      "packages/sim/index.ts": "5853dc685468400fb0bc5e5831f064e66ccc737d7665060cd679c7c51e0c8c11",
+      "src/modules/labs/application/lab-run.ts": "e134d9dfe1c97a465f194a595439b3933df3e0be1d9a340a380669797eb189ff",
+      "src/modules/labs/application/sim-packs.ts": "304e4d64cb955d2ccf226d725bcbf26f2d4210a55e69deda7dfd6491f5d6badf"
+    }
+  }
+}
