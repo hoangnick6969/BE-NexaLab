@@ -178,6 +178,8 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       const releaseService = service;
       const releaseController = new AdminLabsController(p as any, releaseService);
       const releaseDigest = draftA.digest;
+      expect(releaseDigest).toMatch(/^[a-f0-9]{64}$/);
+      expect(draftA.snapshot && digest(draftA.snapshot)).toBe(releaseDigest);
       const reviewBody = (kind: typeof reviewerKinds[number]) => ({
         kind, decision: "APPROVE" as const, releaseDigest, note: `TEST FIXTURE ONLY — synthetic ${kind} approval mechanics, not a real review`,
       });
@@ -192,6 +194,10 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       for (const [index, kind] of reviewerKinds.entries()) {
         await service.authorizeReviewer(reviewers[index].id, adminReq, { subjectId, kind, active: true, reason: "TEST FIXTURE ONLY — isolated reviewer authorization" });
       }
+      await expect(service.review(draftA.id, { user: { sub: reviewers[0].id } }, {
+        ...reviewBody("CURRICULUM"), releaseDigest: "0".repeat(64),
+      })).rejects.toMatchObject({ response: { code: "LAB_RELEASE_DIGEST_MISMATCH" } });
+      expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id } })).toBe(0);
       for (const kind of reviewerKinds.slice(0, 4)) {
         const index = reviewerKinds.indexOf(kind);
         await service.review(draftA.id, { user: { sub: reviewers[index].id } }, reviewBody(kind));
@@ -200,6 +206,7 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
         .rejects.toMatchObject({ response: { code: "LAB_RELEASE_NOT_APPROVED" } });
       const finalAReview = await service.review(draftA.id, { user: { sub: reviewers[4].id } }, reviewBody("RIGHTS"));
       expect(finalAReview.status).toBe("APPROVED");
+      expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id, releaseDigest } })).toBe(reviewerKinds.length);
       const activeA = await releaseController.activateLabRelease(labId, draftA.id, adminReq, { reason: "TEST FIXTURE ONLY — exercise activation mechanics" });
       expect(activeA.status).toBe("ACTIVE");
 
