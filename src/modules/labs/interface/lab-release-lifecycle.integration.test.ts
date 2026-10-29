@@ -116,9 +116,13 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       await p.lab.create({ data: {
         id: labId, subjectId, title: "TEST FIXTURE ONLY — Circuit bulb release workflow", grade: 8, topic: "P3.6 isolated release test",
         learningObjective: "Synthetic fixture for release mechanics only; not curriculum evidence.", status: "published",
-        scope: "CLASS_PRIVATE", releaseCleared: false, topicCode, synthetic: false, simulationModelRef: modelRef,
+        scope: "CLASS_PRIVATE", releaseCleared: false, topicCode: null, synthetic: false, simulationModelRef: "circuit@1.0.0",
       } });
       await p.challenge.create({ data: { id: challengeId, labId, objective: "TEST FIXTURE ONLY — observe bulb state", constraints: {} } });
+      const historicalAttempt = await p.attempt.create({ data: {
+        studentId: student.id, challengeId, labState: state(true), simulationResult: { legacy: true },
+        verdict: "passed", durationMs: 100, simulationModelVersion: "1.0.0",
+      } });
       await p.curriculumChapter.create({ data: { code: chapterCode, subjectId, grade: 8, domain: "ENERGY", title: "TEST FIXTURE ONLY", status: "active", synthetic: false } });
       await p.curriculumTopic.create({ data: { code: topicCode, chapterCode, title: "TEST FIXTURE ONLY", outcomeCodes: [outcomeCode], status: "active" } });
       await p.curriculumOutcome.upsert({
@@ -126,17 +130,24 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
         create: { code: outcomeCode, grade: 8, domain: "ENERGY", chapter: "TEST FIXTURE ONLY", statement: "Synthetic outcome solely for isolated release-gate mechanics.", sourceEvidence: { originType: "test_fixture_only" }, synthetic: false, status: "active" },
         update: { status: "active", synthetic: false, sourceEvidence: { originType: "test_fixture_only" } },
       });
+      const contentPackKey = `p36-content-pack-${suffix}`;
+      // The historical migration has a required subjectId column that the current
+      // Prisma model does not expose. Keep this focused fixture truthful without
+      // broadening P3.6 into an unrelated schema reconciliation.
+      await p.$executeRaw`INSERT INTO "ContentPack" ("key", "subjectId", "grade", "domain", "title", "namespace") VALUES (${contentPackKey}, ${subjectId}, 8, 'ENERGY', 'TEST FIXTURE ONLY — B22 source', 'baseline')`;
+      const contentPackVersion = await p.contentPackVersion.create({ data: {
+        packKey: contentPackKey, version: 1, digest: digest({ fixture: suffix, lesson: "B22" }),
+        manifest: { fixture: suffix, lesson: "B22" }, status: "released", synthetic: false,
+        outcomeCodes: [outcomeCode], releaseId: `p36-content-release-${suffix}`,
+      } });
       const lesson = await p.lesson.create({ data: {
         id: `p36-lesson-${suffix}`, subjectId, authorId: admin.id, title: "TEST FIXTURE ONLY — Circuit lesson binding",
         chapter: "TEST FIXTURE ONLY", grade: 8, topic: "TEST FIXTURE ONLY", learningObjective: "No curriculum claim.",
         prerequisites: "", curriculum: "TEST FIXTURE ONLY", content: "Synthetic release test binding only.", status: "published",
         scope: "SHARED_LIBRARY", synthetic: false, curriculumChapterCode: chapterCode, curriculumTopicCode: topicCode,
-        outcomeCodes: [outcomeCode],
+        outcomeCodes: [outcomeCode], packVersionId: contentPackVersion.id,
       } });
-      const course = await p.foundationalCourseVersion.create({ data: {
-        id: `p36-course-${suffix}`, subjectId, grade: 8, version: `test-${suffix}`, status: "active", sourceVersion: "TEST_FIXTURE_ONLY",
-      } });
-      await p.foundationalCourseLesson.create({ data: { courseVersionId: course.id, lessonId: lesson.id, officialOrder: 1, foundationalLabId: labId } });
+      expect(await p.foundationalCourseVersion.count({ where: { subjectId } })).toBe(0);
 
       const activitySpec = {
         key: CIRCUIT_BULB_ACTIVITY_KEY, outcomeCodes: [outcomeCode], objective: "TEST FIXTURE ONLY: distinguish open and closed bulb states",
@@ -183,7 +194,15 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
         if (previousAppEnv === undefined) delete process.env.APP_ENV;
         else process.env.APP_ENV = previousAppEnv;
       }
-      await p.simulationPackVersion.update({ where: { id: authoredPack.id }, data: { status: "retired" } });
+      const authoredConfig = await authoring.createVersion(labId, adminReq, {
+        challengeParams: {},
+        goldenCases: [{ challengeId, label: "TEST closed bulb", labState: state(true), expectedVerdict: "passed" as const }],
+        reason: "TEST FIXTURE ONLY — author first-release bulb config without changing legacy Lab pointer",
+      });
+      const configA = await authoring.activateVersion(labId, String(authoredConfig.version), adminReq, { reason: "TEST FIXTURE ONLY — activate candidate config" });
+      const packA = await p.simulationPackVersion.findUniqueOrThrow({ where: { id: authoredPack.id } });
+      expect(configA.modelRef).toBe(modelRef);
+      expect(packA).toMatchObject({ status: "active", modelRef });
       const configBody = (version: number) => ({
         labId, version, modelRef, challengeParams: {},
         goldenCases: [{ challengeId, label: "TEST closed bulb", labState: state(true), expectedVerdict: "passed" as const }],
@@ -194,12 +213,13 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
         template: packBody(key).template, semanticMap: packBody(key).semanticMap, bindings: [], challengeTemplates: [], reviews: packBody(key).reviews,
         reason: "TEST FIXTURE ONLY — release mechanics", status, createdById: admin.id,
       });
-      const configA = await p.simulationConfigVersion.create({ data: configBody(1) });
-      const packA = await p.simulationPackVersion.create({ data: packData(1, `p36-pack-a-${suffix}`, "active") });
       const service = new LabReleaseService(p as any);
       const studentReq = { user: { sub: student.id, role: "STUDENT" } };
-      const draftA = await service.createDraft(labId, adminReq, { reason: "TEST FIXTURE ONLY — create Circuit release draft A" });
+      const draftA = await service.createDraft(labId, adminReq, { reason: "TEST FIXTURE ONLY — create Circuit release draft A", lessonId: lesson.id });
       expect(draftA).toMatchObject({ status: "DRAFT", missingReviewKinds: reviewerKinds });
+      expect((draftA.snapshot as any).lessonBindings).toEqual([
+        expect.objectContaining({ bindingType: "DIRECT_LESSON", lessonId: lesson.id, contentPackVersionId: contentPackVersion.id }),
+      ]);
 
       const releaseService = service;
       const releaseController = new AdminLabsController(p as any, releaseService);
@@ -235,21 +255,25 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       expect(finalAReview.status).toBe("APPROVED");
       expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id, releaseDigest } })).toBe(reviewerKinds.length);
       expect((await p.labReleaseReview.findFirstOrThrow({ where: { releaseId: draftA.id } })).evidence).toMatchObject({ curriculumMapping: expect.stringContaining("TEST FIXTURE") });
-      await p.foundationalCourseLesson.updateMany({ where: { foundationalLabId: labId }, data: { officialOrder: 2 } });
+      await p.lesson.update({ where: { id: lesson.id }, data: { outcomeCodes: [] } });
       await expect(service.activate(labId, draftA.id, adminReq, { reason: "TEST ONLY reject changed mapping" }))
         .rejects.toMatchObject({ response: { code: "LAB_RELEASE_BINDING_MISMATCH" } });
-      await p.foundationalCourseLesson.updateMany({ where: { foundationalLabId: labId }, data: { officialOrder: 1 } });
+      await p.lesson.update({ where: { id: lesson.id }, data: { outcomeCodes: [outcomeCode] } });
       const activeA = await releaseController.activateLabRelease(labId, draftA.id, adminReq, { reason: "TEST FIXTURE ONLY — exercise activation mechanics" });
       expect(activeA.status).toBe("ACTIVE");
+      expect(await p.lab.findUniqueOrThrow({ where: { id: labId } })).toMatchObject({ topicCode, simulationModelRef: modelRef });
+      expect(await p.attempt.findUniqueOrThrow({ where: { id: historicalAttempt.id } })).toMatchObject({
+        id: historicalAttempt.id, simulationResult: { legacy: true }, packVersionId: null, configVersionId: null,
+      });
 
       const catalog = new CatalogController(p as any);
       expect((await catalog.labs(studentReq)).some((item: any) => item.id === labId)).toBe(true);
       const labs = new LabsController(p as any, new StudentAccessService(p as any), new RequestRateLimiter());
-      await p.foundationalCourseLesson.updateMany({ where: { foundationalLabId: labId }, data: { officialOrder: 2 } });
+      await p.lesson.update({ where: { id: lesson.id }, data: { outcomeCodes: [] } });
       expect((await catalog.labs(studentReq)).some((item: any) => item.id === labId)).toBe(false);
       await expect(labs.launchRun(labId, studentReq, { challengeId }))
         .rejects.toMatchObject({ response: { code: "LAB_RELEASE_BINDING_MISMATCH" } });
-      await p.foundationalCourseLesson.updateMany({ where: { foundationalLabId: labId }, data: { officialOrder: 1 } });
+      await p.lesson.update({ where: { id: lesson.id }, data: { outcomeCodes: [outcomeCode] } });
       expect(await catalog.lessonLabs(lesson.id, studentReq)).toEqual(expect.arrayContaining([expect.objectContaining({ labId, releaseId: activeA.id })]));
       await expect(labs.launchRun(labId, studentReq, { challengeId, releaseId: "not-the-reviewed-release" }))
         .rejects.toMatchObject({ response: { code: "LAB_RELEASE_CHANGED" } });
@@ -270,7 +294,7 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       await p.simulationPackVersion.update({ where: { id: packA.id }, data: { status: "draft" } });
       const configB = await p.simulationConfigVersion.create({ data: configBody(2) });
       const packB = await p.simulationPackVersion.create({ data: packData(2, `p36-pack-b-${suffix}`, "active") });
-      const draftB = await service.createDraft(labId, adminReq, { reason: "TEST FIXTURE ONLY — create Circuit release draft B" });
+      const draftB = await service.createDraft(labId, adminReq, { reason: "TEST FIXTURE ONLY — create Circuit release draft B", lessonId: lesson.id });
       const digestB = draftB.digest;
       await service.review(draftB.id, adminReq, { ...reviewBody("OWNER_SIGNOFF"), releaseDigest: digestB });
       const activeB = await service.activate(labId, draftB.id, adminReq, { reason: "TEST FIXTURE ONLY — exercise successor activation" });

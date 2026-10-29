@@ -1,4 +1,4 @@
-import { assertReviewedBindings } from "./lab-release-bindings";
+import { assertReviewedBindings, directLessonBinding } from "./lab-release-bindings";
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { z } from "zod";
 import { audit } from "../../../common/audit";
@@ -62,18 +62,31 @@ export class LabReleaseService {
   }
 
   async createDraft(labId: string, req: any, body: unknown) {
-    const b = z.object({ reason: releaseReason }).strict().parse(body);
+    const b = z.object({ reason: releaseReason, lessonId: z.string().min(1).max(200).optional() }).strict().parse(body);
     return this.db.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-release:" + labId);
       const lab = await tx.lab.findUnique({ where: { id: labId } });
       if (!lab) throw new NotFoundException({ code: "LAB_NOT_FOUND" });
       if (lab.synthetic || lab.status === "archived") throw new ConflictException({ code: "LAB_NOT_RELEASE_ELIGIBLE" });
-      if (!lab.topicCode) throw new ConflictException({ code: "LAB_TOPIC_MAPPING_REQUIRED" });
-
-      const [topic, execution] = await Promise.all([
-        tx.curriculumTopic.findUnique({ where: { code: lab.topicCode }, include: { chapter: true } }),
-        captureCurrentLabExecution(tx, labId),
-      ]);
+      const execution = await captureCurrentLabExecution(tx, labId);
+      const directLessons = await tx.lesson.findMany({
+        where: {
+          ...(b.lessonId ? { id: b.lessonId } : { labId }),
+          status: "published", scope: "SHARED_LIBRARY", synthetic: false,
+          packVersion: { status: "released", synthetic: false },
+        },
+        include: { packVersion: true },
+        orderBy: [{ curriculumOrder: "asc" }, { id: "asc" }],
+      });
+      if (b.lessonId && directLessons.length !== 1)
+        throw new ConflictException({ code: "LAB_LESSON_BINDING_REQUIRED" });
+      const directTopicCodes = [...new Set(directLessons.map((lesson: any) => lesson.curriculumTopicCode).filter(Boolean))];
+      if (directLessons.some((lesson: any) => lesson.subjectId !== lab.subjectId || lesson.grade !== lab.grade) || directTopicCodes.length > 1)
+        throw new ConflictException({ code: "LAB_LESSON_BINDING_INVALID" });
+      const topicCode = lab.topicCode ?? directTopicCodes[0];
+      if (!topicCode || (lab.topicCode && directTopicCodes.length && directTopicCodes[0] !== lab.topicCode))
+        throw new ConflictException({ code: "LAB_TOPIC_MAPPING_REQUIRED" });
+      const topic = await tx.curriculumTopic.findUnique({ where: { code: topicCode }, include: { chapter: true } });
       if (!topic || topic.status !== "active" || topic.chapter.status !== "active")
         throw new ConflictException({ code: "LAB_TOPIC_MAPPING_REQUIRED" });
 
@@ -91,13 +104,18 @@ export class LabReleaseService {
       const topicOutcomes = Array.isArray(topic.outcomeCodes) ? topic.outcomeCodes as string[] : [];
       if (outcomes.length !== parsedActivity.data.outcomeCodes.length || parsedActivity.data.outcomeCodes.some((code) => !topicOutcomes.includes(code)))
         throw new ConflictException({ code: "LAB_OUTCOME_MAPPING_REQUIRED" });
+      if (directLessons.some((lesson: any) => {
+        const lessonOutcomes = Array.isArray(lesson.outcomeCodes) ? lesson.outcomeCodes as string[] : [];
+        const packOutcomes = Array.isArray(lesson.packVersion?.outcomeCodes) ? lesson.packVersion.outcomeCodes as string[] : [];
+        return parsedActivity.data.outcomeCodes.some((code) => !lessonOutcomes.includes(code) || !packOutcomes.includes(code));
+      })) throw new ConflictException({ code: "LAB_OUTCOME_MAPPING_REQUIRED" });
 
-      const lessonBindings = await tx.foundationalCourseLesson.findMany({
+      const legacyLessonBindings = directLessons.length ? [] : await tx.foundationalCourseLesson.findMany({
         where: { foundationalLabId: labId, courseVersion: { status: "active" }, lesson: { scope: "SHARED_LIBRARY", status: "published" } },
         include: { courseVersion: { select: { id: true, subjectId: true, grade: true, version: true, sourceVersion: true } }, lesson: { select: { id: true, curriculumTopicCode: true } } },
         orderBy: [{ officialOrder: "asc" }, { lessonId: "asc" }],
       });
-      if (!lessonBindings.length) throw new ConflictException({ code: "LAB_LESSON_BINDING_REQUIRED" });
+      if (!directLessons.length && !legacyLessonBindings.length) throw new ConflictException({ code: "LAB_LESSON_BINDING_REQUIRED" });
 
       const configInput = versionInputSchema.safeParse({
         challengeParams: config.challengeParams,
@@ -120,16 +138,16 @@ export class LabReleaseService {
         : null;
       const glb = (visual?.validation as any)?.glb ?? null;
       const visualReady = Boolean(visual && visual.status === "READY" && visual.asset.kind === "model" && visual.asset.status === "ACTIVE" && glb?.ok);
-      const packCheck = packValidation(packInput.data, { labModelRef: lab.simulationModelRef, activity: { spec: activity.spec }, glb, visualReady });
+      const packCheck = packValidation(packInput.data, { labModelRef: execution.modelRef, activity: { spec: activity.spec }, glb, visualReady });
       if (packCheck.errors.length) throw new ConflictException({ code: "LAB_PACK_VALIDATION_FAILED", details: { errors: packCheck.errors } });
 
       const required = requiredReviewKinds((pack.template as any)?.ranges);
       const snapshot = {
-        lab: { id: lab.id, subjectId: lab.subjectId, grade: lab.grade, title: lab.title, topic: lab.topic, topicCode: lab.topicCode, learningObjective: lab.learningObjective },
+        lab: { id: lab.id, subjectId: lab.subjectId, grade: lab.grade, title: lab.title, topic: lab.topic, topicCode, learningObjective: lab.learningObjective },
         execution,
         activity: { id: activity.id, key: activity.key, version: activity.version, digest: activity.digest, spec: parsedActivity.data },
         outcomes: outcomes.map((outcome) => outcome.code).sort(),
-        lessonBindings: lessonBindings.map((binding) => ({
+        lessonBindings: directLessons.length ? directLessons.map(directLessonBinding) : legacyLessonBindings.map((binding) => ({
           courseVersionId: binding.courseVersion.id, subjectId: binding.courseVersion.subjectId,
           grade: binding.courseVersion.grade, version: binding.courseVersion.version, sourceVersion: binding.courseVersion.sourceVersion,
           lessonId: binding.lesson.id, lessonTopicCode: binding.lesson.curriculumTopicCode, officialOrder: binding.officialOrder,
@@ -222,7 +240,7 @@ export class LabReleaseService {
       if (release.status === "APPROVED" && (
         release.lab.title !== snapshot.lab.title || release.lab.subjectId !== snapshot.lab.subjectId ||
         release.lab.grade !== snapshot.lab.grade || release.lab.topic !== snapshot.lab.topic ||
-        release.lab.topicCode !== snapshot.lab.topicCode || release.lab.learningObjective !== snapshot.lab.learningObjective
+        (release.lab.topicCode !== null && release.lab.topicCode !== snapshot.lab.topicCode) || release.lab.learningObjective !== snapshot.lab.learningObjective
       )) throw new ConflictException({ code: "LAB_RELEASE_STALE" });
 
       const previous = await tx.labRelease.findFirst({ where: { labId, status: "ACTIVE" } });

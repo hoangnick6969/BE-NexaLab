@@ -155,27 +155,32 @@ export class AdminLabsController {
   @ApiOperation({ summary: "Store a new draft configuration version after validation and golden cases pass" })
   async createVersion(@Param("id") labId: string, @Req() req: any, @Body() body: unknown) {
     const input = versionInputSchema.parse(body);
-    const lab = await this.db.lab.findUnique({
-      where: { id: labId },
-      include: { challenges: { where: { NOT: { id: { contains: "_v-" } } } } },
-    });
+    const [lab, activeRelease, candidatePack] = await Promise.all([
+      this.db.lab.findUnique({
+        where: { id: labId },
+        include: { challenges: { where: { NOT: { id: { contains: "_v-" } } } } },
+      }),
+      this.db.labRelease.findFirst({ where: { labId, status: "ACTIVE" }, select: { id: true } }),
+      this.db.simulationPackVersion.findFirst({
+        where: { labId, status: { in: ["draft", "active"] } },
+        orderBy: { createdAt: "desc" }, select: { modelRef: true },
+      }),
+    ]);
     if (!lab) throw notFound("phòng thực hành");
-    const spec = CHALLENGE_PARAMETERS[labId];
+    const modelRef = !activeRelease && !lab.releaseCleared && candidatePack ? candidatePack.modelRef : lab.simulationModelRef;
     const errors = versionErrors(
       labId,
       lab.challenges.map((c) => c.id),
       input,
     );
-    if (spec && lab.simulationModelRef && !spec.modelRef.startsWith(lab.simulationModelRef.split("@")[0]))
-      errors.push(`Mô hình của phòng (${lab.simulationModelRef}) không khớp danh sách cho phép (${spec.modelRef})`);
     try {
-      if (resolveModel(lab.simulationModelRef).labId !== labId) errors.push("Mô hình không thuộc phòng thực hành");
+      if (resolveModel(modelRef).labId !== labId) errors.push("Mô hình không thuộc phòng thực hành");
     } catch {
       errors.push("Mô hình của phòng không nằm trong danh sách cho phép");
     }
     if (errors.length)
       throw new UnprocessableEntityException({ code: "INVALID_SIMULATION_CONFIG", message: errors.join("; "), details: { errors } });
-    const golden = goldenCaseResults(labId, input, lab.simulationModelRef);
+    const golden = goldenCaseResults(labId, input, modelRef);
     if (golden.some((g) => !g.ok))
       throw new UnprocessableEntityException({
         code: "GOLDEN_CASE_MISMATCH",
@@ -193,7 +198,7 @@ export class AdminLabsController {
         data: {
           labId,
           version: (last?.version ?? 0) + 1,
-          modelRef: lab.simulationModelRef,
+          modelRef,
           challengeParams: input.challengeParams,
           goldenCases: input.goldenCases.map((g, i) => ({ ...g, actual: golden[i].actual })) as any,
           reason: input.reason,
@@ -400,15 +405,20 @@ export class AdminLabsController {
   @ApiOperation({ summary: "Validate and store a draft topic simulation pack version; golden cases run before any visual check" })
   async createSimPack(@Req() req: any, @Body() body: unknown) {
     const input = packInputSchema.parse(body);
-    const [lab, activity, visual] = await Promise.all([
+    const [lab, activity, visual, activeRelease] = await Promise.all([
       this.db.lab.findUnique({ where: { id: input.labId } }),
       this.db.practicalActivityVersion.findUnique({ where: { id: input.activityVersionId } }),
       input.visualAssetVersionId ? this.db.assetVersion.findUnique({ where: { id: input.visualAssetVersionId }, include: { asset: true } }) : null,
+      this.db.labRelease.findFirst({ where: { labId: input.labId, status: "ACTIVE" }, select: { id: true } }),
     ]);
     if (!lab) throw notFound("phòng thực hành");
     const glb = (visual?.validation as any)?.glb ?? null;
     const visualReady = Boolean(visual && visual.status === "READY" && visual.asset.kind === "model" && visual.asset.status === "ACTIVE" && glb?.ok);
-    const { errors, golden } = packValidation(input, { labModelRef: lab.simulationModelRef, activity: activity ? { spec: activity.spec } : null, glb, visualReady });
+    // Before the first public release, a private candidate may move from the
+    // legacy model to another registered model for the same Lab. The Lab row is
+    // updated only when the reviewed release activates, preserving legacy data.
+    const authoringModelRef = !activeRelease && !lab.releaseCleared ? input.modelRef : lab.simulationModelRef;
+    const { errors, golden } = packValidation(input, { labModelRef: authoringModelRef, activity: activity ? { spec: activity.spec } : null, glb, visualReady });
     if (errors.length) throw new UnprocessableEntityException({ code: "SIM_PACK_INVALID", message: errors.join("; "), details: { errors, golden } });
     return this.db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-pack:" + input.key}))`;
