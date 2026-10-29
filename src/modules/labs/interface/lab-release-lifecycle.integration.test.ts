@@ -41,7 +41,10 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
     } });
     const challengeId = `p36-challenge-${suffix}`;
     await p.challenge.create({ data: { id: challengeId, labId, objective: "Private release gate", constraints: {} } });
-    const snapshot = { requiredReviewKinds: ["CURRICULUM", "SUBJECT", "MODEL", "SAFETY", "RIGHTS"] };
+    const snapshot = {
+      requiredReviewKinds: ["CURRICULUM", "SUBJECT", "MODEL", "SAFETY", "RIGHTS"],
+      execution: { configVersionId: `missing-config-${suffix}`, packVersionId: `missing-pack-${suffix}`, activityVersionId: `missing-activity-${suffix}` },
+    };
     const release = await p.labRelease.create({ data: {
       labId, version: 1, digest: digest(snapshot), snapshot, status: "DRAFT",
       reason: "Private lifecycle gate test", createdById: `fixture-admin-${suffix}`,
@@ -71,6 +74,19 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
     const labs = new LabsController(p as any, {} as any, {} as any);
     await expect(labs.launchRun(labId, studentReq, { challengeId }))
       .rejects.toMatchObject({ response: { code: "LAB_NOT_FOUND" } });
+    // A release frozen under the former delegated policy retains that policy.
+    const legacyReviewer = await p.user.create({ data: {
+      email: `p36-legacy-reviewer-${suffix}@example.test`, fullName: "TEST ONLY legacy reviewer", passwordHash: "test-only", role: "TEACHER",
+    } });
+    await p.labReviewerAuthorization.create({ data: {
+      userId: legacyReviewer.id, subjectId, kind: "CURRICULUM", active: true, authorizedById: "test-only-admin",
+    } });
+    const legacyDecision = await service.review(release.id, { user: { sub: legacyReviewer.id, role: "TEACHER" } }, {
+      kind: "CURRICULUM", decision: "APPROVE", releaseDigest: release.digest, note: "TEST ONLY legacy policy remains valid",
+    });
+    expect(legacyDecision.status).toBe("DRAFT");
+    expect(legacyDecision.missingReviewKinds).toContain("DISTINCT_REVIEWERS");
+    expect(legacyDecision.missingReviewKinds).toContain("RIGHTS");
   });
 
   it("runs the TEST_FIXTURE_ONLY Circuit release lifecycle through standalone student replay, quarantine and rollback", async () => {
@@ -91,16 +107,11 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       nodes: [{ id: "battery", type: "battery" }, { id: "bulb", type: "bulb" }, { id: "switch", type: "switch", closed }],
       edges: [{ source: "battery", target: "bulb" }, { source: "bulb", target: "switch" }, { source: "switch", target: "battery" }],
     });
-    const now = new Date().toISOString();
-    const testOnlyReviewer = (kind: string) => ({ name: `Synthetic ${kind} reviewer fixture`, email: `synthetic-${kind}-${suffix}@example.test`, at: now });
-    const reviewerKinds = ["CURRICULUM", "SUBJECT", "MODEL", "SAFETY", "RIGHTS"] as const;
+    const reviewerKinds = ["OWNER_SIGNOFF"] as const;
     try {
       const admin = await p.user.create({ data: { email: `p36-admin-${suffix}@example.test`, fullName: "P3.6 test operator", passwordHash: "test-only", role: "ADMIN" } });
       const student = await p.user.create({ data: { username: `p36-browser-${suffix}`, fullName: "P3.6 isolated browser test student", passwordHash: await argon.hash("p36-browser-local-test-only"), role: "STUDENT" } });
       const unauthorized = await p.user.create({ data: { email: `p36-unauthorized-${suffix}@example.test`, fullName: "Unauthorized reviewer test fixture", passwordHash: "test-only", role: "TEACHER" } });
-      const reviewers = await Promise.all(reviewerKinds.map((kind) => p.user.create({
-        data: { email: `p36-${kind.toLowerCase()}-${suffix}@example.test`, fullName: `Synthetic ${kind} reviewer fixture`, passwordHash: "test-only", role: "TEACHER" },
-      })));
       await p.subject.create({ data: { id: subjectId, name: "TEST FIXTURE ONLY — KHTN8 Circuit" } });
       await p.lab.create({ data: {
         id: labId, subjectId, title: "TEST FIXTURE ONLY — Circuit bulb release workflow", grade: 8, topic: "P3.6 isolated release test",
@@ -139,9 +150,13 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       };
       const activity = await ensureCircuitBulbActivity(p, {
         key: CIRCUIT_BULB_ACTIVITY_KEY, version: 1, digest: digest(activitySpec), spec: activitySpec,
-        reviews: { testFixtureOnly: true }, createdById: admin.id,
+        reviews: { ownerSignoffPending: true }, createdById: admin.id,
       });
       expect((activity.spec as any).outcomeCodes).toContain(outcomeCode);
+      const adminReq = { user: { sub: admin.id, role: "ADMIN" } };
+      const authoring = new AdminLabsController(p as any, new LabReleaseService(p as any));
+      const authoredActivity = await authoring.createPractical(adminReq, { ...activitySpec, key: `p36-owner-activity-${suffix}` });
+      expect(authoredActivity.reviews).toEqual({ ownerSignoffPending: true });
 
       const packBody = (key: string) => ({
         key, labId, modelRef, activityVersionId: activity.id,
@@ -153,10 +168,22 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
           ],
         },
         visualAssetVersionId: null, semanticMap: { battery: "battery", bulb: "bulb", switch: "switch" }, bindings: [], challengeTemplates: [],
-        reviews: { subject: testOnlyReviewer("subject"), model: testOnlyReviewer("model") }, reason: "TEST FIXTURE ONLY — release mechanics",
+        reviews: { ownerSignoffPending: true }, reason: "TEST FIXTURE ONLY — release mechanics",
       });
       const packInputCheck = packInputSchema.safeParse(packBody(`p36-pack-check-${suffix}`));
       expect(packInputCheck.success, JSON.stringify(packInputCheck.success ? [] : packInputCheck.error.issues)).toBe(true);
+      const authoredPack = await authoring.createSimPack(adminReq, packBody(`p36-owner-authoring-${suffix}`));
+      expect(authoredPack).toMatchObject({ status: "draft", reviews: { ownerSignoffPending: true } });
+      const previousAppEnv = process.env.APP_ENV;
+      process.env.APP_ENV = "production";
+      try {
+        const activatedPack = await authoring.activateSimPack(authoredPack.id, adminReq, { reason: "TEST ONLY — zero ranges need no separate range reviewer" });
+        expect(activatedPack.status).toBe("active");
+      } finally {
+        if (previousAppEnv === undefined) delete process.env.APP_ENV;
+        else process.env.APP_ENV = previousAppEnv;
+      }
+      await p.simulationPackVersion.update({ where: { id: authoredPack.id }, data: { status: "retired" } });
       const configBody = (version: number) => ({
         labId, version, modelRef, challengeParams: {},
         goldenCases: [{ challengeId, label: "TEST closed bulb", labState: state(true), expectedVerdict: "passed" as const }],
@@ -170,7 +197,6 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       const configA = await p.simulationConfigVersion.create({ data: configBody(1) });
       const packA = await p.simulationPackVersion.create({ data: packData(1, `p36-pack-a-${suffix}`, "active") });
       const service = new LabReleaseService(p as any);
-      const adminReq = { user: { sub: admin.id, role: "ADMIN" } };
       const studentReq = { user: { sub: student.id, role: "STUDENT" } };
       const draftA = await service.createDraft(labId, adminReq, { reason: "TEST FIXTURE ONLY — create Circuit release draft A" });
       expect(draftA).toMatchObject({ status: "DRAFT", missingReviewKinds: reviewerKinds });
@@ -182,31 +208,33 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       expect(draftA.snapshot && digest(draftA.snapshot)).toBe(releaseDigest);
       const reviewBody = (kind: typeof reviewerKinds[number]) => ({
         kind, decision: "APPROVE" as const, releaseDigest, note: `TEST FIXTURE ONLY — synthetic ${kind} approval mechanics, not a real review`,
+        evidence: {
+          curriculumMapping: "TEST FIXTURE ONLY — isolated B22 mapping mechanics",
+          sourceReferences: ["TEST FIXTURE ONLY — synthetic source"],
+          scientificGoldenCases: "TEST FIXTURE ONLY — CLOSED ON and OPEN OFF",
+          rubric: "TEST FIXTURE ONLY — predictions plus explanation",
+          safetyAssessment: "TEST FIXTURE ONLY — no physical electricity",
+          rightsAssessment: "TEST FIXTURE ONLY — no external assets",
+        },
       });
-      await expect(service.review(draftA.id, { user: { sub: unauthorized.id } }, reviewBody("CURRICULUM")))
-        .rejects.toMatchObject({ response: { code: "LAB_REVIEW_NOT_AUTHORIZED" } });
+      await expect(service.review(draftA.id, { user: { sub: unauthorized.id } }, reviewBody("OWNER_SIGNOFF")))
+        .rejects.toMatchObject({ response: { code: "LAB_OWNER_SIGNOFF_NOT_AUTHORIZED" } });
       let activationError: unknown;
       try { await service.activate(labId, draftA.id, adminReq, { reason: "TEST FIXTURE ONLY — incomplete review must not activate" }); }
       catch (error) { activationError = error; }
       expect(activationError).toBeInstanceOf(ConflictException);
       expect((activationError as ConflictException).getResponse()).toMatchObject({ code: "LAB_RELEASE_NOT_APPROVED" });
 
-      for (const [index, kind] of reviewerKinds.entries()) {
-        await service.authorizeReviewer(reviewers[index].id, adminReq, { subjectId, kind, active: true, reason: "TEST FIXTURE ONLY — isolated reviewer authorization" });
-      }
-      await expect(service.review(draftA.id, { user: { sub: reviewers[0].id } }, {
-        ...reviewBody("CURRICULUM"), releaseDigest: "0".repeat(64),
+      await expect(service.review(draftA.id, adminReq, {
+        ...reviewBody("OWNER_SIGNOFF"), releaseDigest: "0".repeat(64),
       })).rejects.toMatchObject({ response: { code: "LAB_RELEASE_DIGEST_MISMATCH" } });
       expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id } })).toBe(0);
-      for (const kind of reviewerKinds.slice(0, 4)) {
-        const index = reviewerKinds.indexOf(kind);
-        await service.review(draftA.id, { user: { sub: reviewers[index].id } }, reviewBody(kind));
-      }
-      await expect(service.activate(labId, draftA.id, adminReq, { reason: "TEST FIXTURE ONLY — missing RIGHTS receipt must not activate" }))
-        .rejects.toMatchObject({ response: { code: "LAB_RELEASE_NOT_APPROVED" } });
-      const finalAReview = await service.review(draftA.id, { user: { sub: reviewers[4].id } }, reviewBody("RIGHTS"));
+      await expect(service.review(draftA.id, adminReq, { ...reviewBody("OWNER_SIGNOFF"), evidence: undefined }))
+        .rejects.toMatchObject({ response: { code: "LAB_OWNER_SIGNOFF_EVIDENCE_REQUIRED" } });
+      const finalAReview = await service.review(draftA.id, adminReq, reviewBody("OWNER_SIGNOFF"));
       expect(finalAReview.status).toBe("APPROVED");
       expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id, releaseDigest } })).toBe(reviewerKinds.length);
+      expect((await p.labReleaseReview.findFirstOrThrow({ where: { releaseId: draftA.id } })).evidence).toMatchObject({ curriculumMapping: expect.stringContaining("TEST FIXTURE") });
       await p.foundationalCourseLesson.updateMany({ where: { foundationalLabId: labId }, data: { officialOrder: 2 } });
       await expect(service.activate(labId, draftA.id, adminReq, { reason: "TEST ONLY reject changed mapping" }))
         .rejects.toMatchObject({ response: { code: "LAB_RELEASE_BINDING_MISMATCH" } });
@@ -244,11 +272,7 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       const packB = await p.simulationPackVersion.create({ data: packData(2, `p36-pack-b-${suffix}`, "active") });
       const draftB = await service.createDraft(labId, adminReq, { reason: "TEST FIXTURE ONLY — create Circuit release draft B" });
       const digestB = draftB.digest;
-      for (const [index, kind] of reviewerKinds.entries()) {
-        await service.review(draftB.id, { user: { sub: reviewers[index].id } }, {
-          ...reviewBody(kind), releaseDigest: digestB,
-        });
-      }
+      await service.review(draftB.id, adminReq, { ...reviewBody("OWNER_SIGNOFF"), releaseDigest: digestB });
       const activeB = await service.activate(labId, draftB.id, adminReq, { reason: "TEST FIXTURE ONLY — exercise successor activation" });
       expect(activeB.status).toBe("ACTIVE");
       expect((await p.labRelease.findUniqueOrThrow({ where: { id: activeA.id } })).status).toBe("SUPERSEDED");

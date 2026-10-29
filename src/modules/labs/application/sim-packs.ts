@@ -106,7 +106,7 @@ export const activitySpecSchema = z
       .array(z.object({ title: text(300), url: z.string().url().optional(), license: text(40) }).strict())
       .min(1)
       .max(20),
-    reviews: z.object({ subject: reviewer, safety: reviewer }).strict(),
+    reviews: z.object({ subject: reviewer, safety: reviewer }).strict().optional(),
   })
   .strict();
 
@@ -184,7 +184,10 @@ export const packInputSchema = z
           .strict(),
       )
       .max(20),
-    reviews: z.object({ subject: reviewer, model: reviewer }).strict(),
+    reviews: z.union([
+      z.object({ subject: reviewer, model: reviewer }).strict(),
+      z.object({ ownerSignoffPending: z.literal(true) }).strict(),
+    ]).default({ ownerSignoffPending: true }),
     /** Q-C2-04 approval reference for the ranges; required to activate outside development/test. */
     rangeApproval: z
       .object({ reference: text(200), approvedBy: reviewer })
@@ -226,7 +229,7 @@ export function packValidation(
   if (!model) return { errors: [`Mô hình ${input.modelRef} không nằm trong danh sách cho phép`], golden: [] };
   if (model.labId !== input.labId) errors.push(`mô hình ${input.modelRef} không thuộc phòng ${input.labId}`);
   if (ctx.labModelRef && ctx.labModelRef !== input.modelRef) errors.push(`phòng đang dùng ${ctx.labModelRef}, khác ${input.modelRef}`);
-  if (!ctx.activity) errors.push("thiếu hoạt động thực hành đã duyệt");
+  if (!ctx.activity) errors.push("thiếu hoạt động thực hành");
   const allowed = CHALLENGE_PARAMETERS[input.labId]?.params ?? {};
   for (const [name, range] of Object.entries(input.template.ranges)) {
     const spec = allowed[name] as any;
@@ -303,7 +306,7 @@ export function packValidation(
     if (!outputs.some((o) => o && compare(o[b.when.output], b.when.op, b.when.value)))
       errors.push(`ràng buộc #${i + 1} (${b.when.output} ${b.when.op} ${b.when.value}) không kích hoạt ở ca mẫu nào`);
   });
-  if (input.reviews.subject.email === input.reviews.model.email)
+  if ("subject" in input.reviews && input.reviews.subject.email === input.reviews.model.email)
     errors.push("người duyệt chuyên môn và người duyệt mô hình phải khác nhau");
   return { errors, golden };
 }

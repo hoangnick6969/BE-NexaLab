@@ -52,3 +52,4 @@ ALTER TABLE "LateDecision" ADD CONSTRAINT "LateDecision_submissionId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "LateDecision" ADD CONSTRAINT "LateDecision_deadlineRevisionId_fkey" FOREIGN KEY ("deadlineRevisionId") REFERENCES "AssignmentDeadlineRevision"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+

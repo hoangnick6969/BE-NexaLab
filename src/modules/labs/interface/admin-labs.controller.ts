@@ -362,7 +362,7 @@ export class AdminLabsController {
     return this.db.practicalActivityVersion.findMany({ orderBy: [{ key: "asc" }, { version: "desc" }] });
   }
   @Post("practicals")
-  @ApiOperation({ summary: "Store an immutable reviewed practical activity version (same content → same version)" })
+  @ApiOperation({ summary: "Store an immutable practical activity candidate (same content → same version); release review is separate" })
   async createPractical(@Req() req: any, @Body() body: unknown) {
     const spec = activitySpecSchema.parse(body);
     const digest = activityDigest(spec);
@@ -376,7 +376,7 @@ export class AdminLabsController {
       const last = await tx.practicalActivityVersion.findFirst({ where: { key: spec.key }, orderBy: { version: "desc" }, select: { version: true } });
       const { reviews, ...rest } = spec;
       const created = await tx.practicalActivityVersion.create({
-        data: { key: spec.key, version: (last?.version ?? 0) + 1, digest, spec: rest as any, reviews: reviews as any, createdById: req.user.sub },
+        data: { key: spec.key, version: (last?.version ?? 0) + 1, digest, spec: rest as any, reviews: (reviews ?? { ownerSignoffPending: true }) as any, createdById: req.user.sub },
       });
       await audit(tx, { actor: req.user, action: "practical.version.create", targetType: "PracticalActivityVersion", targetId: created.id, after: { version: created.version } });
       return created;
@@ -455,7 +455,7 @@ export class AdminLabsController {
       // Read the status under the lock so two concurrent activations cannot both pass the draft check.
       const pack = (await tx.simulationPackVersion.findUnique({ where: { id } }))!;
       if (pack.status !== "draft") throw new ConflictException({ code: "PACK_NOT_DRAFT", message: "Chỉ kích hoạt được gói ở trạng thái nháp; gói đã dùng là bất biến" });
-      if (["pilot", "production"].includes(storageEnv()) && !(pack.reviews as any)?.rangeApproval)
+      if (["pilot", "production"].includes(storageEnv()) && Object.keys((pack.template as any)?.ranges ?? {}).length && !(pack.reviews as any)?.rangeApproval)
         throw new ConflictException({ code: "RANGE_APPROVAL_REQUIRED", message: "Khoảng tham số của mô hình chưa được duyệt (Q-C2-04)" });
       const previous = await tx.simulationPackVersion.findFirst({ where: { labId: pack.labId, status: "active" } });
       const now = new Date();

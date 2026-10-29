@@ -8,13 +8,19 @@ import { captureCurrentLabExecution, resolvePinnedAssignmentLab } from "./assign
 import { digest } from "./lab-run";
 import { goldenCaseResults, versionErrors, versionInputSchema } from "./simulation-versions";
 
-export const LAB_REVIEW_KINDS = ["CURRICULUM", "SUBJECT", "MODEL", "SAFETY", "RIGHTS", "RANGE"] as const;
+export const LAB_REVIEW_KINDS = ["CURRICULUM", "SUBJECT", "MODEL", "SAFETY", "RIGHTS", "RANGE", "OWNER_SIGNOFF"] as const;
 const REVIEW_KIND = z.enum(LAB_REVIEW_KINDS);
+const delegatedReviewKind = z.enum(["CURRICULUM", "SUBJECT", "MODEL", "SAFETY", "RIGHTS", "RANGE"]);
+const ownerEvidence = z.object({
+  curriculumMapping: z.string().trim().min(10),
+  sourceReferences: z.array(z.string().trim().min(5)).min(1),
+  scientificGoldenCases: z.string().trim().min(10),
+  rubric: z.string().trim().min(10),
+  safetyAssessment: z.string().trim().min(10),
+  rightsAssessment: z.string().trim().min(10),
+}).strict();
 const releaseReason = z.string().trim().min(5).max(500);
-const requiredReviewKinds = (ranges: unknown) => [
-  "CURRICULUM", "SUBJECT", "MODEL", "SAFETY", "RIGHTS",
-  ...(ranges && typeof ranges === "object" && Object.keys(ranges).length ? ["RANGE"] : []),
-];
+const requiredReviewKinds = (_ranges: unknown) => ["OWNER_SIGNOFF"];
 
 function missingReviewKinds(snapshot: any, reviews: Array<{ kind: string; decision: string; releaseDigest: string; reviewerId: string }>) {
   const required: string[] = snapshot.requiredReviewKinds;
@@ -22,7 +28,8 @@ function missingReviewKinds(snapshot: any, reviews: Array<{ kind: string; decisi
     .map((r) => [r.kind, r]));
   const missing = required.filter((kind) => !approved.has(kind));
   const coreReviewers = ["CURRICULUM", "SUBJECT", "MODEL"].map((kind) => approved.get(kind)?.reviewerId).filter(Boolean);
-  if (new Set(coreReviewers).size !== 3) missing.push("DISTINCT_REVIEWERS");
+  if (required.includes("CURRICULUM") && required.includes("SUBJECT") && required.includes("MODEL") && new Set(coreReviewers).size !== 3)
+    missing.push("DISTINCT_REVIEWERS");
   return missing;
 }
 
@@ -31,7 +38,7 @@ export class LabReleaseService {
   constructor(@Inject(Db) private db: Db) {}
 
   async authorizeReviewer(userId: string, req: any, body: unknown) {
-    const b = z.object({ subjectId: z.string().min(1).max(80), kind: REVIEW_KIND, active: z.boolean().default(true), reason: releaseReason }).strict().parse(body);
+    const b = z.object({ subjectId: z.string().min(1).max(80), kind: delegatedReviewKind, active: z.boolean().default(true), reason: releaseReason }).strict().parse(body);
     const user = await this.db.user.findUnique({ where: { id: userId }, select: { id: true, role: true, status: true, disabledAt: true } });
     if (!user || user.role !== "TEACHER" || user.status !== "active" || user.disabledAt)
       throw new BadRequestException({ code: "LAB_REVIEWER_NOT_ELIGIBLE", message: "Chỉ gán nhiệm vụ duyệt cho tài khoản giáo viên đang hoạt động" });
@@ -127,6 +134,7 @@ export class LabReleaseService {
           grade: binding.courseVersion.grade, version: binding.courseVersion.version, sourceVersion: binding.courseVersion.sourceVersion,
           lessonId: binding.lesson.id, lessonTopicCode: binding.lesson.curriculumTopicCode, officialOrder: binding.officialOrder,
         })),
+        reviewPolicy: "OWNER_SIGNOFF_V1",
         requiredReviewKinds: required,
       };
       const releaseDigest = digest(snapshot);
@@ -143,7 +151,7 @@ export class LabReleaseService {
   }
 
   async review(releaseId: string, req: any, body: unknown) {
-    const b = z.object({ kind: REVIEW_KIND, decision: z.enum(["APPROVE", "REQUEST_CHANGES"]), releaseDigest: z.string().regex(/^[a-f0-9]{64}$/), note: z.string().trim().min(5).max(1000) }).strict().parse(body);
+    const b = z.object({ kind: REVIEW_KIND, decision: z.enum(["APPROVE", "REQUEST_CHANGES"]), releaseDigest: z.string().regex(/^[a-f0-9]{64}$/), note: z.string().trim().min(5).max(1000), evidence: ownerEvidence.optional() }).strict().parse(body);
     return this.db.$transaction(async (tx) => {
       const release = await tx.labRelease.findUnique({ where: { id: releaseId }, include: { lab: true, reviews: true } });
       if (!release) throw new NotFoundException({ code: "LAB_RELEASE_NOT_FOUND" });
@@ -152,21 +160,30 @@ export class LabReleaseService {
         throw new ConflictException({ code: "LAB_RELEASE_DIGEST_MISMATCH" });
       if (release.status !== "DRAFT") throw new ConflictException({ code: "LAB_RELEASE_NOT_REVIEWABLE" });
       if (!snapshot.requiredReviewKinds.includes(b.kind)) throw new BadRequestException({ code: "LAB_REVIEW_KIND_NOT_REQUIRED" });
-      const authorization = await tx.labReviewerAuthorization.findFirst({
-        where: { userId: req.user.sub, subjectId: release.lab.subjectId, kind: b.kind, active: true },
-        include: { user: { select: { role: true, status: true, disabledAt: true } } },
-      });
-      if (!authorization || authorization.user.role !== "TEACHER" || authorization.user.status !== "active" || authorization.user.disabledAt)
-        throw new ForbiddenException({ code: "LAB_REVIEW_NOT_AUTHORIZED" });
-      const [config, pack, activity] = await Promise.all([
-        tx.simulationConfigVersion.findUnique({ where: { id: snapshot.execution.configVersionId }, select: { createdById: true } }),
-        tx.simulationPackVersion.findUnique({ where: { id: snapshot.execution.packVersionId }, select: { createdById: true } }),
-        tx.practicalActivityVersion.findUnique({ where: { id: snapshot.execution.activityVersionId }, select: { createdById: true } }),
-      ]);
-      if ([release.createdById, config?.createdById, pack?.createdById, activity?.createdById].includes(req.user.sub))
-        throw new ForbiddenException({ code: "LAB_REVIEW_INDEPENDENCE_REQUIRED" });
+      if (b.kind === "OWNER_SIGNOFF") {
+        const owner = await tx.user.findUnique({ where: { id: req.user.sub }, select: { role: true, status: true, disabledAt: true } });
+        if (!owner || owner.role !== "ADMIN" || owner.status !== "active" || owner.disabledAt)
+          throw new ForbiddenException({ code: "LAB_OWNER_SIGNOFF_NOT_AUTHORIZED" });
+        if (b.decision === "APPROVE" && !b.evidence)
+          throw new BadRequestException({ code: "LAB_OWNER_SIGNOFF_EVIDENCE_REQUIRED" });
+      } else {
+        const authorization = await tx.labReviewerAuthorization.findFirst({
+          where: { userId: req.user.sub, subjectId: release.lab.subjectId, kind: b.kind, active: true },
+          include: { user: { select: { role: true, status: true, disabledAt: true } } },
+        });
+        if (!authorization || authorization.user.role !== "TEACHER" || authorization.user.status !== "active" || authorization.user.disabledAt)
+          throw new ForbiddenException({ code: "LAB_REVIEW_NOT_AUTHORIZED" });
+        const [config, pack, activity] = await Promise.all([
+          tx.simulationConfigVersion.findUnique({ where: { id: snapshot.execution.configVersionId }, select: { createdById: true } }),
+          tx.simulationPackVersion.findUnique({ where: { id: snapshot.execution.packVersionId }, select: { createdById: true } }),
+          tx.practicalActivityVersion.findUnique({ where: { id: snapshot.execution.activityVersionId }, select: { createdById: true } }),
+        ]);
+        if ([release.createdById, config?.createdById, pack?.createdById, activity?.createdById].includes(req.user.sub))
+          throw new ForbiddenException({ code: "LAB_REVIEW_INDEPENDENCE_REQUIRED" });
+      }
       const review = await tx.labReleaseReview.create({ data: {
         releaseId, reviewerId: req.user.sub, kind: b.kind, decision: b.decision, releaseDigest: release.digest, note: b.note,
+        evidence: b.kind === "OWNER_SIGNOFF" ? b.evidence ?? undefined : undefined,
       } });
       const allReviews = [...release.reviews, review];
       const missing = missingReviewKinds({ ...snapshot, digest: release.digest }, allReviews);

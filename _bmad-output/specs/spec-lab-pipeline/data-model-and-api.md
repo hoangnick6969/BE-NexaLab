@@ -1,5 +1,7 @@
 # Data and API direction for Build
 
+**Implementation update (2026-10-29):** P3.6 now has a persisted immutable `LabRelease` snapshot/digest and append-only `LabReleaseReview`. New drafts require one authenticated active ADMIN `OWNER_SIGNOFF` receipt on the exact digest with structured curriculum, source, scientific golden-case, rubric, safety and rights evidence; this is internal owner validation, not independent certification. Existing release snapshots with delegated review kinds retain their former authorization and distinct-reviewer rules. `LabReleaseReview.evidence` is nullable for those historical receipts. The paragraphs below describe the original Define-stage choice and must not be read as current implementation status.
+
 The first implementation choice is an additive server-persisted LabRun, not a claim that a production LabRelease table or authenticated reviewer system already exists. Detailed tasks and acceptance are in phase-plan.md. Current Lab, SimulationConfigVersion, PracticalActivityVersion and SimulationPackVersion remain reusable component identities; existing attempts and legacy endpoints remain readable.
 
 ## P3.2a chosen minimal persistence

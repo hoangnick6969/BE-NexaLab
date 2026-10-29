@@ -569,6 +569,8 @@ model LabReleaseReview {
   decision      String
   releaseDigest String
   note          String
+  /// Required structured assessments for OWNER_SIGNOFF; null for historical delegated reviews.
+  evidence      Json?
   createdAt     DateTime   @default(now())
 
   @@unique([releaseId, kind])
