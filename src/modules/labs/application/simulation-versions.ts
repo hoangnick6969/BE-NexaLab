@@ -118,7 +118,14 @@ export function goldenCaseResults(labId: string, input: VersionInput, modelRef?:
   return input.goldenCases.map((golden) => {
     let actual: string;
     try {
-      actual = evaluate(labId, golden.labState, input.challengeParams[golden.challengeId] ?? null, modelRef).verdict;
+      if (modelRef === "circuit-bulb@1.0.0") {
+        // Circuit bulb golden cases validate a well-formed observation state.
+        // They do not assess learning or treat OPEN as a student failure.
+        resolveModel(modelRef).simulate(golden.labState);
+        actual = "passed";
+      } else {
+        actual = evaluate(labId, golden.labState, input.challengeParams[golden.challengeId] ?? null, modelRef).verdict;
+      }
     } catch {
       actual = "invalid";
     }

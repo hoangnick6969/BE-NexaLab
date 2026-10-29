@@ -9,6 +9,8 @@
 
 This table is the current triage view over the 30 discovery IDs below. It proposes 20 candidate slots for prioritisation, **not 20 approved or fixed Lab identities**. SHARE keeps identities separate unless a later explicitly reviewed MERGE says otherwise. SPLIT may increase the number of identities. No candidate has an approved Outcome or scientific model by virtue of this table. The legacy scores, waves, P/S/N and coverage numbers below are historical discovery estimates, not verified educational coverage, staffing commitments or release evidence. P3.2 and the first Circuit pilot do not wait for this portfolio to be complete.
 
+The P3.5 Chemistry pH implementation is a `TECHNICAL_FIXTURE_ONLY` used for runtime compatibility regression checks. It does not add a portfolio identity or count toward any candidate total or curriculum coverage. The Chemistry proposals below were independently derived as unapproved discovery candidates; they do not inherit textbook mapping, review, model validation or release evidence from the fixture.
+
 Decision meanings: KEEP = distinct proposed identity; SHARE = retain identity but propose reuse at the named layer; MERGE = combine identities only with demonstrated shared learning scope, model and workspace plus explicit mapping; SPLIT = boundaries too broad, produce separate scoped proposals; DEFER = insufficient evidence, tractability, rights or reviewer capacity; NO LAB = current candidate is better represented as another learning resource (reviewable decision, not deletion). Sharing only equipment, an engine library or a renderer never implies identity merging.
 
 | Discovery ID | Decision | Proposed v1 slot | Reason and exact reuse boundary |

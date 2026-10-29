@@ -268,7 +268,13 @@ export function packValidation(
     } catch (error: any) {
       problem = "trạng thái không hợp lệ: " + String(error?.message ?? error).slice(0, 120);
     }
-    const verdict = output ? normalize(output.verdict) : "invalid";
+    // The bulb model reports scientific observations but intentionally has no
+    // student verdict. For its configuration golden cases, `passed` means only
+    // that the state was valid; expectedOutputs verifies OPEN/CLOSED and ON/OFF.
+    // Activity assessment is evaluated separately by the pinned rubric.
+    const verdict = output
+      ? input.modelRef === "circuit-bulb@1.0.0" ? "passed" : normalize(output.verdict)
+      : "invalid";
     const mismatches = output
       ? Object.entries(g.expectedOutputs).filter(([k, v]) =>
           typeof v === "number" ? Math.abs(Number(output[k]) - v) > Math.max(g.tolerance, Math.abs(v) * g.tolerance) : output[k] !== v,

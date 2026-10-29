@@ -10,6 +10,8 @@ import { resolveFoundationalLabRelease } from "../application/assignment-lab-exe
 import { digest } from "../application/lab-run";
 import { AdminLabsController } from "./admin-labs.controller";
 import { LabsController } from "./labs.controller";
+import { CatalogController } from "../../curriculum/interface/catalog.controller";
+import { LabReleaseService } from "../application/lab-release.service";
 
 const testUrl = process.env.NEXALAB_PINNING_TEST_URL;
 if (process.env.CI && !testUrl) throw new Error("CI requires NEXALAB_PINNING_TEST_URL for chemistry model integration");
@@ -21,8 +23,8 @@ if (testUrl) {
 const db = testUrl ? new PrismaClient({ datasourceUrl: testUrl }) : null;
 afterAll(async () => { await db?.$disconnect(); });
 
-describe.skipIf(!db)("isolated second-model LabRun compatibility", () => {
-  it("dispatches chemistry state through pinned versions and persists its distinct observation shape", async () => {
+describe.skipIf(!db)("isolated TECHNICAL_FIXTURE_ONLY second-model LabRun compatibility", () => {
+  it("dispatches a private synthetic Chemistry fixture through pinned versions without making it curriculum or student content", async () => {
     const p = db!;
     const suffix = randomUUID().slice(0, 8);
     const labId = "p35-chemistry-" + suffix, challengeId = "challenge-" + suffix, modelRef = "chemistry@1.0.0";
@@ -41,6 +43,14 @@ describe.skipIf(!db)("isolated second-model LabRun compatibility", () => {
         learningObjective: "Verify distinct chemistry state and outputs", status: "published", scope: "CLASS_PRIVATE",
         releaseCleared: false, synthetic: true, simulationModelRef: modelRef,
       } });
+      // This row exists only in the isolated integration DB. It is excluded from
+      // the student catalog and release lifecycle, and is not portfolio evidence.
+      const studentCatalog = await new CatalogController(p as any).labs({ user: { role: "STUDENT" } });
+      expect(studentCatalog.some((lab: any) => lab.id === labId)).toBe(false);
+      const releaseService = new LabReleaseService(p as any);
+      await expect(releaseService.createDraft(labId, { user: { sub: admin.id } }, { reason: "Fixture must never be released" }))
+        .rejects.toMatchObject({ response: { code: "LAB_NOT_RELEASE_ELIGIBLE" } });
+      expect(await p.labRelease.count({ where: { labId } })).toBe(0);
       await p.challenge.create({ data: { id: challengeId, labId, objective: "Identify sample types", constraints: {} } });
       const classroom = await p.classroom.create({ data: { teacherId: teacher.id, name: "P3.5 isolated class" } });
       await p.enrollment.create({ data: { classId: classroom.id, studentId: student.id, status: "approved", approved: true } });

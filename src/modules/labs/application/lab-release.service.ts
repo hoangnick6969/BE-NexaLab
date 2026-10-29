@@ -101,7 +101,7 @@ export class LabReleaseService {
         throw new ConflictException({ code: "LAB_CONFIG_VALIDATION_FAILED" });
 
       const packInput = packInputSchema.safeParse({
-        key: pack.key, labId, modelRef: pack.modelRef, engineVersion: pack.engineVersion,
+        key: pack.key, labId, modelRef: pack.modelRef,
         activityVersionId: pack.activityVersionId, template: pack.template, visualAssetVersionId: pack.visualAssetVersionId,
         semanticMap: pack.semanticMap, bindings: pack.bindings, challengeTemplates: pack.challengeTemplates,
         reviews: pack.reviews, reason: pack.reason,
@@ -234,18 +234,19 @@ export class LabReleaseService {
       const snapshot = release.snapshot as any;
       if (digest(snapshot) !== release.digest) throw new ConflictException({ code: "LAB_RELEASE_INVALID" });
       const packVersionId = snapshot.execution.packVersionId;
+      const activeBeforeQuarantine = await tx.labRelease.findFirst({ where: { labId, status: "ACTIVE" } });
+      const activeSnapshot = activeBeforeQuarantine?.snapshot as any;
+      const activeDependsOnPack = activeBeforeQuarantine?.id === release.id || activeSnapshot?.execution?.packVersionId === packVersionId;
       await tx.labPackRevocation.upsert({
         where: { packVersionId },
         create: { packVersionId, labId, reason: b.reason, revokedById: req.user.sub },
         update: {},
       });
       const quarantined = await tx.labRelease.update({ where: { id: releaseId }, data: { status: "QUARANTINED", quarantinedAt: new Date() } });
-      const active = await tx.labRelease.findFirst({ where: { labId, status: "ACTIVE" } });
-      const activeSnapshot = active?.snapshot as any;
-      if (active && activeSnapshot?.execution?.packVersionId === packVersionId) {
-        if (active.id !== release.id) {
-          await tx.labRelease.update({ where: { id: active.id }, data: { status: "QUARANTINED", quarantinedAt: new Date() } });
-          await audit(tx, { actor: req.user, action: "lab_release.quarantine_dependency", targetType: "LabRelease", targetId: active.id, reason: b.reason, before: { status: "ACTIVE" }, after: { status: "QUARANTINED", packVersionId } });
+      if (activeDependsOnPack && activeBeforeQuarantine) {
+        if (activeBeforeQuarantine.id !== release.id) {
+          await tx.labRelease.update({ where: { id: activeBeforeQuarantine.id }, data: { status: "QUARANTINED", quarantinedAt: new Date() } });
+          await audit(tx, { actor: req.user, action: "lab_release.quarantine_dependency", targetType: "LabRelease", targetId: activeBeforeQuarantine.id, reason: b.reason, before: { status: "ACTIVE" }, after: { status: "QUARANTINED", packVersionId } });
         }
         await tx.lab.update({ where: { id: labId }, data: { releaseCleared: false } });
       }

@@ -33,6 +33,10 @@ Keep all 30 candidates with stable source IDs. The portfolio is an editable prop
 - Production activation must bind curriculum, scientific/model, safety and rights reviews as applicable to exact immutable content and version identities. Engineering fixtures do not create such approvals.
 - Preserve an isolated first technical pilot, then require a different-model fixture through both BE and FE shared contracts and real pilot curriculum/scientific-model approvals before authorizing two concurrent Lab implementation tracks.
 
+### Compatibility fixture boundary
+
+The P3.5 Chemistry pH compatibility fixture is `TECHNICAL_FIXTURE_ONLY`: it reuses an existing prototype solely to test that the shared runtime can dispatch a distinct state/output shape. It is not textbook-Outcome-derived, curriculum-reviewed, a Foundational Lab candidate by itself, or a student product surface. Keep its existing regression tests, but exclude fixture records from portfolio totals, curriculum coverage, release creation/activation, Lesson bindings and student discovery. Chemistry candidates in `lab-catalog-khtn8-9.md` remain separate unapproved discovery proposals and do not inherit evidence from this fixture. Circuit is the sole Foundational Lab pilot for P3.6.
+
 ## First pilot and scope
 
 The candidate pilot is a low-voltage circuit with a battery, switch and generic bulb. Students predict and observe closed and open states and select an explanation. A bounded ideal on/off bulb model is specified in P3.1, not represented as the existing LED model. Outcome B22 is a candidate only. This activity does not claim physical wiring competence, measured current/voltage or scientific approval.

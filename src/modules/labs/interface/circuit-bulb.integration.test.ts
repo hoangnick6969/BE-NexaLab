@@ -44,7 +44,22 @@ describe.skipIf(!db)("isolated Circuit bulb LabRun", () => {
       await p.enrollment.create({ data: { classId: classroom.id, studentId: student.id, status: "approved", approved: true } });
       const assignment = await p.assignment.create({ data: { classId: classroom.id, contentId: labId, contentType: "lab", title: "Private fixture", targets: { create: { studentId: student.id } } } });
       const activity = await p.practicalActivityVersion.findUnique({ where: { key_version: { key: CIRCUIT_BULB_ACTIVITY_KEY, version: 1 } } }) ??
-        await p.practicalActivityVersion.create({ data: { key: CIRCUIT_BULB_ACTIVITY_KEY, version: 1, digest: `fixture-${suffix}`, spec: {}, reviews: {}, createdById: admin.id } });
+        await p.practicalActivityVersion.create({ data: {
+          key: CIRCUIT_BULB_ACTIVITY_KEY, version: 1, digest: `fixture-${suffix}`, createdById: admin.id,
+          reviews: { testFixtureOnly: true, notice: "Not a curriculum or scientific approval." },
+          spec: {
+            key: CIRCUIT_BULB_ACTIVITY_KEY, outcomeCodes: ["KHTN8-P36-TEST-ONLY"],
+            objective: "TEST FIXTURE ONLY: persist and replay the Circuit bulb execution tuple",
+            materials: ["TEST FIXTURE ONLY: battery, bulb, switch"], setup: "Test database only.",
+            procedure: ["TEST FIXTURE ONLY: close and open the switch"],
+            variables: [{ name: "switch", unit: "state", role: "independent" }, { name: "bulbState", unit: "state", role: "dependent" }],
+            observations: ["TEST FIXTURE ONLY: circuit path and bulb state"],
+            expectedResult: "TEST FIXTURE ONLY: closed path illuminates the bulb",
+            explanation: "Synthetic data for a release mechanics test; not a curriculum or scientific approval.",
+            safety: "Synthetic integration fixture only.", limitations: "No curriculum evidence; no physical safety review.",
+            modality: "deterministic-simulation", sources: [{ title: "Synthetic test fixture", license: "TEST_ONLY" }],
+          },
+        } });
       const configData = { labId, modelRef, challengeParams: { [challengeId]: {} }, goldenCases: [], reason: "isolated fixture", createdById: admin.id };
       const configA = await p.simulationConfigVersion.create({ data: { ...configData, version: 1, status: "active" } });
       const configB = await p.simulationConfigVersion.create({ data: { ...configData, version: 2, status: "draft" } });
