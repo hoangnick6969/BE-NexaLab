@@ -1,4 +1,4 @@
-import { assertReviewedBindings, directLessonBinding } from "./lab-release-bindings";
+import { assertReviewedBindings, directLessonBinding, lessonSubjectMatchesLab } from "./lab-release-bindings";
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { z } from "zod";
 import { audit } from "../../../common/audit";
@@ -81,7 +81,7 @@ export class LabReleaseService {
       if (b.lessonId && directLessons.length !== 1)
         throw new ConflictException({ code: "LAB_LESSON_BINDING_REQUIRED" });
       const directTopicCodes = [...new Set(directLessons.map((lesson: any) => lesson.curriculumTopicCode).filter(Boolean))];
-      if (directLessons.some((lesson: any) => lesson.subjectId !== lab.subjectId || lesson.grade !== lab.grade) || directTopicCodes.length > 1)
+      if (directLessons.some((lesson: any) => !lessonSubjectMatchesLab(lab.subjectId, lesson.subjectId) || lesson.grade !== lab.grade) || directTopicCodes.length > 1)
         throw new ConflictException({ code: "LAB_LESSON_BINDING_INVALID" });
       const topicCode = lab.topicCode ?? directTopicCodes[0];
       if (!topicCode || (lab.topicCode && directTopicCodes.length && directTopicCodes[0] !== lab.topicCode))
@@ -123,7 +123,7 @@ export class LabReleaseService {
         reason: config.reason,
       });
       const challengeIds = (await tx.challenge.findMany({ where: { labId, NOT: { id: { contains: "_v-" } } }, select: { id: true } })).map((c) => c.id);
-      if (!configInput.success || versionErrors(labId, challengeIds, configInput.data).length || goldenCaseResults(labId, configInput.data, config.modelRef).some((g) => !g.ok))
+      if (!configInput.success || versionErrors(labId, challengeIds, configInput.data, config.modelRef).length || goldenCaseResults(labId, configInput.data, config.modelRef).some((g) => !g.ok))
         throw new ConflictException({ code: "LAB_CONFIG_VALIDATION_FAILED" });
 
       const packInput = packInputSchema.safeParse({

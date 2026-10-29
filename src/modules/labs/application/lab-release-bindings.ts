@@ -3,6 +3,11 @@ import { canonical, digest } from "./lab-run";
 
 const sorted = (items: any[]) => [...items].sort((a, b) => canonical(a).localeCompare(canonical(b)));
 
+/** KHTN Lessons are stored under the umbrella subject while the legacy Circuit Lab is filed under Physics. */
+export function lessonSubjectMatchesLab(labSubjectId: string, lessonSubjectId: string) {
+  return labSubjectId === lessonSubjectId || (labSubjectId === "physics" && lessonSubjectId === "khtn");
+}
+
 export function directLessonBinding(lesson: any) {
   return {
     bindingType: "DIRECT_LESSON",

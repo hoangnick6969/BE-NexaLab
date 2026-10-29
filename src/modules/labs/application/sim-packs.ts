@@ -106,7 +106,10 @@ export const activitySpecSchema = z
       .array(z.object({ title: text(300), url: z.string().url().optional(), license: text(40) }).strict())
       .min(1)
       .max(20),
-    reviews: z.object({ subject: reviewer, safety: reviewer }).strict().optional(),
+    reviews: z.union([
+      z.object({ subject: reviewer, safety: reviewer }).strict(),
+      z.object({ ownerSignoffPending: z.literal(true) }).strict(),
+    ]).optional(),
   })
   .strict();
 

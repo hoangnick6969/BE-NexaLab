@@ -172,6 +172,7 @@ export class AdminLabsController {
       labId,
       lab.challenges.map((c) => c.id),
       input,
+      modelRef,
     );
     try {
       if (resolveModel(modelRef).labId !== labId) errors.push("Mô hình không thuộc phòng thực hành");
