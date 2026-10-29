@@ -17,6 +17,7 @@ export const digest = (value: unknown) => createHash("sha256").update(canonical(
 export const launchSchema = z.object({
   challengeId: z.string().min(1).max(80),
   assignmentId: z.string().min(1).max(100).optional(),
+  releaseId: z.string().min(1).max(100).optional(),
 }).strict();
 
 const runSubmissionBase = z.object({

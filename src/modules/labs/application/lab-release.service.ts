@@ -1,3 +1,4 @@
+import { assertReviewedBindings } from "./lab-release-bindings";
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { z } from "zod";
 import { audit } from "../../../common/audit";
@@ -188,6 +189,7 @@ export class LabReleaseService {
       const snapshot = release.snapshot as any;
       if (digest(snapshot) !== release.digest || missingReviewKinds({ ...snapshot, digest: release.digest }, release.reviews).length)
         throw new ConflictException({ code: "LAB_RELEASE_REVIEWS_MISSING" });
+      await assertReviewedBindings(tx, labId, snapshot);
       const execution = snapshot.execution;
       if (await tx.labPackRevocation.findUnique({ where: { packVersionId: execution.packVersionId } }))
         throw new ConflictException({ code: "RUN_REVOKED" });

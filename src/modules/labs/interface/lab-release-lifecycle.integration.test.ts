@@ -207,12 +207,24 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       const finalAReview = await service.review(draftA.id, { user: { sub: reviewers[4].id } }, reviewBody("RIGHTS"));
       expect(finalAReview.status).toBe("APPROVED");
       expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id, releaseDigest } })).toBe(reviewerKinds.length);
+      await p.foundationalCourseLesson.updateMany({ where: { foundationalLabId: labId }, data: { officialOrder: 2 } });
+      await expect(service.activate(labId, draftA.id, adminReq, { reason: "TEST ONLY reject changed mapping" }))
+        .rejects.toMatchObject({ response: { code: "LAB_RELEASE_BINDING_MISMATCH" } });
+      await p.foundationalCourseLesson.updateMany({ where: { foundationalLabId: labId }, data: { officialOrder: 1 } });
       const activeA = await releaseController.activateLabRelease(labId, draftA.id, adminReq, { reason: "TEST FIXTURE ONLY — exercise activation mechanics" });
       expect(activeA.status).toBe("ACTIVE");
 
       const catalog = new CatalogController(p as any);
       expect((await catalog.labs(studentReq)).some((item: any) => item.id === labId)).toBe(true);
       const labs = new LabsController(p as any, new StudentAccessService(p as any), new RequestRateLimiter());
+      await p.foundationalCourseLesson.updateMany({ where: { foundationalLabId: labId }, data: { officialOrder: 2 } });
+      expect((await catalog.labs(studentReq)).some((item: any) => item.id === labId)).toBe(false);
+      await expect(labs.launchRun(labId, studentReq, { challengeId }))
+        .rejects.toMatchObject({ response: { code: "LAB_RELEASE_BINDING_MISMATCH" } });
+      await p.foundationalCourseLesson.updateMany({ where: { foundationalLabId: labId }, data: { officialOrder: 1 } });
+      expect(await catalog.lessonLabs(lesson.id, studentReq)).toEqual(expect.arrayContaining([expect.objectContaining({ labId, releaseId: activeA.id })]));
+      await expect(labs.launchRun(labId, studentReq, { challengeId, releaseId: "not-the-reviewed-release" }))
+        .rejects.toMatchObject({ response: { code: "LAB_RELEASE_CHANGED" } });
       const launchA = await labs.launchRun(labId, studentReq, { challengeId });
       expect(launchA).toMatchObject({ versionBinding: "FOUNDATIONAL_RELEASE", modelRef, rubricVersion: CIRCUIT_BULB_RUBRIC });
       const launchRecordA = await p.labRun.findUniqueOrThrow({ where: { id: launchA.runId } });

@@ -1,3 +1,4 @@
+import { assertReviewedBindings } from "./lab-release-bindings";
 import { ConflictException } from "@nestjs/common";
 import { assignmentExecutionSchema, canonical, digest, rubricRefForActivity } from "./lab-run";
 import { resolveModel } from "./sim-packs";
@@ -136,6 +137,7 @@ export async function resolveFoundationalLabRelease(tx: any, release: any, labId
   const execution = snapshot?.execution;
   if (!snapshot?.lab || snapshot.lab.id !== labId || digest(snapshot) !== release.digest || !execution)
     throw new ConflictException({ code: "LAB_RELEASE_INVALID" });
+  await assertReviewedBindings(tx, labId, snapshot);
   const resolved = await resolvePinnedAssignmentLab(
     tx,
     { labExecution: execution, labExecutionDigest: digest(execution) },

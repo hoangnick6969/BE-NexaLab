@@ -282,6 +282,7 @@ export class LabsController {
         where: { ...applicableAssignmentWhere(req.user.sub), contentId: labId, contentType: "lab", ...(b.assignmentId ? { id: b.assignmentId } : {}) },
         orderBy: assignmentQueueOrder,
       });
+      if (b.releaseId && assignment) throw new ConflictException({ code: "LAB_RELEASE_CONTEXT_MISMATCH" });
       const isOpen = challenge.lab.scope === "SHARED_LIBRARY" && challenge.lab.releaseCleared && !challenge.lab.synthetic && Boolean(challenge.lab.topicCode);
       if ((b.assignmentId && !assignment) || (!assignment && !isOpen))
         throw new NotFoundException({ code: "LAB_NOT_FOUND" });
@@ -292,6 +293,7 @@ export class LabsController {
         execution = await resolvePinnedAssignmentLab(tx, assignment, labId, challenge.id);
       } else if (!assignment) {
         const activeRelease = await tx.labRelease.findFirst({ where: { labId, status: "ACTIVE" } });
+        if (b.releaseId && activeRelease?.id !== b.releaseId) throw new ConflictException({ code: "LAB_RELEASE_CHANGED" });
         if (activeRelease) execution = await resolveFoundationalLabRelease(tx, activeRelease, labId, challenge.id);
       }
       if (!execution) {
