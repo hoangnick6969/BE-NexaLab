@@ -7,6 +7,7 @@ import { CIRCUIT_BULB_ACTIVITY_KEY, CIRCUIT_BULB_RUBRIC } from "../application/l
 import { MODEL_REGISTRY } from "../application/sim-packs";
 import { AdminLabsController } from "./admin-labs.controller";
 import { LabsController } from "./labs.controller";
+import { ensureCircuitBulbActivity } from "./lab-test-fixtures";
 
 const testUrl = process.env.NEXALAB_PINNING_TEST_URL;
 if (process.env.CI && !testUrl) throw new Error("CI requires NEXALAB_PINNING_TEST_URL for Circuit bulb integration");
@@ -43,8 +44,7 @@ describe.skipIf(!db)("isolated Circuit bulb LabRun", () => {
       const classroom = await p.classroom.create({ data: { teacherId: teacher.id, name: "Fixture class" } });
       await p.enrollment.create({ data: { classId: classroom.id, studentId: student.id, status: "approved", approved: true } });
       const assignment = await p.assignment.create({ data: { classId: classroom.id, contentId: labId, contentType: "lab", title: "Private fixture", targets: { create: { studentId: student.id } } } });
-      const activity = await p.practicalActivityVersion.findUnique({ where: { key_version: { key: CIRCUIT_BULB_ACTIVITY_KEY, version: 1 } } }) ??
-        await p.practicalActivityVersion.create({ data: {
+      const activity = await ensureCircuitBulbActivity(p, {
           key: CIRCUIT_BULB_ACTIVITY_KEY, version: 1, digest: `fixture-${suffix}`, createdById: admin.id,
           reviews: { testFixtureOnly: true, notice: "Not a curriculum or scientific approval." },
           spec: {
@@ -59,7 +59,7 @@ describe.skipIf(!db)("isolated Circuit bulb LabRun", () => {
             safety: "Synthetic integration fixture only.", limitations: "No curriculum evidence; no physical safety review.",
             modality: "deterministic-simulation", sources: [{ title: "Synthetic test fixture", license: "TEST_ONLY" }],
           },
-        } });
+        });
       const configData = { labId, modelRef, challengeParams: { [challengeId]: {} }, goldenCases: [], reason: "isolated fixture", createdById: admin.id };
       const configA = await p.simulationConfigVersion.create({ data: { ...configData, version: 1, status: "active" } });
       const configB = await p.simulationConfigVersion.create({ data: { ...configData, version: 2, status: "draft" } });

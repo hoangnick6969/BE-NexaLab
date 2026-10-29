@@ -6,8 +6,6 @@ import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { MODEL_REGISTRY } from "../application/sim-packs";
-import { resolveFoundationalLabRelease } from "../application/assignment-lab-execution";
-import { digest } from "../application/lab-run";
 import { AdminLabsController } from "./admin-labs.controller";
 import { LabsController } from "./labs.controller";
 import { CatalogController } from "../../curriculum/interface/catalog.controller";
@@ -81,32 +79,27 @@ describe.skipIf(!db)("isolated TECHNICAL_FIXTURE_ONLY second-model LabRun compat
       } });
 
       const assignments = new AssignmentsService(p as any);
-      const assignmentResponse = await assignments.assign(classroom.id, {
+      await expect(assignments.assign(classroom.id, {
         user: { sub: teacher.id, role: "TEACHER" }, headers: { "idempotency-key": randomUUID() },
-      }, { contentType: "lab", contentId: labId, title: "Private chemistry compatibility fixture" });
-      const assignment = await p.assignment.findUniqueOrThrow({ where: { id: assignmentResponse.assignment.id } });
-      expect(assignment.labExecution).toMatchObject({ modelRef, configVersionId: configA.id, packVersionId: packA.id, activityVersionId: activityA.id });
+      }, { contentType: "lab", contentId: labId, labReleaseId: "fixture-release", labChallengeId: challengeId, title: "Private chemistry compatibility fixture" }))
+        .rejects.toMatchObject({ response: { code: "CONTENT_NOT_PUBLISHED" } });
+      // Keep this old assignment deliberately unpinned: it represents historical
+      // compatibility and must not be upgraded into a reviewed Class Lab fixture.
+      const assignment = await p.assignment.create({ data: {
+        classId: classroom.id, contentId: labId, contentType: "lab", title: "Historical Chemistry fixture",
+        targets: { create: [{ studentId: student.id }] },
+      } });
+      expect(assignment.labExecution).toBeNull();
 
       const labs = new LabsController(p as any, new StudentAccessService(p as any), new RequestRateLimiter());
       const adminLabs = new AdminLabsController(p as any);
       const studentReq = { user: { sub: student.id, role: "STUDENT" } };
       const adminReq = { user: { sub: admin.id, role: "ADMIN" } };
       const launch = await labs.launchRun(labId, studentReq, { challengeId, assignmentId: assignment.id });
-      expect(launch).toMatchObject({ modelRef, rendererKey: null, versionBinding: "ASSIGNMENT_PINNED" });
+      expect(launch).toMatchObject({ modelRef, rendererKey: null, versionBinding: "LEGACY_UNPINNED_LAUNCH" });
 
       await adminLabs.activateVersion(labId, "2", adminReq, { reason: "P3.5 isolated compatibility test" });
       await adminLabs.activateSimPack(packB.id, adminReq, { reason: "P3.5 isolated compatibility test" });
-      const releaseSnapshot = { lab: { id: labId }, execution: assignment.labExecution };
-      const releaseBinding = await resolveFoundationalLabRelease(p, {
-        id: `private-release-fixture-${suffix}`,
-        snapshot: releaseSnapshot,
-        digest: digest(releaseSnapshot),
-      }, labId, challengeId);
-      expect(releaseBinding).toMatchObject({
-        binding: "FOUNDATIONAL_RELEASE", releaseId: `private-release-fixture-${suffix}`,
-        modelRef, configVersionId: configA.id, packVersionId: packA.id,
-      });
-
       const invalidKey = randomUUID();
       await expect(labs.attempt(studentReq, {
         contract: "lab-contract/1", runId: launch.runId, idempotencyKey: invalidKey,

@@ -70,6 +70,8 @@ const executionFieldsSchema = z.object({
   template: z.unknown(),
   binding: z.enum(["ASSIGNMENT_PINNED", "LEGACY_UNPINNED_LAUNCH", "FOUNDATIONAL_LAUNCH", "FOUNDATIONAL_RELEASE"]).optional(),
   releaseId: z.string().min(1).optional(),
+  releaseDigest: z.string().length(64).optional(),
+  selectedChallengeId: z.string().min(1).optional(),
 }).strict();
 const compatibleActivityTuple = <T extends z.ZodTypeAny>(schema: T) => schema.superRefine((tuple: any, ctx) => {
   try {
@@ -84,6 +86,8 @@ export const executionSchema = compatibleActivityTuple(executionFieldsSchema);
 export const assignmentExecutionSchema = compatibleActivityTuple(executionFieldsSchema.omit({ params: true, binding: true }).extend({
   labId: z.string().min(1),
   releaseId: z.string().min(1).optional(),
+  releaseDigest: z.string().length(64).optional(),
+  selectedChallengeId: z.string().min(1).optional(),
   challengeParams: z.record(z.string(), z.record(z.string(), z.union([z.number(), z.string()]))),
   effectiveParams: z.record(z.string(), z.record(z.string(), z.union([z.number(), z.string()])).nullable()),
 }).strict());

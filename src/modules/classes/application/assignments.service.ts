@@ -36,6 +36,8 @@ export const assignmentInput = z
   .object({
     contentType: z.enum(["lesson", "lab", "test"]),
     contentId: text,
+    labReleaseId: text.optional(),
+    labChallengeId: text.optional(),
     title: text.optional(),
     dueDate: z.string().datetime().nullable().optional(),
     studentIds: z.array(text).max(200).default([]),
@@ -43,6 +45,10 @@ export const assignmentInput = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.contentType === "lab" && (!value.labReleaseId || !value.labChallengeId))
+      context.addIssue({ code: z.ZodIssueCode.custom, path: [!value.labReleaseId ? "labReleaseId" : "labChallengeId"], message: "Chọn một Foundational Release đang hoạt động và thử thách được duyệt." });
+    if (value.contentType !== "lab" && (value.labReleaseId || value.labChallengeId))
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["contentType"], message: "Cấu hình Lab chỉ áp dụng cho bài Lab." });
     if (value.audience === "SUBSET" && value.studentIds.length === 0)
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["studentIds"], message: "Hãy chọn ít nhất một học sinh." });
     if (value.audience === "CLASS" && value.studentIds.length > 0)
@@ -326,13 +332,18 @@ export class AssignmentsService {
         orderBy: [{ grade: "asc" }, { title: "asc" }],
       }),
       this.db.lab.findMany({
-        where: { status: "published" },
+        where: {
+          status: "published", scope: "SHARED_LIBRARY", releaseCleared: true, synthetic: false,
+          topicCode: { not: null }, releases: { some: { status: "ACTIVE" } },
+        },
         select: {
           id: true,
           title: true,
           grade: true,
           topic: true,
           subject: { select: { id: true, name: true } },
+          challenges: { where: { NOT: { id: { contains: "_v-" } } }, select: { id: true, objective: true }, orderBy: { id: "asc" } },
+          releases: { where: { status: "ACTIVE" }, select: { id: true, version: true, digest: true, snapshot: true }, take: 1 },
         },
         orderBy: { title: "asc" },
       }),
@@ -342,10 +353,32 @@ export class AssignmentsService {
         orderBy: [{ title: "asc" }, { version: "desc" }],
       }),
     ]);
+    const releaseRows = labs.flatMap((lab: any) => {
+      const release = lab.releases?.[0];
+      const snapshot = release?.snapshot as any;
+      const execution = snapshot?.execution;
+      const challengeIds = execution && typeof execution.effectiveParams === "object" ? Object.keys(execution.effectiveParams) : [];
+      if (!release || !snapshot?.lab || snapshot.lab.id !== lab.id || labExecutionDigest(snapshot) !== release.digest || !challengeIds.length)
+        return [];
+      return [{ lab, release, challengeIds }];
+    });
+    const revokedIds = releaseRows.length ? new Set((await this.db.labPackRevocation.findMany({
+      where: { packVersionId: { in: releaseRows.map(({ release }: any) => (release.snapshot as any).execution.packVersionId) } },
+      select: { packVersionId: true },
+    })).map((entry: any) => entry.packVersionId)) : new Set<string>();
+    const eligibleLabs = releaseRows.flatMap(({ lab, release, challengeIds }: any) => {
+      const execution = (release.snapshot as any).execution;
+      if (revokedIds.has(execution.packVersionId)) return [];
+      return [{
+        id: lab.id, title: lab.title, grade: lab.grade, topic: lab.topic, subject: lab.subject,
+        release: { id: release.id, version: release.version, digest: release.digest },
+        challenges: lab.challenges.filter((challenge: any) => challengeIds.includes(challenge.id)),
+      }].filter((entry: any) => entry.challenges.length > 0);
+    });
     return {
       classGrade: c.grade,
       lessons,
-      labs,
+      labs: eligibleLabs,
       tests: tests.map(({ content, ...test }) => ({ ...test, questionCount: (content as any)?.questions?.length ?? 0 })),
     };
   }
@@ -364,8 +397,7 @@ export class AssignmentsService {
         });
       return { id: test.id as string, title: test.title as string, version: String(test.version) };
     }
-    const content =
-      contentType === "lesson"
+    const content = contentType === "lesson"
         ? await tx.lesson.findFirst({
             where: {
               id: contentId,
@@ -375,7 +407,10 @@ export class AssignmentsService {
             select: { id: true, title: true, content: true, materials: true, questions: true, labId: true, challengeParams: true },
           })
         : await tx.lab.findFirst({
-            where: { id: contentId, status: "published" },
+            where: {
+              id: contentId, status: "published", scope: "SHARED_LIBRARY", releaseCleared: true,
+              synthetic: false, topicCode: { not: null }, releases: { some: { status: "ACTIVE" } },
+            },
             select: { id: true, title: true, simulationModelRef: true, config: true },
           });
     if (!content)
@@ -480,14 +515,15 @@ export class AssignmentsService {
     return idempotent(this.db, ctx, async (tx) => {
       await lock(tx, "class-assign:" + id);
       const content = await this.assignableContentOrThrow(tx, id, b.contentType, b.contentId, req.user.sub);
-      const labExecution = b.contentType === "lab" ? await snapshotAssignmentLab(tx, b.contentId) : null;
+      const labExecution = b.contentType === "lab" ? await snapshotAssignmentLab(tx, b.contentId, b.labReleaseId!, b.labChallengeId!) : null;
+      const contentVersion = labExecution?.releaseDigest ?? content.version;
       const targets = await this.resolveTargets(tx, id, b.studentIds);
       const hash = targetHash(targets);
       await this.assertNotDuplicate(tx, {
         classId: id,
         contentType: b.contentType,
         contentId: b.contentId,
-        contentVersion: content.version,
+        contentVersion,
         dueDate,
         targetHash: hash,
       });
@@ -501,7 +537,7 @@ export class AssignmentsService {
           dueDate,
           audience,
           targetHash: hash,
-          contentVersion: content.version,
+          contentVersion,
           ...(labExecution ? { labExecution, labExecutionDigest: labExecutionDigest(labExecution) } : {}),
           // Deprecated mirror for older deployments: [] meant "whole class".
           studentIds: audience === "SUBSET" ? targets : [],
@@ -537,7 +573,7 @@ export class AssignmentsService {
           classId: id,
           contentType: b.contentType,
           contentId: b.contentId,
-          contentVersion: content.version,
+          contentVersion,
           dueDate,
           audience,
           recipientCount: targets.length,

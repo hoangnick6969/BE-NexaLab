@@ -61,20 +61,26 @@ export async function captureCurrentLabExecution(tx: any, labId: string) {
  * a complete compatible tuple. Existing unpinned assignments are never
  * backfilled and continue through the legacy compatibility path.
  */
-export async function snapshotAssignmentLab(tx: any, labId: string) {
+export async function snapshotAssignmentLab(tx: any, labId: string, releaseId: string, selectedChallengeId: string) {
   await lockLabVersions(tx, labId);
-  const activeRelease = await tx.labRelease.findFirst({ where: { labId, status: "ACTIVE" } });
-  if (activeRelease) {
-    const snapshot = activeRelease.snapshot as any;
-    const parsed = assignmentExecutionSchema.safeParse(snapshot?.execution);
-    if (!snapshot?.lab || snapshot.lab.id !== labId || digest(snapshot) !== activeRelease.digest || !parsed.success)
-      throw new ConflictException({ code: "LAB_RELEASE_INVALID" });
-    const firstChallengeId = Object.keys(parsed.data.effectiveParams)[0];
-    if (!firstChallengeId) throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
-    await resolvePinnedAssignmentLab(tx, { labExecution: parsed.data, labExecutionDigest: digest(parsed.data) }, labId, firstChallengeId);
-    return { ...parsed.data, releaseId: activeRelease.id };
-  }
-  return currentLabExecutionLocked(tx, labId);
+  const activeRelease = await tx.labRelease.findFirst({ where: { id: releaseId, labId, status: "ACTIVE" } });
+  if (!activeRelease) throw new ConflictException({ code: "LAB_RELEASE_NOT_ACTIVE" });
+  const snapshot = activeRelease.snapshot as any;
+  const parsed = assignmentExecutionSchema.safeParse(snapshot?.execution);
+  if (!snapshot?.lab || snapshot.lab.id !== labId || digest(snapshot) !== activeRelease.digest || !parsed.success)
+    throw new ConflictException({ code: "LAB_RELEASE_INVALID" });
+  if (!Object.prototype.hasOwnProperty.call(parsed.data.effectiveParams, selectedChallengeId))
+    throw new ConflictException({ code: "ASSIGNMENT_CHALLENGE_NOT_PINNED" });
+  if (await tx.labPackRevocation.findUnique({ where: { packVersionId: parsed.data.packVersionId } }))
+    throw new ConflictException({ code: "RUN_REVOKED" });
+  const pinned = {
+    ...parsed.data,
+    releaseId: activeRelease.id,
+    releaseDigest: activeRelease.digest,
+    selectedChallengeId,
+  };
+  await resolvePinnedAssignmentLab(tx, { labExecution: pinned, labExecutionDigest: digest(pinned) }, labId, selectedChallengeId);
+  return pinned;
 }
 /** Resolve only the immutable publication snapshot; active versions are irrelevant. */
 export async function resolvePinnedAssignmentLab(tx: any, assignment: { labExecution: unknown; labExecutionDigest: string | null }, labId: string, challengeId: string) {
@@ -82,6 +88,24 @@ export async function resolvePinnedAssignmentLab(tx: any, assignment: { labExecu
   if (!pin.success || !assignment.labExecutionDigest || digest(assignment.labExecution) !== assignment.labExecutionDigest || pin.data.labId !== labId)
     throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID" });
   const snapshot = pin.data;
+  if (snapshot.selectedChallengeId && snapshot.selectedChallengeId !== challengeId)
+    throw new ConflictException({ code: "ASSIGNMENT_CHALLENGE_NOT_PINNED" });
+  if (snapshot.releaseId) {
+    const release = await tx.labRelease.findUnique({ where: { id: snapshot.releaseId } });
+    const releaseSnapshot = release?.snapshot as any;
+    const releasedExecution = assignmentExecutionSchema.safeParse(releaseSnapshot?.execution);
+    if (!release || release.labId !== labId || release.digest !== snapshot.releaseDigest ||
+        digest(releaseSnapshot) !== release.digest || !releaseSnapshot?.lab || releaseSnapshot.lab.id !== labId ||
+        !releasedExecution.success || release.status === "QUARANTINED" || release.status === "DRAFT" || release.status === "APPROVED")
+      throw new ConflictException({ code: release?.status === "QUARANTINED" ? "RUN_REVOKED" : "LAB_RELEASE_INVALID" });
+    if (releasedExecution.data.packVersionId !== snapshot.packVersionId ||
+        releasedExecution.data.configVersionId !== snapshot.configVersionId ||
+        releasedExecution.data.activityVersionId !== snapshot.activityVersionId ||
+        releasedExecution.data.modelRef !== snapshot.modelRef ||
+        releasedExecution.data.engineVersion !== snapshot.engineVersion ||
+        canonical(releasedExecution.data.effectiveParams) !== canonical(snapshot.effectiveParams))
+      throw new ConflictException({ code: "LAB_RELEASE_INVALID" });
+  }
   const [config, pack, activity] = await Promise.all([
     tx.simulationConfigVersion.findUnique({ where: { id: snapshot.configVersionId } }),
     tx.simulationPackVersion.findUnique({ where: { id: snapshot.packVersionId } }),

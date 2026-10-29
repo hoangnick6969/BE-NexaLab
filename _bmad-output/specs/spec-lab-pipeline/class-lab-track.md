@@ -1,6 +1,14 @@
-# Class Lab track: future teacher configuration
+# Class Lab track: assignment-level Foundational release reuse
 
-A Class Lab is a class-private, versioned teacher resource referencing an approved Foundational release and activity. A teacher selects an approved challenge, adds instructions and narrows approved parameter ranges; they cannot change model equations, constants, scientific outputs, rubric semantics, assets, release status or approve curriculum mappings. The future ClassResource LAB extension is a reuse candidate, not implemented capability.
+## Minimal P3.6 implementation
+
+P3.6 implements Class Lab reuse through the existing class `Assignment` and LabRun routes; it does not create a separate reusable `ClassResource` Lab entity. A teacher selects a currently active, eligible Foundational release and one challenge contained in that release. New Lab assignments persist an immutable execution snapshot and digest, including release ID/digest, model, pack/config/activity versions, effective parameters and selected challenge. Assignment `contentVersion` is the release digest. Later activations or edits do not change that assignment's tuple.
+
+The teacher may choose the released activity/challenge and set ordinary assignment details/targets. They cannot change model equations, constants, scientific outputs, rubric semantics, assets, release status, effective scientific parameters or approve curriculum mappings. No extra Lab-specific configuration editor is part of this slice.
+
+Legacy Lab assignments remain unpinned and are not backfilled. Their existing compatibility route is preserved and explicitly identified at launch as `LEGACY_UNPINNED_LAUNCH`; new assignments require a complete active release snapshot. The release itself must remain available and not quarantined/revoked for a new launch/evaluation. Attempt replay uses the persisted execution tuple and does not consult current active versions.
+
+This is assignment-scoped Class Lab reuse, not a class-private resource library. A later `ClassResource` LAB extension remains a separate product decision and must not be inferred from the current implementation.
 
 ## Access and evidence
 
@@ -14,9 +22,11 @@ A newer Foundational release marks an old Class Lab stale and offers an explicit
 
 Emergency scientific/safety revocation overrides the above: block new launches and evaluations immediately, show an actionable notice to the teacher and preserve drafts and historical records for review. Already committed idempotent submissions can still return the existing receipt. A reassign or replacement is an explicit teacher operation, never silent rescoring.
 
-## Future implementation gate
+## Verified implementation boundary and remaining gate
 
-Reuse existing ClassResource ownership, revision and membership facilities if the actual implementation satisfies this contract; add schema/API only where demonstrated necessary. Class Lab implementation begins after an approved, active Foundational release exists. Test member/nonmember/teacher/parent access, resource versions, assignment snapshots, old-version retention, revocation, replay and isolation from Foundational progress. Do not represent engineering fixtures or a teacher's typed identity as review approval.
+The assignment pin uses the existing nullable `Assignment.labExecution` JSON and digest; no new Class Lab table or migration was added. The isolated integration test covers teacher assignment creation, selected challenge pinning, several students/runs inheriting tuple A after later pack/config/model activation, run-bound submission, persisted attempts and reproduction, unauthorized target rejection, expiry/due-date eligibility, explicit archive, pack revocation, idempotent replay, and compatibility for historical unpinned assignments.
+
+The test uses synthetic local release data and is technical evidence only. It does not satisfy the prerequisite of a genuinely approved active Foundational release. Real review, production activation, real-browser assignment flow, and class membership/access checks remain independent gates. Class practice without an assignment is not part of this slice.
 
 ## Access matrix for future acceptance
 

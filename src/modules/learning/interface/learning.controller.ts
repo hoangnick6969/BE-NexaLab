@@ -725,7 +725,7 @@ export class LearningController {
         learningObjective: content.learningObjective,
         prerequisites: "prerequisites" in content ? content.prerequisites : "",
         ...(a.contentType === "lab"
-          ? { challengeId: content.challenges?.[0]?.id ?? null }
+          ? { challengeId: (a.labExecution as any)?.selectedChallengeId ?? Object.keys((a.labExecution as any)?.effectiveParams ?? {})[0] ?? content.challenges?.[0]?.id ?? null }
           : {}),
         ...(a.contentType !== "lesson" && "content" in content
           ? { content: content.content }

@@ -5,6 +5,8 @@ import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { AssignmentsService } from "../../classes/application/assignments.service";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { MODEL_REGISTRY } from "../application/sim-packs";
+import { captureCurrentLabExecution } from "../application/assignment-lab-execution";
+import { digest } from "../application/lab-run";
 import { AdminLabsController } from "./admin-labs.controller";
 import { LabsController } from "./labs.controller";
 
@@ -43,8 +45,9 @@ describe.skipIf(!db)("assignment publication pinning in isolated PostgreSQL", ()
       const assignments = new AssignmentsService(p as any);
       const teacherReq = { user: { sub: teacher.id, role: "TEACHER" }, headers: {} };
       // Publication fails closed when no tuple exists; a pre-existing assignment stays usable without a fabricated pin.
-      await expect(assignments.assign(classroom.id, teacherReq, { contentType: "lab", contentId: labId, title: "No versions fixture" }))
-        .rejects.toMatchObject({ response: { code: "LAB_TUPLE_INCOMPLETE" } });
+      const requestedLab = { contentType: "lab", contentId: labId, labReleaseId: "missing-release", labChallengeId: challengeId, title: "No released tuple fixture" };
+      await expect(assignments.assign(classroom.id, teacherReq, requestedLab))
+        .rejects.toMatchObject({ response: { code: "CONTENT_NOT_PUBLISHED" } });
       expect(await p.assignment.count({ where: { classId: classroom.id } })).toBe(0);
       const legacy = await p.assignment.create({ data: {
         classId: classroom.id, contentId: labId, contentType: "lab", title: "Historical fixture",
@@ -65,15 +68,23 @@ describe.skipIf(!db)("assignment publication pinning in isolated PostgreSQL", ()
       const packA = await p.simulationPackVersion.create({ data: { ...common, key: "ap-a-" + suffix, version: 1, modelRef: refA, engineVersion: "fixture-a", activityVersionId: activityA.id, status: "active" } });
       const packB = await p.simulationPackVersion.create({ data: { ...common, key: "ap-b-" + suffix, version: 1, modelRef: refB, engineVersion: "fixture-b", activityVersionId: activityB.id, status: "draft" } });
       await p.simulationConfigVersion.update({ where: { id: configA.id }, data: { modelRef: refB } });
-      await expect(assignments.assign(classroom.id, teacherReq, { contentType: "lab", contentId: labId, title: "Incompatible fixture" }))
-        .rejects.toMatchObject({ response: { code: "SIM_PACK_CONFIG_INCOMPATIBLE" } });
+      await p.lab.update({ where: { id: labId }, data: { scope: "SHARED_LIBRARY", releaseCleared: true, synthetic: false, topicCode: "TEST_FIXTURE_ONLY" } });
+      await expect(assignments.assign(classroom.id, teacherReq, requestedLab))
+        .rejects.toMatchObject({ response: { code: "CONTENT_NOT_PUBLISHED" } });
       await p.simulationConfigVersion.update({ where: { id: configA.id }, data: { modelRef: refA } });
+      const releaseSnapshotA = { lab: { id: labId }, execution: await captureCurrentLabExecution(p as any, labId) };
+      const releaseA = await p.labRelease.create({ data: {
+        labId, version: 1, digest: digest(releaseSnapshotA), snapshot: releaseSnapshotA, status: "ACTIVE",
+        reason: "TEST FIXTURE ONLY — assignment pin mechanics", createdById: admin.id,
+      } });
+      expect((await assignments.assignableContent(classroom.id, teacherReq)).labs.map((item: any) => item.id)).toContain(labId);
       const pinReq = { ...teacherReq, headers: { "idempotency-key": randomUUID() } };
-      const pinBody = { contentType: "lab", contentId: labId, title: "Pinned fixture" };
+      const pinBody = { ...requestedLab, labReleaseId: releaseA.id, labChallengeId: challengeId, title: "Pinned fixture" };
       const result = await assignments.assign(classroom.id, pinReq, pinBody);
       const assignmentId = result.assignment.id;
       const pinned = await p.assignment.findUniqueOrThrow({ where: { id: assignmentId } });
-      expect(pinned.labExecution).toMatchObject({ labId, modelRef: refA, configVersionId: configA.id, packVersionId: packA.id, activityVersionId: activityA.id, challengeParams: { [challengeId]: {} }, effectiveParams: { [challengeId]: null, [challengeId2]: null } });
+      expect(pinned.contentVersion).toBe(releaseA.digest);
+      expect(pinned.labExecution).toMatchObject({ labId, modelRef: refA, configVersionId: configA.id, packVersionId: packA.id, activityVersionId: activityA.id, releaseId: releaseA.id, releaseDigest: releaseA.digest, selectedChallengeId: challengeId, challengeParams: { [challengeId]: {} }, effectiveParams: { [challengeId]: null, [challengeId2]: null } });
       expect(pinned.labExecutionDigest).toBeTruthy();
       await expect(p.assignment.update({ where: { id: assignmentId }, data: { labExecutionDigest: "tampered" } })).rejects.toThrow();
       const labs = new LabsController(p as any, new StudentAccessService(p as any), new RequestRateLimiter());
@@ -82,6 +93,14 @@ describe.skipIf(!db)("assignment publication pinning in isolated PostgreSQL", ()
       await adminController.activateVersion(labId, "2", adminReq, { reason: "Fixture activation" });
       await adminController.activateSimPack(packB.id, adminReq, { reason: "Fixture activation" });
       await p.lab.update({ where: { id: labId }, data: { simulationModelRef: refB } });
+      const releaseSnapshotB = { lab: { id: labId }, execution: await captureCurrentLabExecution(p as any, labId) };
+      const releaseB = await p.labRelease.create({ data: {
+        labId, version: 2, digest: digest(releaseSnapshotB), snapshot: releaseSnapshotB, status: "DRAFT",
+        reason: "TEST FIXTURE ONLY — successor release", createdById: admin.id,
+      } });
+      expect(releaseB.digest).toBe(digest(releaseSnapshotB));
+      await p.labRelease.update({ where: { id: releaseA.id }, data: { status: "SUPERSEDED" } });
+      await p.labRelease.update({ where: { id: releaseB.id }, data: { status: "ACTIVE" } });
       // Later challenge edits must not change the published assignment's fallback parameters.
       await p.challenge.update({ where: { id: challengeId2 }, data: { constraints: { params: { later: 99 } } } });
       expect((await assignments.assign(classroom.id, pinReq, pinBody)).assignment.id).toBe(assignmentId);
@@ -92,18 +111,18 @@ describe.skipIf(!db)("assignment publication pinning in isolated PostgreSQL", ()
       await p.challenge.create({ data: { id: newChallengeId, labId, objective: "created later", constraints: {} } });
       await expect(labs.launchRun(labId, studentA, { challengeId: newChallengeId, assignmentId }))
         .rejects.toMatchObject({ response: { code: "ASSIGNMENT_CHALLENGE_NOT_PINNED" } });
+      await expect(labs.launchRun(labId, studentA, { challengeId: challengeId2, assignmentId }))
+        .rejects.toMatchObject({ response: { code: "ASSIGNMENT_CHALLENGE_NOT_PINNED" } });
       await expect(labs.launchRun(labId, outsider, { challengeId, assignmentId })).rejects.toMatchObject({ status: 404 });
       const runs = await Promise.all([
         labs.launchRun(labId, studentA, { challengeId, assignmentId }),
         labs.launchRun(labId, studentA, { challengeId, assignmentId }),
         labs.launchRun(labId, studentB, { challengeId, assignmentId }),
-        labs.launchRun(labId, studentB, { challengeId: challengeId2, assignmentId }),
       ]);
-      expect(runs.map((r) => r.versionBinding)).toEqual(["ASSIGNMENT_PINNED", "ASSIGNMENT_PINNED", "ASSIGNMENT_PINNED", "ASSIGNMENT_PINNED"]);
+      expect(runs.map((r) => r.versionBinding)).toEqual(["ASSIGNMENT_PINNED", "ASSIGNMENT_PINNED", "ASSIGNMENT_PINNED"]);
       const storedRuns = await p.labRun.findMany({ where: { id: { in: runs.map((r) => r.runId) } } });
-      expect(storedRuns).toHaveLength(4);
-      expect(storedRuns.find((r) => r.challengeId === challengeId2)?.execution).toMatchObject({ params: null, binding: "ASSIGNMENT_PINNED" });
-      for (const run of storedRuns) expect(run.execution).toMatchObject({ modelRef: refA, configVersionId: configA.id, packVersionId: packA.id, activityVersionId: activityA.id, binding: "ASSIGNMENT_PINNED" });
+      expect(storedRuns).toHaveLength(3);
+      for (const run of storedRuns) expect(run.execution).toMatchObject({ modelRef: refA, configVersionId: configA.id, packVersionId: packA.id, activityVersionId: activityA.id, releaseId: releaseA.id, releaseDigest: releaseA.digest, selectedChallengeId: challengeId, binding: "ASSIGNMENT_PINNED" });
       const body = (runId: string) => ({ contract: "lab-contract/1", runId, idempotencyKey: randomUUID(), stateSchemaVersion: 1, evidenceSchemaVersion: 1, labState: { input: 7 }, durationMs: 500 });
       const bodyA = body(runs[0].runId);
       const submitted = await labs.attempt(studentA, bodyA);

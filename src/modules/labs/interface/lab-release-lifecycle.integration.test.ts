@@ -13,6 +13,7 @@ import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { MODEL_REGISTRY } from "../application/sim-packs";
 import { packInputSchema } from "../application/sim-packs";
 import { AdminLabsController } from "./admin-labs.controller";
+import { ensureCircuitBulbActivity } from "./lab-test-fixtures";
 
 const testUrl = process.env.NEXALAB_PINNING_TEST_URL;
 if (process.env.CI && !testUrl) throw new Error("CI requires NEXALAB_PINNING_TEST_URL for Lab release lifecycle integration");
@@ -75,7 +76,7 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
   it("runs the TEST_FIXTURE_ONLY Circuit release lifecycle through standalone student replay, quarantine and rollback", async () => {
     const p = db!;
     const suffix = randomUUID().slice(0, 8);
-    const labId = "circuit";
+    const labId = `p36-circuit-${suffix}`;
     const challengeId = `p36-challenge-${suffix}`;
     const subjectId = `p36-subject-${suffix}`;
     const topicCode = `P36-TEST-TOPIC-${suffix}`;
@@ -136,11 +137,10 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
         limitations: "Test record is isolated and is not release evidence.", modality: "deterministic-simulation" as const,
         sources: [{ title: "Synthetic test fixture", license: "TEST_ONLY" }],
       };
-      const existingActivity = await p.practicalActivityVersion.findUnique({ where: { key_version: { key: CIRCUIT_BULB_ACTIVITY_KEY, version: 1 } } });
-      const activity = existingActivity ?? await p.practicalActivityVersion.create({ data: {
+      const activity = await ensureCircuitBulbActivity(p, {
         key: CIRCUIT_BULB_ACTIVITY_KEY, version: 1, digest: digest(activitySpec), spec: activitySpec,
         reviews: { testFixtureOnly: true }, createdById: admin.id,
-      } });
+      });
       expect((activity.spec as any).outcomeCodes).toContain(outcomeCode);
 
       const packBody = (key: string) => ({
