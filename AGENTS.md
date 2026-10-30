@@ -30,7 +30,7 @@ Seeded fixtures: `class-pilot-a`, `class-pilot-b`, `demo-class`, `lesson-circuit
 ## Isolated database safety
 
 - Never run tests, seeds, backfills, or Prisma schema/migration commands against shared Supabase or another remote database.
-- For local API startup, any database-writing command, or integration test, set `NEXALAB_ISOLATED_DATABASE_URL` to an isolated loopback PostgreSQL database and set `DATABASE_URL` and `DIRECT_URL` to that same host, port, and database. Guarded npm scripts fail closed otherwise.
+- For automated tests, seeds, backfills, or schema/migration commands, set `NEXALAB_ISOLATED_DATABASE_URL` to an isolated loopback PostgreSQL database and set `DATABASE_URL` and `DIRECT_URL` to that same host, port, and database. Guarded npm scripts fail closed otherwise.
 - Use the guarded npm scripts (for example `npm test`, `npm run test:integration`, `npm run db:migrate`, `npm run db:seed`). Do not invoke raw `prisma migrate deploy`, seed, or backfill commands.
 - Pure read-only Supabase diagnostics must use SELECT-only queries and must never be combined with migration, seed, reset, or rollback operations.
 
