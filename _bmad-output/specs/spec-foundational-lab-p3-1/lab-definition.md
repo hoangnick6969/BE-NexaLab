@@ -1,3 +1,48 @@
+# Circuit pilot blueprint: closed/open circuit with a bulb
+
+Status: technical design complete; outcome, teaching activity and scientific assumptions PROPOSED / UNREVIEWED. This defines a private engineering pilot, not an approved curriculum binding or a public Lab.
+
+## Learning intent and source
+
+Candidate: KHTN8 B22 simple electric circuit, source/lesson locator and precise official Outcome to be confirmed by the curriculum reviewer. Objective for the virtual activity: inspect a provided simple closed circuit, predict and compare the bulb's state when the switch is closed and open, and identify why the states differ. This can provide evidence of virtual reasoning, not physical handling competence. The complete Lesson and video are not prerequisites for the internal technical pilot; public practice remains open.
+
+## Model and boundaries
+
+Implement a new immutable allowlisted modelRef, proposed circuit-bulb@1.0.0, distinct from legacy circuit@1.0.0. State schema v1: component nodes battery, one generic bulb and one switch, and wires as undirected edges. Exactly one of each component; exactly one simple loop of those three nodes; no duplicate/self edges, extra components or alternate paths. A fixed circuit topology is supplied initially; the learner closes/opens the switch. Optional wiring interaction can be added only when separately defined and validated. Reject invalid/missing topology rather than generating plausible outputs.
+
+The bulb is a qualitative, ideal low-voltage finite-resistance load. Output observation is circuitPath=OPEN|CLOSED and bulbState=OFF|ON; switch open gives OPEN/OFF, switch closed with the valid loop gives CLOSED/ON. No voltage/current value, polarity, brightness, heating, short-circuit energy, LED threshold or real circuit design is modeled. Do not equate a generic bulb with a 2 V LED. Review these assumptions and learner-facing safety text with a qualified scientific/model reviewer.
+
+The existing model accepts LED, battery, resistor and switch, uses a fixed LED drop and produces raw verdicts for another activity; do not reuse its verdict as this rubric or modify its behavior in place.
+
+## Activity: two checkpoints and structured explanation
+
+One activity attempt contains these independently captured checkpoints in order. Each checkpoint includes the full submitted state and a learner prediction chosen BEFORE showing the authoritative observation in the assessment flow. FE can show an advisory preview only after the corresponding prediction is recorded. BE re-evaluates both states; client-provided observations cannot count as evidence.
+
+1. CLOSED: switch closed in the valid loop; select predicted bulb state ON or OFF, then observe.
+2. OPEN: open the same switch; select predicted bulb state ON or OFF, then observe.
+3. Explanation: select one answer: A — an open switch interrupts the path, while a closed switch completes it; B — the battery disappears when the switch opens; C — a wire changes into an insulator.
+
+Evidence JSON v1: checkpoints = [{id: CLOSED, state, prediction}, {id: OPEN, state, prediction}], explanation = A|B|C. The order and exact IDs are required; server verifies both states use the pinned model and each required switch state. A saved prediction is learner evidence, not proof of time/order unless captured by a server checkpoint protocol; the initial technical slice accepts a single final evidence envelope and does not claim anti-cheat verification of timing or intermediate physical manipulation.
+
+## Rubric and result
+
+Evaluate both states independently on the pinned model and compare predictions to computed outputs. Award one criterion each for CLOSED prediction ON, OPEN prediction OFF, and explanation A. PASS = all three criteria; NEEDS_PRACTICE = otherwise, with feedback for each unmet criterion. Invalid state/missing checkpoint is a validation error and creates no attempt; correct open-state observation is a valid successful criterion. Every valid incorrect submission creates a real non-passing attempt; retry uses a new idempotency key while preserving compatible workspace state.
+
+Because the initial topology is supplied, this pilot tests interpretation and switch interaction, not independent circuit construction. Building wires and real-world practical skills are future activity outcomes, not claims of this pilot.
+
+## Required cases and UX
+
+Golden/invalid fixtures: closed→ON, open→OFF, all predictions correct + A→PASS; open/OFF must never itself cause failure; each wrong prediction, explanation B/C, missing checkpoint, wrong checkpoint state, duplicate node/wire, extra components and unsupported topology. Test replay, version activation during session, repeated submission and historical compatibility in the shared contract suite. Scientific reviewer validates the binary abstraction and reference values before reviewed use.
+
+Provide accessible 2D controls with text labels, non-colour status, keyboard operation, explicit observe/predict/submit and a limitation notice. FE preview is advisory. Restore local drafts after F5 without creating attempts. A real BE assessment persists exact run/tuple, checkpoint states, computed observations and rubric version. Free Foundational access and assignment evidence follow the master contract.
+
+## Review and later work
+
+A curriculum reviewer confirms the exact official source, lesson/Outcome mapping and whether this activity provides primary or supporting evidence. A subject/science reviewer and a distinct model reviewer check the abstraction, rubric and golden cases; safety and rights review apply before release as needed. No reviewer, approval or source claim is fabricated.
+
+The following historical appendix is discovery context only; its old pilot decision, model assumptions, bindings, ranges, UI and scoring do not govern the bulb pilot. Review it anew if an LED extension is later selected.
+
+# Historical Appendix — LED current-limiting proposal
 # Foundational Lab Definition: LED Current-Limiting DC Circuit
 
 **Status: scientific candidate, not an approved pilot activity.** The first pilot must select one source-grounded KHTN 8 Outcome and one Lesson mapping with a named reviewer. B22 is a candidate; B21–B25 below are possible later consumers. A scientific/model reviewer must approve the exact assumptions, ranges, observations and cases relevant to the selected activity. This draft does not create a binding or authorize release.

@@ -1,4 +1,6 @@
-import { Controller, Get, Inject, Req } from "@nestjs/common";
+import { digest } from "../../labs/application/lab-run";
+import { reviewedBindingsMatch } from "../../labs/application/lab-release-bindings";
+import { Controller, Get, Inject, Param, Req } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../../common/decorators";
 import { Db } from "../../../db/db";
@@ -93,8 +95,22 @@ export class CatalogController {
     });
     return { subjects: subjectData.filter((subject: any) => subject.grades.length) };
   }
-  @Get("labs") labs(@Req() req: any) {
-    return this.db.lab.findMany({
+  @Roles("STUDENT", "TEACHER", "ADMIN")
+  @Get("lessons/:lessonId/foundational-labs")
+  async lessonLabs(@Param("lessonId") lessonId: string, @Req() req: any) {
+    const lesson = await this.db.lesson.findFirst({ where: { id: lessonId, status: "published", scope: "SHARED_LIBRARY", synthetic: false } });
+    if (!lesson) return [];
+    const labs = await this.labs(req);
+    const candidates = await Promise.all(labs.map(async (lab) => {
+      const release = await this.db.labRelease.findFirst({ where: { labId: lab.id, status: "ACTIVE" } });
+      if (!release || !(release.snapshot as any).lessonBindings.some((binding: any) => binding.lessonId === lessonId)) return null;
+      if (digest(release.snapshot) !== release.digest || !await reviewedBindingsMatch(this.db, lab.id, release.snapshot)) return null;
+      return { labId: lab.id, title: lab.title, objective: (release.snapshot as any).activity?.spec?.objective ?? lab.learningObjective, releaseId: release.id, version: release.version };
+    }));
+    return candidates.filter((item) => item !== null);
+  }
+  @Get("labs") async labs(@Req() req: any) {
+    const labs = await this.db.lab.findMany({
       where: {
         status: "published",
         ...(req.user.role === "STUDENT" ? { scope: "SHARED_LIBRARY", releaseCleared: true, synthetic: false, topicCode: { not: null } } : {}),
@@ -102,5 +118,19 @@ export class CatalogController {
       // Lesson-variant challenges belong to their lesson pathway, not the public lab list.
       include: { challenges: { where: { NOT: { id: { contains: "_v-" } } } } },
     });
+    const visible = await Promise.all(labs.map(async (lab) => {
+      const release = await this.db.labRelease.findFirst({ where: { labId: lab.id, status: "ACTIVE" } });
+      // Preserve legacy catalog behavior for Labs without a release lifecycle record.
+      if (!release) return req.user.role !== "STUDENT" || await this.db.labRelease.count({ where: { labId: lab.id } }) === 0 ? lab : null;
+      if (digest(release.snapshot) !== release.digest || !await reviewedBindingsMatch(this.db, lab.id, release.snapshot))
+        return req.user.role === "STUDENT" ? null : lab;
+      const lessonIds = (release.snapshot as any).lessonBindings.map((binding: any) => binding.lessonId);
+      const lessonLinks = await this.db.lesson.findMany({
+        where: { id: { in: lessonIds }, status: "published", scope: "SHARED_LIBRARY", synthetic: false },
+        select: { id: true, title: true, curriculumTopicCode: true },
+      });
+      return { ...lab, lessonLinks: lessonLinks.map((lesson) => ({ lessonId: lesson.id, title: lesson.title, topicCode: lesson.curriculumTopicCode })) };
+    }));
+    return visible.filter((lab) => lab !== null);
   }
 }

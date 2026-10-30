@@ -14,7 +14,7 @@ export function validateContentStudioBlueprint(value: unknown) {
   const parsed = requestSchema.safeParse(value);
   if (!parsed.success) return { ok: false, errors: parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`), golden: [] };
   const input = parsed.data;
-  const errors = versionErrors(input.labId, input.challengeIds, input.config);
+  const errors = versionErrors(input.labId, input.challengeIds, input.config, input.modelRef);
   try {
     if (resolveModel(input.modelRef).labId !== input.labId) errors.push("Blueprint modelRef does not match the existing BE Lab capability");
   } catch (error) {

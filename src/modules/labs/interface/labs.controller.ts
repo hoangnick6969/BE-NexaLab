@@ -11,7 +11,9 @@ import { requestHint } from "../application/hint";
 import { explain } from "../infrastructure/llm";
 import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
+import { canonical, digest, evaluateCircuitBulbActivity, evaluateRunV1, executionSchema, launchSchema, rubricRefForActivity, runSubmissionSchema, CIRCUIT_BULB_RUBRIC } from "../application/lab-run";
 import { StudentAccessService } from "../../progress/application/student-access.service";
+import { assertLegacyCircuitAssignmentCompatible, resolveFoundationalLabRelease, resolvePinnedAssignmentLab } from "../application/assignment-lab-execution";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
 
 @ApiTags("NexaLab")
@@ -78,6 +80,7 @@ export class LabsController {
     @Body() body: unknown,
   ) {
     this.limiter.rate("attempt:" + req.user.sub, 30);
+    if (body && typeof body === "object" && "runId" in body) return this.submitRun(req, body);
     const b = z
       .object({
         challengeId: text,
@@ -111,7 +114,7 @@ export class LabsController {
       });
       if (existing) {
         const samePayload =
-          existing.challengeId === b.challengeId &&
+          !existing.labRunId && existing.challengeId === b.challengeId &&
           JSON.stringify(existing.labState) === JSON.stringify(b.labState) &&
           (!existing.lessonStepId || existing.assignmentId === b.assignmentId);
         if (!samePayload) {
@@ -169,23 +172,34 @@ export class LabsController {
       // Share activation locks so both selected versions were active together.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-version:" + c.labId}))`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-pack-lab:" + c.labId}))`;
-      const configVersion = isVariant
-        ? null
+      const pinnedAssignment = labAssignment?.labExecution != null
+        ? await resolvePinnedAssignmentLab(tx, labAssignment, c.labId, c.id) : null;
+      const configVersion = pinnedAssignment
+        ? await tx.simulationConfigVersion.findUnique({ where: { id: pinnedAssignment.configVersionId } })
+        : isVariant ? null
         : await tx.simulationConfigVersion.findFirst({ where: { labId: c.labId, status: "active" } });
-      const params = (isVariant ? null : versionParams(configVersion, c.id)) ?? (c.constraints as any)?.params;
-      const activePack = await tx.simulationPackVersion.findFirst({ where: { labId: c.labId, status: "active" } });
+      const params = pinnedAssignment ? pinnedAssignment.params
+        : (isVariant ? null : versionParams(configVersion, c.id)) ?? (c.constraints as any)?.params;
+      const activePack = pinnedAssignment
+        ? await tx.simulationPackVersion.findUnique({ where: { id: pinnedAssignment.packVersionId } })
+        : await tx.simulationPackVersion.findFirst({ where: { labId: c.labId, status: "active" } });
       if (activePack) {
-        const errors = packConfigurationErrors(c.labId, activePack, configVersion, params);
+        if (await tx.labPackRevocation.findUnique({ where: { packVersionId: activePack.id } }))
+          throw new ConflictException({ code: "RUN_REVOKED" });
+        const errors = pinnedAssignment ? [] : packConfigurationErrors(c.labId, activePack, configVersion, params);
         if (errors.length) throw new ConflictException({ code: "SIM_PACK_CONFIG_INCOMPATIBLE", message: errors.join("; ") });
       }
-      const modelRef = activePack?.modelRef ?? configVersion?.modelRef ?? c.lab.simulationModelRef;
+      const modelRef = pinnedAssignment?.modelRef ?? activePack?.modelRef ?? configVersion?.modelRef ?? c.lab.simulationModelRef;
+      assertLegacyCircuitAssignmentCompatible(c.labId, labAssignment, modelRef);
       let result: any;
       let normalizedVerdict: string;
       let engineVersion: string;
       try {
         engineVersion = resolveModel(modelRef).engineVersion;
-        ({ result, verdict: normalizedVerdict } = evaluate(c.labId, b.labState, params, modelRef));
-        result = { ...result, _execution: { modelRef, packVersionId: activePack?.id ?? null, configVersionId: configVersion?.id ?? null, params: params ?? null } };
+        ({ result, verdict: normalizedVerdict } = pinnedAssignment
+          ? evaluateRunV1(c.labId, b.labState, params, modelRef)
+          : evaluate(c.labId, b.labState, params, modelRef));
+        result = { ...result, _execution: { modelRef, packVersionId: activePack?.id ?? null, configVersionId: configVersion?.id ?? null, params: params ?? null, ...(pinnedAssignment ? { rubricRef: pinnedAssignment.rubricRef } : {}) } };
       } catch (e: any) {
         throw new BadRequestException(e.message);
       }
@@ -255,6 +269,145 @@ export class LabsController {
       };
       // Gate, evidence, projections and the pathway reconcile in one transaction; at
       // pooled-database round-trip latency that exceeds Prisma's 5 s default.
+    }, { timeout: 20000 });
+  }
+  /** P3.2a: resolve a complete tuple under the same locks as version activation. */
+  @Roles("STUDENT") @Post("labs/:labId/runs")
+  async launchRun(@Param("labId") labId: string, @Req() req: any, @Body() body: unknown) {
+    const b = launchSchema.parse(body);
+    return this.db.$transaction(async (tx) => {
+      const challenge = await tx.challenge.findUnique({ where: { id: b.challengeId }, include: { lab: true } });
+      if (!challenge || challenge.labId !== labId || challenge.lab.status !== "published" || challenge.id.includes("_v-"))
+        throw new NotFoundException({ code: "LAB_NOT_FOUND" });
+      const isOpen = challenge.lab.scope === "SHARED_LIBRARY" && challenge.lab.releaseCleared && !challenge.lab.synthetic && Boolean(challenge.lab.topicCode);
+      // Circuit library practice must not inherit an unrelated legacy LED assignment.
+      const assignment = labId === "circuit" && !b.assignmentId && isOpen ? null : await tx.assignment.findFirst({
+        where: { ...applicableAssignmentWhere(req.user.sub), contentId: labId, contentType: "lab", ...(b.assignmentId ? { id: b.assignmentId } : {}) },
+        orderBy: assignmentQueueOrder,
+      });
+      if (b.releaseId && assignment) throw new ConflictException({ code: "LAB_RELEASE_CONTEXT_MISMATCH" });
+      if ((b.assignmentId && !assignment) || (!assignment && !isOpen))
+        throw new NotFoundException({ code: "LAB_NOT_FOUND" });
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-version:" + labId);
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
+      let execution: any;
+      if (assignment?.labExecution !== null && assignment?.labExecution !== undefined) {
+        execution = await resolvePinnedAssignmentLab(tx, assignment, labId, challenge.id);
+      } else if (!assignment) {
+        const activeRelease = await tx.labRelease.findFirst({ where: { labId, status: "ACTIVE" } });
+        if (b.releaseId && activeRelease?.id !== b.releaseId) throw new ConflictException({ code: "LAB_RELEASE_CHANGED" });
+        if (activeRelease) execution = await resolveFoundationalLabRelease(tx, activeRelease, labId, challenge.id);
+      }
+      if (!execution) {
+        // Old assignments remain usable, without claiming a publication-time pin.
+        const config = await tx.simulationConfigVersion.findFirst({ where: { labId, status: "active" } });
+        const pack = await tx.simulationPackVersion.findFirst({ where: { labId, status: "active" } });
+        if (!config || !pack) throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
+        const configured = config.challengeParams as Record<string, unknown>;
+        if (!configured || !Object.prototype.hasOwnProperty.call(configured, challenge.id))
+          throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
+        const activity = await tx.practicalActivityVersion.findUnique({ where: { id: pack.activityVersionId } });
+        if (!activity) throw new ConflictException({ code: "LAB_TUPLE_INCOMPLETE" });
+        const params = versionParams(config, challenge.id);
+        const errors = packConfigurationErrors(labId, pack, config, params);
+        if (errors.length) throw new ConflictException({ code: "SIM_PACK_CONFIG_INCOMPATIBLE", message: errors.join("; ") });
+        let rubricRef: string;
+        try { rubricRef = rubricRefForActivity(activity.key, activity.version, pack.modelRef); }
+        catch { throw new ConflictException({ code: "LAB_TUPLE_INCOMPATIBLE", message: "Activity và scientific model không khớp phiên bản" }); }
+        execution = {
+          modelRef: pack.modelRef, engineVersion: pack.engineVersion, packVersionId: pack.id,
+          configVersionId: config.id, activityVersionId: activity.id, activityDigest: activity.digest,
+          activityKey: activity.key, activityVersion: activity.version,
+          rubricRef,
+          params, stateSchemaVersion: 1, evidenceSchemaVersion: 1, template: pack.template,
+          binding: assignment ? "LEGACY_UNPINNED_LAUNCH" : "FOUNDATIONAL_LAUNCH",
+        };
+      }
+      assertLegacyCircuitAssignmentCompatible(labId, assignment, execution.modelRef);
+      if (await tx.labPackRevocation.findUnique({ where: { packVersionId: execution.packVersionId } }))
+        throw new ConflictException({ code: "RUN_REVOKED" });
+      const now = new Date();
+      const run = await tx.labRun.create({ data: {
+        studentId: req.user.sub, labId, challengeId: challenge.id, assignmentId: assignment?.id ?? null,
+        context: assignment ? "ASSIGNMENT" : "FOUNDATIONAL", execution: execution as any,
+        executionDigest: digest(execution), expiresAt: assignment ? null : new Date(now.getTime() + 86400000),
+      } });
+      const template = execution.template as any;
+      return {
+        contract: "lab-contract/1", runId: run.id, labId, challengeId: challenge.id,
+        modelRef: execution.modelRef, engineVersion: execution.engineVersion, activityVersionId: execution.activityVersionId,
+        activityVersion: execution.activityVersion, rubricVersion: execution.rubricRef, stateSchemaVersion: 1,
+        evidenceSchemaVersion: 1, constraints: template?.ranges ?? {}, initialState: template?.initialState ?? null,
+        rendererKey: execution.modelRef === "circuit-bulb@1.0.0" ? "circuit-bulb" : null,
+        expiresAt: run.expiresAt, context: run.context, assignmentId: run.assignmentId,
+        versionBinding: execution.binding,
+      };
+    }, { timeout: 20000 });
+  }
+
+  private async submitRun(req: any, body: unknown) {
+    const b = runSubmissionSchema.parse(body);
+    const evidence = "checkpoints" in b ? { checkpoints: b.checkpoints, explanation: b.explanation } : b.labState;
+    return this.db.$transaction(async (tx) => {
+      // One key and one run lock serialize retries and revocation with submission.
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:attempt-key:" + req.user.sub + ":" + b.idempotencyKey);
+      const existing = await tx.attempt.findUnique({ where: { studentId_idempotencyKey: { studentId: req.user.sub, idempotencyKey: b.idempotencyKey } } });
+      if (existing) {
+        if (existing.labRunId !== b.runId || canonical(existing.labState) !== canonical(evidence))
+          throw new ConflictException({ code: "IDEMPOTENCY_KEY_REUSED" });
+        return { ...existing, attempt: existing, retryGuidance: this.access.retryGuidance((await tx.labRun.findUniqueOrThrow({ where: { id: b.runId } })).labId, existing.verdict, existing.simulationResult) };
+      }
+      const run = await tx.labRun.findFirst({ where: { id: b.runId, studentId: req.user.sub } });
+      if (!run) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + run.labId);
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-run:" + run.id);
+      const locked = await tx.labRun.findUniqueOrThrow({ where: { id: run.id } });
+      if (locked.revokedAt) throw new ConflictException({ code: "RUN_REVOKED" });
+      if (locked.expiresAt && locked.expiresAt.getTime() <= Date.now()) throw new ConflictException({ code: "RUN_EXPIRED" });
+      let assignment: any = null;
+      if (locked.assignmentId) {
+        assignment = await tx.assignment.findFirst({ where: {
+          ...applicableAssignmentWhere(req.user.sub), id: locked.assignmentId, contentId: locked.labId, contentType: "lab",
+        } });
+        if (!assignment) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+      } else {
+        const lab = await tx.lab.findUnique({ where: { id: locked.labId } });
+        if (!lab || lab.status !== "published" || lab.scope !== "SHARED_LIBRARY" || !lab.releaseCleared || lab.synthetic || !lab.topicCode)
+          throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+      }
+      const parsed = executionSchema.safeParse(locked.execution);
+      if (!parsed.success || digest(locked.execution) !== locked.executionDigest)
+        throw new ConflictException({ code: "LAB_TUPLE_INVALID" });
+      const execution = parsed.data;
+      if (await tx.labPackRevocation.findUnique({ where: { packVersionId: execution.packVersionId } }))
+        throw new ConflictException({ code: "RUN_REVOKED" });
+      assertLegacyCircuitAssignmentCompatible(locked.labId, assignment, execution.modelRef);
+      let result: any;
+      let verdict: string;
+      try {
+        const model = resolveModel(execution.modelRef);
+        if (model.labId !== locked.labId || model.engineVersion !== execution.engineVersion)
+          throw new Error("Pinned model is unavailable");
+        if (execution.rubricRef === CIRCUIT_BULB_RUBRIC) {
+          if (!("checkpoints" in b)) throw new Error("Thiếu bằng chứng checkpoint Circuit");
+          ({ result, verdict } = evaluateCircuitBulbActivity(b.checkpoints as Array<{ id: "CLOSED" | "OPEN"; state: unknown; prediction: "ON" | "OFF" }>, b.explanation));
+        } else {
+          if (!("labState" in b)) throw new Error("Thiếu trạng thái Lab");
+          ({ result, verdict } = evaluateRunV1(locked.labId, b.labState, execution.params, execution.modelRef));
+        }
+      } catch (e: any) { throw new BadRequestException(e.message); }
+      result = { ...result, _execution: {
+        modelRef: execution.modelRef, packVersionId: execution.packVersionId,
+        configVersionId: execution.configVersionId, params: execution.params, rubricRef: execution.rubricRef,
+      } };
+      const attempt = await tx.attempt.create({ data: {
+        studentId: req.user.sub, challengeId: locked.challengeId, assignmentId: locked.assignmentId,
+        labRunId: locked.id, idempotencyKey: b.idempotencyKey, labState: evidence as any,
+        simulationResult: result, verdict, durationMs: b.durationMs, simulationModelVersion: execution.engineVersion,
+        configVersionId: execution.configVersionId, packVersionId: execution.packVersionId,
+      } });
+      await projectLab(tx, req.user.sub, locked.labId);
+      return { ...attempt, attempt, retryGuidance: this.access.retryGuidance(locked.labId, verdict, result) };
     }, { timeout: 20000 });
   }
   private async practicalStepLink(

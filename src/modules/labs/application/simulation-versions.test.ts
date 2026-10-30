@@ -16,6 +16,15 @@ const input = (overrides: Record<string, unknown> = {}) =>
   });
 
 describe("simulation configuration versions (C2-T3)", () => {
+  it("keeps the bulb activity independent of the legacy LED parameter ranges", () => {
+    const pack = { labId: "circuit", modelRef: "circuit-bulb@1.0.0", engineVersion: "1.0.0", template: { ranges: {} } };
+    const config = { labId: "circuit", modelRef: "circuit-bulb@1.0.0" };
+    expect(packConfigurationErrors("circuit", pack, config, null)).toEqual([]);
+    expect(packConfigurationErrors("circuit", pack, config, { maxCurrentMa: 10 })).toEqual(
+      expect.arrayContaining([expect.stringContaining("không dùng tham số")]),
+    );
+  });
+
   it("accepts only compatible model and parameter values within reviewed pack ranges", () => {
     const pack = { labId: "circuit", modelRef: "circuit@1.0.0", engineVersion: "1.0.0", template: { ranges: {
       maxCurrentMa: { min: 5, max: 10 }, minLitLeds: { min: 1, max: 3 },
@@ -41,6 +50,24 @@ describe("simulation configuration versions (C2-T3)", () => {
     const candidate = input();
     expect(versionErrors("circuit", ["circuit_001"], candidate)).toEqual([]);
     expect(goldenCaseResults("circuit", candidate).every((g) => g.ok)).toBe(true);
+  });
+
+  it("validates bulb-model configs without applying legacy LED parameter rules", () => {
+    const state = (closed: boolean) => ({
+      nodes: [{ id: "battery", type: "battery" }, { id: "bulb", type: "bulb" }, { id: "switch", type: "switch", closed }],
+      edges: [{ source: "battery", target: "bulb" }, { source: "bulb", target: "switch" }, { source: "switch", target: "battery" }],
+    });
+    const bulbConfig = input({
+      challengeParams: { circuit_001: {} },
+      goldenCases: [
+        { challengeId: "circuit_001", label: "Công tắc đóng: đèn sáng", labState: state(true), expectedVerdict: "passed" },
+        { challengeId: "circuit_001", label: "Công tắc mở: đèn tắt", labState: state(false), expectedVerdict: "passed" },
+      ],
+    });
+    expect(versionErrors("circuit", ["circuit_001"], bulbConfig, "circuit-bulb@1.0.0")).toEqual([]);
+    expect(goldenCaseResults("circuit", bulbConfig, "circuit-bulb@1.0.0").every((item) => item.ok)).toBe(true);
+    const invalidParams = input({ challengeParams: { circuit_001: { maxCurrentMa: 15 } } });
+    expect(versionErrors("circuit", ["circuit_001"], invalidParams, "circuit-bulb@1.0.0").join(" ")).toContain("không dùng tham số thử thách LED");
   });
 
   it("rejects unknown models, mismatched challenges, out-of-range and unknown parameters", () => {

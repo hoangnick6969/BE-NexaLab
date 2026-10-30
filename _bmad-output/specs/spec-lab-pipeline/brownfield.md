@@ -1,3 +1,5 @@
+> Historical evidence snapshot from its stated date and branches. As of the checked-out ba4d3b1 baseline the P3.1 spec and pinning fix are incorporated in main; E-02/E-03 branch comparisons and unmerged references below describe the earlier snapshot, not current status. Launch-time pinning, run persistence, class assignment policy and release are still target designs; recheck implementation and target DB at Build time.
+
 # Current State Evidence (2026-10-28)
 
 Read from BE `main` (= `DongResearch`), FE `main` (= `DongResearch`) and BE `origin/codex/foundational-lab-platform` (“fl”, 4 commits not on main).
@@ -29,4 +31,4 @@ Labels:
 | E-17 | Teacher challenge variants are upserted in place on lesson save. The lab assignment `contentVersion` hashes only `simulationModelRef + config` | `src/modules/lessons/interface/lessons.controller.ts:199-207`; `lesson-content.ts:256-264`; `src/modules/classes/application/assignments.service.ts:13,35,388` `[SRC]` | Freeze variants. `class_lab` pins the release |
 | E-18 | No local draft persistence in Lab code. State lives only in React state | grep `localStorage/sessionStorage` in `src/features/labs` (none); FE `Lab.tsx:132` `[SRC]` | Contract v1 §7 |
 | E-19 | Admin FE manages config versions only. Packs/activities exist only as API | FE `src/features/admin/Simulations.tsx:130,153,298` `[SRC]` | JSON + CLI per Content Tool plan |
-| E-20 | DB snapshot: 47 KHTN 8 + 51 KHTN 9 released shared Lessons, none with `labId`; 3 Labs private/uncleared; 4 version tables empty; 157 KHTN 8 + 135 KHTN 9 outcomes (33 duplicates), all textbook-derived. The Content Tool electricity proposal (13/6) is still unverified | Read-only query 2026-10-28 on the BE `.env` development database (`lab-catalog-khtn8-9.md` §1) | DB part verified for development only. Re-check the pilot/staging target before P3.4 |
+| E-20 | DB snapshot: 47 KHTN 8 + 51 KHTN 9 released shared Lessons, none with `labId`; 3 Labs private/uncleared; 4 version tables empty; 157 KHTN 8 + 135 KHTN 9 outcomes (33 duplicates), all textbook-derived. The Content Tool electricity proposal (13/6) is still unverified | Read-only query 2026-10-28 on the BE `.env` development database (`lab-catalog-and-shared-kits-khtn8-9.md` §1) | DB part verified for development only. Re-check the pilot/staging target before P3.4 |

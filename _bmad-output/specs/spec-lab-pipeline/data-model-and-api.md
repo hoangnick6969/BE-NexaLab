@@ -1,95 +1,17 @@
-# Proposed Data Model and API (additive)
+# Data and API direction for Build
 
-All changes are **proposals for ADR-LAB-01**. None exist in code. Each one is additive. Old rows stay readable, and old columns are kept until a later contract migration.
+**Implementation update (2026-10-29):** P3.6 now has a persisted immutable `LabRelease` snapshot/digest and append-only `LabReleaseReview`. New drafts require one authenticated active ADMIN `OWNER_SIGNOFF` receipt on the exact digest with structured curriculum, source, scientific golden-case, rubric, safety and rights evidence; this is internal owner validation, not independent certification. Existing release snapshots with delegated review kinds retain their former authorization and distinct-reviewer rules. `LabReleaseReview.evidence` is nullable for those historical receipts. A first release may now bind directly to an existing released, non-synthetic shared Lesson and its exact `ContentPackVersion` by passing `lessonId` when creating the draft; the immutable binding includes Lesson taxonomy/outcomes plus content-pack ID/digest/release identity. This avoids inventing a `FoundationalCourseVersion`, and activation/discovery reject later mapping drift. Legacy course-version snapshots remain supported. The paragraphs below describe the original Define-stage choice and must not be read as current implementation status.
 
-## Schema additions
+The first implementation choice is an additive server-persisted LabRun, not a claim that a production LabRelease table or authenticated reviewer system already exists. Detailed tasks and acceptance are in lab-pipeline-phase-plan.md. Current Lab, SimulationConfigVersion, PracticalActivityVersion and SimulationPackVersion remain reusable component identities; existing attempts and legacy endpoints remain readable.
 
-```prisma
-/// Immutable runnable tuple; students always run a LabRelease (D-LP-02).
-model LabRelease {
-  id                 String   @id @default(cuid())
-  labId              String
-  version            Int
-  modelRef           String
-  engineVersion      String
-  stateSchemaVersion Int
-  activityVersionId  String           // → PracticalActivityVersion
-  packVersionId      String           // → SimulationPackVersion
-  params             Json             // pinned configuration (supersedes independent config activation)
-  stateConstraints   Json
-  rendererKey        String
-  minFeRenderer      String
-  digest             String
-  status             String   @default("DRAFT") // DRAFT|VALIDATED|APPROVED|ACTIVE|SUPERSEDED|QUARANTINED|RETIRED
-  validation         Json?
-  createdById        String
-  createdAt          DateTime @default(now())
-  activatedAt        DateTime?
-  supersededAt       DateTime?
-  retiredAt          DateTime?
-  quarantineReason   String?
-  receipts           LabReviewReceipt[]
-  @@unique([labId, version])
-  @@unique([labId, digest])
-  @@index([labId, status])
-}
-model LabReviewReceipt {
-  id            String   @id @default(cuid())
-  releaseId     String?
-  release       LabRelease? @relation(fields: [releaseId], references: [id], onDelete: Restrict)
-  kind          String   // curriculum|subject|model|safety|rights|range
-  subjectType   String   // LabRelease|PracticalActivityVersion|SimulationPackVersion|Blueprint|CurriculumOutcome
-  subjectDigest String
-  reviewerId    String   // authenticated User.id
-  role          String
-  decision      String   // approved|changes_requested
-  note          String?
-  createdAt     DateTime @default(now())
-  @@index([subjectType, subjectDigest])
-}
-```
+## P3.2a chosen minimal persistence
 
-Attempt (additive nullable columns):
+LabRun records ID, owner, context/challenge identity, timestamps, expiry, revocation status, immutable execution tuple and digest. The tuple contains modelRef/engine, activity/rubric identity and version, pack/config IDs, effective parameters and state/evidence schema. A nullable run relation/ID on Attempt is additive if needed. A migration and new opt-in launch/submit API are expected in Build because current submit-time selection alone cannot persist launch state. New routes reuse existing auth and activation locks; exact route names and validation schemas are local implementation details under the versioned envelope, not new product behavior.
 
-```prisma
-  labReleaseId      String?   // null = legacy
-  context           String?   // FOUNDATIONAL|LESSON_STEP|CLASS_PRACTICE|ASSIGNMENT; null = legacy
-  classResourceId   String?   // Class Lab version row
-  execution         Json?     // {modelRef, engineVersion, params, stateSchemaVersion, releaseResolution}
-```
+Launch requires compatible components and never creates evidence. Server submit checks authorization and run status, recomputes observations and activity assessment and atomically persists attempt plus eligible context-specific progress. Idempotency replay is checked before expiry/revocation. Old submissions and historical results continue through the legacy path.
 
-Other small changes:
-- `ClassResourceKind` adds `LAB`.
-- `Lab.topicCode` gets a relation to `CurriculumTopic.code`. This needs a data check before adding the FK.
-- `FoundationalCourseLesson.foundationalLabId` gets a relation to `Lab.id`.
+## Production and Class Lab follow-up
 
-Compatibility with existing tables:
-- `SimulationConfigVersion` and `SimulationPackVersion` stay as component versions.
-- Their independent `activate` endpoints become "create release draft". They remain callable for development but no longer affect student runs once a Lab has any `LabRelease`.
+An immutable reviewed release identity must bind exact model, pack, config, activity/rubric and renderer compatibility and associate real reviewer decisions with exact digests. Whether this is a separate LabRelease table, a compatible existing version aggregate or another additive representation is a later implementation choice backed by a concrete migration/replay comparison; it does not block the first private run slice. Until a production release mechanism is accepted and built, public activation is blocked.
 
-## API
-
-| Route | Who | Purpose | Status |
-|---|---|---|---|
-| `GET /labs` | all | Catalog. Students see Labs with an ACTIVE release | exists (`src/modules/curriculum/interface/catalog.controller.ts:96-105`), filter changes |
-| `GET /labs/:labId/launch` | student, teacher | LaunchEnvelope for `FOUNDATIONAL` | new |
-| `GET /lessons/:lessonId/steps/:stepId/lab` | student | LaunchEnvelope for `LESSON_STEP`/`ASSIGNMENT` | exists (`src/modules/learning/interface/learning.controller.ts:390-427`), response extended |
-| `GET /open-curriculum/lessons/:id` | student | Include `LAB` steps (D-LP-06) | exists (`learning.controller.ts:42-48`), filter changes |
-| `GET /classes/:classId/resources/:id/launch` | member, teacher | LaunchEnvelope for `CLASS_PRACTICE`/`ASSIGNMENT` | new |
-| `POST /attempts` | student | SubmitEnvelope | exists (`src/modules/labs/interface/labs.controller.ts:76-252`), contract v1 |
-| `POST /simulate/:labId` | teacher, student | Preview. Accepts optional `labReleaseId` | exists (`labs.controller.ts:60-75`) |
-| `POST /admin/lab-releases` | content admin | Create DRAFT from components | new |
-| `POST /admin/lab-releases/:id/validate` | content admin | Run fixtures, schema, bindings, budget checks | new |
-| `POST /lab-releases/:id/receipts` | reviewer role | Sign receipt on digest | new |
-| `POST /admin/lab-releases/:id/activate` | release manager | APPROVED → ACTIVE, sets Lab public flags (audited) | new |
-| `POST /admin/lab-releases/:id/quarantine` | admin | Block launches | new |
-| `GET /admin/attempts/:id/reproduce` | admin | Replay by `labReleaseId` + `execution` | exists (`src/modules/labs/interface/admin-labs.controller.ts:191-217`), rework |
-| `POST /classes/:classId/resources` kind `LAB` | owner teacher | Class Lab create/revise/publish/archive | exists for other kinds (`class-resources.service.ts:48-108`), add kind |
-| `POST /classes/:classId/assignments` contentType `class_lab` | owner teacher | Scored assignment | exists for lesson/lab/test (`assignments.service.ts:35`), add type |
-
-## Backfill / migration plan
-
-1. Add columns and tables (no data change). Old code paths keep working.
-2. For each Lab, when its first LabRelease is activated, new attempts carry `labReleaseId`/`context`. No backfill of old attempts: they stay `legacy_unverified`.
-3. Extract the nested `_execution` snapshot written by the unmerged fl branch (`brownfield.md` E-03), if merged, into `Attempt.execution` by a one-off copy. Keep the JSON as written.
-4. Retire the legacy-client compatibility window after FE contract v1 is deployed everywhere (date decided by PO).
+ClassResource LAB, class assignment version snapshots and new review-receipt persistence are future proposed changes. No teacher model authoring, public flag change, Lesson mutation, schema migration or DB write happens in Define. Run and assignment retention/revocation rules are normative in contract-v1.md and class-lab-track.md.

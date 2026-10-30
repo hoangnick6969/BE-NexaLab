@@ -1,0 +1,30 @@
+# Single atomic ADMIN publish operation. Implementation only; deploy requires approval.
+# Existing Circuit v2 snapshot and digest are unchanged. No separate signoff call.
+# The authenticated ADMIN identity and server timestamps are recorded automatically.
+@baseUrl = http://127.0.0.1:4000/api
+@adminAccessToken = REPLACE_WITH_YOUR_ADMIN_ACCESS_TOKEN
+
+POST {{baseUrl}}/admin/labs/circuit/releases/cmvtsos7w0004lwy49olx979h/publish
+Authorization: Bearer {{adminAccessToken}}
+Content-Type: application/json
+
+{
+  "releaseDigest": "5c7503494b477b7e49f3ebbfc611c7934743f396ee16f477fb949a1a6dc719cd",
+  "reason": "Publish Circuit Bulb B22 for NexaLab MVP with the following source, scientific, safety and rights declarations.",
+  "evidence": {
+    "curriculumMapping": "B22, KHTN8-L22: supporting CLOSED/OPEN prediction, observation and explanation only; no assembly, wiring or drawing competency claim.",
+    "sourceReferences": [
+      "Lesson pack-structured-38f03d31878e58fc0d8a31b8c8aa9fab4af866f7-v1; content pack digest 47ff7ffca8749f9cd7970ff177d6c6b2f306481ca74e9ea4ad320db1c6c21af3",
+      "https://boiduonghanoi.edu.vn/pluginfile.php/45/mod_folder/content/0/11-CT-Khoa-hoc-tu-nhien.pdf",
+      "NexaLab CircuitBulbActivity.tsx and CircuitBulbActivity.css: instructional text and inline SVG; packages/sim/index.ts: circuitBulb"
+    ],
+    "scientificGoldenCases": "Registered circuit-bulb@1.0.0: CLOSED produces ON; OPEN produces OFF. Publish revalidates scientific golden cases and pinned tuple compatibility.",
+    "rubric": "circuit-bulb-checkpoints@1.0.0: CLOSED prediction, OPEN prediction and explanation A, maximum 3 and pass 3. Does not assess wiring skills.",
+    "safetyAssessment": "Virtual fixed-topology ideal simulation only; no claim about real circuit or household mains safety. Physical experiments require teacher supervision.",
+    "rightsAssessment": "The bulb instructional text and circuit SVG are implemented in NexaLab repository source; this inspection is not an independent copyright ownership attestation. Lucide icons are third-party ISC work with notice distributed at /third-party-notices/lucide.txt. SGK and programme materials are cited for educational alignment only; no textbook pages, extracted paragraphs or artwork are imported by the bulb component. Attribution and public availability are not copyright permission; no permission to reproduce protected textbook material is asserted."
+  }
+}
+
+# Expected success: HTTP 201, status ACTIVE, same id and digest.
+# The server records OWNER_SIGNOFF and activation in one transaction; failure rolls back both.
+# This operation has NOT been sent to shared Supabase during implementation.

@@ -1,3 +1,5 @@
+> Historical P3.1 source snapshot. The old LED-specific first-MVP, automatic verdict and no-migration claims below do not govern the current bulb pilot. Current launch pinning requires the additive LabRun described in the master data-model-and-api.md; current tests and DB state must be rechecked in the target environment.
+
 # Existing Capability Reuse and Proven Gaps
 
 ## Current evidence snapshot

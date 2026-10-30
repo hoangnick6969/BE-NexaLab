@@ -44,6 +44,7 @@ async function submitWithDifferentActivePack() {
       challengeParams: { "challenge-1": { maxCurrentMa: 5, minLitLeds: 1 } },
     }) },
     simulationPackVersion: { findFirst: vi.fn().mockResolvedValue(activePack) },
+    labPackRevocation: { findUnique: vi.fn().mockResolvedValue(null) },
     attempt: {
       create: vi.fn().mockImplementation(async ({ data }: any) => ({ id: "attempt-1", ...data })),
       count: vi.fn().mockResolvedValue(1),

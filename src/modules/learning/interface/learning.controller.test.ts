@@ -19,6 +19,32 @@ describe("LearningController assignment context", () => {
       .rejects.toMatchObject({ response: { code: "INVALID_ASSIGNMENT_CONTEXT" } });
     expect(access.studentPathway).not.toHaveBeenCalled();
   });
+
+  it("returns the canonical challenge needed to launch an assigned LabRun", async () => {
+    const lab = {
+      id: "circuit", status: "published", title: "Mạch điện", grade: 8, topic: "Điện",
+      learningObjective: "Lắp mạch", content: "", subject: { id: "science", name: "KHTN" },
+      challenges: [{ id: "circuit_001" }],
+    };
+    const db = {
+      assignment: { findFirst: vi.fn().mockResolvedValue({
+        id: "assignment-lab", title: "Lab được giao", contentType: "lab", contentId: "circuit",
+        dueDate: null, classroom: { id: "class-1", name: "8A", grade: 8 },
+      }) },
+      lab: { findUnique: vi.fn().mockResolvedValue(lab) },
+    };
+    const result = await new LearningController(db as any, {} as any)
+      .assignment("assignment-lab", { user: { sub: "student-1" } });
+
+    expect(result.content).toMatchObject({ id: "circuit", challengeId: "circuit_001" });
+    expect(db.lab.findUnique).toHaveBeenCalledWith({
+      where: { id: "circuit" },
+      include: {
+        subject: true,
+        challenges: { where: { NOT: { id: { contains: "_v-" } } }, orderBy: { id: "asc" }, take: 1 },
+      },
+    });
+  });
 });
 
 describe("LearningController Open Curriculum basic exercises", () => {

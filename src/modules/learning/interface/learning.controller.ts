@@ -39,7 +39,7 @@ export class LearningController {
     const assignmentId = parseAssignmentIdQuery(rawQuery);
     return this.access.studentPathway(id, req.user.sub, this.db, assignmentId);
   }
-  @Roles("STUDENT") @Get("open-curriculum/lessons/:id") async openCurriculumLesson(@Param("id") id: string, @Req() req: any) {
+  @Roles("STUDENT", "TEACHER", "ADMIN") @Get("open-curriculum/lessons/:id") async openCurriculumLesson(@Param("id") id: string, @Req() req: any) {
     const lesson = await this.db.lesson.findFirst({
       where: { id, status: "published", scope: "SHARED_LIBRARY", synthetic: false, packVersion: { status: "released", synthetic: false } },
       include: {
@@ -577,7 +577,17 @@ export class LearningController {
       ? preloadedContent ?? null
       : a.contentType === "lesson"
         ? await this.db.lesson.findUnique({ where: { id: a.contentId }, include: { subject: true } })
-        : await this.db.lab.findUnique({ where: { id: a.contentId }, include: { subject: true } });
+        : await this.db.lab.findUnique({
+            where: { id: a.contentId },
+            include: {
+              subject: true,
+              challenges: {
+                where: { NOT: { id: { contains: "_v-" } } },
+                orderBy: { id: "asc" },
+                take: 1,
+              },
+            },
+          });
     if (!content || !["published", "archived"].includes(content.status)) return { state: "UNAVAILABLE" as const, content: null };
     if (content.status === "published") return { state: "AVAILABLE" as const, content };
     const started =
@@ -714,6 +724,9 @@ export class LearningController {
         topic: content.topic,
         learningObjective: content.learningObjective,
         prerequisites: "prerequisites" in content ? content.prerequisites : "",
+        ...(a.contentType === "lab"
+          ? { challengeId: (a.labExecution as any)?.selectedChallengeId ?? Object.keys((a.labExecution as any)?.effectiveParams ?? {})[0] ?? content.challenges?.[0]?.id ?? null }
+          : {}),
         ...(a.contentType !== "lesson" && "content" in content
           ? { content: content.content }
           : {}),

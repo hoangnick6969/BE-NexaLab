@@ -5,6 +5,52 @@
 - No Lab here is approved, scheduled or released.
 - This document replaces neither the P3.1 candidate catalog nor its LED decision. It extends that catalog to the whole KHTN 8–9 register, following `pipeline.md` stages 1–3.
 
+## Portfolio v1 — provisional disposition
+
+This table is the current triage view over the 30 discovery IDs below. It proposes 20 candidate slots for prioritisation, **not 20 approved or fixed Lab identities**. SHARE keeps identities separate unless a later explicitly reviewed MERGE says otherwise. SPLIT may increase the number of identities. No candidate has an approved Outcome or scientific model by virtue of this table. The legacy scores, waves, P/S/N and coverage numbers below are historical discovery estimates, not verified educational coverage, staffing commitments or release evidence. P3.2 and the first Circuit pilot do not wait for this portfolio to be complete.
+
+The P3.5 Chemistry pH implementation is a `TECHNICAL_FIXTURE_ONLY` used for runtime compatibility regression checks. It does not add a portfolio identity or count toward any candidate total or curriculum coverage. The Chemistry proposals below were independently derived as unapproved discovery candidates; they do not inherit textbook mapping, review, model validation or release evidence from the fixture.
+
+Decision meanings: KEEP = distinct proposed identity; SHARE = retain identity but propose reuse at the named layer; MERGE = combine identities only with demonstrated shared learning scope, model and workspace plus explicit mapping; SPLIT = boundaries too broad, produce separate scoped proposals; DEFER = insufficient evidence, tractability, rights or reviewer capacity; NO LAB = current candidate is better represented as another learning resource (reviewable decision, not deletion). Sharing only equipment, an engine library or a renderer never implies identity merging.
+
+| Discovery ID | Decision | Proposed v1 slot | Reason and exact reuse boundary |
+|---|---|---:|---|
+| FL-01 | SHARE | 1 | Circuit family: K8 bulb first; K9 and LED are separate unapproved activities/models or versions as needed; share host and topology concepts, not automatic bindings |
+| FL-02 | DEFER | — | Qualitative charging model and instructional gain need stronger evidence |
+| FL-03 | SHARE | 2 | Density Lab: share fluid workspace/widgets with FL-04/05; retain distinct model/activity/identity |
+| FL-04 | SHARE | 3 | Pressure Lab: share fluid workspace/widgets; preserve distinct model/activity and inspect B15 source gap |
+| FL-05 | SHARE | 4 | Buoyancy Lab: share fluid workspace/widgets; may consume reviewed density data, distinct model/activity |
+| FL-06 | KEEP | 5 | Lever equilibrium has a bounded interactive objective |
+| FL-07 | SHARE | 6 | Calorimetry: share graph/measurement widgets with FL-08, not scientific model or identity |
+| FL-08 | SHARE | 7 | Heat transfer: shared graph/measurement widgets with FL-07; review distinct modes |
+| FL-09 | DEFER | — | Expansion has narrower coverage; review value after early thermal Labs |
+| FL-10 | SPLIT | 8 | Scope mol/stoichiometry versus equation/yield activities before identity/model count is fixed; chemistry code is only reuse evidence |
+| FL-11 | KEEP | 9 | Solution/concentration work has distinct experimental activity |
+| FL-12 | KEEP | 10 | Reaction-rate model requires reviewed assumptions and fixtures |
+| FL-13 | SHARE | 11 | Indicator/acid-base shares only reviewed bench components with other chemistry; separate model/rubric from FL-10 |
+| FL-14 | SPLIT | 12 | Broad reaction family needs narrower modes and curated reaction data before model/identity decisions |
+| FL-15 | KEEP | 13 | Safety scenarios need a separate safety review and evidence rubric |
+| FL-16 | NO LAB | — | Current eye/anatomy labelling is provisionally a Lesson resource; reconsider a Lab only if interaction yields distinct learning evidence |
+| FL-17 | DEFER | — | Circulation/respiration model tractability and health framing unresolved |
+| FL-18 | DEFER | — | Nutrition table rights, child-facing framing and reviewer need unresolved |
+| FL-19 | DEFER | — | Physiological feedback assumptions and tractability unresolved |
+| FL-20 | KEEP | 14 | Ecology/tolerance activity proposed; review model assumptions |
+| FL-21 | KEEP | 15 | Food web has distinct dependency interactions; share diagrams with FL-20 only if useful |
+| FL-22 | DEFER | — | Climate model tractability and non-misleading abstraction need review |
+| FL-23 | SPLIT | 16 | Optics combines refraction, prism and lenses; define bounded modes/models before final identity count; K9 provenance conditional |
+| FL-24 | KEEP | 17 | Mechanical energy candidate is bounded; K9 provenance conditional |
+| FL-25 | KEEP | 18 | Electromagnetic induction candidate; K9 provenance and qualitative model require review |
+| FL-26 | KEEP | 19 | Genetics cross activity: review independent/linkage scope and K9 provenance |
+| FL-27 | KEEP | 20 | Gene-to-protein candidate: review model data and K9 provenance |
+| FL-28 | DEFER | — | Cell division learning interaction and evidence require review |
+| FL-29 | DEFER | — | Selection dynamics model tractability and assumptions unresolved |
+| FL-30 | DEFER | — | Molecular/polymer scope, 2D/3D value and reviewed valence data need definition |
+
+No MERGE is asserted yet: the current source does not prove a shared model, workspace and learning scope for a safe identity merge. The decision remains available after review. The 20-slot view includes conditional KHTN9 exploration only; it never authorizes binding or release. Reviewers may change any disposition, keep fewer or more, or reorder work. Preserve lineage from each original FL ID to any later split/merge and give each eventual model and activity an independent version.
+
+## Historical discovery data
+
+The remainder is retained for provenance. Its W1 LED pilot and phase references are superseded by the bulb blueprint and canonical lab-pipeline-phase-plan.md. Its outcome statements are truncated, may contain OCR errors and do not themselves prove virtual assessment of real practical skills.
 ## 1. Input actually used
 
 Read-only query on 2026-10-28 against the database configured in BE `.env` (development):
@@ -52,9 +98,9 @@ For each outcome (157 + 102):
    | K | sensitive/child-safety topic |
 
 2. Group P/S outcomes by **one bounded scientific model** (rule from `SPEC.md`: Lab = model, not Lesson).
-3. Score each candidate on the rubric from `foundational-lab-track.md` §3.
+3. Score each candidate on the historical discovery rubric (interaction I, tractability T, coverage C, reuse R, leverage L, modality M; 2D = 5). Note: `foundational-lab-track.md` establishes the principle in "Reuse and QA" that proposed budgets must be measured on target devices rather than asserted, while formalization of the quantitative rubric and budget table is a pending documentation task in P3.2.
    - Gates: interaction value I ≥ 3, tractability T ≥ 3, virtual-only safety framing possible.
-   - Other dimensions: outcome coverage C, reuse R, implementation leverage L, modality cost M (2D = 5).
+   - Other dimensions: outcome coverage C, reuse R, implementation leverage L, modality cost M.
 4. Assign a wave, respecting the cap of ≤ 2 concurrent Labs after the P3.5 gate.
 
 The full per-outcome table is the **Appendix**. It was generated from the DB export by a script, so the counts below are exact for this mapping.
@@ -149,7 +195,124 @@ Rationale:
 - **3D with a 2D fallback** for FL-16 (organ structures), FL-30 (molecular geometry) and FL-17 (heart chambers, backlog).
 - **3D optional** for FL-25 and FL-28. Adopt it only after a 2D version passes QA.
 
-Budgets as in `foundational-lab-track.md` §6.
+Budgets as referenced in `foundational-lab-track.md` ("Reuse and QA": proposed budgets must be measured on agreed target devices; formal numeric budget table pending P3.2).
+
+## 6A. Presentation tiers & shared kits (PROPOSED)
+
+> **PROPOSED / UNAPPROVED:** Mục này là đề xuất kỹ thuật bổ sung, không thay thế §6 hiện tại và không làm thay đổi các mã định danh (Lineage ID), mô hình khoa học hay quyết định wave/cổng (I ≥ 3, T ≥ 3) của Catalog. Các outcome viện dẫn vẫn là đề xuất chưa duyệt (`PROPOSED_UNAPPROVED`).
+
+### 6A.1. Ba tầng hiển thị (Presentation tiers — Đích đến)
+
+* **Tier A — Scene-first:** Không gian 3 chiều là trung tâm thể hiện hiện tượng (từ trường trong không gian FL-25, liên kết phân tử FL-30, cấu trúc DNA FL-27).
+* **Tier B — Bench:** Bàn thí nghiệm mô phỏng dụng cụ và thao tác thực tế ảo, kết hợp bảng hiển thị số đo/đồ thị.
+* **Tier C — Light scene + HUD:** Khung cảnh 3D tối giản làm nền bối cảnh; tương tác trọng tâm diễn ra trên HUD bảng số liệu, ma trận hoặc đồ thị.
+
+### 6A.2. Phân định Dual-View: Vẽ (Evidence) vs Đọc (Hiển thị)
+
+Sơ đồ 2D trong mô phỏng cần được phân định rõ theo yêu cầu tương tác của outcome đề xuất:
+* **Vẽ (chế độ nhập để sinh learning evidence):** Áp dụng cho các outcome đề xuất yêu cầu học sinh tạo ra sơ đồ/tia sáng: `B22-O01` (vẽ sơ đồ mạch điện), `B25-O02` (ký hiệu ampe kế/vôn kế), `9/anh-sang/4` (vẽ đường truyền qua lăng kính), `9/anh-sang/7, 10` (vẽ ảnh qua thấu kính). Học sinh thao tác đặt ký hiệu, nối mạch hoặc dựng tia; server đối soát kiểm tra tính tương đương (netlist/hình học) để chấm điểm. Sơ đồ tự sinh từ 3D chỉ dùng làm phản hồi sau nộp bài. Việc virtual lab có chấm kỹ năng vẽ hay không là quyết định cần phê duyệt (CAT-8).
+* **Đọc (hiển thị sơ đồ cho sẵn):** Áp dụng cho các outcome yêu cầu quan sát/dựa vào sơ đồ: `9/tu-gene-den-protein/4, 5, 7`. Sơ đồ 2D được hiển thị đồng bộ từ trạng thái mô phỏng (`SimState`), học sinh không phải vẽ lại.
+* **Tuỳ chọn:** Các lab còn lại có thể cung cấp sơ đồ hoặc đồ thị bổ trợ ở chế độ xem song song nếu hỗ trợ hiểu bài.
+
+### 6A.3. Gom 30 ứng viên theo Shared Kits, Tiers & Modality phát hành đầu
+
+| ID | Lab | Decision & Wave (Catalog) | Kit đề xuất | Presentation Tier (đích đến) | Modality phát hành đầu | Dual-View | Minh hoạ ý tưởng (ngoài scope) |
+|---|---|---|---|---|---|---|---|
+| FL-01 | Mạch điện một chiều | SHARE / W1 | K1 Bàn điện | Tier B (Bench) | 2D (pilot Circuit bulb) | **Vẽ (evidence)** (`B22-O01`, `B25-O02`) | Khung bàn nguồn, khoá K, ampe kế, vôn kế, bóng đèn; pilot P3.4 |
+| FL-02 | Nhiễm điện do cọ xát | DEFER / W4 | K1 Bàn điện | Tier B (Bench) | 2D | Tuỳ chọn | Thước nhựa, vải dạ, điện nghiệm tĩnh điện |
+| FL-03 | Khối lượng riêng | SHARE / W2 | K3 Bàn chất lỏng | Tier B (Bench) | 2D (`bench-core` 2D) | Tuỳ chọn | Cân điện tử, bình tràn, ống đong; chia sẻ lõi kính với K2 |
+| FL-04 | Áp suất chất lỏng, khí quyển | SHARE / W2 | K3 Bàn chất lỏng | Tier B (Bench) | 2D (`bench-core` 2D) | Tuỳ chọn | Cột áp kế, màng cao su, giác hút; cần bù lỗ hổng B15 |
+| FL-05 | Lực đẩy Archimedes | SHARE / W2 | K3 Bàn chất lỏng | Tier B (Bench) | 2D (`bench-core` 2D) | Tuỳ chọn | Lực kế, quả nặng chìm/nổi trong chất lỏng |
+| FL-06 | Moment lực và đòn bẩy | KEEP / W3 | K5 Cơ học | Tier B (Bench) | 2D | Tuỳ chọn | Thanh đòn chia vạch trên trục quay, các quả nặng móc treo |
+| FL-07 | Năng lượng nhiệt (joulemeter) | SHARE / W3 | K4 Bàn nhiệt | Tier B (Bench) | 2D | Tuỳ chọn (HUD đồ thị) | Nhiệt lượng kế, que đun, joulemeter, nhiệt kế số |
+| FL-08 | Sự truyền nhiệt | SHARE / W4 | K4 Bàn nhiệt | Tier B (Bench) | 2D | Tuỳ chọn | Giá đỡ các thanh dẫn nhiệt, nến sáp rụng |
+| FL-09 | Sự nở vì nhiệt | DEFER / W4 | K4 Bàn nhiệt | Tier B (Bench) | 2D | Tuỳ chọn | Nguồn nhiệt, thanh kim loại nở dài, băng kép uốn cong |
+| FL-10 | Mol & tính theo PTHH | SPLIT / W2 | K2 Bàn hoá ướt | Tier B (Bench + HUD) | 2D | Tuỳ chọn (bảng stoichiometry) | Cân đĩa kín phản ứng, bình tam giác, ống đong thu khí |
+| FL-11 | Dung dịch và nồng độ | KEEP / W3 | K2 Bàn hoá ướt | Tier B (Bench) | 2D | Tuỳ chọn (đồ thị độ tan) | Cốc mỏ, đũa thuỷ tinh, thìa hoá chất màu, bình định mức |
+| FL-12 | Tốc độ phản ứng & xúc tác | KEEP / W3 | K2 Bàn hoá ướt | Tier B (Bench) | 2D | Tuỳ chọn (đồ thị bọt khí) | Ống nghiệm sinh khí, bình thêm xúc tác, bình cách thuỷ |
+| FL-13 | Acid – base, chỉ thị & pH | SHARE / W2 | K2 Bàn hoá ướt | Tier B (Bench) | 2D | Tuỳ chọn (bảng thang pH) | Khay ống nghiệm axit/bazo, giấy chỉ thị, bút đo pH |
+| FL-14 | Bàn phản ứng vô cơ & kim loại | SPLIT / W3 | K2 Bàn hoá ướt | Tier B (Bench) | 2D | Tuỳ chọn (bảng tính tan) | Dãy ống nghiệm phản ứng trao đổi, dãy điện hoá kim loại |
+| FL-15 | An toàn phòng thí nghiệm | KEEP / W4 | K2 Bàn hoá ướt | Tier B (Bench) | 2D (First-person tuỳ chọn) | Tuỳ chọn (biển báo) | Bàn kịch bản quy tắc an toàn, chọn dụng cụ/thiết bị bảo hộ |
+| FL-16 | Cấu tạo mắt & cơ thể người | NO LAB / W4 | Explorer đề xuất | Tier A (Scene-first) | 3D xem (không tạo Lab) | Tuỳ chọn (đường truyền sáng) | Tài nguyên xem/bóc tách nhãn cầu 3D, không chấm điểm (*Lưu ý:* mâu thuẫn giữa Table 1 NO LAB vs §5 xếp W4 là điểm chờ reviewer chuẩn hoá) |
+| FL-17 | Tuần hoàn và hô hấp | DEFER / BL | Explorer đề xuất | Tier A (Scene-first) | 3D xem (không tạo Lab) | Tuỳ chọn (sơ đồ vòng tuần hoàn) | Hoạt ảnh 3D dòng chảy qua tim và phổi; không chẩn đoán bệnh |
+| FL-18 | Xây dựng khẩu phần ăn | DEFER / W4 | K8 Cảnh nhẹ + HUD | Tier C (Light scene + HUD) | 2D (HUD) | Tuỳ chọn (tháp dinh dưỡng) | HUD chọn món ăn, tính tổng calo và dưỡng chất |
+| FL-19 | Điều hoà thân nhiệt | DEFER / BL | K8 Cảnh nhẹ + HUD | Tier C (Light scene + HUD) | 2D (HUD) | Tuỳ chọn (sơ đồ phản hồi) | Minh hoạ phản hồi thân nhiệt định tính |
+| FL-20 | Nhân tố & giới hạn sinh thái | KEEP / W4 | K8 Cảnh nhẹ + HUD | Tier C (Light scene + HUD) | 2D (HUD) | Tuỳ chọn (đồ thị giới hạn) | Sa bàn sinh thái bối cảnh nhẹ; thanh trượt nhân tố môi trường |
+| FL-21 | Lưới thức ăn & cân bằng | KEEP / W4 | K8 Cảnh nhẹ + HUD | Tier C (Light scene + HUD) | 2D (HUD) | Tuỳ chọn (sơ đồ lưới thức ăn) | Sa bàn sinh thái bối cảnh nhẹ; nối dòng năng lượng |
+| FL-22 | Hiệu ứng nhà kính & Carbon | DEFER / BL | K8 Cảnh nhẹ + HUD | Tier C (Light scene + HUD) | 2D (HUD) | Tuỳ chọn (sơ đồ chu trình) | Sơ đồ bức xạ nhiệt và chu trình carbon |
+| FL-23 | Quang học K9 | SPLIT / W3 (K9 cond.) | K6 Bàn quang học | Tier B (Bench) | 2D-first | **Vẽ (evidence)** (`9/anh-sang/4, 7, 10`) | Bàn quang học tối, đèn chiếu, lăng kính, thấu kính, màn hứng |
+| FL-24 | Cơ năng, công, công suất K9 | KEEP / W3 (K9 cond.) | K5 Cơ học | Tier B (Bench + HUD) | 2D-first | Tuỳ chọn (thanh năng lượng) | Máng trượt, con lắc, cảm biến cổng quang điện |
+| FL-25 | Cảm ứng điện từ & xoay chiều | KEEP / W4 (K9 cond.) | K1 Bàn điện | Tier A (Scene-first) | 2D-first (3D optional sau QA) | Tuỳ chọn (đồ thị AC) | Nam châm và cuộn dây di chuyển trong từ trường, đèn LED |
+| FL-26 | Lai Mendel & NST K9 | KEEP / W3 (K9 cond.) | K8 Cảnh nhẹ + HUD | Tier C (Light scene + HUD) | 2D-first | Tuỳ chọn (ma trận Punnett) | Bối cảnh vườn thực nghiệm; HUD ma trận tổ hợp alen |
+| FL-27 | Từ gene đến protein K9 | KEEP / W4 (K9 cond.) | K7 Procedural phân tử/gen | Tier A (Scene-first) | 2D-first | **Đọc (hiển thị)** (`9/tu-gene-den-protein/4, 5, 7`) | Mô hình DNA sinh bằng code; tháo xoắn; ribosome dịch mã |
+| FL-28 | NST & phân bào K9 | DEFER / W4 (K9 cond.) | K7 Procedural phân tử/gen | Tier A (Scene-first) | 2D-first (3D optional sau QA) | Tuỳ chọn (sơ đồ phân bào) | Các kỳ nguyên phân/giảm phân; 2D trước, 3D sau khi đạt QA |
+| FL-29 | Chọn lọc tự nhiên K9 | DEFER / BL (K9 cond.) | K8 Cảnh nhẹ + HUD | Tier C (Light scene + HUD) | 2D-first (BL do T=2) | Tuỳ chọn (đồ thị tần số alen) | Mô phỏng quần thể có lựa chọn quy luật; BL do T=2 |
+| FL-30 | Phân tử hữu cơ & polymer K9 | DEFER / W4 (K9 cond.) | K7 Procedural phân tử/gen | Tier A (Scene-first) | 2D-first (3D fallback theo catalog) | Tuỳ chọn (CTCT 2D) | Ghép nối quả cầu hoá trị alkane/alkene; polymer mạch dài |
+
+*Ghi chú:* Lò cao không có FL ID trong catalog và không có outcome P/S; đề xuất xem xét ở dạng Explorer candidate ngoài danh mục Lab chấm điểm.
+
+### 6A.4. Cân nhắc kỹ thuật nền tảng và ranh giới mô hình – renderer
+
+* **Ranh giới mô hình khoa học và renderer:** Mô hình khoa học độc lập hoàn toàn với lớp hiển thị; mô hình chỉ xuất ra trạng thái khai báo (`declarative scene state`: vật thể, vị trí tương đối, mức chất lỏng, màu sắc, sự kiện bọt khí/kết tủa, chỉ số đồng hồ đo). Renderer (dù là 2D hay 3D) chỉ đóng vai trò vẽ lại trạng thái đó. Bất biến kiến trúc: renderer không được phép làm thay đổi kết quả khoa học, dữ liệu checkpoint hay điểm số rubric; server luôn tính toán lại toàn bộ.
+* **Tái cấu trúc bộ kit W2 (`bench-core` thay vì `fluid-bench-2d`):** Đổi tên kit dùng chung thành `bench-core` (quản lý trạng thái cảnh, khay mẫu, dụng cụ, widget đo lường) đi kèm hai renderer độc lập: `renderer-2d` và `renderer-3d`. W2 triển khai bằng `renderer-2d` để vượt cổng P3.5 an toàn; `renderer-3d` được tổ chức như một platform track riêng song song ngoài đường găng, không chiếm slot Lab trong giới hạn ≤ 2 Labs đồng thời. Quyết định mở rộng sang 3D cho K2/K3 sẽ dựa trên spike đo đạc thực tế trên thiết bị mục tiêu tại W3 theo nguyên tắc tại `foundational-lab-track.md` (mục Reuse and QA).
+* **Chiến lược tạo hình Kit K7 (Procedural geometry):** Khuyến nghị sinh hình học bằng code (Three.js InstancedMesh, SplineCurve cho chuỗi xoắn DNA, liên kết phân tử đơn giản) thay vì tải mesh GLB lớn để tối ưu hoá thời gian tải trang; các đại phân tử phức tạp (ribosome, enzyme) có thể kết hợp mesh tối ưu hoá khi có kết quả đo hiệu năng thực tế.
+
+### 6A.5. Quy hoạch Shared 3D Physics Lab Room (Họ Điện - Từ) & Bảo toàn tuyệt đối Class Lab
+
+* **K1 — Bàn Điện–Từ (kit dùng chung theo danh mục, chưa đồng nghĩa đã implement):**
+  1. `FL-01`: **Mạch điện một chiều** (pilot bóng đèn; các mode đo I/U, Ohm, nối tiếp/song song cần activity/model riêng khi được duyệt).
+  2. `FL-02`: **Nhiễm điện do cọ xát & Tĩnh điện** (điện nghiệm, thước tích điện).
+  3. `FL-25`: **Cảm ứng điện từ & Dòng xoay chiều** (nam châm, cuộn dây, cảm ứng và các phép đo tương ứng).
+  Cả ba có thể dùng chung vỏ phòng, bàn và lighting; apparatus, interactions và model vẫn riêng. Chỉ Circuit bulb và circuit topology hiện có renderer frontend; FL-02/25 chưa được triển khai.
+* **Không gộp K4 vào K1:** `FL-07` (Năng lượng nhiệt/Joulemeter), `FL-08` (Truyền nhiệt), `FL-09` (Nở vì nhiệt) thuộc **K4 Bàn nhiệt** theo §6A.3, không thuộc kit Điện–Từ. Có thể tái sử dụng hạ tầng phòng khi hợp lý, nhưng cần khay nhiệt và renderer/interaction theo từng Lab.
+* **Tái dùng vỏ phòng có điều kiện:** `FL-06` (K5 Cơ học) và `FL-23` (K6 Quang học) có thể tái dùng geometry phòng/bàn sau review; không vì thế trở thành thành viên K1 hoặc được tính là 3D đã có.
+
+* **Bảo toàn tuyệt đối Logic & Hợp đồng Class Lab (Class Lab Invariance):**
+  - **Không thay đổi tuple thực thi:** Mọi assignment được giao trong Class Lab tiếp tục gắn với tuple bất biến: `modelRef`, `engineVersion`, `packVersionId`, `configVersionId`, `activityVersionId`, `activityDigest`, `rubricRef`.
+  - **Mô hình tính toán độc lập:** Hàm mô phỏng (`packages/sim`) và engine đánh giá chấm điểm server (`lab-run.ts`, `evaluateCircuitBulbActivity`) giữ nguyên $100\%$ logic, chỉ xử lý dữ liệu thuần tuý (`checkpoint evidence` & `answers`).
+  - **Renderer 2D/3D là View hoán đổi được (Swappable View):** Renderer nhận cùng state và phát cùng interaction events qua hợp đồng hiện có; không tự tính science/scoring. Khi cả hai view được xây và kiểm tra tương đương, học sinh có thể chọn 2D hoặc 3D, mặc định 3D cho Lab có 3D ổn định. Preference chỉ lưu cục bộ theo Lab, không đi vào attempt/assignment tuple; mode không làm thay đổi evidence payload hay kết quả chấm. Không hiện lựa chọn renderer chưa thực sự tồn tại.
+
+### 6A.6. Runtime frontend dùng chung và phạm vi đã có (2026-10-30)
+
+**Định hướng 8 Shared Kits + 1 Explorer:** Giữ cách phân nhóm K1–K8 ở §6A.3 làm kế hoạch tái sử dụng presentation. Explorer là tài nguyên xem/khám phá không sinh evidence, không tự động là Lab hay một trong 20 slot đề xuất. Bảng này vẫn là proposal: dùng chung phòng, mesh, dụng cụ, HUD hoặc renderer **không** gộp Lab identity, outcome, model khoa học, activity/rubric, quyền truy cập hay assignment. Portfolio vẫn là 30 discovery IDs/20 provisional slots cho tới khi reviewer quyết định; con số 8 kits không phải 8 Lab, 8 release, cũng không chứng minh phủ kín curriculum.
+
+**Tra cứu danh mục theo shared kit (proposal, đối chiếu §6A.3):**
+
+| Nhóm/kit | Lab IDs trong catalog | Phạm vi môn/chủ đề | Trạng thái pipeline và view |
+|---|---|---|---|
+| K1 Bàn Điện–Từ | FL-01, FL-02, FL-25 | Vật lý: mạch điện, tĩnh điện, cảm ứng điện từ | Chỉ FL-01 Circuit bulb/topology có renderer frontend; FL-02/25 chưa triển khai. Circuit bulb có 2D schematic + 3D; topology dùng lại React Flow 2D editor cũ + 3D. 3D mặc định; view preference cục bộ. |
+| K2 Bàn hoá ướt | FL-10–FL-15 | Hoá học: mol/PTHH, dung dịch, tốc độ phản ứng, acid–base, phản ứng vô cơ, an toàn | Kit quy hoạch; chưa có scene chemistry production. Chemistry pH fixture chỉ là `TECHNICAL_FIXTURE_ONLY`, không phải Lab đã phát hành. |
+| K3 Bàn chất lỏng | FL-03, FL-04, FL-05 | Vật lý: khối lượng riêng, áp suất, Archimedes | Kit quy hoạch; chưa có scene Lab production. Target: 2D trước, 3D bổ sung sau benchmark thiết bị. |
+| K4 Bàn nhiệt | FL-07, FL-08, FL-09 | Vật lý: năng lượng nhiệt, truyền nhiệt, nở vì nhiệt | Kit quy hoạch; chưa có scene Lab production. |
+| K5 Cơ học | FL-06, FL-24 | Vật lý: moment/đòn bẩy; cơ năng, công, công suất | Kit quy hoạch; chưa có scene Lab production. |
+| K6 Bàn quang học | FL-23 | Vật lý: quang học K9 | Một candidate SPLIT; cần chốt modes/model. 2D evidence drawing là yêu cầu riêng, không thể thay bằng chỉ đổi camera. |
+| K7 Phân tử/gen | FL-27, FL-28, FL-30 | Sinh học: gene–protein, phân bào; Hoá học: phân tử hữu cơ/polymer | Kit quy hoạch; chưa có scene production. FL-28/30 deferred theo catalog. |
+| K8 Cảnh nhẹ + HUD | FL-18–FL-22, FL-26, FL-29 | Sinh học/sinh thái, dinh dưỡng, khí hậu, di truyền | Kit quy hoạch; chưa có scene production. Phần lớn là HUD/2D-first; 3D chỉ thêm khi cải thiện học tập và qua QA. |
+| Explorer (không phải kit/Lab) | FL-16, FL-17 (đề xuất) | Sinh học/cơ thể người | Nội dung xem/khám phá, không tạo evidence và không phải release Lab; giữ đúng trạng thái NO LAB/DEFER trong catalog. |
+
+Các ID giữ nguyên decision/wave/provisional status ở bảng §6A.3 và bảng portfolio; bảng trên chỉ trả lời “dùng chung presentation kit nào”, không nâng status `DEFER`, `SPLIT`, `NO LAB` thành `SHARE`/`implemented`. Nếu một candidate chưa có state schema/model/activity đã review, mock-up 2D/3D cũng không được ghi là pipeline implementation.
+
+| Layer | Reuse boundary | Current evidence / next work |
+|---|---|---|
+| Shared FE directory map | Nhóm code theo runtime, pathway, discipline và kit để đặt shared environment gần các Labs dùng chung | `../../../../nexalab-fe/src/features/labs/README.md` ánh xạ cấu trúc code với đúng 20 provisional portfolio slots. Kit folders chưa có renderer chỉ chứa README/status, không giả lập implementation. |
+| K1 / shared physics room | Phòng, bàn, ánh sáng, camera và surface controls được dùng chung; mỗi model/activity cung cấp thiết bị và thao tác riêng | `physics/shared/PhysicsStage.tsx` + `LabRoomEnvironment` cấp scene chung cho Circuit bulb và topology. Cảnh hình học procedural; chưa phải runtime declarative tổng quát hay bằng chứng FL-02/06/07/23/25 đã implement. |
+| Pilot apparatus | Nguồn, dây, công tắc, bóng đèn và thiết bị circuit | `physics/electricity/CircuitBulb3DStage.tsx` hiển thị pilot bulb. `Circuit.tsx` chọn renderer topology; `Circuit2DEditor.tsx` khôi phục React Flow 2D component editor từ pre-Lab-Space `Circuit.tsx`; state/evidence vẫn theo contract caller và server tiếp tục chấm. Đây chưa phải Lab successor hay release mới được duyệt. |
+| Lab Space shell | Viewport, thoát, renderer fallback, panel câu hỏi/kết quả dùng chung cho entry points | `shared/LabSpace.tsx` chạy cho standalone Lab và assigned lesson; `shared/LabRendererToggle.tsx` chọn view; `runtime/lab-run-host.ts` giữ launch/draft/submit contract. Không đổi model registry hoặc release policy. |
+| K2–K8 kits | Shared components/assets theo từng archetype; chỉ đổi apparatus/config khi learning interaction và model cho phép | Là kế hoạch. Chưa dựng Wet Chemistry, Fluid, Mechanics, Optics, Molecular, Ecology hoặc Explorer thành scene production. Prototype Chemistry vẫn `TECHNICAL_FIXTURE_ONLY`. |
+
+**Ranh giới K2:** Có thể đề xuất reuse các dụng cụ bench/pipet/ống nghiệm/đồ đo giữa FL-10–15; không coi một căn phòng hay bộ prop hiện thực hóa cả sáu Lab. FL-10 và FL-14 còn `SPLIT`; các models/reactions, state, safety framing, activity/rubric và candidate IDs cần được chốt riêng. Với hoạt động pH → tốc độ phản ứng, chỉ tái dùng room/asset catalog sau khi từng model được review; chất lỏng, bọt khí, màu chỉ là output presentation từ kết quả model có version.
+
+**Ranh giới K3:** FL-03/04/05 có thể chia sẻ bể, cân, ống đong và dụng cụ đo. Density, pressure và buoyancy giữ model, activity, parameters, rubric và outcome mapping riêng. Việc dùng chung kết quả density chỉ được phép nếu được khai báo/version hóa; renderer không tính công thức thay simulation server.
+
+**Low-end device, asset delivery và caching (yêu cầu cho P3.7 design/QA):**
+
+- Lazy-load scene/model theo Lab route; tải đúng kit và apparatus đang dùng. Cache asset bất biến theo version/digest, đặt kích thước và content type rõ, cho phép CDN/browser cache; manifest mới trỏ sang asset version mới thay vì thay file tại chỗ. Không cache attempt/evidence như asset công khai.
+- Ưu tiên procedural geometry/primitive hoặc mesh GLB ít node; dùng instancing cho vật thể lặp, texture KTX2 và Draco khi pipeline hỗ trợ, giới hạn texture/triangles theo thiết bị. Giải phóng GPU geometry/material/texture khi rời Lab hoặc thay kit.
+- Hạ DPR/quality, shadow map, postprocessing và particle count trên thiết bị yếu; giữ tương tác input và server evaluation hoạt động khi WebGL mất/lỗi. Không buộc GPU rời; Explorer có thể là scene xem nhẹ và không sinh evidence.
+- Đo lạnh/ấm: download bytes, thời gian đến tương tác, memory, frame pacing, context loss và thời gian khởi tạo trên Chromebook/Celeron, tablet và máy mục tiêu đã thống nhất. Ghi actual baseline và ngưỡng trước activation; không suy ra performance pass từ Playwright desktop, bundle size hay cache hit đơn lẻ.
+- Search/indexing: trang Lab có route/deep-link và metadata văn bản qua DOM để app/search nội bộ tìm được title/objective; không dựa vào label nằm trong canvas. Không index route private/Class Lab hoặc nội dung chưa phát hành vào public search/robots; đây là indexing nội dung, không phải index GPU/assets.
+
+**P3.6/P3.7 application:** P3.6 chỉ ghi nhận shell + Circuit 2D/3D frontend là presentation/compatibility progress; source được nhóm theo discipline/kit nhưng không khẳng định các folder đó đã có Lab renderer. Release vẫn cần exact digest, genuine OWNER_SIGNOFF, quyền truy cập và device QA như phase-plan. P3.7 xây từng Lab theo thứ tự 20 slot sau gate: scope model/activity trước, chọn kit reuse, thêm asset/thao tác cần thiết, kiểm tra đúng device, rồi review và release từng identity. Không triển khai đồng loạt 8 kits như điều kiện để khép phase và không mở song song quá cap roadmap.
 
 ## 7. Decisions needed from reviewers
 
@@ -162,6 +325,9 @@ Budgets as in `foundational-lab-track.md` §6.
 | CAT-5 | Science | Whether FL-23 uses the thin-lens formula or geometric construction only at KHTN 9 level |
 | CAT-6 | Product/safety | Confirm H/K outcomes stay out of simulations (B31–B40 health, B40 reproduction) |
 | CAT-7 | Technical | Split `chemistry@1.0.0` into `stoichiometry@…` and `acid-base@…` models before FL-10/FL-13 releases (relates to T-4) |
+| CAT-8 | Product/Curriculum | Dual-View cho kỹ năng vẽ: Thí nghiệm ảo có chấm điểm tương tác vẽ sơ đồ của học sinh (`B22-O01`, `B25-O02`, `9/anh-sang/4, 7, 10`) để sinh learning evidence trong `lab-contract/1` hay chỉ hiển thị sơ đồ 2D đồng bộ làm phản hồi quan sát? |
+| CAT-9 | Architecture/Product | Định danh Explorer: Có bổ sung phân loại tài nguyên học tập 3D không sinh evidence (như FL-16, FL-17 hoặc mô hình lò cao) vào mô hình dữ liệu Lesson không, hay giữ nguyên phạm vi Lab hiện tại? (Cần ADR nếu thay đổi schema). |
+| CAT-10 | Architecture/Platform | Phạm vi kit chất lỏng W2 và hạch toán cap ≤ 2 Labs: Giữ nguyên `fluid-bench-2d` hay đổi thành `bench-core` (2D trước, cắm 3D sau)? *(Proposed resolution: W2 ra mắt bằng renderer 2D trên `bench-core`; renderer-3d là platform track riêng, không chiếm slot Lab trong cap ≤ 2 và không nằm trong đường găng cổng P3.5. Lab chỉ tính vào cap khi đang trong pipeline review khoa học/chương trình. Quyết định mở rộng 3D cho K2/K3 để W3, dựa trên spike đo trên thiết bị mục tiêu).* |
 
 ## Appendix — per-outcome mapping
 

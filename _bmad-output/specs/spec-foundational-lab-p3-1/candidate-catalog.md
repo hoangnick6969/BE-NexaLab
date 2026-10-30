@@ -1,3 +1,5 @@
+> Historical discovery ranking: the LED recommendation below is superseded for the first pilot by the bulb activity in lab-definition.md. The master 30-candidate catalog and lab-pipeline-phase-plan.md govern current portfolio decisions; all mappings remain proposals.
+
 # Ranked Foundational Lab Candidate Catalog
 
 ## Scoring method

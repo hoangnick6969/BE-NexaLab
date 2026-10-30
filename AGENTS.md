@@ -27,8 +27,12 @@ Default dev values (set by whoever last ran `db:seed`):
 
 Seeded fixtures: `class-pilot-a`, `class-pilot-b`, `demo-class`, `lesson-circuit`, `lesson-eye`, `lesson-chemistry`, `pilot-a-lesson-assignment`.
 
-> [!IMPORTANT]
-> Để seed lên Supabase: đặt `APP_ENV=development`, `SEED_TARGET=<host>/<db>` (phải khớp `DIRECT_URL`), `sslmode=require` trong `DIRECT_URL`. Chạy `npm run db:seed`. Không dùng `SEED_RESET_FIXTURES=true` trên database production.
+## Isolated database safety
+
+- Never run tests, seeds, backfills, or Prisma schema/migration commands against shared Supabase or another remote database.
+- For automated tests, seeds, backfills, or schema/migration commands, set `NEXALAB_ISOLATED_DATABASE_URL` to an isolated loopback PostgreSQL database and set `DATABASE_URL` and `DIRECT_URL` to that same host, port, and database. Guarded npm scripts fail closed otherwise.
+- Use the guarded npm scripts (for example `npm test`, `npm run test:integration`, `npm run db:migrate`, `npm run db:seed`). Do not invoke raw `prisma migrate deploy`, seed, or backfill commands.
+- Pure read-only Supabase diagnostics must use SELECT-only queries and must never be combined with migration, seed, reset, or rollback operations.
 
 ## Known bugs — giao cho Dev A1 fix
 

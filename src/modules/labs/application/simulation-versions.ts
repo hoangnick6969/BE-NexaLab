@@ -56,6 +56,10 @@ export function packConfigurationErrors(
   }
   const template = pack.template as { ranges?: Record<string, { min: number; max: number }> } | null;
   const ranges = template?.ranges ?? {};
+  if (pack.modelRef === "circuit-bulb@1.0.0") {
+    if (params && Object.keys(params).length) errors.push("Mô hình bóng đèn không dùng tham số thử thách LED");
+    return errors;
+  }
   if (params) {
     errors.push(...challengeParamErrors(labId, params));
     for (const [name, value] of Object.entries(params)) {
@@ -89,14 +93,16 @@ export function evaluate(labId: string, labState: unknown, params: ChallengePara
 }
 
 /** Structural problems: unknown model, mismatched challenge, out-of-range or non-allowlisted parameter. */
-export function versionErrors(labId: string, baseChallengeIds: string[], input: VersionInput): string[] {
+export function versionErrors(labId: string, baseChallengeIds: string[], input: VersionInput, modelRef?: string | null): string[] {
   const spec = CHALLENGE_PARAMETERS[labId];
   if (!spec) return [`Mô hình "${labId}" không nằm trong danh sách cho phép`];
   const errors: string[] = [];
   const base = new Set(baseChallengeIds);
   for (const [challengeId, params] of Object.entries(input.challengeParams)) {
     if (!base.has(challengeId)) errors.push(`Thử thách "${challengeId}" không thuộc phòng thực hành này`);
-    else for (const error of challengeParamErrors(labId, params)) errors.push(`${challengeId}: ${error}`);
+    else if (modelRef === "circuit-bulb@1.0.0") {
+      if (Object.keys(params).length) errors.push(`${challengeId}: mô hình bóng đèn không dùng tham số thử thách LED`);
+    } else for (const error of challengeParamErrors(labId, params)) errors.push(`${challengeId}: ${error}`);
   }
   for (const [index, golden] of input.goldenCases.entries()) {
     if (!base.has(golden.challengeId))
@@ -114,7 +120,14 @@ export function goldenCaseResults(labId: string, input: VersionInput, modelRef?:
   return input.goldenCases.map((golden) => {
     let actual: string;
     try {
-      actual = evaluate(labId, golden.labState, input.challengeParams[golden.challengeId] ?? null, modelRef).verdict;
+      if (modelRef === "circuit-bulb@1.0.0") {
+        // Circuit bulb golden cases validate a well-formed observation state.
+        // They do not assess learning or treat OPEN as a student failure.
+        resolveModel(modelRef).simulate(golden.labState);
+        actual = "passed";
+      } else {
+        actual = evaluate(labId, golden.labState, input.challengeParams[golden.challengeId] ?? null, modelRef).verdict;
+      }
     } catch {
       actual = "invalid";
     }

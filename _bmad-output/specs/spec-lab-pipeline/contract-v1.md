@@ -1,199 +1,96 @@
-# Lab Platform Contract v1
+# Minimal Lab contract v1
 
-Version identifier: `lab-contract/1`. Every envelope below carries `contract: "lab-contract/1"`. A breaking change creates `lab-contract/2`. BE accepts both during an announced overlap.
+Identifier: lab-contract/1. This is a target contract, not a claim that current code implements it. Existing APIs remain compatible while an opt-in run-bound path is developed. Production authorization is separate.
 
-## Ownership split
+## Ownership and scientific independence
 
-| Platform owns (shared, changed only by the platform integrator) | Each Lab owns (its module) |
-|---|---|
-| Envelopes, error codes, verdict vocabulary, LabRelease lifecycle, receipts | Model function, descriptor contents, fixtures |
-| BE `MODEL_REGISTRY` entry format, FE renderer registry format | One registry line in each |
-| Renderer host (launch, draft, submit, result, a11y shell, limitation banner) | Renderer component, assets, localized copy |
-| Contract test runner (runs every Lab's fixtures on server + FE preview) | Scoring map from raw outputs to verdict |
+The shared runtime/host owns authorization, launch, run identity, version resolution, validation dispatch, attempts, replay, idempotency and local draft recovery. Each model module owns its versioned deterministic function, state/output schema, valid domain, errors, assumptions and golden/invalid cases. Each activity owns an immutable rubric and evidence schema. Scientific observations are facts from the model; the activity evaluates them in the context of an instructional task. A valid OPEN_CIRCUIT is an observation, not automatically a failed activity.
 
-Target module layout (proposed):
+An interaction archetype is a reuse hint, not a universal model schema. Renderer selection and 2D/3D modality are separate; no arbitrary code or scientific formula may be downloaded from a pack.
 
-```
-BE packages/sim/models/<lab>/<version>/{model.ts, descriptor.ts, fixtures.json}
-BE src/modules/labs/application/model-registry.ts        # one line per modelRef
-FE src/features/labs/renderers/<rendererKey>/{Renderer.tsx, copy.ts}
-FE src/features/labs/renderer-registry.ts                 # one line per rendererKey
-```
+## Immutable launch tuple
 
-## 1. ModelDescriptor
+A server-persisted LabRun binds student, context, challenge and creation/expiry to a snapshot of lab ID, modelRef and engine version, activity/rubric identity and version, pack version, config version, effective params, state/evidence schema versions, relevant state constraints and a canonical digest. IDs reference existing immutable versions where available; the exact evaluation parameters are snapshotted. For the isolated engineering slice a versioned fixture activity/rubric may be used; it is not a reviewed release.
 
-```ts
-type ModelDescriptor = {
-  modelRef: string;              // "circuit@1.1.0" — immutable behaviour identity
-  engineVersion: string;         // per model, not one global VERSION
-  labKey: string;                // logical Lab family; a model may serve several Labs/Class Labs
-  stateSchemaVersion: number;    // bump on any labState shape change
-  stateSchema: JsonSchema;       // strict; unknown keys rejected
-  stateConstraints: Constraint[];// release-level ranges on state (U, R, N, B...), narrowable, never widenable
-  params: ParamSpec[];           // challenge params (number|choice) with unit, min, max, step, default
-  outputs: Record<string, { type: "number"|"string"|"array"|"null"; unit?: string }>;
-  rawVerdicts: string[];         // model's own statuses
-  errors: Record<string, string>;// stable error codes → message key (e.g. UNSUPPORTED_TOPOLOGY)
-  limitations: string;           // learner-facing
-  modality: "2d" | "3d" | "2d+3d";
-};
-```
+Launch resolves and snapshots compatible components under existing activation locks. Request IDs narrow server-side authorization; they do not grant access. A missing model, incompatible config, missing required tuple field or unsupported model fails closed. Old attempts without launch snapshots remain readable and replay is labeled legacy_unverified where appropriate.
 
-Rules:
-- `simulate(state)` is pure and deterministic. It does not read time, randomness, the environment or I/O.
-- Invalid state fails closed with a declared error code. It is never coerced into a plausible result.
-- `stateConstraints` and `params` are the **only** narrowing surface for packs, releases and Class Labs.
+## Envelopes
 
-## 2. LabRelease
+Launch response: contract, runId, labId, modelRef, engineVersion, activity/rubric version, state/evidence schema versions, constraints, initial state, rendererKey, expiry and learner copy. The server owns the tuple; the client cannot replace it. Student-facing output need not expose internal review information.
 
-```ts
-type LabRelease = {
-  id: string; labId: string; version: number;
-  modelRef: string; engineVersion: string; stateSchemaVersion: number;
-  activityVersionId: string; packVersionId: string;
-  params: Record<string, ParamRange|ChoiceSet>;       // pinned config (replaces separately activated config)
-  stateConstraints: Constraint[];                      // ⊆ descriptor constraints
-  challengeTemplates: ChallengeTemplate[];             // from pack
-  rendererKey: string; minFeRenderer: string;          // FE compatibility
-  digest: string;                                      // sha256 over all of the above
-  status: "DRAFT"|"VALIDATED"|"APPROVED"|"ACTIVE"|"SUPERSEDED"|"QUARANTINED"|"RETIRED";
-  receipts: ReviewReceipt[];
-};
-```
+Submission: contract, runId, idempotencyKey, stateSchemaVersion, checkpoints/evidence, duration. For Circuit the checkpoints contain two independent states and selected predictions plus one structured explanation answer, as defined in the pilot blueprint. BE validates every state, computes observations on the pinned model, then runs the pinned activity rubric; client preview, selected predictions and submitted observations cannot override model output.
 
-## 3. LaunchEnvelope (BE → FE)
+Result: attemptId, runId, rubric version, scientific observations per checkpoint, assessment verdict and unmet criteria, retry guidance. Invalid state is a validation error and creates no attempt. Valid but incorrect learner evidence creates a failed attempt and can be retried.
 
-```json
+### Concrete v1 pilot payload
+
+Proposed launch route: POST /labs/:labId/runs with challengeId and a server-validated context; the authenticated user is derived from the session. Successful launch returns runId, contract, expiresAt, modelRef, engineVersion, activityVersion, rubricVersion, stateSchemaVersion, evidenceSchemaVersion, constraints and rendererKey. The private P3.2a fixture uses an authorized assignment context; public release is not required.
+
+The opt-in POST /attempts body for the bulb activity has this shape:
+
+~~~json
 {
   "contract": "lab-contract/1",
-  "labReleaseId": "…", "labId": "circuit", "rendererKey": "circuit-2d",
-  "modelRef": "circuit@1.1.0", "stateSchemaVersion": 2,
-  "context": { "kind": "FOUNDATIONAL|LESSON_STEP|CLASS_PRACTICE|ASSIGNMENT", "lessonStepId": null, "classLabId": null, "assignmentId": null },
-  "challenge": { "id": "…", "objective": "…", "params": { "maxCurrentMa": 20 } },
-  "stateConstraints": [ … ], "initialState": { … },
-  "copy": { "title": "…", "objective": "…", "limitations": "…", "safety": "…" },
-  "scored": false,
-  "launchedAt": "ISO-8601"
-}
-```
-
-## 4. SubmitEnvelope (FE → BE, `POST /attempts`)
-
-```json
-{
-  "contract": "lab-contract/1",
-  "labReleaseId": "…", "idempotencyKey": "uuid (required)",
-  "stateSchemaVersion": 2, "labState": { … },
-  "challengeId": "…", "lessonStepId": null, "classLabId": null, "assignmentId": null,
-  "durationMs": 12345
-}
-```
-
-Server rules:
-1. **Idempotency.** `(studentId, idempotencyKey)` is unique. A same-payload replay, including a concurrent duplicate that hits the unique violation, returns the stored attempt. A different payload returns 409 `IDEMPOTENCY_KEY_REUSED`.
-2. **Release check.** Lock the Lab's activation key, then load the release.
-   - `ACTIVE` → accept.
-   - `SUPERSEDED` and `now - activatedAt(successor) ≤ grace` → accept under the pinned release.
-   - Otherwise → 409 `LAB_RELEASE_CHANGED`. Same for a `stateSchemaVersion` mismatch.
-3. **Authorization** per context (see `class-lab-track.md` matrix). The context is derived on the server. Client IDs only narrow it.
-4. **Validation** order: schema → `stateConstraints` → evaluate → scoring map. Constraint failure returns 422 `LAB_STATE_OUT_OF_RANGE` and records no attempt.
-5. **Persist** in one transaction: attempt with `labReleaseId`, `context`, `executionTuple`, plus the progress projection for that context only.
-6. Legacy clients without `labReleaseId` are served the active release for one compatibility window and recorded with `releaseResolution: "server_latest"`. After the window they receive 400 `LAB_RELEASE_REQUIRED`.
-
-## 5. ResultEnvelope (BE → FE)
-
-```json
-{
-  "contract": "lab-contract/1",
-  "attemptId": "…", "attemptNumber": 3, "labReleaseId": "…",
-  "verdict": "passed|partial|needs_practice",
-  "rawStatus": "SAFE", "outputs": { "branches": [ … ], "currentA": 0.0149 },
-  "score": { "rule": "…", "unmet": [] },
-  "retryGuidance": "…", "hintAvailable": true,
-  "pathway": null
-}
-```
-
-`executionTuple` (`modelRef`, `engineVersion`, `labReleaseId`, `params`, `stateSchemaVersion`) is stored server-side and exposed only to admin replay. It is not returned in `outputs` and not copied into saved experiments.
-
-## 6. Renderer interface (FE)
-
-```ts
-type RendererProps = {
-  launch: LaunchEnvelope;
-  state: unknown; onChange(next: unknown): void;   // host owns state, draft and reset
-  preview: unknown | null;                         // advisory, same modelRef
-  result: ResultEnvelope | null;                   // authoritative; replaces preview
-  disabled: boolean;
-};
-// Registry: rendererKey → lazy(() => import(...)). Unknown key → host shows "unavailable", never a fallback Lab.
-```
-
-The host provides, so renderers do not re-implement them: draft persistence, submit with idempotency, retry, 409 relaunch flow, limitation/safety banner, verdict badge, hint panel, keyboard focus order shell and a text result table.
-
-Each renderer must:
-- give every interactive element an accessible name;
-- encode state with text/icon and not by colour alone;
-- support the keyboard alternative to drag;
-- stay within the modality budget (`foundational-lab-track.md` §2D/3D).
-
-## 7. Draft persistence (FE host)
-
-- Key: `nexalab:lab-draft:v1:{userId}:{contextKind}:{contextId|labId}:{labReleaseId}:{stateSchemaVersion}`.
-- Written on change, debounced 500 ms. Cleared on a `passed` result in scored contexts. Kept on 409 `LAB_RELEASE_CHANGED`, so after relaunch the host offers "restore earlier setup" only if the new `stateSchemaVersion` is equal.
-- Wrapped in try/catch. If storage is unavailable, the Lab works without restore.
-- Never sent to the server automatically. Never counts as evidence.
-
-## 8. Fixture format (shared BE test + FE parity)
-
-```json
-{
-  "modelRef": "circuit@1.1.0",
-  "cases": [
-    { "id": "GC-03", "state": { … }, "params": { "maxCurrentMa": 20 },
-      "expect": { "rawStatus": "SAFE", "verdict": "passed",
-                  "outputs": { "branches[0].currentA": 0.014893617 }, "tolerance": 1e-6 } },
-    { "id": "GC-12", "state": { … }, "expect": { "error": "UNSUPPORTED_TOPOLOGY" } },
-    { "id": "GC-14", "state": { … }, "release": "pilot", "expect": { "error": "LAB_STATE_OUT_OF_RANGE" } }
+  "runId": "server-generated-run-id",
+  "idempotencyKey": "client-generated-uuid",
+  "stateSchemaVersion": 1,
+  "evidenceSchemaVersion": 1,
+  "checkpoints": [
+    {
+      "id": "CLOSED",
+      "state": {
+        "nodes": [
+          {"id":"battery","type":"battery"},
+          {"id":"bulb","type":"bulb"},
+          {"id":"switch","type":"switch","closed":true}
+        ],
+        "edges": [
+          {"source":"battery","target":"bulb"},
+          {"source":"bulb","target":"switch"},
+          {"source":"switch","target":"battery"}
+        ]
+      },
+      "prediction": "ON"
+    },
+    {
+      "id": "OPEN",
+      "state": {
+        "nodes": [
+          {"id":"battery","type":"battery"},
+          {"id":"bulb","type":"bulb"},
+          {"id":"switch","type":"switch","closed":false}
+        ],
+        "edges": [
+          {"source":"battery","target":"bulb"},
+          {"source":"bulb","target":"switch"},
+          {"source":"switch","target":"battery"}
+        ]
+      },
+      "prediction": "OFF"
+    }
   ],
-  "digest": "sha256 of cases"
+  "explanation": "A",
+  "durationMs": 12000
 }
-```
+~~~
 
-- CI fails if the fixture digest of a model that has an `APPROVED`+ release changes. A behaviour change requires a new `modelRef` version.
-- Golden cases run **with params**, so narrowed teacher thresholds are tested numerically, not only by verdict.
+The BE uses the run's server-owned context, challenge and version tuple. P3.2a may use a separate existing-model engineering fixture with its own schema; P3.2c adds the bulb schema and this activity evidence. Both share launch/submit envelopes. Legacy requests without runId continue on their current path without being silently presented as launch-pinned.
+## Retention, expiry, revocation and idempotency
 
-## 9. ReviewReceipt
+- Open practice: newly launched runs use current eligible tuple and expire 24 hours after server creation. On expiry reject new attempts with RUN_EXPIRED; preserve draft and allow a new launch. No silent switch of model in an open run.
+- Assignment: publication pins its tuple and target snapshot. Eligible target submissions use it while the class and assignment are active and membership/target eligibility holds. A due date marks work late but does not itself close Lab submission; an absent due date has no automatic cutoff. Explicit closure/archive, withdrawal, membership removal or emergency revocation stops new submissions. No universal two-hour window. Historical tuples/models stay available for reproduction; any later storage retention policy must preserve accessible evidence and be explicit.
+- Emergency scientific/safety revocation blocks launches and new evaluations against affected versions, including assignments; return RUN_REVOKED, preserve draft and evidence, notify the responsible teacher/admin and provide reassign/update guidance. Serialize revocation and submit on the run/release lock: a submit committed before revocation remains valid; no new submit may commit after revocation. Historical attempts remain readable and are flagged for review rather than silently rescored.
+- Idempotency is scoped to student and key. Same canonical payload (run ID, challenge/context and checkpoint evidence, excluding timing and transport metadata) returns the previously committed result even if the run is now expired/revoked; changed payload returns IDEMPOTENCY_KEY_REUSED. Concurrent duplicates create at most one attempt and return that attempt. A new intentional try uses a new key.
+- A new launch, preview, checkpoint editing or local draft never creates an attempt, progress or assignment evidence. Store a bounded local IndexedDB draft keyed by user, context, run and schema; use explicit restore after re-launch only if model/activity/schema compatibility is verified, not merely matching a schema number.
 
-```ts
-type ReviewReceipt = {
-  kind: "curriculum" | "subject" | "model" | "safety" | "rights" | "range";
-  reviewerUserId: string;     // authenticated session user, never a typed name/email
-  role: string;               // reviewer role granted by admin, audited
-  subjectDigest: string;      // digest of exactly what was reviewed
-  decision: "approved" | "changes_requested";
-  note?: string; at: string;
-};
-```
+## Compatibility and test gates
 
-Invariants:
-- subject reviewer ≠ model reviewer;
-- the creator of a component cannot sign its subject or model receipt;
-- a receipt on an old digest does not carry over to a new draft.
+The BE scientific result is authoritative; FE preview must identify the same model/version and is never evidence. A run pins semantic identities for rendering; model/renderer deployment compatibility is checked before production activation. Released model behavior is immutable; retain executable versions required by active assignments and historical replay. Unknown versions fail closed.
 
-## 10. Error codes (stable)
+The first slice covers isolated BE launch, persisted tuple, activation change, submit/replay, authorization, expiry/revocation, idempotency and legacy compatibility. P3.2 completion also covers FE host/draft and accessibility. P3.5 requires another model with a genuinely different state/output shape through BE and FE shared contracts, a real persisted pilot attempt, and actual pilot curriculum and scientific/model approvals before opening a second Lab implementation track. Engineering fixture checks are not curriculum/science approvals.
 
-`LAB_NOT_FOUND`, `LAB_RELEASE_REQUIRED`, `LAB_RELEASE_CHANGED`, `LAB_STATE_INVALID`, `LAB_STATE_OUT_OF_RANGE`, `UNSUPPORTED_TOPOLOGY` (model-specific codes namespaced `<labKey>.<CODE>`), `IDEMPOTENCY_KEY_REUSED`, `STEP_LOCKED`, `CLASS_LAB_UNAVAILABLE`, `ASSIGNMENT_TARGET_REQUIRED`, `RENDERER_UNAVAILABLE` (FE only).
+## Shared host and independent release requirements
 
-## Contract acceptance (P3.2 gate)
+The FE host controls run identity, draft, submit, retry and authoritative result. A renderer receives a version-compatible launch description, state/change callbacks and advisory preview; unknown renderer or model versions show unavailable, with no fallback to another Lab. It must support accessible names, keyboard alternatives and status that does not depend on colour. It never imports executable code or formulas from a content manifest.
 
-1. Circuit fixtures and one **mock second model with a different state/output shape** (for example a 1-D numeric slider model) pass the server runner and FE preview parity.
-2. Integration tests on an isolated database:
-   - activation during an open session (within/after grace);
-   - concurrent duplicate submit → one attempt;
-   - F5 restore without an attempt;
-   - network retry with same key;
-   - legacy client within/after the window;
-   - replay of a new attempt;
-   - legacy attempt labelled `legacy_unverified`.
-3. FE builds with no `labId === "circuit" | "eye" | "chemistry"` dispatch in the host. Unknown `rendererKey` shows unavailable.
+Before any production activation, verify the exact model/engine, activity/rubric, pack/config, semantic asset bindings and renderer compatibility; scientific fixtures include boundary, invalid and observation-to-rubric cases with explicit numerical tolerances where applicable. For MVP releases, an authenticated active ADMIN owner records one append-only OWNER_SIGNOFF tied to the immutable LabRelease digest, with curriculum mapping, source references, scientific golden cases, rubric, safety and rights assessments. The API never generates that receipt on the owner's behalf. This is internal validation, not independent expert certification. Releases snapshotted under the earlier delegated reviewer policy keep their original required kinds and distinct-reviewer rule. Activation/quarantine is auditable and must not alter another Lab or historical attempt; recovery may reactivate a previously approved compatible version.

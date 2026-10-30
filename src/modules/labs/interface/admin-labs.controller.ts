@@ -17,6 +17,7 @@ import { notFound, reason, text } from "../../../common/admin-api";
 import { Roles } from "../../../common/decorators";
 import { audit, changedFields } from "../../../common/audit";
 import { Db } from "../../../db/db";
+import { LabReleaseService } from "../application/lab-release.service";
 import { storageEnv } from "../../storage/infrastructure/storage";
 import { MODEL_REGISTRY, activityDigest, activitySpecSchema, packInputSchema, packValidation, resolveModel } from "../application/sim-packs";
 import {
@@ -29,6 +30,7 @@ import {
   versionParams,
 } from "../application/simulation-versions";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
+import { canonical, digest, evaluateCircuitBulbActivity, evaluateRunV1, executionSchema as labRunExecutionSchema, CIRCUIT_BULB_RUBRIC } from "../application/lab-run";
 
 /** PostgreSQL JSON numbers can round at the last floating-point digits. */
 function sameStoredResult(actual: any, expected: any): boolean {
@@ -54,7 +56,42 @@ function sameStoredResult(actual: any, expected: any): boolean {
 @Roles("ADMIN")
 @Controller("admin")
 export class AdminLabsController {
-  constructor(@Inject(Db) private db: Db) {}
+  constructor(@Inject(Db) private db: Db, @Inject(LabReleaseService) private releases: LabReleaseService) {}
+
+  @Put("lab-reviewers/:userId")
+  @ApiOperation({ summary: "Authorize or revoke a named teacher's Lab release review duty" })
+  authorizeLabReviewer(@Param("userId") userId: string, @Req() req: any, @Body() body: unknown) {
+    return this.releases.authorizeReviewer(userId, req, body);
+  }
+
+  @Get("labs/:id/releases")
+  listLabReleases(@Param("id") labId: string) {
+    return this.releases.list(labId);
+  }
+
+  @Post("labs/:id/releases")
+  @ApiOperation({ summary: "Snapshot a validated active Lab tuple into an immutable release draft" })
+  createLabRelease(@Param("id") labId: string, @Req() req: any, @Body() body: unknown) {
+    return this.releases.createDraft(labId, req, body);
+  }
+
+  @Post("labs/:id/releases/:releaseId/activate")
+  @ApiOperation({ summary: "Activate a release with complete authenticated approvals for its exact digest" })
+  activateLabRelease(@Param("id") labId: string, @Param("releaseId") releaseId: string, @Req() req: any, @Body() body: unknown) {
+    return this.releases.activate(labId, releaseId, req, body);
+  }
+
+  @Post("labs/:id/releases/:releaseId/publish")
+  @ApiOperation({ summary: "Publish an exact draft with ADMIN evidence and activation in one atomic operation" })
+  publishLabRelease(@Param("id") labId: string, @Param("releaseId") releaseId: string, @Req() req: any, @Body() body: unknown) {
+    return this.releases.publish(labId, releaseId, req, body);
+  }
+
+  @Post("labs/:id/releases/:releaseId/quarantine")
+  @ApiOperation({ summary: "Quarantine a release and revoke new evaluations using its pinned pack" })
+  quarantineLabRelease(@Param("id") labId: string, @Param("releaseId") releaseId: string, @Req() req: any, @Body() body: unknown) {
+    return this.releases.quarantine(labId, releaseId, req, body);
+  }
 
   // ───────────────────────── C2-T3 simulation versions ─────────────────────────
   @Get("labs")
@@ -82,6 +119,12 @@ export class AdminLabsController {
     return this.db.$transaction(async (tx) => {
       const before = await tx.lab.findUnique({ where: { id } });
       if (!before) throw notFound("phòng thực hành");
+      const [activeRelease, anyRelease] = await Promise.all([
+        tx.labRelease.findFirst({ where: { labId: id, status: "ACTIVE" }, select: { id: true } }),
+        tx.labRelease.findFirst({ where: { labId: id }, select: { id: true } }),
+      ]);
+      if (activeRelease || (anyRelease && b.status === "published" && before.status !== "published"))
+        throw new ConflictException({ code: "LAB_RELEASE_REQUIRED", message: "Lab có hồ sơ release; hãy dùng quy trình review, activate hoặc quarantine để thay đổi trạng thái công khai" });
       const { reason: why, ...data } = b;
       const lab = await tx.lab.update({ where: { id }, data });
       const diff = changedFields(before, lab);
@@ -118,27 +161,33 @@ export class AdminLabsController {
   @ApiOperation({ summary: "Store a new draft configuration version after validation and golden cases pass" })
   async createVersion(@Param("id") labId: string, @Req() req: any, @Body() body: unknown) {
     const input = versionInputSchema.parse(body);
-    const lab = await this.db.lab.findUnique({
-      where: { id: labId },
-      include: { challenges: { where: { NOT: { id: { contains: "_v-" } } } } },
-    });
+    const [lab, activeRelease, candidatePack] = await Promise.all([
+      this.db.lab.findUnique({
+        where: { id: labId },
+        include: { challenges: { where: { NOT: { id: { contains: "_v-" } } } } },
+      }),
+      this.db.labRelease.findFirst({ where: { labId, status: "ACTIVE" }, select: { id: true } }),
+      this.db.simulationPackVersion.findFirst({
+        where: { labId, status: { in: ["draft", "active"] } },
+        orderBy: { createdAt: "desc" }, select: { modelRef: true },
+      }),
+    ]);
     if (!lab) throw notFound("phòng thực hành");
-    const spec = CHALLENGE_PARAMETERS[labId];
+    const modelRef = !activeRelease && !lab.releaseCleared && candidatePack ? candidatePack.modelRef : lab.simulationModelRef;
     const errors = versionErrors(
       labId,
       lab.challenges.map((c) => c.id),
       input,
+      modelRef,
     );
-    if (spec && lab.simulationModelRef && !spec.modelRef.startsWith(lab.simulationModelRef.split("@")[0]))
-      errors.push(`Mô hình của phòng (${lab.simulationModelRef}) không khớp danh sách cho phép (${spec.modelRef})`);
     try {
-      if (resolveModel(lab.simulationModelRef).labId !== labId) errors.push("Mô hình không thuộc phòng thực hành");
+      if (resolveModel(modelRef).labId !== labId) errors.push("Mô hình không thuộc phòng thực hành");
     } catch {
       errors.push("Mô hình của phòng không nằm trong danh sách cho phép");
     }
     if (errors.length)
       throw new UnprocessableEntityException({ code: "INVALID_SIMULATION_CONFIG", message: errors.join("; "), details: { errors } });
-    const golden = goldenCaseResults(labId, input, lab.simulationModelRef);
+    const golden = goldenCaseResults(labId, input, modelRef);
     if (golden.some((g) => !g.ok))
       throw new UnprocessableEntityException({
         code: "GOLDEN_CASE_MISMATCH",
@@ -156,7 +205,7 @@ export class AdminLabsController {
         data: {
           labId,
           version: (last?.version ?? 0) + 1,
-          modelRef: lab.simulationModelRef,
+          modelRef,
           challengeParams: input.challengeParams,
           goldenCases: input.goldenCases.map((g, i) => ({ ...g, actual: golden[i].actual })) as any,
           reason: input.reason,
@@ -207,6 +256,28 @@ export class AdminLabsController {
       return active;
     });
   }
+  /** Emergency block: serialized with pack selection and run submission. */
+  @Post("labs/:id/packs/:packId/revoke-runs")
+  async revokePackRuns(@Param("id") labId: string, @Param("packId") packId: string, @Req() req: any, @Body() body: unknown) {
+    const b = z.object({ reason }).strict().parse(body);
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
+      const pack = await tx.simulationPackVersion.findUnique({ where: { id: packId } });
+      if (!pack || pack.labId !== labId) throw notFound("gói mô phỏng");
+      const existing = await tx.labPackRevocation.findUnique({ where: { packVersionId: packId } });
+      if (existing) return existing;
+      const revoked = await tx.labPackRevocation.create({ data: { packVersionId: packId, labId, reason: b.reason, revokedById: req.user.sub } });
+      const activeRelease = await tx.labRelease.findFirst({ where: { labId, status: "ACTIVE" } });
+      const activeSnapshot = activeRelease?.snapshot as any;
+      if (activeRelease && activeSnapshot?.execution?.packVersionId === packId) {
+        await tx.labRelease.update({ where: { id: activeRelease.id }, data: { status: "QUARANTINED", quarantinedAt: new Date() } });
+        await tx.lab.update({ where: { id: labId }, data: { releaseCleared: false } });
+        await audit(tx, { actor: req.user, action: "lab_release.quarantine_dependency", targetType: "LabRelease", targetId: activeRelease.id, reason: b.reason, before: { status: "ACTIVE" }, after: { status: "QUARANTINED", packVersionId: packId } });
+      }
+      await audit(tx, { actor: req.user, action: "lab.pack.revoke_runs", targetType: "SimulationPackVersion", targetId: packId, reason: b.reason, after: { labId, packVersionId: packId } });
+      return revoked;
+    });
+  }
   @Get("attempts/:id/reproduce")
   @ApiOperation({ summary: "Re-evaluate a historical attempt with the version it pinned" })
   async reproduce(@Param("id") id: string) {
@@ -222,13 +293,28 @@ export class AdminLabsController {
       throw new ConflictException({ code: "PINNED_VERSION_MISSING", message: "Không tìm thấy phiên bản đã ghi trong lần thực hành" });
     if ((version && version.labId !== attempt.challenge.labId) || (pack && pack.labId !== attempt.challenge.labId))
       throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID", message: "Phiên bản đã ghi không thuộc phòng thực hành" });
-    const originalResult = attempt.simulationResult as any;
+    let runBinding: string | null = null;
+    if (attempt.labRunId) {
+      const run = await this.db.labRun.findUnique({ where: { id: attempt.labRunId } });
+      const parsed = run ? labRunExecutionSchema.safeParse(run.execution) : null;
+      if (!run || run.studentId !== attempt.studentId || run.challengeId !== attempt.challengeId ||
+          !parsed?.success || digest(run.execution) !== run.executionDigest ||
+          parsed.data.packVersionId !== attempt.packVersionId || parsed.data.configVersionId !== attempt.configVersionId ||
+          parsed.data.engineVersion !== attempt.simulationModelVersion)
+        throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID", message: "Bằng chứng phiên chạy không nhất quán" });
+      runBinding = parsed.data.binding ?? null;
+      const resultExecution = (attempt.simulationResult as any)?._execution;
+      if (!resultExecution || resultExecution.modelRef !== parsed.data.modelRef ||
+          canonical(resultExecution.params) !== canonical(parsed.data.params))
+        throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID", message: "Kết quả không khớp phiên chạy" });
+    }    const originalResult = attempt.simulationResult as any;
     const rawExecution = originalResult?._execution;
     const executionSchema = z.object({
       modelRef: z.string().min(1),
       packVersionId: z.string().nullable(),
       configVersionId: z.string().nullable(),
       params: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
+      rubricRef: z.enum(["legacy-challenge@1.0.0", CIRCUIT_BULB_RUBRIC]).optional(),
     }).strict();
     const execution = rawExecution == null ? null : executionSchema.safeParse(rawExecution);
     if (execution && (!execution.success || execution.data.packVersionId !== attempt.packVersionId || execution.data.configVersionId !== attempt.configVersionId ||
@@ -250,7 +336,11 @@ export class AdminLabsController {
     let reproduced: string;
     let reproducedResult: any = null;
     try {
-      const evaluated = evaluate(attempt.challenge.labId, attempt.labState, params, modelRef);
+      const evaluated = execution?.success && execution.data.rubricRef === CIRCUIT_BULB_RUBRIC
+        ? evaluateCircuitBulbActivity((attempt.labState as any).checkpoints, (attempt.labState as any).explanation)
+        : attempt.labRunId || (execution?.success && execution.data.rubricRef === "legacy-challenge@1.0.0")
+          ? evaluateRunV1(attempt.challenge.labId, attempt.labState, params ?? null, modelRef!)
+          : evaluate(attempt.challenge.labId, attempt.labState, params, modelRef);
       reproduced = evaluated.verdict;
       reproducedResult = evaluated.result;
     } catch {
@@ -267,6 +357,9 @@ export class AdminLabsController {
       packVersionId: attempt.packVersionId,
       modelRef: modelRef ?? null,
       reproductionBasis: execution?.success ? "pinned_execution" : "legacy_unverified",
+      assignmentVersionBinding: attempt.assignmentId
+        ? runBinding ?? (execution?.success && execution.data.rubricRef ? "ASSIGNMENT_PINNED" : "LEGACY_UNPINNED")
+        : null,
       originalVerdict: attempt.verdict,
       reproducedVerdict: reproduced,
       matches: verdictMatches && (execution?.success ? resultMatches : true),
@@ -281,7 +374,7 @@ export class AdminLabsController {
     return this.db.practicalActivityVersion.findMany({ orderBy: [{ key: "asc" }, { version: "desc" }] });
   }
   @Post("practicals")
-  @ApiOperation({ summary: "Store an immutable reviewed practical activity version (same content → same version)" })
+  @ApiOperation({ summary: "Store an immutable practical activity candidate (same content → same version); release review is separate" })
   async createPractical(@Req() req: any, @Body() body: unknown) {
     const spec = activitySpecSchema.parse(body);
     const digest = activityDigest(spec);
@@ -295,7 +388,7 @@ export class AdminLabsController {
       const last = await tx.practicalActivityVersion.findFirst({ where: { key: spec.key }, orderBy: { version: "desc" }, select: { version: true } });
       const { reviews, ...rest } = spec;
       const created = await tx.practicalActivityVersion.create({
-        data: { key: spec.key, version: (last?.version ?? 0) + 1, digest, spec: rest as any, reviews: reviews as any, createdById: req.user.sub },
+        data: { key: spec.key, version: (last?.version ?? 0) + 1, digest, spec: rest as any, reviews: (reviews ?? { ownerSignoffPending: true }) as any, createdById: req.user.sub },
       });
       await audit(tx, { actor: req.user, action: "practical.version.create", targetType: "PracticalActivityVersion", targetId: created.id, after: { version: created.version } });
       return created;
@@ -319,15 +412,20 @@ export class AdminLabsController {
   @ApiOperation({ summary: "Validate and store a draft topic simulation pack version; golden cases run before any visual check" })
   async createSimPack(@Req() req: any, @Body() body: unknown) {
     const input = packInputSchema.parse(body);
-    const [lab, activity, visual] = await Promise.all([
+    const [lab, activity, visual, activeRelease] = await Promise.all([
       this.db.lab.findUnique({ where: { id: input.labId } }),
       this.db.practicalActivityVersion.findUnique({ where: { id: input.activityVersionId } }),
       input.visualAssetVersionId ? this.db.assetVersion.findUnique({ where: { id: input.visualAssetVersionId }, include: { asset: true } }) : null,
+      this.db.labRelease.findFirst({ where: { labId: input.labId, status: "ACTIVE" }, select: { id: true } }),
     ]);
     if (!lab) throw notFound("phòng thực hành");
     const glb = (visual?.validation as any)?.glb ?? null;
     const visualReady = Boolean(visual && visual.status === "READY" && visual.asset.kind === "model" && visual.asset.status === "ACTIVE" && glb?.ok);
-    const { errors, golden } = packValidation(input, { labModelRef: lab.simulationModelRef, activity: activity ? { spec: activity.spec } : null, glb, visualReady });
+    // Before the first public release, a private candidate may move from the
+    // legacy model to another registered model for the same Lab. The Lab row is
+    // updated only when the reviewed release activates, preserving legacy data.
+    const authoringModelRef = !activeRelease && !lab.releaseCleared ? input.modelRef : lab.simulationModelRef;
+    const { errors, golden } = packValidation(input, { labModelRef: authoringModelRef, activity: activity ? { spec: activity.spec } : null, glb, visualReady });
     if (errors.length) throw new UnprocessableEntityException({ code: "SIM_PACK_INVALID", message: errors.join("; "), details: { errors, golden } });
     return this.db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"nexalab:sim-pack:" + input.key}))`;
@@ -374,7 +472,7 @@ export class AdminLabsController {
       // Read the status under the lock so two concurrent activations cannot both pass the draft check.
       const pack = (await tx.simulationPackVersion.findUnique({ where: { id } }))!;
       if (pack.status !== "draft") throw new ConflictException({ code: "PACK_NOT_DRAFT", message: "Chỉ kích hoạt được gói ở trạng thái nháp; gói đã dùng là bất biến" });
-      if (["pilot", "production"].includes(storageEnv()) && !(pack.reviews as any)?.rangeApproval)
+      if (["pilot", "production"].includes(storageEnv()) && Object.keys((pack.template as any)?.ranges ?? {}).length && !(pack.reviews as any)?.rangeApproval)
         throw new ConflictException({ code: "RANGE_APPROVAL_REQUIRED", message: "Khoảng tham số của mô hình chưa được duyệt (Q-C2-04)" });
       const previous = await tx.simulationPackVersion.findFirst({ where: { labId: pack.labId, status: "active" } });
       const now = new Date();

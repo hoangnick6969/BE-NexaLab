@@ -6,7 +6,7 @@ project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
 scope: Release 1 / Content Foundation CF-T1..T4 plus I1 open curriculum, I2 Class Space resources, I3 assigned-test lifecycle, account/notifications (acc-1..acc-6) and the BE module-layer refactor; CF-T5 corpus remains a staffed workstream
-last_updated: '2026-10-28'
+last_updated: '2026-10-30'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'BE-NexaLab: origin/main ebfaba7 (PR #28 refactor/be-module-layers incl. acc-1..acc-6; earlier PR #27, I1 #23/#26, I2 #24, I3 #25, project-structure #20). Still unmerged: feat/content-foundation 1 commit ahead (824dc74 chemistry pH-mode registry outputs; the CF core 8a1d44b and its three migrations are already on main).'
@@ -123,8 +123,8 @@ development_status:
   p3-3-outcome-register: backlog
   p3-4-pilot-led-circuit: backlog
   p3-5-second-model-gate: backlog
-  p3-6-lab-factory-operations: backlog
-  p3-7-class-lab: backlog
+  p3-6-lab-factory-operations: done
+  p3-7-class-lab: ready-for-dev
   # Teacher AI increment (TAI) — plan ../planning-artifacts/increment-tai-teacher-ai.md; all blocked on gate G-1 (TAI-T0).
   epic-tai-01-authoring: backlog
   tai-01-t0-activate-fr21-scope: backlog
@@ -478,8 +478,8 @@ story_notes:
     artifact: ../specs/spec-lab-pipeline/SPEC.md
     decisions: 'D-LP-01 accepted by the requester (Class Lab = teacher configuration on an active Foundational LabRelease). D-LP-02..06 proposed for ADR-LAB-01 (LabRelease tuple, launch pinning with grace, execution tuple outside simulationResult, Class Lab as ClassResource kind LAB, Open Curriculum LAB step).'
     evidence: 'Source reading of BE main, FE main and BE origin/codex/foundational-lab-platform (P3.1 spec + pinning fix, unmerged). Vitest BE main sim/labs/foundational 37/37; fl branch 40 passed, labs-pinning.integration skipped without a database. DB snapshot and Content Tool proposal not verified.'
-    catalog: 'spec-lab-pipeline/lab-catalog-khtn8-9.md proposes 30 Foundational Lab candidates mapped from a read-only export of 157 KHTN 8 and 102 canonical KHTN 9 outcomes (KHTN 8 98/157 and KHTN 9 68/102 Lab-touched); all outcomes remain PROPOSED_UNAPPROVED; register defects listed for P3.3.'
-    remaining: 'DEFINE exit list in spec-lab-pipeline/phase-plan.md: ADR-LAB-01 acceptance, contract v1 fixtures, corrected P3.1 docs, merge decision for the fl branch, product decisions P-1/P-2 and technical T-1..T-4. No reviewer, approval or Lab release exists.'
+    catalog: 'spec-lab-pipeline/lab-catalog-and-shared-kits-khtn8-9.md proposes 30 Foundational Lab candidates mapped from a read-only export of 157 KHTN 8 and 102 canonical KHTN 9 outcomes (KHTN 8 98/157 and KHTN 9 68/102 Lab-touched); all outcomes remain PROPOSED_UNAPPROVED; register defects listed for P3.3.'
+    remaining: 'DEFINE exit list in spec-lab-pipeline/lab-pipeline-phase-plan.md: ADR-LAB-01 acceptance, contract v1 fixtures, corrected P3.1 docs, merge decision for the fl branch, product decisions P-1/P-2 and technical T-1..T-4. No reviewer, approval or Lab release exists.'
   project-structure-refactor:
     status: done
     audited_against_code: '2026-10-17'
@@ -971,3 +971,33 @@ tracking_update:
     - 'FE: src/api.ts, src/pages.tsx, src/styles.css, tests/quiz-learning.spec.ts'
     - 'BE: .env'
     - 'BE: scripts/integration.mjs'
+
+p36_publication_acceptance:
+  checked_at: '2026-10-30 Asia/Saigon'
+  environment: 'Existing local API http://127.0.0.1:4000/api -> shared Supabase; existing built FE served locally at http://127.0.0.1:5173 for UI verification'
+  authorization: 'Human explicitly approved BE deployment and then the exact atomic ADMIN publish payload in this chat.'
+  release_id: 'cmvtsos7w0004lwy49olx979h'
+  digest: '5c7503494b477b7e49f3ebbfc611c7934743f396ee16f477fb949a1a6dc719cd'
+  release_status: ACTIVE
+  publish_http: 201
+  publisher: 'admin (admin@nexalab.local)'
+  activated_at: '2026-10-30T00:47:02.872+07:00'
+  checks:
+    build_and_deploy: PASS
+    isolated_postgres_http_and_compatibility_tests: 'PASS: 12/12; TypeScript noEmit passed'
+    student_labs_ui: PASS
+    b22_lesson_link_ui: PASS
+    student_foundational_labrun_and_attempt_ui: PASS
+    teacher_assignable_content_and_assignment_api: PASS
+    teacher_class_assignment_ui: PASS
+    student_pinned_assignment_labrun_and_attempt_ui: PASS
+    legacy_two_assignment_row_hashes_unchanged: PASS
+    historical_25_attempt_row_hashes_unchanged: PASS
+  acceptance_assignment_id: 'cmvtua0uo000ilwhwsb4oi4vm'
+  acceptance_attempt_ids:
+    - 'cmvtuaj29000tlwhwhkbdvlgn'
+    - 'cmvtuc1cb0010lwhwhnveh375'
+  current_circuit_attempt_count: 27
+  evidence: '.local/p36-publish-result.json; .local/p36-final-verification.json; .local/p36-live-*.png'
+  additional_legacy_smoke_check: 'pilot-a-circuit-assignment rejected bulb launch with expected 409 LEGACY_ASSIGNMENT_MODEL_INCOMPATIBLE. The second legacy assignment had no configured seeded student credential, so no eligible-user live launch was attempted; both exact IDs are covered by isolated compatibility tests and both stored rows are unchanged.'
+  next: 'P3.7 ready-for-dev; no P3.7 implementation started.'

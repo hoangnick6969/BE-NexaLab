@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { circuit, chemistry, eye, eyeParts, reactions } from "./index";
+import { circuit, circuitBulb, chemistry, eye, eyeParts, reactions } from "./index";
 const state = (r = 350) => ({
   nodes: [
     { id: "b", type: "battery", value: 9 },
@@ -15,6 +15,34 @@ const state = (r = 350) => ({
   ],
 });
 describe("Scientific engine", () => {
+  const bulbState = (closed: boolean) => ({
+    nodes: [
+      { id: "battery", type: "battery" },
+      { id: "bulb", type: "bulb" },
+      { id: "switch", type: "switch", closed },
+    ],
+    edges: [
+      { source: "battery", target: "bulb" },
+      { source: "bulb", target: "switch" },
+      { source: "switch", target: "battery" },
+    ],
+  });
+
+  it.each([
+    { closed: true, circuitPath: "CLOSED", bulbState: "ON" },
+    { closed: false, circuitPath: "OPEN", bulbState: "OFF" },
+  ])("models a $circuitPath path as a scientific observation", ({ closed, ...expected }) => {
+    expect(circuitBulb(bulbState(closed))).toMatchObject(expected);
+  });
+
+  it("rejects a bulb circuit with a broken wire or ambiguous components", () => {
+    const broken = bulbState(true);
+    broken.edges.pop();
+    expect(() => circuitBulb(broken)).toThrow();
+    expect(() => circuitBulb({ ...bulbState(true), nodes: [...bulbState(true).nodes, { id: "extra", type: "switch" }] })).toThrow();
+    expect(() => circuitBulb({ ...bulbState(true), nodes: [{ id: "battery", type: "battery", closed: true }, ...bulbState(true).nodes.slice(1)] })).toThrow();
+  });
+
   it("9V, 2V LED, 350Ω = exactly 20mA and passes", () => {
     expect(circuit(state())).toMatchObject({
       current: 0.02,
