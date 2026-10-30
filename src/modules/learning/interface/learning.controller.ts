@@ -39,7 +39,7 @@ export class LearningController {
     const assignmentId = parseAssignmentIdQuery(rawQuery);
     return this.access.studentPathway(id, req.user.sub, this.db, assignmentId);
   }
-  @Roles("STUDENT") @Get("open-curriculum/lessons/:id") async openCurriculumLesson(@Param("id") id: string, @Req() req: any) {
+  @Roles("STUDENT", "TEACHER", "ADMIN") @Get("open-curriculum/lessons/:id") async openCurriculumLesson(@Param("id") id: string, @Req() req: any) {
     const lesson = await this.db.lesson.findFirst({
       where: { id, status: "published", scope: "SHARED_LIBRARY", synthetic: false, packVersion: { status: "released", synthetic: false } },
       include: {

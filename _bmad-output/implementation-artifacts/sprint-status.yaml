@@ -6,7 +6,7 @@ project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
 scope: Release 1 / Content Foundation CF-T1..T4 plus I1 open curriculum, I2 Class Space resources, I3 assigned-test lifecycle, account/notifications (acc-1..acc-6) and the BE module-layer refactor; CF-T5 corpus remains a staffed workstream
-last_updated: '2026-10-28'
+last_updated: '2026-10-30'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'BE-NexaLab: origin/main ebfaba7 (PR #28 refactor/be-module-layers incl. acc-1..acc-6; earlier PR #27, I1 #23/#26, I2 #24, I3 #25, project-structure #20). Still unmerged: feat/content-foundation 1 commit ahead (824dc74 chemistry pH-mode registry outputs; the CF core 8a1d44b and its three migrations are already on main).'
@@ -123,8 +123,8 @@ development_status:
   p3-3-outcome-register: backlog
   p3-4-pilot-led-circuit: backlog
   p3-5-second-model-gate: backlog
-  p3-6-lab-factory-operations: backlog
-  p3-7-class-lab: backlog
+  p3-6-lab-factory-operations: done
+  p3-7-class-lab: ready-for-dev
 
 increment_i2_tracking:
   plan: ../planning-artifacts/increment-i2-epic-02-class-space-resources.md
@@ -897,3 +897,33 @@ tracking_update:
     - 'FE: src/api.ts, src/pages.tsx, src/styles.css, tests/quiz-learning.spec.ts'
     - 'BE: .env'
     - 'BE: scripts/integration.mjs'
+
+p36_publication_acceptance:
+  checked_at: '2026-10-30 Asia/Saigon'
+  environment: 'Existing local API http://127.0.0.1:4000/api -> shared Supabase; existing built FE served locally at http://127.0.0.1:5173 for UI verification'
+  authorization: 'Human explicitly approved BE deployment and then the exact atomic ADMIN publish payload in this chat.'
+  release_id: 'cmvtsos7w0004lwy49olx979h'
+  digest: '5c7503494b477b7e49f3ebbfc611c7934743f396ee16f477fb949a1a6dc719cd'
+  release_status: ACTIVE
+  publish_http: 201
+  publisher: 'admin (admin@nexalab.local)'
+  activated_at: '2026-10-30T00:47:02.872+07:00'
+  checks:
+    build_and_deploy: PASS
+    isolated_postgres_http_and_compatibility_tests: 'PASS: 12/12; TypeScript noEmit passed'
+    student_labs_ui: PASS
+    b22_lesson_link_ui: PASS
+    student_foundational_labrun_and_attempt_ui: PASS
+    teacher_assignable_content_and_assignment_api: PASS
+    teacher_class_assignment_ui: PASS
+    student_pinned_assignment_labrun_and_attempt_ui: PASS
+    legacy_two_assignment_row_hashes_unchanged: PASS
+    historical_25_attempt_row_hashes_unchanged: PASS
+  acceptance_assignment_id: 'cmvtua0uo000ilwhwsb4oi4vm'
+  acceptance_attempt_ids:
+    - 'cmvtuaj29000tlwhwhkbdvlgn'
+    - 'cmvtuc1cb0010lwhwhnveh375'
+  current_circuit_attempt_count: 27
+  evidence: '.local/p36-publish-result.json; .local/p36-final-verification.json; .local/p36-live-*.png'
+  additional_legacy_smoke_check: 'pilot-a-circuit-assignment rejected bulb launch with expected 409 LEGACY_ASSIGNMENT_MODEL_INCOMPATIBLE. The second legacy assignment had no configured seeded student credential, so no eligible-user live launch was attempted; both exact IDs are covered by isolated compatibility tests and both stored rows are unchanged.'
+  next: 'P3.7 ready-for-dev; no P3.7 implementation started.'

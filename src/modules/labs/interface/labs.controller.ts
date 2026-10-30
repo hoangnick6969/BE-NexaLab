@@ -13,7 +13,7 @@ import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
 import { canonical, digest, evaluateCircuitBulbActivity, evaluateRunV1, executionSchema, launchSchema, rubricRefForActivity, runSubmissionSchema, CIRCUIT_BULB_RUBRIC } from "../application/lab-run";
 import { StudentAccessService } from "../../progress/application/student-access.service";
-import { resolveFoundationalLabRelease, resolvePinnedAssignmentLab } from "../application/assignment-lab-execution";
+import { assertLegacyCircuitAssignmentCompatible, resolveFoundationalLabRelease, resolvePinnedAssignmentLab } from "../application/assignment-lab-execution";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
 
 @ApiTags("NexaLab")
@@ -190,6 +190,7 @@ export class LabsController {
         if (errors.length) throw new ConflictException({ code: "SIM_PACK_CONFIG_INCOMPATIBLE", message: errors.join("; ") });
       }
       const modelRef = pinnedAssignment?.modelRef ?? activePack?.modelRef ?? configVersion?.modelRef ?? c.lab.simulationModelRef;
+      assertLegacyCircuitAssignmentCompatible(c.labId, labAssignment, modelRef);
       let result: any;
       let normalizedVerdict: string;
       let engineVersion: string;
@@ -278,12 +279,13 @@ export class LabsController {
       const challenge = await tx.challenge.findUnique({ where: { id: b.challengeId }, include: { lab: true } });
       if (!challenge || challenge.labId !== labId || challenge.lab.status !== "published" || challenge.id.includes("_v-"))
         throw new NotFoundException({ code: "LAB_NOT_FOUND" });
-      const assignment = await tx.assignment.findFirst({
+      const isOpen = challenge.lab.scope === "SHARED_LIBRARY" && challenge.lab.releaseCleared && !challenge.lab.synthetic && Boolean(challenge.lab.topicCode);
+      // Circuit library practice must not inherit an unrelated legacy LED assignment.
+      const assignment = labId === "circuit" && !b.assignmentId && isOpen ? null : await tx.assignment.findFirst({
         where: { ...applicableAssignmentWhere(req.user.sub), contentId: labId, contentType: "lab", ...(b.assignmentId ? { id: b.assignmentId } : {}) },
         orderBy: assignmentQueueOrder,
       });
       if (b.releaseId && assignment) throw new ConflictException({ code: "LAB_RELEASE_CONTEXT_MISMATCH" });
-      const isOpen = challenge.lab.scope === "SHARED_LIBRARY" && challenge.lab.releaseCleared && !challenge.lab.synthetic && Boolean(challenge.lab.topicCode);
       if ((b.assignmentId && !assignment) || (!assignment && !isOpen))
         throw new NotFoundException({ code: "LAB_NOT_FOUND" });
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-version:" + labId);
@@ -321,6 +323,7 @@ export class LabsController {
           binding: assignment ? "LEGACY_UNPINNED_LAUNCH" : "FOUNDATIONAL_LAUNCH",
         };
       }
+      assertLegacyCircuitAssignmentCompatible(labId, assignment, execution.modelRef);
       if (await tx.labPackRevocation.findUnique({ where: { packVersionId: execution.packVersionId } }))
         throw new ConflictException({ code: "RUN_REVOKED" });
       const now = new Date();
@@ -361,11 +364,12 @@ export class LabsController {
       const locked = await tx.labRun.findUniqueOrThrow({ where: { id: run.id } });
       if (locked.revokedAt) throw new ConflictException({ code: "RUN_REVOKED" });
       if (locked.expiresAt && locked.expiresAt.getTime() <= Date.now()) throw new ConflictException({ code: "RUN_EXPIRED" });
+      let assignment: any = null;
       if (locked.assignmentId) {
-        const allowed = await tx.assignment.findFirst({ where: {
+        assignment = await tx.assignment.findFirst({ where: {
           ...applicableAssignmentWhere(req.user.sub), id: locked.assignmentId, contentId: locked.labId, contentType: "lab",
         } });
-        if (!allowed) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+        if (!assignment) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
       } else {
         const lab = await tx.lab.findUnique({ where: { id: locked.labId } });
         if (!lab || lab.status !== "published" || lab.scope !== "SHARED_LIBRARY" || !lab.releaseCleared || lab.synthetic || !lab.topicCode)
@@ -377,6 +381,7 @@ export class LabsController {
       const execution = parsed.data;
       if (await tx.labPackRevocation.findUnique({ where: { packVersionId: execution.packVersionId } }))
         throw new ConflictException({ code: "RUN_REVOKED" });
+      assertLegacyCircuitAssignmentCompatible(locked.labId, assignment, execution.modelRef);
       let result: any;
       let verdict: string;
       try {

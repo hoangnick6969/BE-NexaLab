@@ -81,6 +81,12 @@ export class AdminLabsController {
     return this.releases.activate(labId, releaseId, req, body);
   }
 
+  @Post("labs/:id/releases/:releaseId/publish")
+  @ApiOperation({ summary: "Publish an exact draft with ADMIN evidence and activation in one atomic operation" })
+  publishLabRelease(@Param("id") labId: string, @Param("releaseId") releaseId: string, @Req() req: any, @Body() body: unknown) {
+    return this.releases.publish(labId, releaseId, req, body);
+  }
+
   @Post("labs/:id/releases/:releaseId/quarantine")
   @ApiOperation({ summary: "Quarantine a release and revoke new evaluations using its pinned pack" })
   quarantineLabRelease(@Param("id") labId: string, @Param("releaseId") releaseId: string, @Req() req: any, @Body() body: unknown) {
@@ -117,7 +123,7 @@ export class AdminLabsController {
         tx.labRelease.findFirst({ where: { labId: id, status: "ACTIVE" }, select: { id: true } }),
         tx.labRelease.findFirst({ where: { labId: id }, select: { id: true } }),
       ]);
-      if (activeRelease || (anyRelease && b.status === "published"))
+      if (activeRelease || (anyRelease && b.status === "published" && before.status !== "published"))
         throw new ConflictException({ code: "LAB_RELEASE_REQUIRED", message: "Lab có hồ sơ release; hãy dùng quy trình review, activate hoặc quarantine để thay đổi trạng thái công khai" });
       const { reason: why, ...data } = b;
       const lab = await tx.lab.update({ where: { id }, data });

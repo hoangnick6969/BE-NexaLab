@@ -214,12 +214,73 @@ export class LabReleaseService {
 
   async activate(labId: string, releaseId: string, req: any, body: unknown) {
     const b = z.object({ reason: releaseReason }).strict().parse(body);
+    return this.db.$transaction((tx) => this.activateLocked(tx, labId, releaseId, req, b), { timeout: 15000 });
+  }
+
+  /** Explicit ADMIN publication records its evidence and activates atomically. */
+  async publish(labId: string, releaseId: string, req: any, body: unknown) {
+    const b = z.object({ reason: releaseReason, releaseDigest: z.string().regex(/^[a-f0-9]{64}$/), evidence: ownerEvidence }).strict().parse(body);
     return this.db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-release:" + labId);
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
+      const admin = await tx.user.findUnique({ where: { id: req.user.sub }, select: { role: true, status: true, disabledAt: true } });
+      if (req.user.role !== "ADMIN" || !admin || admin.role !== "ADMIN" || admin.status !== "active" || admin.disabledAt)
+        throw new ForbiddenException({ code: "LAB_OWNER_SIGNOFF_NOT_AUTHORIZED" });
+      const release = await tx.labRelease.findFirst({ where: { id: releaseId, labId }, include: { reviews: true } });
+      if (!release) throw new NotFoundException({ code: "LAB_RELEASE_NOT_FOUND" });
+      const snapshot = release.snapshot as any;
+      if (release.digest !== b.releaseDigest || digest(snapshot) !== release.digest)
+        throw new ConflictException({ code: "LAB_RELEASE_DIGEST_MISMATCH" });
+      if (snapshot.reviewPolicy !== "OWNER_SIGNOFF_V1" || snapshot.requiredReviewKinds?.length !== 1 || snapshot.requiredReviewKinds[0] !== "OWNER_SIGNOFF")
+        throw new ConflictException({ code: "LAB_RELEASE_POLICY_MISMATCH" });
+      if (release.status === "ACTIVE") {
+        if (missingReviewKinds({ ...snapshot, digest: release.digest }, release.reviews).length)
+          throw new ConflictException({ code: "LAB_RELEASE_REVIEWS_MISSING" });
+        return release;
+      }
+      if (release.status !== "DRAFT") throw new ConflictException({ code: "LAB_RELEASE_NOT_REVIEWABLE" });
+      await this.validateReleaseScience(tx, snapshot);
+      const existing = release.reviews.find((review) => review.kind === "OWNER_SIGNOFF");
+      if (existing) throw new ConflictException({ code: "LAB_RELEASE_ALREADY_REVIEWED" });
+      const receipt = await tx.labReleaseReview.create({ data: {
+        releaseId, reviewerId: req.user.sub, kind: "OWNER_SIGNOFF", decision: "APPROVE",
+        releaseDigest: release.digest, note: b.reason, evidence: b.evidence,
+      } });
+      await audit(tx, { actor: req.user, action: "lab_release.review", targetType: "LabRelease", targetId: releaseId, reason: b.reason,
+        after: { kind: receipt.kind, decision: receipt.decision, digest: release.digest, publication: true } });
+      return this.activateLocked(tx, labId, releaseId, req, b, true);
+    }, { timeout: 20000 });
+  }
+
+  private async validateReleaseScience(tx: any, snapshot: any) {
+    const [config, pack] = await Promise.all([
+      tx.simulationConfigVersion.findUnique({ where: { id: snapshot.execution.configVersionId } }),
+      tx.simulationPackVersion.findUnique({ where: { id: snapshot.execution.packVersionId } }),
+    ]);
+    if (!config || !pack) throw new ConflictException({ code: "PINNED_VERSION_MISSING" });
+    const input = versionInputSchema.safeParse({ challengeParams: config.challengeParams,
+      goldenCases: ((config.goldenCases as any[]) ?? []).map(({ actual: _actual, ...golden }) => golden), reason: config.reason });
+    const challengeIds = Object.keys(snapshot.execution.effectiveParams ?? {});
+    if (!input.success || versionErrors(snapshot.lab.id, challengeIds, input.data, config.modelRef).length || goldenCaseResults(snapshot.lab.id, input.data, config.modelRef).some((g) => !g.ok))
+      throw new ConflictException({ code: "LAB_CONFIG_VALIDATION_FAILED" });
+    const packInput = packInputSchema.safeParse({ key: pack.key, labId: pack.labId, modelRef: pack.modelRef,
+      activityVersionId: pack.activityVersionId, template: pack.template, visualAssetVersionId: pack.visualAssetVersionId,
+      semanticMap: pack.semanticMap, bindings: pack.bindings, challengeTemplates: pack.challengeTemplates, reviews: pack.reviews, reason: pack.reason });
+    const activity = activitySpecSchema.omit({ reviews: true }).safeParse(snapshot.activity?.spec);
+    if (!packInput.success || !activity.success) throw new ConflictException({ code: "LAB_PACK_VALIDATION_FAILED" });
+    const visual = pack.visualAssetVersionId ? await tx.assetVersion.findUnique({ where: { id: pack.visualAssetVersionId }, include: { asset: true } }) : null;
+    const glb = visual?.validation?.glb ?? null;
+    const visualReady = Boolean(visual && visual.status === "READY" && visual.asset.kind === "model" && visual.asset.status === "ACTIVE" && glb?.ok);
+    if (packValidation(packInput.data, { labModelRef: snapshot.execution.modelRef, activity: { spec: activity.data }, glb, visualReady }).errors.length)
+      throw new ConflictException({ code: "LAB_PACK_VALIDATION_FAILED" });
+  }
+
+  private async activateLocked(tx: any, labId: string, releaseId: string, req: any, b: { reason: string }, publishing = false) {
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-release:" + labId);
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
       const release = await tx.labRelease.findFirst({ where: { id: releaseId, labId }, include: { lab: true, reviews: true } });
       if (!release) throw new NotFoundException({ code: "LAB_RELEASE_NOT_FOUND" });
-      if (!(release.status === "APPROVED" || release.status === "SUPERSEDED"))
+      if (!(release.status === "APPROVED" || release.status === "SUPERSEDED" || (publishing && release.status === "DRAFT")))
         throw new ConflictException({ code: "LAB_RELEASE_NOT_APPROVED" });
       const snapshot = release.snapshot as any;
       if (digest(snapshot) !== release.digest || missingReviewKinds({ ...snapshot, digest: release.digest }, release.reviews).length)
@@ -237,7 +298,7 @@ export class LabReleaseService {
         }, labId, challengeId);
       }
       if (release.lab.synthetic || release.lab.status === "archived") throw new ConflictException({ code: "LAB_NOT_RELEASE_ELIGIBLE" });
-      if (release.status === "APPROVED" && (
+      if ((release.status === "APPROVED" || publishing) && (
         release.lab.title !== snapshot.lab.title || release.lab.subjectId !== snapshot.lab.subjectId ||
         release.lab.grade !== snapshot.lab.grade || release.lab.topic !== snapshot.lab.topic ||
         (release.lab.topicCode !== null && release.lab.topicCode !== snapshot.lab.topicCode) || release.lab.learningObjective !== snapshot.lab.learningObjective
@@ -254,7 +315,6 @@ export class LabReleaseService {
       } });
       await audit(tx, { actor: req.user, action: "lab_release.activate", targetType: "LabRelease", targetId: release.id, reason: b.reason, before: { activeReleaseId: previous?.id ?? null }, after: { labId, version: active.version, digest: release.digest, rollback: release.status === "SUPERSEDED" } });
       return active;
-    }, { timeout: 15000 });
   }
 
   async quarantine(labId: string, releaseId: string, req: any, body: unknown) {

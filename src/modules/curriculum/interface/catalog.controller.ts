@@ -95,7 +95,7 @@ export class CatalogController {
     });
     return { subjects: subjectData.filter((subject: any) => subject.grades.length) };
   }
-  @Roles("STUDENT")
+  @Roles("STUDENT", "TEACHER", "ADMIN")
   @Get("lessons/:lessonId/foundational-labs")
   async lessonLabs(@Param("lessonId") lessonId: string, @Req() req: any) {
     const lesson = await this.db.lesson.findFirst({ where: { id: lessonId, status: "published", scope: "SHARED_LIBRARY", synthetic: false } });
@@ -104,7 +104,8 @@ export class CatalogController {
     const candidates = await Promise.all(labs.map(async (lab) => {
       const release = await this.db.labRelease.findFirst({ where: { labId: lab.id, status: "ACTIVE" } });
       if (!release || !(release.snapshot as any).lessonBindings.some((binding: any) => binding.lessonId === lessonId)) return null;
-      return { labId: lab.id, title: lab.title, releaseId: release.id, version: release.version };
+      if (digest(release.snapshot) !== release.digest || !await reviewedBindingsMatch(this.db, lab.id, release.snapshot)) return null;
+      return { labId: lab.id, title: lab.title, objective: (release.snapshot as any).activity?.spec?.objective ?? lab.learningObjective, releaseId: release.id, version: release.version };
     }));
     return candidates.filter((item) => item !== null);
   }
@@ -117,12 +118,18 @@ export class CatalogController {
       // Lesson-variant challenges belong to their lesson pathway, not the public lab list.
       include: { challenges: { where: { NOT: { id: { contains: "_v-" } } } } },
     });
-    if (req.user.role !== "STUDENT") return labs;
     const visible = await Promise.all(labs.map(async (lab) => {
       const release = await this.db.labRelease.findFirst({ where: { labId: lab.id, status: "ACTIVE" } });
       // Preserve legacy catalog behavior for Labs without a release lifecycle record.
-      if (!release) return await this.db.labRelease.count({ where: { labId: lab.id } }) === 0 ? lab : null;
-      return digest(release.snapshot) === release.digest && await reviewedBindingsMatch(this.db, lab.id, release.snapshot) ? lab : null;
+      if (!release) return req.user.role !== "STUDENT" || await this.db.labRelease.count({ where: { labId: lab.id } }) === 0 ? lab : null;
+      if (digest(release.snapshot) !== release.digest || !await reviewedBindingsMatch(this.db, lab.id, release.snapshot))
+        return req.user.role === "STUDENT" ? null : lab;
+      const lessonIds = (release.snapshot as any).lessonBindings.map((binding: any) => binding.lessonId);
+      const lessonLinks = await this.db.lesson.findMany({
+        where: { id: { in: lessonIds }, status: "published", scope: "SHARED_LIBRARY", synthetic: false },
+        select: { id: true, title: true, curriculumTopicCode: true },
+      });
+      return { ...lab, lessonLinks: lessonLinks.map((lesson) => ({ lessonId: lesson.id, title: lesson.title, topicCode: lesson.curriculumTopicCode })) };
     }));
     return visible.filter((lab) => lab !== null);
   }

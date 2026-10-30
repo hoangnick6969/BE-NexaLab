@@ -14,6 +14,12 @@ import { MODEL_REGISTRY } from "../application/sim-packs";
 import { packInputSchema } from "../application/sim-packs";
 import { AdminLabsController } from "./admin-labs.controller";
 import { ensureCircuitBulbActivity } from "./lab-test-fixtures";
+import { NestFactory, Reflector } from "@nestjs/core";
+import type { INestApplication } from "@nestjs/common";
+import { Db } from "../../../db/db";
+import { Errors } from "../../../common/errors";
+import { AuthGuard, access } from "../../auth/interface/auth";
+import { LearningController } from "../../learning/interface/learning.controller";
 
 const testUrl = process.env.NEXALAB_PINNING_TEST_URL;
 if (process.env.CI && !testUrl) throw new Error("CI requires NEXALAB_PINNING_TEST_URL for Lab release lifecycle integration");
@@ -108,6 +114,8 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       edges: [{ source: "battery", target: "bulb" }, { source: "bulb", target: "switch" }, { source: "switch", target: "battery" }],
     });
     const reviewerKinds = ["OWNER_SIGNOFF"] as const;
+    let httpApp: INestApplication | undefined;
+    const previousJwtSecret = process.env.JWT_SECRET;
     try {
       const admin = await p.user.create({ data: { email: `p36-admin-${suffix}@example.test`, fullName: "P3.6 test operator", passwordHash: "test-only", role: "ADMIN" } });
       const student = await p.user.create({ data: { username: `p36-browser-${suffix}`, fullName: "P3.6 isolated browser test student", passwordHash: await argon.hash("p36-browser-local-test-only"), role: "STUDENT" } });
@@ -123,6 +131,16 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
         studentId: student.id, challengeId, labState: state(true), simulationResult: { legacy: true },
         verdict: "passed", durationMs: 100, simulationModelVersion: "1.0.0",
       } });
+      await p.attempt.createMany({ data: Array.from({ length: 24 }, () => ({
+        studentId: student.id, challengeId, labState: state(true), simulationResult: { legacy: true },
+        verdict: "passed", durationMs: 100, simulationModelVersion: "1.0.0",
+      })) });
+      const classroom = await p.classroom.create({ data: { teacherId: unauthorized.id, name: "TEST ONLY legacy Circuit class" } });
+      await p.assignment.createMany({ data: [1, 2].map((n) => ({
+        id: `p36-legacy-led-${suffix}-${n}`, classId: classroom.id, contentId: labId, contentType: "lab", title: "TEST ONLY legacy LED assignment",
+      })) });
+      const historicalRows = await p.attempt.findMany({ where: { challengeId }, orderBy: { id: "asc" } });
+      const legacyAssignments = await p.assignment.findMany({ where: { classId: classroom.id }, orderBy: { id: "asc" } });
       await p.curriculumChapter.create({ data: { code: chapterCode, subjectId, grade: 8, domain: "ENERGY", title: "TEST FIXTURE ONLY", status: "active", synthetic: false } });
       await p.curriculumTopic.create({ data: { code: topicCode, chapterCode, title: "TEST FIXTURE ONLY", outcomeCodes: [outcomeCode], status: "active" } });
       await p.curriculumOutcome.upsert({
@@ -251,22 +269,92 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id } })).toBe(0);
       await expect(service.review(draftA.id, adminReq, { ...reviewBody("OWNER_SIGNOFF"), evidence: undefined }))
         .rejects.toMatchObject({ response: { code: "LAB_OWNER_SIGNOFF_EVIDENCE_REQUIRED" } });
-      const finalAReview = await service.review(draftA.id, adminReq, reviewBody("OWNER_SIGNOFF"));
-      expect(finalAReview.status).toBe("APPROVED");
-      expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id, releaseDigest } })).toBe(reviewerKinds.length);
-      expect((await p.labReleaseReview.findFirstOrThrow({ where: { releaseId: draftA.id } })).evidence).toMatchObject({ curriculumMapping: expect.stringContaining("TEST FIXTURE") });
+      const publishBody = { reason: "TEST ONLY explicit ADMIN publish", releaseDigest, evidence: reviewBody("OWNER_SIGNOFF").evidence };
+      process.env.JWT_SECRET = "isolated-p36-http-only-secret-at-least-32-characters";
+      httpApp = await NestFactory.create({
+        module: class IsolatedPublishTestModule {},
+        controllers: [AdminLabsController, CatalogController, LabsController, LearningController],
+        providers: [
+          { provide: Db, useValue: p }, { provide: LabReleaseService, useValue: service },
+          { provide: StudentAccessService, useValue: new StudentAccessService(p as any) },
+          { provide: RequestRateLimiter, useValue: new RequestRateLimiter() },
+        ],
+      }, { logger: false });
+      httpApp.setGlobalPrefix("api");
+      httpApp.useGlobalGuards(new AuthGuard(new Reflector(), p as any));
+      httpApp.useGlobalFilters(new Errors());
+      await httpApp.listen(0, "127.0.0.1");
+      const baseUrl = await httpApp.getUrl();
+      const authenticated = async (user: typeof admin) => {
+        const session = await p.session.create({ data: { userId: user.id, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 60000) } });
+        return access(user, session.id);
+      };
+      const adminToken = await authenticated(admin);
+      const studentToken = await authenticated(student);
+      const teacherToken = await authenticated(unauthorized);
+      const http = async (path: string, token?: string, body?: unknown) => {
+        const response = await fetch(baseUrl + "/api" + path, {
+          method: body === undefined ? "GET" : "POST",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        });
+        return { status: response.status, body: await response.json() };
+      };
+      const publishPath = `/admin/labs/${labId}/releases/${draftA.id}/publish`;
+      expect((await http(publishPath, undefined, publishBody)).status).toBe(401);
+      expect((await http(publishPath, studentToken, publishBody)).status).toBe(403);
+      await expect(service.publish(labId, draftA.id, { user: { sub: unauthorized.id, role: "TEACHER" } }, publishBody))
+        .rejects.toMatchObject({ response: { code: "LAB_OWNER_SIGNOFF_NOT_AUTHORIZED" } });
+      await expect(service.publish(labId, draftA.id, adminReq, { ...publishBody, releaseDigest: "0".repeat(64) }))
+        .rejects.toMatchObject({ response: { code: "LAB_RELEASE_DIGEST_MISMATCH" } });
+      await expect(service.publish(labId, draftA.id, adminReq, { ...publishBody, evidence: undefined })).rejects.toThrow();
+      await expect(service.publish(labId, draftA.id, adminReq, { ...publishBody, evidence: { ...publishBody.evidence, rightsAssessment: "" } })).rejects.toThrow();
+      const originalGolden = configA.goldenCases;
+      await p.simulationConfigVersion.update({ where: { id: configA.id }, data: { goldenCases: [{ challengeId, label: "Wrong scientific case", labState: state(true), expectedVerdict: "not_passed" }] } });
+      await expect(service.publish(labId, draftA.id, adminReq, publishBody)).rejects.toMatchObject({ response: { code: "LAB_CONFIG_VALIDATION_FAILED" } });
+      await p.simulationConfigVersion.update({ where: { id: configA.id }, data: { goldenCases: originalGolden as any } });
       await p.lesson.update({ where: { id: lesson.id }, data: { outcomeCodes: [] } });
-      await expect(service.activate(labId, draftA.id, adminReq, { reason: "TEST ONLY reject changed mapping" }))
+      await expect(service.publish(labId, draftA.id, adminReq, publishBody))
         .rejects.toMatchObject({ response: { code: "LAB_RELEASE_BINDING_MISMATCH" } });
+      // Receipt insertion happens before activation validation; both roll back together.
+      expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id } })).toBe(0);
+      expect((await p.labRelease.findUniqueOrThrow({ where: { id: draftA.id } })).status).toBe("DRAFT");
+      expect((await p.lab.findUniqueOrThrow({ where: { id: labId } })).releaseCleared).toBe(false);
       await p.lesson.update({ where: { id: lesson.id }, data: { outcomeCodes: [outcomeCode] } });
-      const activeA = await releaseController.activateLabRelease(labId, draftA.id, adminReq, { reason: "TEST FIXTURE ONLY — exercise activation mechanics" });
+      const [activeA, retriedA] = await Promise.all([
+        http(publishPath, adminToken, publishBody).then((r) => { expect(r.status).toBe(201); return r.body; }),
+        http(publishPath, adminToken, publishBody).then((r) => { expect(r.status).toBe(201); return r.body; }),
+      ]);
       expect(activeA.status).toBe("ACTIVE");
+      expect(retriedA.id).toBe(activeA.id);
+      expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id } })).toBe(1);
+      const receipt = await p.labReleaseReview.findFirstOrThrow({ where: { releaseId: draftA.id } });
+      expect(receipt).toMatchObject({ reviewerId: admin.id, kind: "OWNER_SIGNOFF", releaseDigest, evidence: publishBody.evidence });
+      expect(receipt.createdAt).toBeInstanceOf(Date);
+      expect((await p.labRelease.findUniqueOrThrow({ where: { id: draftA.id } })).snapshot).toEqual(draftA.snapshot);
+      expect(await p.attempt.findMany({ where: { challengeId }, orderBy: { id: "asc" } })).toEqual(historicalRows);
+      expect(historicalRows).toHaveLength(25);
+      expect(await p.assignment.findMany({ where: { classId: classroom.id }, orderBy: { id: "asc" } })).toEqual(legacyAssignments);
       expect(await p.lab.findUniqueOrThrow({ where: { id: labId } })).toMatchObject({ topicCode, simulationModelRef: modelRef });
       expect(await p.attempt.findUniqueOrThrow({ where: { id: historicalAttempt.id } })).toMatchObject({
         id: historicalAttempt.id, simulationResult: { legacy: true }, packVersionId: null, configVersionId: null,
       });
 
       const catalog = new CatalogController(p as any);
+      const httpCatalog = await http("/labs", studentToken);
+      expect(httpCatalog.status).toBe(200);
+      expect(httpCatalog.body.some((item: any) => item.id === labId)).toBe(true);
+      expect(httpCatalog.body.find((item: any) => item.id === labId).lessonLinks).toEqual([
+        { lessonId: lesson.id, title: lesson.title, topicCode },
+      ]);
+      for (const token of [adminToken, teacherToken]) {
+        const linked = await http(`/lessons/${lesson.id}/foundational-labs`, token);
+        expect(linked.status).toBe(200);
+        expect(linked.body).toEqual(expect.arrayContaining([expect.objectContaining({ labId, releaseId: activeA.id })]));
+        const publicReading = await http(`/open-curriculum/lessons/${lesson.id}`, token);
+        expect(publicReading.status).toBe(200);
+        expect(publicReading.body.id).toBe(lesson.id);
+      }
       expect((await catalog.labs(studentReq)).some((item: any) => item.id === labId)).toBe(true);
       const labs = new LabsController(p as any, new StudentAccessService(p as any), new RequestRateLimiter());
       await p.lesson.update({ where: { id: lesson.id }, data: { outcomeCodes: [] } });
@@ -275,9 +363,14 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
         .rejects.toMatchObject({ response: { code: "LAB_RELEASE_BINDING_MISMATCH" } });
       await p.lesson.update({ where: { id: lesson.id }, data: { outcomeCodes: [outcomeCode] } });
       expect(await catalog.lessonLabs(lesson.id, studentReq)).toEqual(expect.arrayContaining([expect.objectContaining({ labId, releaseId: activeA.id })]));
+      const b22Link = await http(`/lessons/${lesson.id}/foundational-labs`, studentToken);
+      expect(b22Link.status).toBe(200);
+      expect(b22Link.body).toEqual(expect.arrayContaining([expect.objectContaining({ labId, releaseId: activeA.id })]));
       await expect(labs.launchRun(labId, studentReq, { challengeId, releaseId: "not-the-reviewed-release" }))
         .rejects.toMatchObject({ response: { code: "LAB_RELEASE_CHANGED" } });
-      const launchA = await labs.launchRun(labId, studentReq, { challengeId });
+      const httpLaunch = await http(`/labs/${labId}/runs`, studentToken, { challengeId });
+      expect(httpLaunch.status).toBe(201);
+      const launchA = httpLaunch.body;
       expect(launchA).toMatchObject({ versionBinding: "FOUNDATIONAL_RELEASE", modelRef, rubricVersion: CIRCUIT_BULB_RUBRIC });
       const launchRecordA = await p.labRun.findUniqueOrThrow({ where: { id: launchA.runId } });
       expect(launchRecordA.execution).toMatchObject({ binding: "FOUNDATIONAL_RELEASE", releaseId: activeA.id, packVersionId: packA.id });
@@ -285,7 +378,9 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
         contract: "lab-contract/1", runId: launchA.runId, idempotencyKey: randomUUID(), stateSchemaVersion: 1, evidenceSchemaVersion: 1,
         checkpoints: [{ id: "CLOSED", state: state(true), prediction: "ON" }, { id: "OPEN", state: state(false), prediction: "OFF" }], explanation: "A", durationMs: 100,
       };
-      const attemptA = await labs.attempt(studentReq, evidence);
+      const httpAttempt = await http("/attempts", studentToken, evidence);
+      expect(httpAttempt.status).toBe(201);
+      const attemptA = httpAttempt.body;
       const persistedA = await p.attempt.findUniqueOrThrow({ where: { id: attemptA.id } });
       expect(persistedA).toMatchObject({ labRunId: launchA.runId, packVersionId: packA.id, configVersionId: configA.id, verdict: "passed" });
       expect(await new AdminLabsController(p as any, service).reproduce(persistedA.id)).toMatchObject({ matches: true, resultMatches: true, reproductionBasis: "pinned_execution" });
@@ -296,8 +391,7 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       const packB = await p.simulationPackVersion.create({ data: packData(2, `p36-pack-b-${suffix}`, "active") });
       const draftB = await service.createDraft(labId, adminReq, { reason: "TEST FIXTURE ONLY — create Circuit release draft B", lessonId: lesson.id });
       const digestB = draftB.digest;
-      await service.review(draftB.id, adminReq, { ...reviewBody("OWNER_SIGNOFF"), releaseDigest: digestB });
-      const activeB = await service.activate(labId, draftB.id, adminReq, { reason: "TEST FIXTURE ONLY — exercise successor activation" });
+      const activeB = await service.publish(labId, draftB.id, adminReq, { ...publishBody, releaseDigest: digestB });
       expect(activeB.status).toBe("ACTIVE");
       expect((await p.labRelease.findUniqueOrThrow({ where: { id: activeA.id } })).status).toBe("SUPERSEDED");
       expect(configB.status).toBe("active");
@@ -324,6 +418,9 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       expect((await new AdminLabsController(p as any, service).reproduce(attemptAfterRollback.id)).matches).toBe(true);
       expect((await p.attempt.findUniqueOrThrow({ where: { id: persistedA.id } })).packVersionId).toBe(packA.id);
     } finally {
+      await httpApp?.close();
+      if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
+      else process.env.JWT_SECRET = previousJwtSecret;
       MODEL_REGISTRY[modelRef] = originalModel;
       if (originalParams) CHALLENGE_PARAMETERS[labId] = originalParams;
       else delete CHALLENGE_PARAMETERS[labId];

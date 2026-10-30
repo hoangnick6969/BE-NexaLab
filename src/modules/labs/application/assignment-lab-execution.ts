@@ -9,6 +9,18 @@ const lockLabVersions = async (tx: any, labId: string) => {
   await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
 };
 
+export function assertLegacyCircuitAssignmentCompatible(
+  labId: string,
+  assignment: { labExecution?: unknown } | null | undefined,
+  modelRef: string,
+) {
+  if (labId === "circuit" && assignment && assignment.labExecution == null && modelRef === "circuit-bulb@1.0.0")
+    throw new ConflictException({
+      code: "LEGACY_ASSIGNMENT_MODEL_INCOMPATIBLE",
+      message: "Bài giao LED cũ chưa ghim phiên bản nên không thể dùng mô hình bóng đèn mới.",
+    });
+}
+
 async function currentLabExecutionLocked(tx: any, labId: string) {
   const config = await tx.simulationConfigVersion.findFirst({ where: { labId, status: "active" } });
   const pack = await tx.simulationPackVersion.findFirst({ where: { labId, status: "active" } });
