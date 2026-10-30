@@ -26,13 +26,13 @@ Prior local browser verification covered teacher assignment, student submit, F5 
 
 ## P3.7 readiness
 
-Technical shared runtime is reusable; portfolio expansion remains gated by genuine pilot review and device evidence. portfolio-review-v1.md preserves all 20 provisional slots and original IDs/decisions. All 20 mappings remain unapproved; incomplete chapter/lesson labels are explicitly unresolved rather than fabricated. Proposed next candidates: FL-03 density, then FL-06 lever equilibrium. Scope and source review precede implementation.
+Technical shared runtime is reusable; portfolio expansion remains gated by genuine pilot review and device evidence. lab-portfolio-20-slots-v1.md preserves all 20 provisional slots and original IDs/decisions. All 20 mappings remain unapproved; incomplete chapter/lesson labels are explicitly unresolved rather than fabricated. Proposed next candidates: FL-03 density, then FL-06 lever equilibrium. Scope and source review precede implementation.
 
 ### Shared Lab Space and frontend kit update — 2026-10-30
 
 The sibling FE now has an implementation-level shared `LabSpace` viewport shell and `PhysicsStage` environment for the Circuit bulb pilot and the existing legacy circuit model. The circuit editor retains node/edge/value state and emits the existing state contract; the bulb activity retains checkpoint evidence and server grading. The assigned lesson opens the space as an overlay and retains its lesson-step submission/reconciliation path. FE validation recorded 22/22 focused mocked browser tests, lint and build passing. This does not change release readiness, create an active release, authorize shared database work, or verify representative school hardware.
 
-Architecture follow-up: keep the proposed K1–K8 component kits and one non-evidence Explorer as presentation reuse only. K2 Wet Chemistry and K3 Fluid equipment can share rooms/assets/measurement widgets, but FL-10–15 and FL-03/04/05 remain distinct candidate identities and scientific models. Current frontend supports K1 room + Circuit apparatus only; no other catalog kit or Explorer is production-complete. Asset caching, low-end rendering tiers, lifecycle cleanup, public/private search visibility, and numeric Chromebook/Celeron budgets require per-kit implementation and measured P3.7 acceptance. See `lab-catalog-khtn8-9.md` §6A.6.
+Architecture follow-up: keep the proposed K1–K8 component kits and one non-evidence Explorer as presentation reuse only. K2 Wet Chemistry and K3 Fluid equipment can share rooms/assets/measurement widgets, but FL-10–15 and FL-03/04/05 remain distinct candidate identities and scientific models. Current frontend supports K1 room + Circuit apparatus only; no other catalog kit or Explorer is production-complete. Asset caching, low-end rendering tiers, lifecycle cleanup, public/private search visibility, and numeric Chromebook/Celeron budgets require per-kit implementation and measured P3.7 acceptance. See `lab-catalog-and-shared-kits-khtn8-9.md` §6A.6.
 
 ## Engineering closure update
 
@@ -83,8 +83,8 @@ Phase status: P3.1 technical Define complete; P3.2 runtime complete for verified
 
 ## Lab pipeline and renderer update — 2026-10-30
 
-- Pipeline phase snapshot is maintained in `phase-plan.md` (canonical P3 authority). Current status remains: P3.1 technical definition complete; P3.2 verified for documented isolated slices; P3.3 genuine owner review open; P3.4 isolated pilot passed; P3.5 technical fixture passed but full gate not met; P3.6 engineering verified but release gate blocked/not done; P3.7 expansion not started as a release track.
-- `lab-catalog-khtn8-9.md` §6A.6 now provides the proposal-level index from K1–K8/Explorer to candidate Lab IDs and identifies which renderer evidence exists today. Kit membership does not imply a working Lab or release.
+- Pipeline phase snapshot is maintained in `lab-pipeline-phase-plan.md` (canonical P3 authority). Current status remains: P3.1 technical definition complete; P3.2 verified for documented isolated slices; P3.3 genuine owner review open; P3.4 isolated pilot passed; P3.5 technical fixture passed but full gate not met; P3.6 engineering verified but release gate blocked/not done; P3.7 expansion not started as a release track.
+- `lab-catalog-and-shared-kits-khtn8-9.md` §6A.6 now provides the proposal-level index from K1–K8/Explorer to candidate Lab IDs and identifies which renderer evidence exists today. Kit membership does not imply a working Lab or release.
 - The Circuit bulb and circuit topology frontends offer 2D and 3D equivalents. 3D is default; learner preference stays local and is excluded from simulation, attempt and assignment contracts. Other Labs do not expose a renderer option until the alternate renderer exists and is verified.
 - The topology 2D editor was present in the original `Circuit.tsx` as React Flow. It is now retained at `src/features/labs/physics/electricity/Circuit2DEditor.tsx`; the FE `features/labs/README.md` documents grouping against the 20 provisional slots and marks unimplemented kits explicitly.
 - This UI work does not change release gates, shared DB status, OWNER_SIGNOFF or P3.7 authorization.

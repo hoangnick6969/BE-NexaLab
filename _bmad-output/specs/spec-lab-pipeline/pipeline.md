@@ -1,6 +1,6 @@
 # Pipeline, decisions and release boundaries
 
-The canonical phase numbering and Build backlog are in phase-plan.md. This document describes stages rather than additional phase IDs.
+The canonical phase numbering and Build backlog are in lab-pipeline-phase-plan.md. This document describes stages rather than additional phase IDs.
 
 1. Record official program and textbook/teacher-guide source identity, edition, locator, provenance and rights. Register outcomes as proposed; obtain a qualified human decision before claiming approved curriculum coverage.
 2. Map Outcome → concept → activity → Lesson/video → candidate Lab. Each mapping has its own review status. Inventory KHTN8–9 broadly; prioritise Circuit without blocking the technical pilot on the entire register.

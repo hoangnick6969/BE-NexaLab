@@ -50,7 +50,7 @@ No MERGE is asserted yet: the current source does not prove a shared model, work
 
 ## Historical discovery data
 
-The remainder is retained for provenance. Its W1 LED pilot and phase references are superseded by the bulb blueprint and canonical phase-plan.md. Its outcome statements are truncated, may contain OCR errors and do not themselves prove virtual assessment of real practical skills.
+The remainder is retained for provenance. Its W1 LED pilot and phase references are superseded by the bulb blueprint and canonical lab-pipeline-phase-plan.md. Its outcome statements are truncated, may contain OCR errors and do not themselves prove virtual assessment of real practical skills.
 ## 1. Input actually used
 
 Read-only query on 2026-10-28 against the database configured in BE `.env` (development):

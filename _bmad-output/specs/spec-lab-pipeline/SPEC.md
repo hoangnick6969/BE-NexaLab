@@ -7,8 +7,8 @@ companions:
   - foundational-lab-track.md
   - class-lab-track.md
   - data-model-and-api.md
-  - phase-plan.md
-  - lab-catalog-khtn8-9.md
+  - lab-pipeline-phase-plan.md
+  - lab-catalog-and-shared-kits-khtn8-9.md
   - brownfield.md
 ---
 # NexaLab Lab Pipeline — master definition
@@ -35,7 +35,7 @@ Keep all 30 candidates with stable source IDs. The portfolio is an editable prop
 
 ### Compatibility fixture boundary
 
-The P3.5 Chemistry pH compatibility fixture is `TECHNICAL_FIXTURE_ONLY`: it reuses an existing prototype solely to test that the shared runtime can dispatch a distinct state/output shape. It is not textbook-Outcome-derived, curriculum-reviewed, a Foundational Lab candidate by itself, or a student product surface. Keep its existing regression tests, but exclude fixture records from portfolio totals, curriculum coverage, release creation/activation, Lesson bindings and student discovery. Chemistry candidates in `lab-catalog-khtn8-9.md` remain separate unapproved discovery proposals and do not inherit evidence from this fixture. Circuit is the sole Foundational Lab pilot for P3.6.
+The P3.5 Chemistry pH compatibility fixture is `TECHNICAL_FIXTURE_ONLY`: it reuses an existing prototype solely to test that the shared runtime can dispatch a distinct state/output shape. It is not textbook-Outcome-derived, curriculum-reviewed, a Foundational Lab candidate by itself, or a student product surface. Keep its existing regression tests, but exclude fixture records from portfolio totals, curriculum coverage, release creation/activation, Lesson bindings and student discovery. Chemistry candidates in `lab-catalog-and-shared-kits-khtn8-9.md` remain separate unapproved discovery proposals and do not inherit evidence from this fixture. Circuit is the sole Foundational Lab pilot for P3.6.
 
 ## First pilot and scope
 
@@ -45,4 +45,4 @@ The existing LED definition, 2 V approximation and golden cases remain an unappr
 
 ## Completion and gate boundary
 
-Define DONE means an implementer can start the P3.2a isolated BE version-pinning slice using the named contract, initial data choice, acceptance checks and ownership in phase-plan.md. Human signoff is not needed to build private fixtures. The MVP owner must personally review the exact candidate and submit an authenticated receipt before it can be represented as validated or released. Independent expert certification is outside this MVP policy. Open review decisions and operational retention controls remain tracked in phase-plan.md and do not authorize production.
+Define DONE means an implementer can start the P3.2a isolated BE version-pinning slice using the named contract, initial data choice, acceptance checks and ownership in lab-pipeline-phase-plan.md. Human signoff is not needed to build private fixtures. The MVP owner must personally review the exact candidate and submit an authenticated receipt before it can be represented as validated or released. Independent expert certification is outside this MVP policy. Open review decisions and operational retention controls remain tracked in lab-pipeline-phase-plan.md and do not authorize production.

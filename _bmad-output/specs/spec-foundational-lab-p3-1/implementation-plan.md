@@ -1,6 +1,6 @@
 # P3.1 delivery pointer
 
-The authoritative phases, gates, Build backlog and agent ownership are in ../spec-lab-pipeline/phase-plan.md. This file no longer defines a separate phase sequence.
+The authoritative phases, gates, Build backlog and agent ownership are in ../spec-lab-pipeline/lab-pipeline-phase-plan.md. This file no longer defines a separate phase sequence.
 
 - Define is complete for a private technical Build; the Circuit Outcome, scientific model and rubric remain unreviewed.
 - First Build is the BE launch-bound LabRun slice with isolated PostgreSQL checks. FE host, bulb model and curriculum preparation proceed according to the master dependencies.

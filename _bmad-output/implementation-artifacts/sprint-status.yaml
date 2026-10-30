@@ -404,8 +404,8 @@ story_notes:
     artifact: ../specs/spec-lab-pipeline/SPEC.md
     decisions: 'D-LP-01 accepted by the requester (Class Lab = teacher configuration on an active Foundational LabRelease). D-LP-02..06 proposed for ADR-LAB-01 (LabRelease tuple, launch pinning with grace, execution tuple outside simulationResult, Class Lab as ClassResource kind LAB, Open Curriculum LAB step).'
     evidence: 'Source reading of BE main, FE main and BE origin/codex/foundational-lab-platform (P3.1 spec + pinning fix, unmerged). Vitest BE main sim/labs/foundational 37/37; fl branch 40 passed, labs-pinning.integration skipped without a database. DB snapshot and Content Tool proposal not verified.'
-    catalog: 'spec-lab-pipeline/lab-catalog-khtn8-9.md proposes 30 Foundational Lab candidates mapped from a read-only export of 157 KHTN 8 and 102 canonical KHTN 9 outcomes (KHTN 8 98/157 and KHTN 9 68/102 Lab-touched); all outcomes remain PROPOSED_UNAPPROVED; register defects listed for P3.3.'
-    remaining: 'DEFINE exit list in spec-lab-pipeline/phase-plan.md: ADR-LAB-01 acceptance, contract v1 fixtures, corrected P3.1 docs, merge decision for the fl branch, product decisions P-1/P-2 and technical T-1..T-4. No reviewer, approval or Lab release exists.'
+    catalog: 'spec-lab-pipeline/lab-catalog-and-shared-kits-khtn8-9.md proposes 30 Foundational Lab candidates mapped from a read-only export of 157 KHTN 8 and 102 canonical KHTN 9 outcomes (KHTN 8 98/157 and KHTN 9 68/102 Lab-touched); all outcomes remain PROPOSED_UNAPPROVED; register defects listed for P3.3.'
+    remaining: 'DEFINE exit list in spec-lab-pipeline/lab-pipeline-phase-plan.md: ADR-LAB-01 acceptance, contract v1 fixtures, corrected P3.1 docs, merge decision for the fl branch, product decisions P-1/P-2 and technical T-1..T-4. No reviewer, approval or Lab release exists.'
   project-structure-refactor:
     status: done
     audited_against_code: '2026-10-17'
