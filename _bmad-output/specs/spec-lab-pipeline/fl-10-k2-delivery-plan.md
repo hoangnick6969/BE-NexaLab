@@ -1,6 +1,6 @@
 # FL-10 / K2 — kế hoạch hoàn tất hoạt động bảo toàn khối lượng
 
-Trạng thái 2026-10-31: **đang triển khai, chưa phát hành**. Đây là một activity ứng viên thuộc FL-10 SPLIT, không tuyên bố bao phủ mọi Outcome FL-10 hay hoàn thành K2 cho FL-11–15. Dựa trên [implementation spec](fl-10-k2-implementation-spec.md) và [nội dung chủ dự án cung cấp](fl-10-student-content-draft.md).
+Trạng thái 2026-10-31: **pre-release đang chuẩn bị; migration event đã áp dụng lên Supabase; chưa tạo candidate hoặc phát hành**. Đây là một activity ứng viên thuộc FL-10 SPLIT, không tuyên bố bao phủ mọi Outcome FL-10 hay hoàn thành K2 cho FL-11–15. Dựa trên [implementation spec](fl-10-k2-implementation-spec.md) và [nội dung chủ dự án cung cấp](fl-10-student-content-draft.md).
 
 ## Quyết định kỹ thuật để đi tiếp
 
@@ -19,6 +19,31 @@ Trạng thái 2026-10-31: **đang triển khai, chưa phát hành**. Đây là m
 5. **UI POEA:** LabSpace fullscreen, cảnh và bảng câu hỏi responsive, focus/keyboard/touch/aria-live, an toàn → dự đoán → quan sát → giải thích → vận dụng → tổng kết. Reset tạo run mới sau xác nhận. Số cân từ server, ví dụ tính toán tách biệt. Kiểm desktop/mobile 200%, 2D/3D parity, mạng mất/retry và lỗi API.
 6. **Review/release:** đối chiếu edition/trang in 24–27/source block/Outcome/quyền; chuyên môn hóa học duyệt dung dịch, hiện tượng, an toàn; UX/device QA; reviewer phê activity, config, pack, rubric và golden. Chỉ sau đó tạo release snapshot/digest, OWNER_SIGNOFF đúng digest và activate theo quy trình. Không tự ký hay activate.
 
+## Hồ sơ review ứng viên — chưa phê duyệt
+
+Hồ sơ này chuẩn hóa theo kịch bản hiện đang cài trong FE/BE. Các mục ghi `pending` chưa phải review receipt hay xác nhận của chuyên gia; không dùng chúng để phát hành.
+
+| Hạng mục | Nội dung hiện tại | Trạng thái |
+|---|---|---|
+| Curriculum / nguồn | Outcome ứng viên B05-O01; SGK KHTN 8 Bài 5, trang in 24–27 theo thông tin chủ dự án. Edition, source block, wording đối chiếu và quyền tái sử dụng chưa được xác minh. | Pending curriculum + rights review |
+| Kịch bản hóa học | BaCl₂ (dd) + Na₂SO₄ (dd) → BaSO₄ (rắn trắng) + 2NaCl (dd). Đây là mô hình hai cốc mở đặt trên cân; kết tủa là minh họa, không gọi là hệ kín. | Pending subject review |
+| Tham số mô phỏng cho học sinh | Hai cốc rỗng 100,0 g mỗi cốc; nước 100,0 g mỗi cốc; fixture chất phản ứng 20,8 g + 14,2 g và sản phẩm 23,3 g + 11,7 g. Tổng trên cân là 435,0 g trước/sau theo giả định lý tưởng; hiển thị nhãn `Số liệu mô phỏng`. Học sinh không nhập các khối lượng. | Pending xác nhận dải/nồng độ/độ tan và pin digest |
+| Fixture kỹ thuật | Golden model dùng 50,0 g dung môi mỗi cốc để kiểm tra phép cộng; không tái sử dụng làm số liệu học sinh. Model kiểm tra tỉ lệ mol và bảo toàn fixture đã allowlist. | Unit tests passed; không phải chứng nhận khoa học |
+| An toàn | Barium chloride tan độc; mô phỏng trên máy, không tự làm tại nhà. Nếu thực hành thật phải theo hướng dẫn giáo viên và quy định phòng thí nghiệm. | Pending review an toàn có tên |
+| Activity / rubric | Activity `mass-conservation-poea`; rubric `mass-conservation-poea@1.0.0`, C1–C6 đạt/chưa đạt, dự đoán không chấm đúng/sai, văn bản tự do không ảnh hưởng điểm. V3 phản tư không chấm. | BE tests passed; pending review sư phạm |
+| Renderer / UX | Phòng nền vật lý dùng chung; FL-10 thêm cân và hai cốc. Hai cốc luôn ở trên cân; 2D/3D cùng giữ state và chỉ hiện số sau event hợp lệ. Playwright fixture dùng API mock, chưa kiểm tra FE→BE→DB production. | Mock E2E passed; live integration/device review pending |
+| Release | Candidate chưa được tạo; chưa có `releaseDigest`, review receipt hoặc OWNER_SIGNOFF. | Not ready |
+
+## Evidence pre-release 2026-10-31
+
+- Checkout BE tại commit `70613abd` trùng `origin/f10`; checkout FE tại commit `53d92fa` trùng `origin/f10`.
+- `npx prisma migrate status` ban đầu phát hiện migration pending `20261031130000_fl10_run_events`. `npx prisma migrate deploy` áp đúng migration Prisma lên Supabase project `eiotlkegrejjhldsvaqp`; status sau đó báo 45 migrations found, schema up to date. Read-only verification xác nhận migration có `finished_at`, bảng `LabRunEvent` có 6 cột và 1 trigger bất biến.
+- Truy vấn production sau migration: `Lab` cho `mass-conservation`, activity `mass-conservation-poea`, config, pack và release đều chưa có bản ghi. `LabRunEvent` là schema duy nhất mới được thêm; chưa tạo nội dung/candidate.
+- Supabase security advisor ghi INFO `rls_enabled_no_policy` cho bảng mới (RLS bật, không có policy cho client trực tiếp) và WARN `function_search_path_mutable` cho `prevent_lab_run_event_mutation`; cần theo dõi remediation trước release. Các cảnh báo này không thay thế review bảo mật.
+- BE: `npm run build` passed; 5 test files FL-10 liên quan model, rubric, event ordering, controller và tương thích LabRun passed, 31/31 assertions. Lần chạy trong sandbox đầu tiên gặp Windows `EPERM` khi resolve source; retry trong quyền được cấp chạy thành công. Không chạy integration test FE→BE→DB trên production.
+- FE: `npm run build` passed. Playwright bằng Chrome đã cài: FL-10 giữ dự đoán/trạng thái qua 2D↔3D và Circuit khôi phục evidence đều passed (2/2). Các test này mock API; không chứng minh kết nối production.
+- Candidate chưa thể tạo trong lượt này: môi trường không có `NEXALAB_API` hoặc thông tin xác thực owner/admin cho API runtime. Repo hiện chỉ có workflow CI, không có workflow deploy backend production. Không seed trực tiếp hoặc gọi service bằng cách giả lập danh tính.
+
 ## Trạng thái
 
-`model thuần`, `event API + migration`, `rubric/submit`, `registry/config/launch` và `K2 2D/3D + UI` đã có mã và kiểm tra. Migration đã chạy trên PostgreSQL UTF-8 loopback cô lập; integration test tạo run, ghi đủ bốn event, từ chối người ngoài, submit và reproduce qua admin. 35 test BE tập trung qua. Chrome test dùng API mock đã chạy luồng desktop/mobile, đổi 2D/3D và nộp kết quả; lint/build FE qua. **Chưa có một phép thử trình duyệt nối tới BE/DB thật**, và cấu hình/nguồn D3–D4 vẫn là ứng viên. `review/release` ⬜. Chỉ gọi FL-10 “chạy được” trên môi trường học sinh khi có thử nghiệm FE→BE→DB trên dữ liệu local cô lập; chỉ gọi “phát hành” khi mục review/release có evidence và OWNER_SIGNOFF đúng digest.
+`model thuần`, `event API + migration`, `rubric/submit`, `registry/config/launch` và `K2 2D/3D + UI` đã có mã. Migration FL-10 đã áp dụng lên Supabase qua Prisma, nhưng production chưa có Lab/Activity/Config/Pack. Test BE/FE ở trên là unit/mock evidence; **chưa có một phép thử trình duyệt nối FE→BE→DB thật**, cấu hình và review D3–D4 chưa được xác nhận. `review/release` vẫn mở. Candidate chỉ được tạo qua API/service trên runtime đã triển khai sau khi có cấu hình và bằng chứng review; OWNER_SIGNOFF cần do chủ dự án thực hiện trên đúng digest.
