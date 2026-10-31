@@ -410,8 +410,8 @@ export class LabsController {
         evidenceSchemaVersion: 1,
         constraints: execution.modelRef === "mass-conservation@1.0.0" ? {} : template?.ranges ?? {},
         initialState: execution.modelRef === "mass-conservation@1.0.0" ? null : template?.initialState ?? null,
-        rendererKey: execution.modelRef === "circuit-bulb@1.0.0" ? "circuit-bulb"
-          : execution.modelRef === "mass-conservation@1.0.0" ? "mass-conservation" : null,
+        rendererKey: checkpointActivityForModel(execution.modelRef)?.rendererKey
+          ?? (execution.modelRef === "mass-conservation@1.0.0" ? "mass-conservation" : null),
         expiresAt: run.expiresAt, context: run.context, assignmentId: run.assignmentId,
         versionBinding: execution.binding,
       };
