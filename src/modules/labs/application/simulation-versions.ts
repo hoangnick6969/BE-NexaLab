@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { VERSION as ENGINE_VERSION, eyeParts } from "../../../../packages/sim";
-import { MODEL_REGISTRY, modelRefForLab, resolveModel } from "./sim-packs";
+import { observationOnlyModel, modelRefForLab, resolveModel } from "./sim-packs";
 import { CHALLENGE_PARAMETERS, type ChallengeParams, challengeParamErrors, evaluateChallenge } from "../../lessons/application/lesson-content";
 
 /**
@@ -60,8 +60,9 @@ export function packConfigurationErrors(
   }
   const template = pack.template as { ranges?: Record<string, { min: number; max: number }> } | null;
   const ranges = template?.ranges ?? {};
-  if (MODEL_REGISTRY[pack.modelRef]?.observationOnly) {
-    if (params && Object.keys(params).length) errors.push(observationParamsError(pack.modelRef));
+  const observationOnly = observationOnlyModel(pack.modelRef);
+  if (observationOnly) {
+    if (params && Object.keys(params).length) errors.push(observationOnly.unsupportedParams[0].toUpperCase() + observationOnly.unsupportedParams.slice(1));
     return errors;
   }
   if (pack.modelRef === "mass-conservation@1.0.0") {
@@ -111,11 +112,12 @@ export function versionErrors(labId: string, baseChallengeIds: string[], input: 
   const spec = CHALLENGE_PARAMETERS[labId];
   if (!spec) return [`Mô hình "${labId}" không nằm trong danh sách cho phép`];
   const errors: string[] = [];
+  const observationOnly = observationOnlyModel(modelRef);
   const base = new Set(baseChallengeIds);
   for (const [challengeId, params] of Object.entries(input.challengeParams)) {
     if (!base.has(challengeId)) errors.push(`Thử thách "${challengeId}" không thuộc phòng thực hành này`);
-    else if (modelRef && MODEL_REGISTRY[modelRef]?.observationOnly) {
-      if (Object.keys(params).length) errors.push(`${challengeId}: ${observationParamsError(modelRef).replace(/^M/, "m")}`);
+    else if (observationOnly) {
+      if (Object.keys(params).length) errors.push(`${challengeId}: ${observationOnly.unsupportedParams}`);
     } else for (const error of challengeParamErrors(labId, params)) errors.push(`${challengeId}: ${error}`);
   }
   for (const [index, golden] of input.goldenCases.entries()) {
@@ -134,10 +136,10 @@ export function goldenCaseResults(labId: string, input: VersionInput, modelRef?:
   return input.goldenCases.map((golden) => {
     let actual: string;
     try {
-      if (modelRef && (MODEL_REGISTRY[modelRef]?.observationOnly || modelRef === "mass-conservation@1.0.0")) {
+      if (modelRef && (observationOnlyModel(modelRef) || modelRef === "mass-conservation@1.0.0")) {
         // Observation-only golden cases validate a well-formed observation state.
         // They do not assess learning or treat OPEN as a student failure.
-        resolveModel(modelRef).simulate(golden.labState);
+        resolveModel(modelRef!).simulate(golden.labState);
         actual = "passed";
       } else {
         actual = evaluate(labId, golden.labState, input.challengeParams[golden.challengeId] ?? null, modelRef).verdict;

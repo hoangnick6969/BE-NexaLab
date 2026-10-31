@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { resolveModel } from "./sim-packs";
-import { normalizeVerdict } from "./simulation-versions";
-import { CHECKPOINT_ACTIVITIES, LEGACY_RUBRIC, RUBRIC_REFS, checkpointActivityForModel } from "./checkpoint-activities";
-import type { ChallengeParams } from "../../lessons/application/lesson-content";
+import { CHECKPOINT_ACTIVITIES } from "./checkpoint-activities";
+import { boundedState } from "./evaluators/legacy-challenge.evaluator";
+import { labEvaluators } from "./evaluators/registry";
+import type { EvidenceEnvelope } from "./evaluators/lab-evaluator";
 
 /** Stable JSON for digests and idempotency; key order is not meaningful. */
 export function canonical(value: unknown): string {
@@ -29,32 +29,23 @@ const runSubmissionBase = z.object({
   evidenceSchemaVersion: z.literal(1),
   durationMs: z.number().int().min(0).max(86400000),
 }).strict();
-const boundedState = z.unknown().refine((v) => v !== undefined && JSON.stringify(v).length <= 20000);
-const checkpointSubmissions = CHECKPOINT_ACTIVITIES.map((activity) =>
-  runSubmissionBase.extend(activity.submission).strict().superRefine(activity.refine));
 export const runSubmissionSchema = z.union([
   runSubmissionBase.extend({ labState: boundedState }).strict(),
-  checkpointSubmissions[0],
-  ...checkpointSubmissions.slice(1),
+  runSubmissionBase.extend({ evidence: boundedState }).strict(),
+  ...CHECKPOINT_ACTIVITIES.map((activity) => runSubmissionBase.extend(activity.submission).strict().superRefine(activity.refine)),
 ]);
+export type RunSubmission = z.infer<typeof runSubmissionSchema>;
 
-export { CIRCUIT_BULB_ACTIVITY_KEY, CIRCUIT_BULB_RUBRIC, evaluateCircuitBulbActivity } from "./checkpoint-activities";
-export const FL10_ACTIVITY_KEY = "mass-conservation-poea";
+/** Learner data exactly as stored on the attempt, with the envelope it arrived in. */
+export function submittedEvidence(submission: RunSubmission): { envelope: EvidenceEnvelope; data: unknown } {
+  if ("checkpoints" in submission) return { envelope: "checkpoints", data: { checkpoints: submission.checkpoints, explanation: submission.explanation } };
+  if ("evidence" in submission) return { envelope: "evidence", data: submission.evidence };
+  return { envelope: "labState", data: (submission as { labState?: unknown }).labState };}
+
+export { CIRCUIT_BULB_ACTIVITY_KEY, CIRCUIT_BULB_RUBRIC, evaluateCircuitBulbActivity } from "./evaluators/circuit-bulb-checkpoints.evaluator";
+export { LEGACY_CHALLENGE_RUBRIC, evaluateRunV1 } from "./evaluators/legacy-challenge.evaluator";
 export const FL10_RUBRIC = "mass-conservation-poea@1.0.0";
-export function rubricRefForActivity(activityKey: string, activityVersion: number, modelRef: string) {
-  if (modelRef === "mass-conservation@1.0.0" || activityKey.startsWith("mass-conservation-")) {
-    if (activityKey !== FL10_ACTIVITY_KEY || activityVersion !== 1 || modelRef !== "mass-conservation@1.0.0") throw new Error("FL-10 model and activity versions are incompatible");
-    return FL10_RUBRIC;
-  }
-  const byKey = CHECKPOINT_ACTIVITIES.find((activity) => activity.activityKey === activityKey);
-  const byModel = checkpointActivityForModel(modelRef);
-  if (byKey || byModel) {
-    if (!byKey || byKey !== byModel || activityVersion !== byKey.activityVersion)
-      throw new Error("Checkpoint model and activity versions are incompatible");
-    return byKey.rubricRef;
-  }
-  return LEGACY_RUBRIC;
-}
+export const rubricRefForActivity = labEvaluators.rubricRefForActivity;
 
 const executionFieldsSchema = z.object({
   modelRef: z.string().min(1),
@@ -65,8 +56,7 @@ const executionFieldsSchema = z.object({
   activityDigest: z.string().min(1),
   activityKey: z.string().min(1),
   activityVersion: z.number().int().positive(),
-  rubricRef: z.enum([...RUBRIC_REFS, FL10_RUBRIC]),
-  params: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
+  rubricRef: z.string().refine(labEvaluators.isRegistered, "Rubric is not registered"),  params: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
   stateSchemaVersion: z.literal(1),
   evidenceSchemaVersion: z.literal(1),
   template: z.unknown(),
@@ -93,41 +83,3 @@ export const assignmentExecutionSchema = compatibleActivityTuple(executionFields
   challengeParams: z.record(z.string(), z.record(z.string(), z.union([z.number(), z.string()]))),
   effectiveParams: z.record(z.string(), z.record(z.string(), z.union([z.number(), z.string()])).nullable()),
 }).strict());
-/**
- * Frozen compatibility rubric. Its identity is recorded on LabRun; new
- * assessment behavior must use another implementation and version.
- */
-export function evaluateRunV1(labId: string, state: any, params: ChallengeParams | null, modelRef: string) {
-  if (modelRef === "mass-conservation@1.0.0") throw new Error("FL-10 requires its pinned activity rubric");
-  let result: any = resolveModel(modelRef).simulate(state);
-  if (params) {
-    const unmet: string[] = [];
-    let verdict = result.verdict as string;
-    if (labId === "circuit") {
-      const maxA = Number(params.maxCurrentMa ?? 20) / 1000;
-      const branches: Array<{ current: number | null; leds: number }> = result.branches ?? [];
-      const lit = branches.filter((b) => b.leds > 0 && b.current !== null && b.current >= 0.001 && b.current <= 0.02 + 1e-12);
-      const litLeds = lit.reduce((sum, b) => sum + b.leds, 0);
-      if (branches.some((b) => b.leds > 0 && b.current !== null && b.current > maxA + 1e-12)) unmet.push("maxCurrentMa");
-      if (litLeds < Number(params.minLitLeds ?? 1)) unmet.push("minLitLeds");
-      if (verdict === "passed" && unmet.length) verdict = "partial";
-    } else if (labId === "chemistry") {
-      if (params.experiment === "ph") {
-        const samples: Array<{ type: string | null }> = result.samples ?? [];
-        if (samples.length !== 3 || samples.some((sample) => sample.type == null)) verdict = "not_passed";
-      } else if (params.reactionId && state?.reactionId !== params.reactionId) {
-        unmet.push("reactionId");
-        verdict = "not_passed";
-      }
-    } else if (labId === "eye") {
-      const score = Number(result.score ?? 0);
-      if (score >= Number(params.minScore ?? 100)) verdict = "passed";
-      else {
-        unmet.push("minScore");
-        verdict = score > 0 ? "partial" : "not_passed";
-      }
-    }
-    result = { ...result, verdict, challengeCheck: { params, unmet } };
-  }
-  return { result, verdict: normalizeVerdict(result.verdict) };
-}
