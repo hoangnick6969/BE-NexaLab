@@ -213,6 +213,9 @@ fl25_tracking:
     - 'BE learning.controller.test.ts: I3 status test froze Date (fixed due date 2026-11-01 turned DUE_SOON from 2026-10-31).'
     - 'FE: removed unreferenced stale src/features/labs/CircuitBulbActivity.tsx/.css that broke lint/build on main.'
     - 'FE LabSpace.css: Circuit result-drawer rules extended to .em-activity.'
+    - 'BE CI (also cherry-picked to main): set NEXALAB_ISOLATED_DATABASE_URL; run npm test on a migrated nexalab_pinning_test database.'
+    - 'BE migration 20261031120000_lesson_scope_teacher_private: Lesson_scope_check also allows TEACHER_PRIVATE (code default); teacher-private lesson creation returned 500 on any database with 20261025150000. Applies to the shared DB only through the normal deploy.'
+    - 'BE scripts/integration.mjs aligned with Foundational Release rules: group assignment uses a seeded lesson; circuit practicals go through the lesson lab step; unreleased chemistry/eye labs assert assignment refusal and are graded via teacher preview. 99 assertions pass locally.'
   next:
     - 'Curriculum reviewer: D-3 KHTN 9 Điện từ outcome text/provenance; owner confirms D-2, D-4, D-5.'
     - 'FL25-T10 on agreed school hardware, screen reader pass, GPU memory release on leave.'
