@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { circuit, circuitBulb, chemistry, eye, eyeParts, reactions } from "./index";
+import { circuit, circuitBulb, chemistry, emInduction, eye, eyeParts, reactions } from "./index";
 const state = (r = 350) => ({
   nodes: [
     { id: "b", type: "battery", value: 9 },
@@ -136,5 +136,45 @@ describe("Scientific engine", () => {
         .score,
     ).toBe(100);
     expect(eye({ answers: {} }).score).toBe(0);
+  });
+});
+
+describe("em-induction@1.0.0 (FL-25 golden cases)", () => {
+  const coil = (poleFacingCoil: "N" | "S", magnetPosition: "OUTSIDE" | "INSIDE", motion: "STILL" | "TOWARD" | "AWAY", circuit: "CLOSED" | "OPEN" = "CLOSED") =>
+    ({ setup: "magnet-coil", circuit, poleFacingCoil, magnetPosition, motion });
+  const generator = (rotation: "STILL" | "CW" | "CCW", turns: 0 | 1, circuit: "CLOSED" | "OPEN" = "CLOSED") =>
+    ({ setup: "generator", circuit, rotation, turns });
+
+  it.each([
+    { id: "EM-01", state: coil("N", "INSIDE", "STILL"), expected: { fieldThroughCoil: "UNCHANGED", inducedCurrent: "ABSENT", direction: "NONE" } },
+    { id: "EM-02", state: coil("N", "INSIDE", "TOWARD"), expected: { fieldThroughCoil: "INCREASING", inducedCurrent: "PRESENT", direction: "D1" } },
+    { id: "EM-03", state: coil("N", "OUTSIDE", "AWAY"), expected: { fieldThroughCoil: "DECREASING", inducedCurrent: "PRESENT", direction: "D2" } },
+    { id: "EM-04", state: coil("S", "INSIDE", "TOWARD"), expected: { fieldThroughCoil: "INCREASING", inducedCurrent: "PRESENT", direction: "D2" } },
+    { id: "EM-05", state: coil("S", "OUTSIDE", "AWAY"), expected: { fieldThroughCoil: "DECREASING", inducedCurrent: "PRESENT", direction: "D1" } },
+    { id: "EM-06", state: coil("N", "INSIDE", "TOWARD", "OPEN"), expected: { fieldThroughCoil: "INCREASING", inducedCurrent: "ABSENT", direction: "NONE" } },
+    { id: "EM-07", state: coil("N", "OUTSIDE", "STILL"), expected: { fieldThroughCoil: "UNCHANGED", inducedCurrent: "ABSENT", direction: "NONE" } },
+  ])("$id magnet and coil", ({ state, expected }) => {
+    expect(emInduction(state)).toEqual({ version: "1.0.0", setup: "magnet-coil", ...expected });
+  });
+
+  it.each([
+    { id: "EM-08", state: generator("CW", 1), phases: ["NONE", "D1", "D1", "D1", "NONE", "D2", "D2", "D2"], kind: "ALTERNATING", reversals: 2 },
+    { id: "EM-09", state: generator("CCW", 1), phases: ["NONE", "D2", "D2", "D2", "NONE", "D1", "D1", "D1"], kind: "ALTERNATING", reversals: 2 },
+    { id: "EM-10", state: generator("STILL", 0), phases: Array(8).fill("NONE"), kind: "NONE", reversals: 0 },
+    { id: "EM-11", state: generator("CW", 1, "OPEN"), phases: Array(8).fill("NONE"), kind: "NONE", reversals: 0 },
+  ])("$id generator", ({ state, phases, kind, reversals }) => {
+    expect(emInduction(state)).toEqual({
+      version: "1.0.0", setup: "generator", inducedCurrent: kind === "NONE" ? "ABSENT" : "PRESENT",
+      currentKind: kind, reversalsPerTurn: reversals, phaseDirections: phases,
+    });
+  });
+
+  it("rejects contradictory or unknown states (EM-X1..X3)", () => {
+    expect(() => emInduction(coil("N", "OUTSIDE", "TOWARD"))).toThrow();
+    expect(() => emInduction(coil("N", "INSIDE", "AWAY"))).toThrow();
+    expect(() => emInduction(generator("STILL", 1))).toThrow();
+    expect(() => emInduction(generator("CW", 0))).toThrow();
+    expect(() => emInduction({ ...coil("N", "INSIDE", "STILL"), speed: 2 })).toThrow();
+    expect(() => emInduction({ setup: "transformer", circuit: "CLOSED" })).toThrow();
   });
 });

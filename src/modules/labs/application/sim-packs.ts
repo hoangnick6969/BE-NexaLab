@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, eye, eyeParts } from "../../../../packages/sim";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, emInduction, eye, eyeParts } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -18,6 +18,8 @@ type Model = {
   outputs: Record<string, "number" | "string" | "array">;
   /** Semantic IDs every visual for this model must map. */
   requiredSemanticIds: string[];
+  /** Reports scientific observations only; a pinned checkpoint rubric assesses the learner. */
+  observationOnly?: true;
 };
 export const MODEL_REGISTRY: Record<string, Model> = {
   "circuit@1.0.0": {
@@ -41,6 +43,15 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     simulate: circuitBulb,
     outputs: { circuitPath: "string", bulbState: "string" },
     requiredSemanticIds: ["battery", "bulb", "switch"],
+    observationOnly: true,
+  },
+  "em-induction@1.0.0": {
+    labId: "em-induction",
+    engineVersion: ENGINE_VERSION,
+    simulate: emInduction,
+    outputs: { setup: "string", fieldThroughCoil: "string", inducedCurrent: "string", direction: "string", currentKind: "string", reversalsPerTurn: "number", phaseDirections: "array" },
+    requiredSemanticIds: ["coil", "magnet", "galvanometer", "led-pair", "generator"],
+    observationOnly: true,
   },
   "chemistry@1.0.0": {
     labId: "chemistry",
@@ -274,12 +285,12 @@ export function packValidation(
     } catch (error: any) {
       problem = "trạng thái không hợp lệ: " + String(error?.message ?? error).slice(0, 120);
     }
-    // The bulb model reports scientific observations but intentionally has no
-    // student verdict. For its configuration golden cases, `passed` means only
-    // that the state was valid; expectedOutputs verifies OPEN/CLOSED and ON/OFF.
+    // Observation-only models (Circuit bulb, induction) intentionally have no
+    // student verdict. For their configuration golden cases, `passed` means only
+    // that the state was valid; expectedOutputs verifies the observations.
     // Activity assessment is evaluated separately by the pinned rubric.
     const verdict = output
-      ? input.modelRef === "circuit-bulb@1.0.0" ? "passed" : normalize(output.verdict)
+      ? model.observationOnly ? "passed" : normalize(output.verdict)
       : "invalid";
     const mismatches = output
       ? Object.entries(g.expectedOutputs).filter(([k, v]) =>

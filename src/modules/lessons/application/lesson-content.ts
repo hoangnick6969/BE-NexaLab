@@ -73,6 +73,12 @@ export const CHALLENGE_PARAMETERS: Record<
       minScore: { kind: "number", label: "Điểm tối thiểu để đạt", unit: "%", min: 50, max: 100, step: 10, default: 100 },
     },
   },
+  // FL-25 private prototype: observation-only model with a pinned checkpoint rubric; no challenge parameters.
+  "em-induction": {
+    modelRef: "em-induction@1.0.0",
+    rangeReview: "pending",
+    params: {},
+  },
 };
 export type ChallengeParams = Record<string, number | string>;
 

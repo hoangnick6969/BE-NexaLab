@@ -11,7 +11,8 @@ import { requestHint } from "../application/hint";
 import { explain } from "../infrastructure/llm";
 import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
-import { canonical, digest, evaluateCircuitBulbActivity, evaluateRunV1, executionSchema, launchSchema, rubricRefForActivity, runSubmissionSchema, CIRCUIT_BULB_RUBRIC } from "../application/lab-run";
+import { canonical, digest, evaluateRunV1, executionSchema, launchSchema, rubricRefForActivity, runSubmissionSchema } from "../application/lab-run";
+import { checkpointActivityForModel, checkpointActivityForRubric } from "../application/checkpoint-activities";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { assertLegacyCircuitAssignmentCompatible, resolveFoundationalLabRelease, resolvePinnedAssignmentLab } from "../application/assignment-lab-execution";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
@@ -338,7 +339,7 @@ export class LabsController {
         modelRef: execution.modelRef, engineVersion: execution.engineVersion, activityVersionId: execution.activityVersionId,
         activityVersion: execution.activityVersion, rubricVersion: execution.rubricRef, stateSchemaVersion: 1,
         evidenceSchemaVersion: 1, constraints: template?.ranges ?? {}, initialState: template?.initialState ?? null,
-        rendererKey: execution.modelRef === "circuit-bulb@1.0.0" ? "circuit-bulb" : null,
+        rendererKey: checkpointActivityForModel(execution.modelRef)?.rendererKey ?? null,
         expiresAt: run.expiresAt, context: run.context, assignmentId: run.assignmentId,
         versionBinding: execution.binding,
       };
@@ -388,9 +389,10 @@ export class LabsController {
         const model = resolveModel(execution.modelRef);
         if (model.labId !== locked.labId || model.engineVersion !== execution.engineVersion)
           throw new Error("Pinned model is unavailable");
-        if (execution.rubricRef === CIRCUIT_BULB_RUBRIC) {
-          if (!("checkpoints" in b)) throw new Error("Thiếu bằng chứng checkpoint Circuit");
-          ({ result, verdict } = evaluateCircuitBulbActivity(b.checkpoints as Array<{ id: "CLOSED" | "OPEN"; state: unknown; prediction: "ON" | "OFF" }>, b.explanation));
+        const activity = checkpointActivityForRubric(execution.rubricRef);
+        if (activity) {
+          if (!("checkpoints" in b)) throw new Error("Thiếu bằng chứng checkpoint");
+          ({ result, verdict } = activity.evaluate(b.checkpoints, b.explanation));
         } else {
           if (!("labState" in b)) throw new Error("Thiếu trạng thái Lab");
           ({ result, verdict } = evaluateRunV1(locked.labId, b.labState, execution.params, execution.modelRef));
