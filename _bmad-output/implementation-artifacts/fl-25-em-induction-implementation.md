@@ -132,3 +132,9 @@ Owner asked that students can act on the apparatus themselves. FE only, local, n
 - Shared environment (read-only check with the owner's admin account): topic `KHTN9-CH04-T01` and outcome `KHTN-L9/dien-tu/1` are active and not synthetic; the lesson's pack version is released with that outcome; the Lab did not exist yet. The outcome statement is still truncated (D-3).
 - Rehearsal on an isolated database: all steps pass, rerun is idempotent, a student launch resolves `FOUNDATIONAL_RELEASE` and a full submission scores 5/5.
 - Not done from this machine: applying migrations to the shared database (the guarded `db:migrate` refuses non-loopback targets; the owner applies them).
+
+## Release (2026-10-31)
+- Owner applied both pending migrations to Supabase (`prisma migrate deploy`; status showed exactly `20261031120000_lesson_scope_teacher_private` and `20261031130000_fl25_em_induction_lab`).
+- `scripts/release-em-induction.mjs` against the owner's API (port 4000, shared DB) with the owner's ADMIN account: activity v1, configuration v1, pack `em-induction-k1` v1, release v1 draft (digest `66d99668f24565c7024c95b7fb0b923d92e98c92c00727f081f34e0e6cc5f323`), then on the owner's "publish đi" OWNER_SIGNOFF with the evidence in the script and publish.
+- Verified read-only: release v1 ACTIVE with `OWNER_SIGNOFF:APPROVE`, lesson binding and outcome as above; Lab `published`, `SHARED_LIBRARY`, `releaseCleared`, not synthetic.
+- Still open: D-3 outcome statement text in the register; T10 on school hardware; the shared admin account still uses the documented default password.
