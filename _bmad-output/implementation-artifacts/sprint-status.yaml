@@ -189,10 +189,11 @@ development_status:
 
 fl25_tracking:
   spec: ../specs/spec-fl-25-em-induction/SPEC.md
-  status: owner-approved-pending-release
+  status: released
   date: '2026-10-31'
   record: fl-25-em-induction-implementation.md
   branch: 'feat/fl-25-electromagnetic-induction in BE (from adaee7f) and FE (from 0d63fb8); committed and pushed 2026-10-31 on owner request (owner opens the PRs)'
+  release: 'LabRelease v1 ACTIVE on the shared environment 2026-10-31, digest 66d99668f24565c7024c95b7fb0b923d92e98c92c00727f081f34e0e6cc5f323; OWNER_SIGNOFF APPROVE by the owner ADMIN account (owner instruction "publish đi"); bound to lesson pack-khtn9-l14-cam-ung-dien-tu-nguyen-tac-tao-ra-dong-dien-xo-v1, outcome KHTN-L9/dien-tu/1; Lab now published, SHARED_LIBRARY, releaseCleared. Migrations 20261031120000 and 20261031130000 applied to Supabase by the owner (prisma migrate deploy).'
   owner_approval: 'owner statement in the working session 2026-10-31: "Lab đã được duyệt" and asked to release to the shared DB, commit and push. Release is not written to the shared DB from a dev machine: it goes through the deployed admin release flow (POST /admin/labs/:id/releases → activate → publish) with the genuine OWNER_SIGNOFF on the exact digest, after the branch is merged and deployed.'
   scope: 'FL-25 cảm ứng điện từ & dòng xoay chiều (K1, K9 cond.): qualitative model em-induction@1.0.0, activity em-induction-checkpoints v1 (4 predictions + explanation), BE activity registry generalisation, FE 3D apparatus + equivalent 2D view.'
   audit_findings:
@@ -220,7 +221,8 @@ fl25_tracking:
     - 'Curriculum reviewer: D-3 KHTN 9 Điện từ outcome text/provenance; owner confirms D-2, D-4, D-5.'
     - 'FL25-T10 on agreed school hardware, screen reader pass, GPU memory release on leave.'
     - 'Optional ticket: merge static geometry of the shared PhysicsStage room (draw calls).'
-    - 'Owner opens PRs for both branches; after merge and deploy, release FL-25 through the admin release flow with in-system OWNER_SIGNOFF (a dev machine never writes the shared DB).'
+    - 'Merged to main (PR #41). Apply pending migrations 20261031120000_lesson_scope_teacher_private and 20261031130000_fl25_em_induction_lab to the shared DB through the owner process (db:migrate is loopback-guarded), then run scripts/release-em-induction.mjs against the API with the owner ADMIN account; FL25_PUBLISH=true signs OWNER_SIGNOFF with the printed evidence and publishes.'
+    - 'Release rehearsal 2026-10-31 on an isolated database (local stand-ins for the KHTN9 Điện từ topic, outcome KHTN-L9/dien-tu/1 and lesson pack-khtn9-l14-…): activity, configuration v1, pack em-induction-k1 v1, release v1 draft → publish → ACTIVE; rerun idempotent; student foundational launch and submit scored 5/5.'
   pre_existing_issues:
     - 'FE main: 10 Playwright cases in lab-run-host/lesson-lab-navigation are stale against the current Lab Space UI (labels such as "Thoát phòng thực hành", "Câu hỏi · 1/6", chemistry button names); they are Circuit/P3.5 evidence, so left for their owners.'
 

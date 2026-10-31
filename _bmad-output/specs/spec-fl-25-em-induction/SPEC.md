@@ -1,6 +1,6 @@
 ---
 id: SPEC-fl-25-em-induction
-status: owner-approved-pending-release
+status: released
 date: '2026-10-31'
 branch: feat/fl-25-electromagnetic-induction (BE + FE)
 companions:
