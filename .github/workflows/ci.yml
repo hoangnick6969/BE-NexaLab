@@ -14,6 +14,8 @@ jobs:
         options: --health-cmd="pg_isready -U nexalab" --health-interval=5s --health-retries=10
     env:
       DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/nexalab?schema=public
+      # The job's own Postgres service on loopback; the package scripts refuse any other target.
+      NEXALAB_ISOLATED_DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/nexalab?schema=public
       JWT_SECRET: ci-only-secret-not-for-production-0123456789
       SEED_PASSWORD: IntegrationPassword2026!
       WEB_ORIGIN: http://localhost:5173
