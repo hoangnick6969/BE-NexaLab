@@ -168,6 +168,64 @@ export function circuitBulb(raw: unknown) {
   };
 }
 
+// FL-25 em-induction@1.0.0: qualitative induction only. No EMF, magnitude,
+// speed, turn count or field strength is modelled. D1/D2 are the two current
+// directions of the fixed coil winding; renderers map them to needle sides.
+export const emInductionSchema = z.discriminatedUnion("setup", [
+  z.object({
+    setup: z.literal("magnet-coil"),
+    circuit: z.enum(["CLOSED", "OPEN"]),
+    poleFacingCoil: z.enum(["N", "S"]),
+    magnetPosition: z.enum(["OUTSIDE", "INSIDE"]),
+    motion: z.enum(["STILL", "TOWARD", "AWAY"]),
+  }).strict(),
+  z.object({
+    setup: z.literal("generator"),
+    circuit: z.enum(["CLOSED", "OPEN"]),
+    rotation: z.enum(["STILL", "CW", "CCW"]),
+    turns: z.union([z.literal(0), z.literal(1)]),
+  }).strict(),
+]);
+export type EmInductionState = z.infer<typeof emInductionSchema>;
+export type EmDirection = "D1" | "D2" | "NONE";
+
+/** Phase samples at 0°, 45°, …, 315° of one turn; current follows the sign of sin θ for CW. */
+const GENERATOR_CW: EmDirection[] = ["NONE", "D1", "D1", "D1", "NONE", "D2", "D2", "D2"];
+const reverse = (direction: EmDirection): EmDirection => direction === "D1" ? "D2" : direction === "D2" ? "D1" : "NONE";
+
+export function emInduction(raw: unknown) {
+  const state = emInductionSchema.parse(raw);
+  if (state.setup === "magnet-coil") {
+    if ((state.motion === "TOWARD" && state.magnetPosition !== "INSIDE") ||
+        (state.motion === "AWAY" && state.magnetPosition !== "OUTSIDE"))
+      throw new Error("Vị trí nam châm không khớp chiều chuyển động");
+    const fieldThroughCoil = state.motion === "TOWARD" ? "INCREASING" : state.motion === "AWAY" ? "DECREASING" : "UNCHANGED";
+    const present = state.circuit === "CLOSED" && fieldThroughCoil !== "UNCHANGED";
+    // Reversing either the pole or the motion reverses the current.
+    const northDirection: EmDirection = state.motion === "TOWARD" ? "D1" : "D2";
+    return {
+      version: "1.0.0",
+      setup: "magnet-coil" as const,
+      fieldThroughCoil,
+      inducedCurrent: present ? "PRESENT" : "ABSENT",
+      direction: present ? (state.poleFacingCoil === "N" ? northDirection : reverse(northDirection)) : "NONE" as EmDirection,
+    };
+  }
+  if ((state.rotation === "STILL") !== (state.turns === 0))
+    throw new Error("Số vòng quay không khớp trạng thái quay");
+  const present = state.circuit === "CLOSED" && state.rotation !== "STILL";
+  return {
+    version: "1.0.0",
+    setup: "generator" as const,
+    inducedCurrent: present ? "PRESENT" : "ABSENT",
+    currentKind: present ? "ALTERNATING" : "NONE",
+    reversalsPerTurn: present ? 2 : 0,
+    phaseDirections: present
+      ? state.rotation === "CW" ? [...GENERATOR_CW] : GENERATOR_CW.map(reverse)
+      : GENERATOR_CW.map((): EmDirection => "NONE"),
+  };
+}
+
 export const reactions = [
   {
     id: "mg-hcl",

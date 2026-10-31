@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { LearningController } from "./learning.controller";
 
 describe("LearningController assignment context", () => {
@@ -207,6 +207,9 @@ describe("LearningController assignment catalog summaries", () => {
   });
 
   it("keeps I3 test status while returning I1 catalog metadata for assigned lessons", async () => {
+    // Freeze the clock well before the fixture deadline so the status stays UPCOMING on any run date.
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-20T00:00:00Z") });
+    onTestFinished(() => { vi.useRealTimers(); });
     const dueAt = new Date("2026-11-01T00:00:00Z");
     const assignmentRows = [
       {

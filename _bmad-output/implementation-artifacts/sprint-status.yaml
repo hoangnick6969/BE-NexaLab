@@ -6,7 +6,7 @@ project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
 scope: Release 1 / Content Foundation CF-T1..T4 plus I1 open curriculum, I2 Class Space resources, I3 assigned-test lifecycle, account/notifications (acc-1..acc-6) and the BE module-layer refactor; CF-T5 corpus remains a staffed workstream
-last_updated: '2026-10-30'
+last_updated: '2026-10-31'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'BE-NexaLab: origin/main ebfaba7 (PR #28 refactor/be-module-layers incl. acc-1..acc-6; earlier PR #27, I1 #23/#26, I2 #24, I3 #25, project-structure #20). Still unmerged: feat/content-foundation 1 commit ahead (824dc74 chemistry pH-mode registry outputs; the CF core 8a1d44b and its three migrations are already on main).'
@@ -125,6 +125,19 @@ development_status:
   p3-5-second-model-gate: backlog
   p3-6-lab-factory-operations: done
   p3-7-class-lab: ready-for-dev
+  # FL-25 em-induction — ../specs/spec-fl-25-em-induction/; private engineering prototype under owner exception D-1 (P3.5 gate still not met).
+  fl-25-t0-owner-decisions: in-progress
+  fl-25-t1-blueprint: review
+  fl-25-t2-activity-registry: done
+  fl-25-t3-em-induction-model: done
+  fl-25-t4-activity-integration: done
+  fl-25-t5-fe-runtime-dispatch: done
+  fl-25-t6-3d-apparatus: done
+  fl-25-t7-animation-choreography: done
+  fl-25-t8-panel-2d-a11y: done
+  fl-25-t9-verification: done
+  fl-25-t10-device-qa: in-progress
+  fl-25-t11-release-candidate: backlog
   # Teacher AI increment (TAI) — plan ../planning-artifacts/increment-tai-teacher-ai.md; all blocked on gate G-1 (TAI-T0).
   epic-tai-01-authoring: backlog
   tai-01-t0-activate-fr21-scope: backlog
@@ -173,6 +186,40 @@ development_status:
   tai-06-t3-draft-lab-challenge-job-routes: backlog
   tai-06-t4-teacher-proposal-review-ux: backlog
   tai-06-t5-golden-evaluation-e2e: backlog
+
+fl25_tracking:
+  spec: ../specs/spec-fl-25-em-induction/SPEC.md
+  status: owner-approved-pending-release
+  date: '2026-10-31'
+  record: fl-25-em-induction-implementation.md
+  branch: 'feat/fl-25-electromagnetic-induction in BE (from adaee7f) and FE (from 0d63fb8); committed and pushed 2026-10-31 on owner request (owner opens the PRs)'
+  owner_approval: 'owner statement in the working session 2026-10-31: "Lab đã được duyệt" and asked to release to the shared DB, commit and push. Release is not written to the shared DB from a dev machine: it goes through the deployed admin release flow (POST /admin/labs/:id/releases → activate → publish) with the genuine OWNER_SIGNOFF on the exact digest, after the branch is merged and deployed.'
+  scope: 'FL-25 cảm ứng điện từ & dòng xoay chiều (K1, K9 cond.): qualitative model em-induction@1.0.0, activity em-induction-checkpoints v1 (4 predictions + explanation), BE activity registry generalisation, FE 3D apparatus + equivalent 2D view.'
+  audit_findings:
+    - 'A1 blocking: P3.5 gate NOT MET; phase plan says do not open a second Lab implementation track.'
+    - 'A2/A3: FL-25 is W4 with lowest score; catalog says 2D-first, 3D optional after QA, yet Tier A scene-first.'
+    - 'A4: register outcome 9/dien-tu/1 is truncated and the induction-condition requirement is missing; KHTN9 provenance CONDITIONAL.'
+    - 'A5: BE runtime hard-codes the Circuit bulb rubric/evidence (rubricRef enum, sim-packs.ts:282, assignment-lab-execution.ts:17); needs an activity registry before a second activity.'
+  open_decisions:
+    D-1: 'decided 2026-10-31 — owner: record an exception; build FL-25 in parallel as a private synthetic engineering prototype (no release, catalog, Lesson binding or shared DB). P3.5 stays NOT MET.'
+    D-2: 'open — 3D as default view; recommendation: build 2D and 3D on one state, default 3D only after equivalence check.'
+    D-3: 'open — curriculum reviewer fixes KHTN9 Điện từ outcome text and provenance.'
+    D-4: 'open — no speed/Faraday numerics in v1 (recommended).'
+    D-5: 'open — rubric 5 criteria, pass 5/5 (recommended provisionally).'
+  verification: 'Local only, throwaway PostgreSQL 18 cluster on 127.0.0.1:55432 (scratchpad, stopped afterwards; shared Supabase never touched). BE npm test 47 files / 293 tests passed, 0 skipped (all DB suites incl. em-induction integration); build, check:layers ok; route manifest identical to main. FE lint + build pass; em-induction-lab.spec 5/5 (2D flow + F5, 3D phone, 3D desktop, free explore, WebGL context loss); em-induction-real-stack.spec 1/1 (Vite → API → isolated DB; server scored 4/5 with unmetCriteria prediction:PUSH; Attempt + LabRun rows confirmed); existing lab specs 12 pass / 10 fail, same cases as main. Sloplint 0 FAIL, 1 WARN waived. No commit, push, shared DB, release or signoff.'
+  t10_measurements: 'M1 Pro + Chrome only (not a school device): 16.7 ms frames incl. CPU throttle 4x/6x; 250 draws/frame desktop (main 201, shadow 49), 174 phone; 38k main-pass triangles; heap 43-47 MB; mount ~2.1 s. Above the 120-call discussion threshold mainly from the shared K1 room (~155 objects vs ~93 FL-25 apparatus); merging PhysicsStage static geometry proposed as a separate ticket (affects Circuit).'
+  fixes_outside_fl25:
+    - 'BE catalog.controller.ts: foundational-labs list and catalog no longer 500 when an ACTIVE LabRelease snapshot has no lessonBindings (failed on main too).'
+    - 'BE learning.controller.test.ts: I3 status test froze Date (fixed due date 2026-11-01 turned DUE_SOON from 2026-10-31).'
+    - 'FE: removed unreferenced stale src/features/labs/CircuitBulbActivity.tsx/.css that broke lint/build on main.'
+    - 'FE LabSpace.css: Circuit result-drawer rules extended to .em-activity.'
+  next:
+    - 'Curriculum reviewer: D-3 KHTN 9 Điện từ outcome text/provenance; owner confirms D-2, D-4, D-5.'
+    - 'FL25-T10 on agreed school hardware, screen reader pass, GPU memory release on leave.'
+    - 'Optional ticket: merge static geometry of the shared PhysicsStage room (draw calls).'
+    - 'Owner opens PRs for both branches; after merge and deploy, release FL-25 through the admin release flow with in-system OWNER_SIGNOFF (a dev machine never writes the shared DB).'
+  pre_existing_issues:
+    - 'FE main: 10 Playwright cases in lab-run-host/lesson-lab-navigation are stale against the current Lab Space UI (labels such as "Thoát phòng thực hành", "Câu hỏi · 1/6", chemistry button names); they are Circuit/P3.5 evidence, so left for their owners.'
 
 teacher_ai_tracking:
   plan: ../planning-artifacts/increment-tai-teacher-ai.md

@@ -280,7 +280,7 @@ Sơ đồ 2D trong mô phỏng cần được phân định rõ theo yêu cầu 
 
 | Nhóm/kit | Lab IDs trong catalog | Phạm vi môn/chủ đề | Trạng thái pipeline và view |
 |---|---|---|---|
-| K1 Bàn Điện–Từ | FL-01, FL-02, FL-25 | Vật lý: mạch điện, tĩnh điện, cảm ứng điện từ | Chỉ FL-01 Circuit bulb/topology có renderer frontend; FL-02/25 chưa triển khai. Circuit bulb có 2D schematic + 3D; topology dùng lại React Flow 2D editor cũ + 3D. 3D mặc định; view preference cục bộ. |
+| K1 Bàn Điện–Từ | FL-01, FL-02, FL-25 | Vật lý: mạch điện, tĩnh điện, cảm ứng điện từ | FL-01 Circuit bulb/topology có renderer frontend. FL-25 có bản *private engineering prototype* (ngoại lệ owner 2026-10-31, xem `../spec-fl-25-em-induction/`), không phải release hay Lab đã duyệt. FL-02 chưa triển khai. Circuit bulb có 2D schematic + 3D; topology dùng lại React Flow 2D editor cũ + 3D. 3D mặc định; view preference cục bộ. |
 | K2 Bàn hoá ướt | FL-10–FL-15 | Hoá học: mol/PTHH, dung dịch, tốc độ phản ứng, acid–base, phản ứng vô cơ, an toàn | Kit quy hoạch; chưa có scene chemistry production. Chemistry pH fixture chỉ là `TECHNICAL_FIXTURE_ONLY`, không phải Lab đã phát hành. |
 | K3 Bàn chất lỏng | FL-03, FL-04, FL-05 | Vật lý: khối lượng riêng, áp suất, Archimedes | Kit quy hoạch; chưa có scene Lab production. Target: 2D trước, 3D bổ sung sau benchmark thiết bị. |
 | K4 Bàn nhiệt | FL-07, FL-08, FL-09 | Vật lý: năng lượng nhiệt, truyền nhiệt, nở vì nhiệt | Kit quy hoạch; chưa có scene Lab production. |

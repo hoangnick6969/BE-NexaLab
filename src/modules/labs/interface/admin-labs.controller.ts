@@ -30,7 +30,8 @@ import {
   versionParams,
 } from "../application/simulation-versions";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
-import { canonical, digest, evaluateCircuitBulbActivity, evaluateRunV1, executionSchema as labRunExecutionSchema, CIRCUIT_BULB_RUBRIC } from "../application/lab-run";
+import { canonical, digest, evaluateRunV1, executionSchema as labRunExecutionSchema } from "../application/lab-run";
+import { RUBRIC_REFS, checkpointActivityForRubric } from "../application/checkpoint-activities";
 
 /** PostgreSQL JSON numbers can round at the last floating-point digits. */
 function sameStoredResult(actual: any, expected: any): boolean {
@@ -314,7 +315,7 @@ export class AdminLabsController {
       packVersionId: z.string().nullable(),
       configVersionId: z.string().nullable(),
       params: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
-      rubricRef: z.enum(["legacy-challenge@1.0.0", CIRCUIT_BULB_RUBRIC]).optional(),
+      rubricRef: z.enum(RUBRIC_REFS).optional(),
     }).strict();
     const execution = rawExecution == null ? null : executionSchema.safeParse(rawExecution);
     if (execution && (!execution.success || execution.data.packVersionId !== attempt.packVersionId || execution.data.configVersionId !== attempt.configVersionId ||
@@ -336,8 +337,9 @@ export class AdminLabsController {
     let reproduced: string;
     let reproducedResult: any = null;
     try {
-      const evaluated = execution?.success && execution.data.rubricRef === CIRCUIT_BULB_RUBRIC
-        ? evaluateCircuitBulbActivity((attempt.labState as any).checkpoints, (attempt.labState as any).explanation)
+      const checkpointActivity = execution?.success && execution.data.rubricRef ? checkpointActivityForRubric(execution.data.rubricRef) : null;
+      const evaluated = checkpointActivity
+        ? checkpointActivity.evaluate((attempt.labState as any).checkpoints, (attempt.labState as any).explanation)
         : attempt.labRunId || (execution?.success && execution.data.rubricRef === "legacy-challenge@1.0.0")
           ? evaluateRunV1(attempt.challenge.labId, attempt.labState, params ?? null, modelRef!)
           : evaluate(attempt.challenge.labId, attempt.labState, params, modelRef);
