@@ -1,6 +1,6 @@
 ---
 id: PLAN-FL-03-K3
-status: proposed-plan
+status: technical-candidate-unapproved
 updated: 2026-10-31
 supersedes-draft: fl-03-density-lab-plan.md (untracked draft 2026-10-30; see §2 A1)
 companions:
@@ -11,16 +11,23 @@ companions:
 ---
 # FL-03 Khối lượng riêng + Shared Kit K3 "Bàn chất lỏng" — audit và kế hoạch triển khai
 
-> **PROPOSED / UNAPPROVED.** Tài liệu này là kế hoạch kỹ thuật. Nó không duyệt Outcome mapping, hằng số khoa học, rubric, quyền tài sản hay release; không mở track Lab thứ hai khi gate P3.5 chưa đạt (§10). Mọi Outcome dưới đây vẫn `PROPOSED_UNAPPROVED`.
+> **TECHNICAL CANDIDATE / UNAPPROVED.** Code và fixture FL-03 là bằng chứng kỹ thuật, không duyệt Outcome mapping, hằng số khoa học, rubric, quyền tài sản hay release. Receipt `OWNER_SIGNOFF` trong isolated DB chỉ kiểm thử cơ chế, không phải signoff thật. P3.5 chưa đạt và P3.7 chưa mở; mọi Outcome dưới đây vẫn `PROPOSED_UNAPPROVED`.
+
+## Cách đọc tài liệu
+
+- **Historical Audit (§1–§2):** ảnh chụp tại thời điểm 2026-10-31 trước các commit FL-03; không dùng làm trạng thái code hiện tại.
+- **Technical Decisions (§3–§12):** thiết kế đề xuất và các gate; chi tiết chưa được reviewer duyệt không trở thành chuẩn khoa học chỉ vì đã có fixture.
+- **Implementation Evidence (§13–§16):** bằng chứng code/test theo từng mốc, mục sau cập nhật mục trước; chỉ có hiệu lực trong phạm vi môi trường kiểm thử ghi rõ.
+- **Open Gates (§10 và cuối tài liệu):** điều kiện còn thiếu trước khi gọi là Lab được duyệt hoặc phát hành.
 
 ## 0. Tóm tắt
 
 - FL-03 là Lab **"Xác định khối lượng riêng"** bám đúng SGK KHTN 8 Bài 13 (TN1, TN2, `D = m/V`, đơn vị) và Bài 14 (ba phần: khối gỗ hộp chữ nhật, một lượng nước, hòn sỏi). Một Lab identity, một model `density-bench@1.0.0`, một activity `density-stations@1`.
-- K3 là **kit presentation dùng chung** cho FL-03/04/05: bàn, cân điện tử, ống đong, cốc, thước, chất lỏng có mặt khum, camera đọc vạch, motion tokens, perf tiers. K3 không chứa công thức khoa học, rubric hay Outcome. Bộ dụng cụ thuỷ tinh đặt ở mức cross-kit để K2 (hoá ướt) dùng lại (catalog §6A.3: "chia sẻ lõi kính với K2").
-- Điều kiện tiên quyết bắt buộc: **tổng quát hoá shared runtime** (BE activity registry, FE renderer registry). Audit cho thấy runtime hiện vẫn hard-code Circuit (§2 A4); không làm bước này thì FL-03 phải copy-paste nhánh `isBulb`.
-- Thứ tự: Phase 0 (quyết định + nguồn) → Phase 1 (platform) → Phase 2 (K3 kit) ∥ Phase 3 (model/rubric BE) → Phase 4 (FL-03 FE 2D+3D) → Phase 5 (QA) → Phase 6 (release). Phase 1–2 là platform/presentation, được làm trước gate; Phase 3+ chờ gate (§10).
+- `PhysicalLabEnvironment` là phòng nền xuyên kit (tường, sàn, tủ, lababo, bàn, ánh sáng). K3 chỉ tổ chức dụng cụ và tương tác chất lưu phù hợp từng activity; cân, ống đong, cốc, thước và vật mẫu được FL-03 chọn theo model. Model, state khoa học, rubric và Outcome thuộc FL-03, không thuộc K3. Không mặc định chia sẻ dụng cụ thuỷ tinh với K2; mỗi Lab phải chứng minh nhu cầu và contract trước khi reuse.
+- Registry BE/FE đã có trên nhánh FL-03 (§13–§16). Nhận định runtime hard-code Circuit ở §2 là audit lịch sử.
+- Thứ tự Phase 0–6 dưới đây là kế hoạch gốc, không phải bằng chứng gate đã qua. Việc xây technical candidate trước gate được ghi ở §13–§16; không mở P3.7 hoặc cho phép release.
 
-## 1. Chạy local (2026-10-31)
+## 1. Historical Audit — chạy local (ảnh chụp 2026-10-31)
 
 | Thành phần | Kết quả |
 |---|---|
@@ -31,13 +38,13 @@ companions:
 
 Cấu hình chạy nằm ở `D:\FPT\Ky8\WDP301\.claude\launch.json` (`be-api`, `fe-web`).
 
-## 2. Audit specs Foundational Lab qua các commit gần đây
+## 2. Historical Audit — specs Foundational Lab trước commit FL-03
 
 Phạm vi: BE `9a08c2d…adaee7f` (P3.5–P3.6, 2026-10-28→30), FE `b1321df…0d63fb8`, specs `spec-lab-pipeline/*`, `spec-foundational-lab-p3-1/lab-definition.md`, cùng code `packages/sim`, `modules/labs`, `features/labs`.
 
 | ID | Mức | Phát hiện | Bằng chứng | Hành động trong plan |
 |---|---|---|---|---|
-| A1 | Cao | Draft FL-03 (untracked) loại "liquid density" khỏi v1, dùng "khối hộp sắt" và không có TN1/TN2. Outcome `KHTN8-B14-O01` ghi rõ "…khối hộp chữ nhật, …vật có hình dạng bất kì, **…một lượng chất lỏng**"; SGK Bài 14 dùng **khối gỗ**, **lượng nước**, **hòn sỏi**. Draft sẽ không phủ được Outcome chính. | SELECT `CurriculumOutcome` B13/B14; lesson `pack-structured-0733be47…-v1` mục I, II, III | §4–§5: bốn trạm theo đúng SGK |
+| A1 | Cao | Draft FL-03 (untracked) loại "liquid density" khỏi v1, dùng "khối hộp sắt" và không có TN1/TN2. Outcome `KHTN8-B14-O01` ghi rõ "…khối hộp chữ nhật, …vật có hình dạng bất kì, **…một lượng chất lỏng**"; SGK Bài 14 dùng **khối gỗ**, **lượng nước**, **hòn sỏi**. Draft sẽ không phủ được Outcome chính. | SELECT `CurriculumOutcome` B13/B14; lesson `pack-structured-0733be47…-v1` mục I, II, III | §4–§5: 5 trạm S1–S5 theo thiết kế đề xuất |
 | A2 | Cao | Commit FE `952a368` thêm bản sao `src/features/labs/CircuitBulbActivity.tsx/.css` ở root, import `./CircuitBulb3DStage`, `./LabRendererToggle` không tồn tại. Không file nào import nó, nhưng `tsc -b` trong `npm run build` fail. | `tsc --noEmit` | Ticket P-0: xoá bản sao, giữ `physics/electricity/` |
 | A3 | Cao (env) | Prisma Client không được generate sau migration LabRun → lint BE fail và runtime `prisma.labRun` undefined khi launch Lab. | 55 lỗi TS2339/2353 trước `db:generate` | P-0: `postinstall: prisma generate` hoặc ghi rõ trong README |
 | A4 | Cao (kiến trúc) | "Shared runtime" vẫn gắn chết Circuit: `runSubmissionSchema` union cứng `CLOSED/OPEN`, `ON/OFF`, `A/B/C`; `rubricRef: z.enum([legacy, circuit-bulb])`; `rubricRefForActivity` là chuỗi `if`; `rendererKey` là ternary trong `labs.controller.ts:341`; FE `Lab.tsx` dùng `isBulb` và danh sách cứng `["circuit","eye","chemistry"]` (dòng 273). Fixture P3.5 chạy bằng `legacy-challenge@1.0.0` nên **đường activity tổng quát chưa từng được kiểm**. | `lab-run.ts:31-55`, `labs.controller.ts:341`, `Lab.tsx:218-357` | Phase 1 (P-1…P-6) |
@@ -51,7 +58,7 @@ Phạm vi: BE `9a08c2d…adaee7f` (P3.5–P3.6, 2026-10-28→30), FE `b1321df…
 | A12 | Info | Specs P3.6 mô tả đúng hiện trạng: release BLOCKED chờ signoff thật; Class Lab reuse mới verify trong isolated PG; Lab Space 2D/3D chỉ là presentation progress. | phase-plan "Verified implementation status" | Giữ nguyên ranh giới khi viết FL-03 |
 | A13 | Thấp | `VITE_API_PROXY` mặc định 4000, BE `.env` `PORT=4100`; AGENTS.md ghi 4000. `npm run dev` hai repo không tự nối được. | `vite.config.ts`, `.env` | P-0: thống nhất 4000 hoặc thêm `VITE_API_PROXY` vào `.env.example` |
 
-## 3. Bài học từ pilot FL-01 Circuit
+## 3. Technical Decisions — bài học từ pilot FL-01 Circuit
 
 **Giữ và tái sử dụng:** `LabSpace` (fullscreen, inert, focus trả về), `LabSceneContext` portal, `LabRendererToggle` + preference localStorage theo Lab, `lab-run-host` (launch/draft/submit/idempotency), contract `lab-contract/1`, LabRun snapshot tuple, golden + invalid fixtures, release/OWNER_SIGNOFF pipeline, assignment pinning. Mẫu activity "dự đoán → thao tác → quan sát → giải thích" và nút DOM tương đương cho mọi thao tác 3D (`bulb-accessible-switch`).
 
@@ -80,10 +87,10 @@ Bất kỳ hằng số nào (KLR sắt/nhôm/đồng/gỗ/sỏi/nước, ĐCNN, 
 | modelRef | `density-bench@1.0.0` (mới, allowlist trong `MODEL_REGISTRY`) |
 | Activity | `density-stations@1`, rubric `density-stations@1.0.0` |
 | rendererKey | `density-bench` |
-| Kit | K3 (`physics/fluid/kit`) + cross-kit glassware |
+| Kit | K3 (`physics/fluid/kit`) cho dụng cụ chất lưu; phòng nền `PhysicalLabEnvironment` dùng chung xuyên kit. Dụng cụ chỉ được reuse khi activity yêu cầu. |
 | Modality | 3D mặc định khi qua QA, 2D tương đương đầy đủ; preference cục bộ |
 
-### 5.2 Bốn trạm (theo đúng thứ tự SGK)
+### 5.2 Năm trạm S1–S5 (thiết kế đề xuất theo SGK)
 
 | Trạm | Thao tác học sinh | Dữ liệu ghi vào "Sổ thí nghiệm" | Outcome |
 |---|---|---|---|
@@ -183,17 +190,17 @@ Chấp nhận dấu phẩy thập phân ở UI, chuẩn hoá thành số trướ
 | I4 | Mực nước sau thả sỏi > 100 mL | Model từ chối |
 | L1 | Idempotency trùng key, replay sau hết hạn/revoke, đổi active tuple giữa phiên | Như suite Circuit |
 
-## 6. Shared Kit K3 và chuẩn 3D chân thực
+## 6. Technical Decisions — Shared Kit K3 và chuẩn 3D
 
 ### 6.1 Ranh giới và cấu trúc thư mục (FE)
 
 ```text
 src/features/labs/
   shared/
-    stage/BenchStage.tsx          # Canvas mới, opt-in: tone mapping, environment, perf tier, frameloop demand
+    PhysicalLabEnvironment.tsx   # phòng nền xuyên kit; không chứa apparatus của FL-03
+    stage/BenchStage.tsx          # host/camera đề xuất, không sở hữu mesh phòng
     stage/bench-quality.ts        # tier low/mid/high, PerformanceMonitor → dpr
     stage/useCameraRig.ts         # preset camera + chuyển cảnh mượt (drei CameraControls)
-    apparatus/glassware/          # cross-kit K2/K3: GraduatedCylinder, Beaker, LiquidColumn, Meniscus
     motion/lab-motion.ts          # duration/easing tokens, reduced-motion
   physics/fluid/
     kit/                          # K3, presentation-only
@@ -210,9 +217,9 @@ src/features/labs/
       DensityNotebook.tsx, density-evidence.ts, density-copy.ts
 ```
 
-K3 **không** import model, rubric, Outcome hay state của FL-03/04/05. FL-03 chỉ ghép dụng cụ K3 + state + copy. FL-04/05 sau này tái dùng `BenchStage`, cân, ống đong, chất lỏng, camera rig; thêm lực kế, bình chứa, áp kế trong K3 khi Lab đó được duyệt.
+K3 **không** sở hữu model, rubric, Outcome, state hay mesh phòng của FL-03/04/05. `PhysicalLabEnvironment` là lớp phòng nền độc lập xuyên kit; stage chỉ quản lý Canvas/camera. FL-03 chọn dụng cụ K3 theo activity đã review; FL-04/05 và K2 không mặc định nhận cùng dụng cụ. Mỗi lần reuse cần xác nhận nhu cầu, đơn vị đo, interaction và evidence contract riêng.
 
-`PhysicsStage` của Circuit giữ nguyên; `BenchStage` là component mới. Khi BenchStage qua QA, Circuit có thể chuyển sang trong ticket riêng (không trong FL-03).
+Sơ đồ thư mục trên là đề xuất ban đầu; trạng thái code thực tế xem §13–§16. `PhysicsStage` hiện compose phòng nền chung. Thay đổi room shell cần QA các consumer K1/K2/K3, không coi việc dùng chung source là bằng chứng đạt hiệu năng thiết bị.
 
 ### 6.2 Quy ước tỉ lệ và dụng cụ
 
@@ -344,9 +351,9 @@ Phase 2 và Phase 3 chạy song song được (khác repo, khác file). Phase 4 
 | Học sinh chia sẻ đáp án | Biến thể theo run (§5.3) |
 | Lỗi OCR lọt vào copy học sinh | T0.2 trước F-1; copy FL-03 viết lại, không dán từ register |
 
-## 13. Implementation status — 2026-10-31 (private pilot, not released)
+## 13. Implementation Evidence — mốc đầu 2026-10-31 (technical candidate)
 
-Built on branch `feat/fl03-runtime-registry` at the owner's request, ahead of the P3.5 gate (§10). No Lab row, pack, config, activity version or release exists, so a student cannot launch FL-03 yet. This is engineering evidence only: no curriculum, science or rights approval.
+Built on branch `feat/fl03-runtime-registry` at the owner's request, ahead of the P3.5 gate (§10). **Tại mốc đầu này** chưa có Lab row, pack, config, activity version hay release; §15–§16 ghi nhận fixture isolated DB được tạo sau đó. Không dùng câu này để mô tả DB hiện tại. Đây chỉ là bằng chứng kỹ thuật: chưa có curriculum, science hoặc rights approval.
 
 | Area | State |
 |---|---|
@@ -357,7 +364,7 @@ Built on branch `feat/fl03-runtime-registry` at the owner's request, ahead of th
 | FE | `DensityActivity` 2D pilot on the K3 kit, registered as `rendererKey="density-bench"`; guided readiness, notebook tables 13.1–14.3, `K3Hud`. Dev-only previews at `/dev/lab-kits/k3` and `/dev/lab-kits/density`. 3 Playwright tests (mocked API). |
 | Known gaps | Specimen data is duplicated between the FE sample config and the BE table (keep them identical; BE is authoritative). The block and pebble are chosen by the learner, not per run (§5.3 server-chosen variants are not built). 3D is not wired to the activity. Pack/config seeding and a `CHALLENGE_PARAMETERS` entry for `density` are needed before a pack can be validated. |
 
-## 14. Runtime pins and sync — 2026-10-31
+## 14. Implementation Evidence — runtime pins và sync (mốc tiếp theo 2026-10-31)
 
 | Area | State |
 |---|---|
@@ -368,13 +375,13 @@ Built on branch `feat/fl03-runtime-registry` at the owner's request, ahead of th
 | Seed / release | **Not done.** `.env` points at shared Supabase; a write needs owner approval. A LabRelease can only become ACTIVE with a genuine OWNER_SIGNOFF (plan §10), which cannot be fabricated. Proposed next step: a guarded, idempotent seed (`assert-isolated-db`) run first against the isolated loopback DB, then a DRAFT release for owner review. |
 | Verification | BE: 294 unit tests pass; one pre-existing failure in `learning.controller.test.ts` also fails on the original code. FE: Playwright density spec 5/5, lint and build green. Integration tests not run (no isolated PostgreSQL). |
 
-## 15. Seed status — 2026-10-31
+## 15. Implementation Evidence — seed isolated DB (2026-10-31)
 
 - **Isolated DB (done):** a private PostgreSQL 18 instance on `127.0.0.1:54329`, database `nexalab_fl03_isolated`. Base `prisma/seed.ts` ran against it, then `npm run db:seed:fl03-isolated` (idempotent; second run changed nothing). The rows are Lab `density` (synthetic, releaseCleared=false, CLASS_PRIVATE), challenge `density_001`, activity `density-stations@1`, config v1 and pack `density-bench-fixture` v1 (active). No LabRelease was created.
 - **Shared Supabase (not written):** the `.env` database was NOT seeded and no release was activated. Reason: an ACTIVE release needs a genuine OWNER_SIGNOFF (§10), and seeding the shared DB is outside the isolated-only rule in AGENTS.md. Waiting for the owner's decision on the sign-off path.
 - **Pending:** end-to-end launch and submit through the API against the isolated DB still needs an assignment or an active release; not run in this pass.
 
-## 16. Release chain on the isolated database — 2026-10-31
+## 16. Implementation Evidence — release chain trên isolated DB (2026-10-31)
 
 - **Mechanics, through the real service:** `LabReleaseService.createDraft` → `review(OWNER_SIGNOFF)` → `activate`, all in `density-release.fixture.ts`. The release is `ACTIVE`, version 1, and its single review matches the release digest. Lab `density` has `releaseCleared=true`, `scope=SHARED_LIBRARY`, `topicCode` set.
 - **Labelled test fixtures, not approvals:** the outcome `KHTN8-B14-O01`, chapter, topic, lesson and content pack are `TEST FIXTURE ONLY`. The OWNER_SIGNOFF is a mechanics receipt. It is not a real owner review and must not be read as curriculum or scientific approval.
@@ -382,3 +389,10 @@ Built on branch `feat/fl03-runtime-registry` at the owner's request, ahead of th
 - **Idempotent:** the database was rebuilt from scratch, then the seed ran twice and the E2E ran twice. All passed. `releaseCleared` is owned by activation and is no longer reset by reruns.
 - **E2E (`density-e2e.integration.test.ts`):** (a) assignment path, and (b) launch with no assignment through the ACTIVE release (`versionBinding=FOUNDATIONAL_RELEASE`). Both pin a specimen pair, submit evidence, and get `passed` 6/6, and a wrong-specimen submission creates no attempt.
 - **Caveat:** the activity spec was changed in place (`density-stations` v1 now names `KHTN8-B14-O01`). The seed is the only writer, and it runs only on the isolated database. A real activity must be authored as a new immutable version.
+
+## Open Gates — trạng thái hiện tại
+
+- **FL-03 và FL-10 đều là Technical Candidate.** Code, test và dữ liệu DB/receipt fixture chỉ chứng minh cơ chế kỹ thuật trong phạm vi đã ghi; không chứng minh nội dung học liệu, khoa học, an toàn hay quyền sử dụng đã được duyệt. FL-10 có implementation spec riêng nhưng không kế thừa approval từ FL-03 hoặc ngược lại.
+- **P3.5 chưa đạt:** cần owner thật xác nhận chính xác mapping và model Circuit trên digest thật trước khi mở track Lab thứ hai theo phase plan. Receipt giả lập trong isolated DB không đáp ứng gate này. Các triển khai FL-03/FL-10 đã làm trước gate phải được ghi là ngoại lệ/kỹ thuật, không diễn giải lại phase gate thành đã đạt.
+- **Trước release FL-03/FL-10:** cần review nguồn/Outcome, model, rubric, safety/rights; `OWNER_SIGNOFF` thật trên immutable release digest, QA accessibility và thiết bị đại diện, rồi xác minh activation/access. Chưa có bằng chứng các điều kiện này hoàn tất.
+- **P3.7 chưa mở:** không suy từ số Lab có code, seed, hay `ACTIVE` trong isolated DB ra tiến độ portfolio/release production. Xem [phase plan](lab-pipeline-phase-plan.md) là nguồn chuẩn cho phase và gate.
