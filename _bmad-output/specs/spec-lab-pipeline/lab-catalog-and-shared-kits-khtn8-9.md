@@ -303,7 +303,7 @@ K1 Circuit, FL-25 private engineering prototype và ứng viên FL-10/K2 hiện 
 | K4 Bàn nhiệt | FL-07, FL-08, FL-09 | Vật lý: năng lượng nhiệt, truyền nhiệt, nở vì nhiệt | Kit quy hoạch; chưa có scene Lab production. |
 | K5 Cơ học | FL-06, FL-24 | Vật lý: moment/đòn bẩy; cơ năng, công, công suất | Kit quy hoạch; chưa có scene Lab production. |
 | K6 Bàn quang học | FL-23 | Vật lý: quang học K9 | Một candidate SPLIT; cần chốt modes/model. 2D evidence drawing là yêu cầu riêng, không thể thay bằng chỉ đổi camera. |
-| K7 Phân tử/gen | FL-27, FL-28, FL-30 | Sinh học: gene–protein, phân bào; Hoá học: phân tử hữu cơ/polymer | Kit quy hoạch; chưa có scene production. FL-28/30 deferred theo catalog. |
+| K7 Phân tử/gen | FL-27, FL-28, FL-30 | Sinh học: gene–protein, phân bào; Hoá học: phân tử hữu cơ/polymer | Kit K7 presentation có trên nhánh `feat/fl27` (stage phân tử riêng, không dùng phòng vật lý). FL-27 là private engineering prototype 3D + 2D "Đọc", chưa có model server/release (xem [FL-27 plan](fl-27-gene-protein-k7-plan.md)). FL-28/30 deferred theo catalog. |
 | K8 Cảnh nhẹ + HUD | FL-18–FL-22, FL-26, FL-29 | Sinh học/sinh thái, dinh dưỡng, khí hậu, di truyền | Kit quy hoạch; chưa có scene production. Phần lớn là HUD/2D-first; 3D chỉ thêm khi cải thiện học tập và qua QA. |
 | Explorer (không phải kit/Lab) | FL-16, FL-17 (đề xuất) | Sinh học/cơ thể người | Nội dung xem/khám phá, không tạo evidence và không phải release Lab; giữ đúng trạng thái NO LAB/DEFER trong catalog. |
 
