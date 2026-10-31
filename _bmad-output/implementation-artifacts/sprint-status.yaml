@@ -204,7 +204,7 @@ fl20_tracking:
   status: in-progress
   date: '2026-10-31'
   record: fl-20-ecological-tolerance-implementation.md
-  branch: 'feat/fl-20-ecological-tolerance in BE (from 0ac700a) and FE (from 0a8cf73); not pushed'
+  branch: 'feat/fl-20-ecological-tolerance in BE (from 0ac700a; commits 96af96d fix, 91318b6 feat) and FE (from 0a8cf73; commit 4533838); pushed 2026-10-31 on owner request (owner opens the PRs)'
   scope: 'FL-20 nhân tố & giới hạn sinh thái + đặc trưng quần thể (K8, 2D SVG): model ecology-tolerance@1.0.0 (tolerance, sweep, import comparison, density, age structure), activity ecology-tolerance-checkpoints v1 (6 checkpoints + explanation, pass 7/7 proposed).'
   sources: 'Read-only admin GETs on the local API (:4000 -> shared DB): taxonomy KHTN8-L41/L42, lessons pack-structured-03b2dcaf…-v1 (Bài 41) and pack-structured-af15f30a…-v1 (Bài 42). Verified SGK data: cá rô phi 5,6–42 °C (p0174-b0009); Bảng 42.1 densities (p0177-b0008..9). No writes.'
   audit_findings:

@@ -1,7 +1,7 @@
 # FL-20 ecology-tolerance — implementation record
 
 Spec: `../specs/spec-fl-20-ecological-tolerance/` (SPEC, lab-definition, implementation-plan).
-Branch: `feat/fl-20-ecological-tolerance` in BE (from `0ac700a`) and FE (from `0a8cf73`). Nothing committed or pushed.
+Branch: `feat/fl-20-ecological-tolerance` in BE (from `0ac700a`) and FE (from `0a8cf73`). Committed and pushed 2026-10-31 on owner request: BE `96af96d` (rendererKey fix), `91318b6` (FL-20); FE `4533838`. The owner opens the PRs.
 
 ## Session 2026-10-31
 
