@@ -30,13 +30,12 @@ import {
   versionParams,
 } from "../application/simulation-versions";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
-import { canonical, digest, evaluateRunV1, executionSchema as labRunExecutionSchema } from "../application/lab-run";
-import { RUBRIC_REFS, checkpointActivityForRubric } from "../application/checkpoint-activities";
 import { FL10_RUBRIC } from "../application/lab-run";
 import { evaluateMassConservation } from "../../../../packages/sim";
 import { evaluateFl10Activity } from "../application/fl-10-draft-evidence";
 import type { Fl10Event } from "../application/fl-10-events";
-
+import { canonical, digest, evaluateRunV1, executionSchema as labRunExecutionSchema, LEGACY_CHALLENGE_RUBRIC } from "../application/lab-run";
+import { labEvaluators } from "../application/evaluators/registry";
 /** PostgreSQL JSON numbers can round at the last floating-point digits. */
 function sameStoredResult(actual: any, expected: any): boolean {
   if (typeof actual === "number" && typeof expected === "number")
@@ -319,8 +318,7 @@ export class AdminLabsController {
       packVersionId: z.string().nullable(),
       configVersionId: z.string().nullable(),
       params: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
-      rubricRef: z.enum([...RUBRIC_REFS, FL10_RUBRIC]).optional(),
-    }).strict();
+      rubricRef: z.string().refine(labEvaluators.isRegistered).optional(),    }).strict();
     const execution = rawExecution == null ? null : executionSchema.safeParse(rawExecution);
     if (execution && (!execution.success || execution.data.packVersionId !== attempt.packVersionId || execution.data.configVersionId !== attempt.configVersionId ||
       (pack && execution.data.modelRef !== pack.modelRef) || (version && execution.data.modelRef !== version.modelRef)))
@@ -341,7 +339,7 @@ export class AdminLabsController {
     let reproduced: string;
     let reproducedResult: any = null;
     try {
-      const checkpointActivity = execution?.success && execution.data.rubricRef ? checkpointActivityForRubric(execution.data.rubricRef) : null;
+      const checkpointActivity = execution?.success && execution.data.rubricRef && execution.data.rubricRef !== FL10_RUBRIC && execution.data.rubricRef !== LEGACY_CHALLENGE_RUBRIC ? labEvaluators.resolve(execution.data.rubricRef) : null;
       const evaluated = execution?.success && execution.data.rubricRef === FL10_RUBRIC
         ? await (async () => {
             if (!attempt.labRunId) throw new Error("FL-10 requires a pinned run");
@@ -351,7 +349,7 @@ export class AdminLabsController {
             return evaluateFl10Activity(attempt.labState, model.value, events.map((row) => row.event as Fl10Event));
           })()
         : checkpointActivity
-        ? checkpointActivity.evaluate((attempt.labState as any).checkpoints, (attempt.labState as any).explanation)
+        ? labEvaluators.evaluate(checkpointActivity.rubricRef, attempt.labRunId, attempt.labState, { labId: attempt.challenge.labId, modelRef: modelRef!, engineVersion: attempt.simulationModelVersion ?? "", params: params ?? null, template: pack?.template ?? null })
         : attempt.labRunId || (execution?.success && execution.data.rubricRef === "legacy-challenge@1.0.0")
           ? evaluateRunV1(attempt.challenge.labId, attempt.labState, params ?? null, modelRef!)
           : evaluate(attempt.challenge.labId, attempt.labState, params, modelRef);

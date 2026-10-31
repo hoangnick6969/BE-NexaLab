@@ -77,6 +77,12 @@ export const CHALLENGE_PARAMETERS: Record<
       },
     },
   },
+  // FL-03: no learner-tunable parameters. Specimens are pinned per run by the server (density-specimens.ts).
+  density: {
+    modelRef: "density-bench@1.0.0",
+    rangeReview: "pending",
+    params: {},
+  },
   eye: {
     modelRef: "eye@1.0.0",
     rangeReview: "pending",

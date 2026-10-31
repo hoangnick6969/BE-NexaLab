@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, ecologyTolerance, emInduction, eye, eyeParts, evaluateMassConservation } from "../../../../packages/sim";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, eye, eyeParts, evaluateMassConservation } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -18,8 +18,12 @@ type Model = {
   outputs: Record<string, "number" | "string" | "array">;
   /** Semantic IDs every visual for this model must map. */
   requiredSemanticIds: string[];
-  /** Reports scientific observations only; a pinned checkpoint rubric assesses the learner. */
-  observationOnly?: true;
+  /**
+   * The model reports scientific observations only: it has no learner verdict
+   * and no challenge parameters; the pinned activity rubric assesses learning.
+   */
+  /** Lower-case clause used in configuration errors. */
+  observationOnly?: { unsupportedParams: string };
 };
 export const MODEL_REGISTRY: Record<string, Model> = {
   "mass-conservation@1.0.0": {
@@ -55,7 +59,7 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     simulate: circuitBulb,
     outputs: { circuitPath: "string", bulbState: "string" },
     requiredSemanticIds: ["battery", "bulb", "switch"],
-    observationOnly: true,
+    observationOnly: { unsupportedParams: "mô hình bóng đèn không dùng tham số thử thách LED" },
   },
   "em-induction@1.0.0": {
     labId: "em-induction",
@@ -63,7 +67,15 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     simulate: emInduction,
     outputs: { setup: "string", fieldThroughCoil: "string", inducedCurrent: "string", direction: "string", currentKind: "string", reversalsPerTurn: "number", phaseDirections: "array" },
     requiredSemanticIds: ["coil", "magnet", "galvanometer", "led-pair", "generator"],
-    observationOnly: true,
+    observationOnly: { unsupportedParams: "mô hình quan sát không dùng tham số thử thách" },
+  },
+  "density-bench@1.0.0": {
+    labId: "density",
+    engineVersion: ENGINE_VERSION,
+    simulate: densityBench,
+    outputs: { version: "string", explore: "array" },
+    requiredSemanticIds: ["balance", "cylinder", "ruler"],
+    observationOnly: { unsupportedParams: "mô hình khối lượng riêng không dùng tham số thử thách" },
   },
   "ecology-tolerance@1.0.0": {
     labId: "ecology-tolerance",
@@ -71,7 +83,7 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     simulate: ecologyTolerance,
     outputs: { setup: "string", zone: "string", widthDeciC: "number", candidates: "array", count: "number", amount: "number", unit: "string", pyramid: "string" },
     requiredSemanticIds: ["pond", "thermometer", "tolerance-graph", "population-plot", "age-pyramid"],
-    observationOnly: true,
+    observationOnly: { unsupportedParams: "mô hình sinh thái không dùng tham số thử thách" },
   },
   "chemistry@1.0.0": {
     labId: "chemistry",
@@ -102,6 +114,8 @@ export function resolveModel(modelRef: string) {
   if (!model) throw new Error(`Mô hình ${modelRef} không nằm trong danh sách cho phép`);
   return model;
 }
+/** Observation-only declaration of an allowlisted model, or null. */
+export const observationOnlyModel = (modelRef: string | null | undefined) => (modelRef && MODEL_REGISTRY[modelRef]?.observationOnly) || null;
 export const modelRefForLab = (labId: string) => Object.entries(MODEL_REGISTRY).find(([, m]) => m.labId === labId)?.[0] ?? null;
 
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -305,9 +319,9 @@ export function packValidation(
     } catch (error: any) {
       problem = "trạng thái không hợp lệ: " + String(error?.message ?? error).slice(0, 120);
     }
-    // Observation-only models (Circuit bulb, induction) intentionally have no
-    // student verdict. For their configuration golden cases, `passed` means only
-    // that the state was valid; expectedOutputs verifies the observations.
+    // Observation-only models intentionally have no student verdict. For their
+    // configuration golden cases, `passed` means only that the state was valid;
+    // expectedOutputs verifies the observations (e.g. OPEN/CLOSED and ON/OFF).
     // Activity assessment is evaluated separately by the pinned rubric.
     const verdict = output
       ? model.observationOnly ? "passed" : normalize(output.verdict)
