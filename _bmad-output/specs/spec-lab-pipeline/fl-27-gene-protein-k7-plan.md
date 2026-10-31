@@ -36,7 +36,7 @@ Phạm vi đọc: `spec-lab-pipeline/{SPEC, lab-pipeline-phase-plan, lab-catalog
 |---|---|---|---|---|
 | F1 | Cao | Kit của FL-27 là **K7**, không phải K3/K8. FL-27 là KHTN 9 (K9 cond.). | catalog §6A.3 dòng FL-27; §6A.6 bảng kit; portfolio §3 slot 20 | §0, D-1 |
 | F2 | Cao (gate) | P3.5 **NOT MET**, cap ≤ 2 track đồng thời, và FL-03 + FL-10 đang là hai technical candidate. FL-27 là track thứ ba → chỉ được làm như private engineering prototype theo yêu cầu owner (tiền lệ FL-25, ngoại lệ 2026-10-31), không release. | phase-plan "FL-03 / FL-10 status"; FL-25 SPEC §trạng thái | §10, D-2 |
-| F3 | Cao (kiến trúc) | `PhysicsStage` luôn compose `PhysicalLabEnvironment`. Catalog §6A.6: K7 chỉ dùng phòng nền "nếu đúng archetype scene"; cảnh phân tử không phải phòng thực hành → K7 cần stage host riêng. Phần lifecycle Canvas/WebGL fallback/context-lost/portal hiện bị lặp giữa các stage. | `physics/shared/PhysicsStage.tsx` | K7 có `MolecularStage` riêng; ticket nền tảng P-2 gom `StageHost` dùng chung |
+| F3 | Cao (kiến trúc) | `PhysicsStage` luôn compose `PhysicalLabEnvironment`. Catalog §6A.6 khi đó: K7 chỉ dùng phòng nền "nếu đúng archetype scene"; cảnh phân tử không phải phòng thực hành. Lifecycle Canvas/WebGL fallback/context-lost/portal bị lặp giữa các stage. | `physics/shared/PhysicsStage.tsx` | **Đã chốt (owner 2026-10-31, §15):** cảnh vào dùng phòng nền qua `PhysicsStage` (bàn K7), cảnh phân tử dùng `MolecularStage` riêng; catalog §6A.6 đã cập nhật. Gom `StageHost` vẫn là đề xuất P-2 |
 | F4 | Trung bình | FL-03 plan §6.1 đề xuất `shared/motion/lab-motion.ts`, nhưng code chỉ có `usePrefersReducedMotion` trong `k3-motion.ts`. Kit khác không thể import K3 mà không tạo phụ thuộc chéo kit. | `physics/fluid/kit/k3-motion.ts` | Thêm `shared/motion/usePrefersReducedMotion.ts`; K3 chuyển sau (P-3) |
 | F5 | Trung bình | `K3Hud` là khung hướng dẫn tổng quát nhưng nằm trong K3 và kéo `k3.css`. | `physics/fluid/kit/hud/K3Hud.tsx` | K7 có `K7Hud` riêng cùng ngữ nghĩa; đề xuất P-4 nâng thành `shared/LabGuideHud` |
 | F6 | Trung bình | `activity-renderers.tsx` import eager `DensityActivity` (kéo three/drei và K3 vào chunk Lab chung), trái với catalog §6A.6 "lazy-load scene/model theo Lab route". | `runtime/activity-renderers.tsx` | FL-27 đăng ký renderer bằng `lazy()`; FL-03 sửa riêng (P-5) |
@@ -171,8 +171,10 @@ src/features/labs/
       k7-palette.ts      # màu A/T/G/C/U + amino acid theo nhóm tính chất (luôn kèm chữ)
       k7-motion.ts       # thời lượng, hằng số damp, stagger
       k7-quality.ts      # tier high/mid/low → dpr, số hạt, độ chi tiết
-      MolecularStage.tsx # Canvas host không phòng vật lý: nền nhân tế bào, ánh sáng, camera rig, fallback
-      molecules/  DnaDuplex3D, NucleotideStrand3D, Enzyme3D, Ribosome3D, Trna3D, Polypeptide3D, Nucleoplasm3D, AngstromRuler3D
+      MolecularStage.tsx # Canvas host không phòng vật lý: nền nhân tế bào, ánh sáng, camera rig, fallback, bể nucleotide
+      bench/      GeneLabBench3D (cảnh vào trong phòng nền), Microscope3D, Thermocycler3D + TubeRack3D
+      molecules/  DnaDuplex3D, strand-renderer, atom-renderer (bi-que), NucleotideStrand3D, NucleotidePool3D,
+                  Enzyme3D, Ribosome3D, Trna3D, Polypeptide3D, Nucleoplasm3D, AngstromRuler3D
       two-d/      SequenceDiagram2D (sơ đồ Đọc đồng bộ state)
       hud/        K7Hud, BasePicker, CodonTable
       dev/        K7KitPreview (route /dev/lab-kits/k7, chỉ DEV)
@@ -192,8 +194,10 @@ K7 **không** sở hữu trình tự gene, bảng biến thể, rubric hay Outco
 
 | Thành phần | Dựng hình | Vật liệu |
 |---|---|---|
-| Khung đường–phosphate | `InstancedMesh`: cầu phosphate + khối ngũ giác (đường deoxyribose/ribose) + đoạn trụ nối, cập nhật ma trận khi tham số mở xoắn đổi | `MeshPhysicalMaterial` clearcoat 0,6, sheen nhẹ; DNA ấm, RNA lạnh hơn để phân biệt |
-| Base | `InstancedMesh` khối bo cạnh, màu theo `instanceColor` từ `k7-palette` | roughness 0,45, clearcoat |
+| Khung đường–phosphate | `InstancedMesh`: ống trụ liền mạch nối các đường + hạt phosphate + tấm ngũ giác (đường deoxyribose/ribose), cập nhật ma trận khi tham số mở xoắn đổi | `MeshPhysicalMaterial` ánh kim nhẹ (metalness 0,35–0,55, roughness 0,2, clearcoat 1); mạch mẹ xanh bạc, mạch mới bạc hà, RNA tím nhạt |
+| Base | `InstancedMesh` thanh trụ màu theo `instanceColor` từ `k7-palette`; purine dài hơn pyrimidine, hai base ghép cặp gặp nhau ở giữa | roughness 0,26, clearcoat |
+| Mô hình nguyên tử (tuỳ chọn ở S1) | `atom-renderer.ts`: nhóm phosphate, vòng đường 5 cạnh, vòng base (purine 5+6, pyrimidine 6) và nguyên tử ngoài vòng chính, nối bằng que; base dài tới đầu thanh sơ đồ để liên kết H khớp | Màu CPK (C xám, N xanh dương, O đỏ, P cam), dải xương sống xanh lá; minh hoạ, không phải toạ độ tinh thể học |
+| Bể nucleotide tự do | `NucleotidePool3D`: 36–72 nucleotide (đường + phosphate + thanh base) trôi và xoay quanh cảnh, tránh vùng phân tử ở giữa | Cùng vật liệu sơ đồ; tắt khi reduced motion hoặc tier low |
 | Liên kết H | `InstancedMesh` trụ mảnh, 2 hoặc 3 vạch | emissive nhẹ, trong suốt |
 | Enzyme (helicase, DNA/RNA polymerase) | Bề mặt phân tử procedural: icosahedron chi tiết 5, dịch đỉnh bằng noise có seed (deterministic), rãnh ôm DNA | Physical, `transparent`, opacity 0,5–0,7, sheen + fresnel từ environment, `depthWrite false` |
 | Ribosome | Hai tiểu đơn vị procedural (lớn/nhỏ) có kênh mRNA và vị trí E/P/A | Physical, mờ, màu rRNA |
