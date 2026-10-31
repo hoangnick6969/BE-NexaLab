@@ -343,3 +343,16 @@ Phase 2 và Phase 3 chạy song song được (khác repo, khác file). Phase 4 
 | Reviewer chưa sẵn sàng | Phase 1–2 không phụ thuộc reviewer; Phase 3 dùng giá trị PROPOSED trong fixture synthetic |
 | Học sinh chia sẻ đáp án | Biến thể theo run (§5.3) |
 | Lỗi OCR lọt vào copy học sinh | T0.2 trước F-1; copy FL-03 viết lại, không dán từ register |
+
+## 13. Implementation status — 2026-10-31 (private pilot, not released)
+
+Built on branch `feat/fl03-runtime-registry` at the owner's request, ahead of the P3.5 gate (§10). No Lab row, pack, config, activity version or release exists, so a student cannot launch FL-03 yet. This is engineering evidence only: no curriculum, science or rights approval.
+
+| Area | State |
+|---|---|
+| BE model | `density-bench@1.0.0` in `packages/sim` (observation only; specimen table and tolerances PROPOSED_UNAPPROVED). `VERSION` is unchanged so existing pinned runs still resolve. |
+| BE rubric | `density-stations@1.0.0` registered in the evaluator registry. **Deviation from §5.6:** six criteria, not seven. The separate "procedure" criterion (R5) is folded into the calculation criterion, which already judges the textbook method (m₂ − m₁, V₂ − V₁, mean of trials); order errors (m₂ ≤ m₁, V₂ ≤ V₁) are validation errors that create no attempt. Criteria: balance, ruler, cylinder, calculation, unitConversion, concept; each reports unmet stations. |
+| Evidence | `{ evidence: { explore, block, water, pebble, units } }` in the generic `evidence` envelope. A misreading is penalised once: calculation and unit conversion are judged against the learner's own readings. The result never returns expected readings. |
+| Tests | 19 evaluator/model tests (G1–G6, B1–B2, I1–I3 plus runtime pinning and envelope). Not covered: BE integration (launch, replay, expiry) — needs an isolated PostgreSQL and a seeded density Lab/pack. |
+| FE | `DensityActivity` 2D pilot on the K3 kit, registered as `rendererKey="density-bench"`; guided readiness, notebook tables 13.1–14.3, `K3Hud`. Dev-only previews at `/dev/lab-kits/k3` and `/dev/lab-kits/density`. 3 Playwright tests (mocked API). |
+| Known gaps | Specimen data is duplicated between the FE sample config and the BE table (keep them identical; BE is authoritative). The block and pebble are chosen by the learner, not per run (§5.3 server-chosen variants are not built). 3D is not wired to the activity. Pack/config seeding and a `CHALLENGE_PARAMETERS` entry for `density` are needed before a pack can be validated. |

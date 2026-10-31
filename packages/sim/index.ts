@@ -399,6 +399,93 @@ export function eye(raw: unknown) {
     verdict: score === 100 ? "passed" : score > 0 ? "partial" : "not_passed",
   };
 }
+/**
+ * FL-03 density bench (KHTN 8 Bài 13–14): reviewed virtual specimens, ideal
+ * instruments and the readings a correct learner would take. Observation only:
+ * it has no learner verdict; the activity rubric compares learner readings.
+ * Values are PROPOSED_UNAPPROVED until a reviewer signs the release digest, and
+ * must agree with the frontend K3 sample config. Dimensions are mm, volumes
+ * cm³ (1 mL = 1 cm³), masses g, densities g/cm³.
+ */
+export const DENSITY_INSTRUMENTS = {
+  balance: { capacityG: 500, resolutionG: 0.1 },
+  ruler: { lengthMm: 300, resolutionMm: 1 },
+  cylinder: { capacityMl: 100, resolutionMl: 1 },
+  cupEmptyMassG: 48.6,
+} as const;
+export const DENSITY_TOLERANCES = {
+  /** Readings accepted within this many instrument divisions. */
+  readingDivisions: 1,
+  /** Learner calculation accepted within this relative error of their own m/V. */
+  relativeCalculation: 0.01,
+  /** …but never tighter than this absolute rounding allowance (g/cm³). */
+  absoluteCalculationGcm3: 0.005,
+  /** Observational feedback band around the reference density. */
+  referenceBand: 0.05,
+} as const;
+export const WATER_DENSITY_GCM3 = 1;
+type BoxSpecimen = { shape: "box"; id: string; material: string; referenceGcm3: number; sizeMm: readonly [number, number, number]; massG: number };
+type PebbleSpecimen = { shape: "irregular"; id: string; material: string; referenceGcm3: number; volumeMl: number; massG: number };
+export const DENSITY_SPECIMENS = {
+  "iron-1v": { shape: "box", id: "iron-1v", material: "iron", referenceGcm3: 7.8, sizeMm: [20, 20, 25], massG: 78 },
+  "iron-2v": { shape: "box", id: "iron-2v", material: "iron", referenceGcm3: 7.8, sizeMm: [20, 20, 50], massG: 156 },
+  "iron-3v": { shape: "box", id: "iron-3v", material: "iron", referenceGcm3: 7.8, sizeMm: [20, 30, 50], massG: 234 },
+  "aluminium-1v": { shape: "box", id: "aluminium-1v", material: "aluminium", referenceGcm3: 2.7, sizeMm: [20, 20, 25], massG: 27 },
+  "copper-1v": { shape: "box", id: "copper-1v", material: "copper", referenceGcm3: 8.9, sizeMm: [20, 20, 25], massG: 89 },
+  "cast-iron-block": { shape: "box", id: "cast-iron-block", material: "cast-iron", referenceGcm3: 7, sizeMm: [20, 30, 50], massG: 210 },
+  "wood-block-a": { shape: "box", id: "wood-block-a", material: "wood", referenceGcm3: 0.6, sizeMm: [100, 60, 40], massG: 144 },
+  "wood-block-b": { shape: "box", id: "wood-block-b", material: "wood", referenceGcm3: 0.6, sizeMm: [80, 50, 30], massG: 72 },
+  "pebble-a": { shape: "irregular", id: "pebble-a", material: "pebble", referenceGcm3: 2.6, volumeMl: 12, massG: 31.2 },
+  "pebble-b": { shape: "irregular", id: "pebble-b", material: "pebble", referenceGcm3: 2.6, volumeMl: 9, massG: 23.4 },
+} as const satisfies Record<string, BoxSpecimen | PebbleSpecimen>;
+export const DENSITY_EXPLORE_IDS = ["iron-1v", "iron-2v", "iron-3v", "aluminium-1v", "copper-1v"] as const;
+export const DENSITY_BLOCK_IDS = ["wood-block-a", "wood-block-b"] as const;
+export const DENSITY_PEBBLE_IDS = ["pebble-a", "pebble-b"] as const;
+
+const round = (value: number, places: number) => Number(value.toFixed(places));
+const boxVolumeCm3 = (sizeMm: readonly [number, number, number]) => round((sizeMm[0] * sizeMm[1] * sizeMm[2]) / 1000, 6);
+
+/** Learner-chosen apparatus set-up: which specimens, how much water. */
+export const densityBenchSchema = z.object({
+  blockId: z.enum(DENSITY_BLOCK_IDS),
+  pebbleId: z.enum(DENSITY_PEBBLE_IDS),
+  pouredMl: z.number().int().min(10).max(90),
+  pebbleInitialMl: z.number().int().min(20).max(80),
+}).strict();
+
+export function densityBench(raw: unknown) {
+  const state = densityBenchSchema.parse(raw);
+  const block = DENSITY_SPECIMENS[state.blockId];
+  const pebble = DENSITY_SPECIMENS[state.pebbleId];
+  const blockVolume = boxVolumeCm3(block.sizeMm);
+  const waterMassG = round(state.pouredMl * WATER_DENSITY_GCM3, 1);
+  const v2Ml = state.pebbleInitialMl + pebble.volumeMl;
+  if (v2Ml > DENSITY_INSTRUMENTS.cylinder.capacityMl) throw new Error("Mực nước sau khi thả vật vượt dung tích ống đong");
+  return {
+    version: "1.0.0",
+    instruments: DENSITY_INSTRUMENTS,
+    tolerances: DENSITY_TOLERANCES,
+    explore: DENSITY_EXPLORE_IDS.map((id) => {
+      const specimen = DENSITY_SPECIMENS[id];
+      const volumeCm3 = boxVolumeCm3(specimen.sizeMm);
+      return { specimenId: id, massG: specimen.massG, volumeCm3, densityGcm3: round(specimen.massG / volumeCm3, 4) };
+    }),
+    block: {
+      specimenId: block.id, edgesMm: [...block.sizeMm], volumeCm3: blockVolume, massG: block.massG,
+      densityGcm3: round(block.massG / blockVolume, 4), referenceGcm3: block.referenceGcm3,
+    },
+    water: {
+      pouredMl: state.pouredMl, cupMassG: DENSITY_INSTRUMENTS.cupEmptyMassG, waterMassG,
+      cupPlusWaterG: round(DENSITY_INSTRUMENTS.cupEmptyMassG + waterMassG, 1),
+      densityGcm3: round(waterMassG / state.pouredMl, 4), referenceGcm3: WATER_DENSITY_GCM3,
+    },
+    pebble: {
+      specimenId: pebble.id, massG: pebble.massG, v1Ml: state.pebbleInitialMl, v2Ml,
+      volumeCm3: pebble.volumeMl, densityGcm3: round(pebble.massG / pebble.volumeMl, 4), referenceGcm3: pebble.referenceGcm3,
+    },
+  };
+}
+
 export function simulate(labId: string, state: unknown) {
   if (labId === "circuit") return circuit(state);
   if (labId === "chemistry") return chemistry(state);

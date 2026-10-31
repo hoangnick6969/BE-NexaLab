@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, emInduction, eye, eyeParts, evaluateMassConservation } from "../../../../packages/sim";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, emInduction, eye, eyeParts, evaluateMassConservation } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -68,6 +68,14 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     outputs: { setup: "string", fieldThroughCoil: "string", inducedCurrent: "string", direction: "string", currentKind: "string", reversalsPerTurn: "number", phaseDirections: "array" },
     requiredSemanticIds: ["coil", "magnet", "galvanometer", "led-pair", "generator"],
     observationOnly: { unsupportedParams: "mô hình quan sát không dùng tham số thử thách" },
+  },
+  "density-bench@1.0.0": {
+    labId: "density",
+    engineVersion: ENGINE_VERSION,
+    simulate: densityBench,
+    outputs: { version: "string", explore: "array" },
+    requiredSemanticIds: ["balance", "cylinder", "ruler"],
+    observationOnly: { unsupportedParams: "mô hình khối lượng riêng không dùng tham số thử thách" },
   },
   "chemistry@1.0.0": {
     labId: "chemistry",
