@@ -72,3 +72,9 @@ Main gained FL-03 (density) and FL-10 release work, plus two registry refactors:
 - BE: 379 tests passed, including the FL-20 and FL-25 integrations. Lint, build and check:layers ok.
 - Remaining BE failure: `density-e2e.integration.test.ts` (FL-03) refuses every isolated URL except `nexalab_fl03_isolated`. It fails at import whenever `NEXALAB_ISOLATED_DATABASE_URL` is set, so on main and in CI too. Not changed here.
 - FE: lint and build ok. Playwright passed 18/18: FL-20 2, FL-25 6, FL-03 density 10.
+
+### CI fix and second merge (2026-10-31)
+- CI "API checks" failed on `density-e2e.integration.test.ts`, the FL-03 suite from main. Its guard threw at import whenever the isolated URL was not `nexalab_fl03_isolated`, so it also failed on CI's `nexalab_pinning_test`.
+- Fix: the suite now skips (`describe.skipIf`) outside the loopback FL-03 database. It still never runs anywhere else.
+- Local run with the CI database: 57 files passed, 2 skipped; 381 tests passed, 3 skipped.
+- FE merged main again (`522cf5e`, catalog thumbnails). `package.json` conflict resolved by keeping main's `capture:lab-thumbnails` script together with the sim 1.3.0 tarball. FE lint and build ok.
