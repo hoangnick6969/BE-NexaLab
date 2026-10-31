@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, emInduction, eye, eyeParts, evaluateMassConservation } from "../../../../packages/sim";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, ecologyTolerance, emInduction, eye, eyeParts, evaluateMassConservation } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -63,6 +63,14 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     simulate: emInduction,
     outputs: { setup: "string", fieldThroughCoil: "string", inducedCurrent: "string", direction: "string", currentKind: "string", reversalsPerTurn: "number", phaseDirections: "array" },
     requiredSemanticIds: ["coil", "magnet", "galvanometer", "led-pair", "generator"],
+    observationOnly: true,
+  },
+  "ecology-tolerance@1.0.0": {
+    labId: "ecology-tolerance",
+    engineVersion: ENGINE_VERSION,
+    simulate: ecologyTolerance,
+    outputs: { setup: "string", zone: "string", widthDeciC: "number", candidates: "array", count: "number", amount: "number", unit: "string", pyramid: "string" },
+    requiredSemanticIds: ["pond", "thermometer", "tolerance-graph", "population-plot", "age-pyramid"],
     observationOnly: true,
   },
   "chemistry@1.0.0": {

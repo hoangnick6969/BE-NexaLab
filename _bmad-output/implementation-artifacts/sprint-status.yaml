@@ -138,6 +138,18 @@ development_status:
   fl-25-t9-verification: done
   fl-25-t10-device-qa: in-progress
   fl-25-t11-release-candidate: backlog
+  # FL-20 ecology-tolerance — ../specs/spec-fl-20-ecological-tolerance/; D-1 decided 2026-10-31 (second track with FL-10); built and verified locally, not released.
+  fl-20-t0-owner-decisions: in-progress
+  fl-20-t1-blueprint: review
+  fl-20-t2-ecology-model: done
+  fl-20-t3-activity-integration: done
+  fl-20-t4-fe-runtime-entry: done
+  fl-20-t5-pond-tolerance-graph: done
+  fl-20-t6-population-age-pyramid: done
+  fl-20-t7-panel-a11y: done
+  fl-20-t8-verification: done
+  fl-20-t9-device-qa: in-progress
+  fl-20-t10-release: backlog
   # Teacher AI increment (TAI) — plan ../planning-artifacts/increment-tai-teacher-ai.md; all blocked on gate G-1 (TAI-T0).
   epic-tai-01-authoring: backlog
   tai-01-t0-activate-fr21-scope: backlog
@@ -186,6 +198,32 @@ development_status:
   tai-06-t3-draft-lab-challenge-job-routes: backlog
   tai-06-t4-teacher-proposal-review-ux: backlog
   tai-06-t5-golden-evaluation-e2e: backlog
+
+fl20_tracking:
+  spec: ../specs/spec-fl-20-ecological-tolerance/SPEC.md
+  status: in-progress
+  date: '2026-10-31'
+  record: fl-20-ecological-tolerance-implementation.md
+  branch: 'feat/fl-20-ecological-tolerance in BE (from 0ac700a) and FE (from 0a8cf73); not pushed'
+  scope: 'FL-20 nhân tố & giới hạn sinh thái + đặc trưng quần thể (K8, 2D SVG): model ecology-tolerance@1.0.0 (tolerance, sweep, import comparison, density, age structure), activity ecology-tolerance-checkpoints v1 (6 checkpoints + explanation, pass 7/7 proposed).'
+  sources: 'Read-only admin GETs on the local API (:4000 -> shared DB): taxonomy KHTN8-L41/L42, lessons pack-structured-03b2dcaf…-v1 (Bài 41) and pack-structured-af15f30a…-v1 (Bài 42). Verified SGK data: cá rô phi 5,6–42 °C (p0174-b0009); Bảng 42.1 densities (p0177-b0008..9). No writes.'
+  audit_findings:
+    - 'B1: gate records disagree (phase plan says P3.5 NOT MET; sprint-status has P3.6 done and P3.7 ready-for-dev); either way ≤2 concurrent Lab tracks, and FL-10 plus FL-25 are open.'
+    - 'B3: Bài 41/42 text in the DB has OCR errors (quản thể, tôn tại, Mặt độ, thấp tuổi); Lab copy is written fresh.'
+    - 'B4: fish A/B/C data, optimum range and pyramid type names exist only in SGK figures; v1 uses labelled illustrative data.'
+  open_decisions:
+    D-1: 'decided 2026-10-31 — owner: "đồng ý D-1 theo khuyến nghị"; FL-25 counts as done for development (T10 is QA only), so FL-20 is the second track with FL-10; no exception needed. Phase plan still to be synced with sprint-status.'
+    D-2: 'open — bind both Bài 41 and Bài 42 (recommended).'
+    D-3: 'open — curriculum reviewer fixes OCR errors in register/lesson text.'
+    D-4: 'open — illustrative data for fish A/B/C and no optimum in v1 (recommended).'
+    D-5: 'open — age-pyramid thresholds 6/5 and 4/5; names from Hình 42.3.'
+    D-6: 'open — rubric 7 criteria, pass 7/7 (recommended provisionally).'
+    D-7: 'open — limits inclusive (recommended).'
+  build_note: 'D-2…D-7 built on the SPEC recommendations; reviewers may change them.'
+  verification: 'Local only. Throwaway PostgreSQL 18 on 127.0.0.1:55432 (scratchpad; stopped afterwards; shared Supabase never touched). BE npm test 54 files / 351 tests passed, 1 skipped (fl-10 integration needs NEXALAB_FL10_TEST_URL); new: 26 model golden tests, 15 activity tests, ecology-tolerance.integration (persist, replay, idempotency, 404 outsider, tuple pinning). lint, build, check:layers ok; route manifest identical to main. FE lint + build pass; ecology-tolerance-lab.spec 2/2 (mock: full keyboard flow, F5 restore, payload; phone layout); em-induction-lab.spec 6/6; lab-run-host 5 failures are a subset of the 6 that fail on main. ecology-tolerance-real-stack.spec 1/1 (Vite → API → isolated DB; server scored 6/7, unmetCriteria prediction:T_ABOVE; Attempt + LabRun rows confirmed). Screenshots 1440/1280 dark/390 px, no page errors, no horizontal scroll. Sloplint 0 FAIL (WARN 29 waived, F7 answered).'
+  fixes_outside_fl20:
+    - 'BE labs.controller.ts launchRun: the FL-10 merge (75ebad1) replaced the registry lookup of rendererKey with a Circuit/FL-10-only ternary, so main launched the released FL-25 Lab with rendererKey null (em-induction.integration failed on main). Restored the registry lookup with the FL-10 fallback; FL-25 integration passes again.'
+  sim_package: '@nexalab/sim 1.3.0 (ecology-tolerance.ts added; engine VERSION stays 1.0.0); FE vendor/nexalab-sim-1.3.0.tgz replaces 1.2.0.'
 
 fl25_tracking:
   spec: ../specs/spec-fl-25-em-induction/SPEC.md

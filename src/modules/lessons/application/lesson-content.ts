@@ -90,6 +90,12 @@ export const CHALLENGE_PARAMETERS: Record<
     rangeReview: "pending",
     params: {},
   },
+  // FL-20: observation-only model with a pinned checkpoint rubric; no challenge parameters.
+  "ecology-tolerance": {
+    modelRef: "ecology-tolerance@1.0.0",
+    rangeReview: "pending",
+    params: {},
+  },
 };
 export type ChallengeParams = Record<string, number | string>;
 
