@@ -46,7 +46,7 @@ describe("Lab evaluator registry", () => {
   });
 
   it("keeps the released Circuit identity, renderer and legacy fallback", () => {
-    expect(labEvaluators.rubricRefs).toEqual([LEGACY_CHALLENGE_RUBRIC, CIRCUIT_BULB_RUBRIC, "em-induction-checkpoints@1.0.0", "mass-conservation-poea@1.0.0", "density-stations@1.0.0"]);
+    expect(labEvaluators.rubricRefs).toEqual([LEGACY_CHALLENGE_RUBRIC, CIRCUIT_BULB_RUBRIC, "em-induction-checkpoints@1.0.0", "ecology-tolerance-checkpoints@1.0.0", "mass-conservation-poea@1.0.0", "density-stations@1.0.0"]);
     expect(labEvaluators.resolve("em-induction-checkpoints@1.0.0").rendererKey).toBe("em-induction");
     expect(labEvaluators.resolve(CIRCUIT_BULB_RUBRIC).rendererKey).toBe("circuit-bulb");
     expect(labEvaluators.resolve(LEGACY_CHALLENGE_RUBRIC).rendererKey).toBeNull();

@@ -13,12 +13,11 @@ import { seedDensityReleaseFixture } from "./density-release.fixture";
  * the standard runtime path that needs no LabRelease. Test rows are labelled.
  */
 const url = process.env.NEXALAB_ISOLATED_DATABASE_URL;
-if (url) {
-  const parsed = new URL(url);
-  if (!["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname) || parsed.pathname !== "/nexalab_fl03_isolated")
-    throw new Error("FL-03 E2E only runs against the isolated nexalab_fl03_isolated database on loopback");
-}
-const db = url ? new PrismaClient({ datasourceUrl: url }) : null;
+const parsed = url ? new URL(url) : null;
+// Runs only against the dedicated loopback nexalab_fl03_isolated database; any other
+// isolated database (for example CI's nexalab_pinning_test) skips the suite.
+const fl03Database = parsed !== null && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname) && parsed.pathname === "/nexalab_fl03_isolated";
+const db = fl03Database ? new PrismaClient({ datasourceUrl: url }) : null;
 afterAll(async () => { await db?.$disconnect(); });
 
 const round = (value: number, places: number) => Number(value.toFixed(places));
