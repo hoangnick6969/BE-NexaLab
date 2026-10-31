@@ -422,7 +422,8 @@ export class LabsController {
         constraints: execution.modelRef === "mass-conservation@1.0.0" ? {} : template?.ranges ?? {},
         initialState: execution.modelRef === "mass-conservation@1.0.0" ? null : template?.initialState ?? null,
         // The pinned rubric's evaluator names the client renderer (e.g. density-bench for the density Lab).
-        rendererKey: rendererKeyFor(execution.rubricRef),
+        rendererKey: execution.modelRef === "circuit-bulb@1.0.0"
+          ? "circuit-bulb" : labEvaluators.resolve(execution.rubricRef).rendererKey,
         expiresAt: run.expiresAt, context: run.context, assignmentId: run.assignmentId,
         versionBinding: execution.binding,
         // Server-chosen run parameters (e.g. FL-03 specimen pins); the client shows them, the server checks them.

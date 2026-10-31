@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, emInduction, eye, eyeParts, evaluateMassConservation, geneExpression } from "../../../../packages/sim";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, eye, eyeParts, evaluateMassConservation, geneExpression } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -84,6 +84,14 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     outputs: { version: "string", mrna: "string", aminoAcids: "array", codons: "array" },
     requiredSemanticIds: ["dna", "mrna", "ribosome"],
     observationOnly: { unsupportedParams: "mô hình từ gene đến protein không dùng tham số thử thách" },
+  },
+  "ecology-tolerance@1.0.0": {
+    labId: "ecology-tolerance",
+    engineVersion: ENGINE_VERSION,
+    simulate: ecologyTolerance,
+    outputs: { setup: "string", zone: "string", widthDeciC: "number", candidates: "array", count: "number", amount: "number", unit: "string", pyramid: "string" },
+    requiredSemanticIds: ["pond", "thermometer", "tolerance-graph", "population-plot", "age-pyramid"],
+    observationOnly: { unsupportedParams: "mô hình sinh thái không dùng tham số thử thách" },
   },
   "chemistry@1.0.0": {
     labId: "chemistry",

@@ -155,7 +155,106 @@ const emInductionActivity: CheckpointActivity = {
   evaluate: (checkpoints, explanation) => evaluateEmInductionActivity(checkpoints as any, explanation),
 };
 
-export const CHECKPOINT_ACTIVITIES: readonly CheckpointActivity[] = [circuitBulbActivity, emInductionActivity];
+// FL-20 ecology-tolerance (see spec-fl-20-ecological-tolerance)
+export const ECOLOGY_TOLERANCE_ACTIVITY_KEY = "ecology-tolerance-checkpoints";
+export const ECOLOGY_TOLERANCE_RUBRIC = "ecology-tolerance-checkpoints@1.0.0";
+const ECO_CHECKPOINTS = ["T_INSIDE", "T_ABOVE", "LIMITS", "IMPORT", "DENSITY", "AGE"] as const;
+type EcoCheckpointId = (typeof ECO_CHECKPOINTS)[number];
+const ECO_CHOICES: Record<Exclude<EcoCheckpointId, "DENSITY">, readonly string[]> = {
+  T_INSIDE: ["PERSISTS", "NOT_PERSIST"],
+  T_ABOVE: ["PERSISTS", "NOT_PERSIST"],
+  LIMITS: ["L1", "L2", "L3", "L4"],
+  IMPORT: ["FISH_A", "FISH_B", "FISH_C", "NONE"],
+  AGE: ["GROWING", "STABLE", "DECLINING"],
+};
+/** Option ranges of the LIMITS reading, fixed in activity version 1. */
+const ECO_LIMIT_OPTIONS: Record<string, { minDeciC: number; maxDeciC: number }> = {
+  L1: { minDeciC: 56, maxDeciC: 420 },
+  L2: { minDeciC: 0, maxDeciC: 420 },
+  L3: { minDeciC: 56, maxDeciC: 300 },
+  L4: { minDeciC: 300, maxDeciC: 440 },
+};
+const ECO_DENSITY_UNITS: Record<string, string> = { ha: "PER_HA", m2: "PER_M2", m3: "PER_M3" };
+const ECO_REQUIRED_STATE: Record<EcoCheckpointId, Record<string, unknown>> = {
+  T_INSIDE: { setup: "tolerance", speciesId: "ca-ro-phi", factor: "TEMPERATURE", valueDeciC: 300 },
+  T_ABOVE: { setup: "tolerance", speciesId: "ca-ro-phi", factor: "TEMPERATURE", valueDeciC: 440 },
+  LIMITS: { setup: "tolerance-sweep", speciesId: "ca-ro-phi", factor: "TEMPERATURE" },
+  IMPORT: { setup: "import-comparison", siteId: "site-demo", factor: "TEMPERATURE" },
+  DENSITY: { setup: "density", populationId: "bap-cai" },
+  AGE: { setup: "age-structure", sampleId: "P3" },
+};
+const densityAnswer = z.object({ value: z.string().regex(/^\d{1,9}([.,]\d{1,3})?$/), unit: z.enum(["PER_HA", "PER_M2", "PER_M3"]) }).strict();
+type DensityAnswer = z.infer<typeof densityAnswer>;
+
+/** "4,0" → 40/10; exact decimal as a fraction so the comparison never uses floats. */
+const decimalFraction = (value: string) => {
+  const [whole, decimals = ""] = value.replace(",", ".").split(".");
+  return { num: Number(whole + decimals), den: 10 ** decimals.length };
+};
+
+export function evaluateEcologyToleranceActivity(checkpoints: Array<{ id: EcoCheckpointId; state: unknown; prediction: unknown }>, explanation: string) {
+  const byId = new Map(checkpoints.map((checkpoint) => [checkpoint.id, checkpoint]));
+  const model = resolveModel("ecology-tolerance@1.0.0");
+  const expectedChoice = (id: EcoCheckpointId, observation: any): string | null => {
+    if (id === "T_INSIDE" || id === "T_ABOVE") return observation.canPersist ? "PERSISTS" : "NOT_PERSIST";
+    if (id === "LIMITS")
+      return Object.entries(ECO_LIMIT_OPTIONS).find(([, range]) =>
+        range.minDeciC === observation.limits.minDeciC && range.maxDeciC === observation.limits.maxDeciC)?.[0] ?? null;
+    if (id === "IMPORT") {
+      const suitable = observation.candidates.filter((candidate: any) => candidate.suitable);
+      if (suitable.length > 1) throw new Error("Dữ liệu so sánh có nhiều hơn một loài phù hợp");
+      return suitable.length ? suitable[0].speciesId.replace("fish-", "FISH_").toUpperCase() : "NONE";
+    }
+    return observation.pyramid;
+  };
+  const evaluated = ECO_CHECKPOINTS.map((id) => {
+    const checkpoint = byId.get(id);
+    if (!checkpoint) throw new Error("All six ecology checkpoints are required");
+    const required = ECO_REQUIRED_STATE[id];
+    const state = checkpoint.state as Record<string, unknown> | null;
+    if (!state || typeof state !== "object" || Object.keys(state).length !== Object.keys(required).length ||
+        Object.entries(required).some(([key, value]) => state[key] !== value))
+      throw new Error(`Trạng thái thí nghiệm không khớp checkpoint ${id}`);
+    const observation = model.simulate(state);
+    let predictionCorrect: boolean;
+    if (id === "DENSITY") {
+      const answer = densityAnswer.parse(checkpoint.prediction) as DensityAnswer;
+      const given = decimalFraction(answer.value);
+      predictionCorrect = answer.unit === ECO_DENSITY_UNITS[observation.unit] &&
+        given.num * observation.density.den === observation.density.num * given.den;
+    } else predictionCorrect = checkpoint.prediction === expectedChoice(id, observation);
+    return { id, scientificObservation: observation, prediction: checkpoint.prediction, predictionCorrect };
+  });
+  return assessment(evaluated, explanation === "A");
+}
+
+const ecologyToleranceActivity: CheckpointActivity = {
+  activityKey: ECOLOGY_TOLERANCE_ACTIVITY_KEY,
+  activityVersion: 1,
+  modelRef: "ecology-tolerance@1.0.0",
+  rubricRef: ECOLOGY_TOLERANCE_RUBRIC,
+  rendererKey: "ecology-tolerance",
+  submission: {
+    checkpoints: z.array(z.object({
+      id: z.enum(ECO_CHECKPOINTS),
+      state: boundedState,
+      prediction: z.union([z.enum(["PERSISTS", "NOT_PERSIST", "L1", "L2", "L3", "L4", "FISH_A", "FISH_B", "FISH_C", "NONE", "GROWING", "STABLE", "DECLINING"]), densityAnswer]),
+    }).strict()).length(6),
+    explanation: z.enum(["A", "B", "C"]),
+  },
+  refine: (evidence, ctx) => {
+    evidence.checkpoints.forEach((checkpoint: { id: EcoCheckpointId; prediction: unknown }, index: number) => {
+      if (checkpoint.id !== ECO_CHECKPOINTS[index])
+        ctx.addIssue({ code: "custom", message: "Ecology checkpoints must be ordered T_INSIDE, T_ABOVE, LIMITS, IMPORT, DENSITY, AGE" });
+      else if (checkpoint.id === "DENSITY" ? typeof checkpoint.prediction !== "object" : !ECO_CHOICES[checkpoint.id].includes(checkpoint.prediction as string))
+        ctx.addIssue({ code: "custom", message: `Prediction is not a choice of checkpoint ${checkpoint.id}` });
+    });
+    limitEvidenceSize(evidence, ctx);
+  },
+  evaluate: (checkpoints, explanation) => evaluateEcologyToleranceActivity(checkpoints as any, explanation),
+};
+
+export const CHECKPOINT_ACTIVITIES: readonly CheckpointActivity[] = [circuitBulbActivity, emInductionActivity, ecologyToleranceActivity];
 export const LEGACY_RUBRIC = "legacy-challenge@1.0.0";
 export const RUBRIC_REFS = [LEGACY_RUBRIC, ...CHECKPOINT_ACTIVITIES.map((activity) => activity.rubricRef)] as [string, ...string[]];
 export const checkpointActivityForRubric = (rubricRef: string) => CHECKPOINT_ACTIVITIES.find((activity) => activity.rubricRef === rubricRef) ?? null;
