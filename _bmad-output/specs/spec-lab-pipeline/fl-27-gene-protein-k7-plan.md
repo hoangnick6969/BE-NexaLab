@@ -319,6 +319,12 @@ Mọi chuyển động hội tụ về state (vị trí ribosome = codon hiện 
 | Kiểm chứng FE | `tsc` + `npm run build` sạch (chunk FL-27 ≈ 28 KB gzip). Playwright: `gene-protein-run.spec.ts` 3/3 (launch ghim gene; body POST /attempts đúng 7 khoá và `evidence` bằng đúng object kỳ vọng; đổi trạm và 3D↔2D không làm đổi evidence; kết quả needs_practice), `gene-protein-lab.spec.ts` 4/4, hồi quy `density-lab.spec.ts` 10/10 (1 test reduced-motion của FL-03 fail một lần khi chạy gộp, chạy lại riêng pass: flaky, không liên quan FL-27). API trong Playwright là mock; luồng BE thật được chứng minh riêng bằng E2E ở trên, chưa chạy một phiên trình duyệt FE → BE → DB liền mạch. |
 | Chưa làm | Đo hiệu năng thiết bị, audit a11y bằng công cụ, review curriculum/khoa học, owner exception cho track thứ ba, release. P-2…P-5 giữ là đề xuất (không sửa K3/FL-03 trên nhánh này). |
 
+## 15. Implementation Evidence — phòng thí nghiệm và kính hiển vi (2026-10-31)
+
+Theo ảnh tham khảo của owner (phòng thí nghiệm ảo kiểu PraxiLabs; bấm vào thiết bị soi để thấy DNA/gene), 3D của FL-27 mở trong phòng nền dùng chung `PhysicalLabEnvironment` với một bàn sinh học phân tử: kính hiển vi quang học (thân men, bàn kính có tiêu bản nhuộm, đèn, tụ quang, revolver với vật kính 4×/10×/40× mã màu, đầu hai thị kính, núm chỉnh thô/tinh), máy PCR (nắp gia nhiệt, màn hình nhiệt độ và đồ thị chu kỳ, bàn phím, khe thông gió) và giá 8 ống PCR. Mọi dụng cụ dựng bằng code trong `kit/bench/`; không sửa room shell (đúng hợp đồng §6A.6). Bấm kính hiển vi (hoặc nút DOM "Soi dưới kính hiển vi") → camera tiến vào thị kính (≈ 1 s) → `MolecularStage` mở như nhìn qua thị kính (vòng tròn mở rộng); nút "Về bàn thí nghiệm" quay lại. Reduced motion: chuyển cảnh tức thì. Trạng thái cảnh không vào evidence. Điều này cập nhật quyết định §1 F3: K7 dùng phòng nền ở cảnh vào, còn cảnh phân tử vẫn không có phòng.
+
+Kiểm chứng: `tsc`, `npm run build`; Playwright `gene-protein-lab.spec.ts` + `gene-protein-run.spec.ts` 7/7 (vào phòng → kính hiển vi → cảnh phân tử → quay lại; evidence không đổi khi đổi cảnh/chế độ xem); soi trực quan 1440 × 900 trong trình duyệt dev.
+
 ## Open Gates — trạng thái hiện tại
 
 Curriculum/science review cho Outcome K9 và hằng số; model + rubric server; owner exception cho track thứ ba; parity 2D/3D và đo thiết bị đại diện; OWNER_SIGNOFF thật. Không mục nào được đáp ứng bởi nhánh này.
