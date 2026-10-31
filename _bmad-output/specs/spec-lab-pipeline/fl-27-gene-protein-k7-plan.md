@@ -384,8 +384,10 @@ Owner ghi nhận ngoại lệ mở track thứ ba cho FL27 và yêu cầu hoàn 
 | BE test đặc thù | FL03 **2/2**, FL10 **1/1**, FL27 **1/1**, mỗi suite dùng đúng database tên riêng; tổng ma trận BE **384 test qua**. |
 | FE focused cuối | FL27 preview/run/full-stack/axe/render + toàn bộ density regression: **20/20 passed**. Bao gồm rót nước và reduced-motion FL03, frame counter static/hidden/reduced, đủ 12 lượt axe. |
 | FE kiểm tra sửa phụ trợ | Avatar người lớn, avatar học sinh/moderation, dashboard mobile và phụ huynh quá hạn: **4/4 passed**; mailbox SMTP local được bật và `MAILBOX_DIR` trỏ đúng worktree. |
-| Build production | FE `tsc -b && vite build` và BE `tsc -p tsconfig.json`: **pass**. FE production dùng `/api`, không đóng gói endpoint 4127 của test. |
-| FE toàn dự án | Đã chạy đủ lệnh suite 125 ca: **88 passed, 22 failed, 7 skipped, 8 did not run**. Lượt này có khoảng gián đoạn hệ thống dài; không dùng duration của nó làm benchmark. |
+| Build production sau merge main | FE `npm run build` (**pass**, chunk GeneProtein 34.35 KB gzip) và BE `npm run build` (**pass**). |
+| Test sau merge | BE test suite **chưa chạy**: guard yêu cầu `NEXALAB_ISOLATED_DATABASE_URL`; lần thử không có DB isolated nên bị guard chặn. `npm run db:generate` cũng gặp EPERM vì Prisma query-engine DLL đang được checkout/worktree khác khóa. Không ghi nhận suite xanh cho lượt này. |
+| FE toàn dự án (trước merge) | Đã chạy đủ lệnh suite 125 ca: **88 passed, 22 failed, 7 skipped, 8 did not run**. Lượt này có khoảng gián đoạn hệ thống dài; không dùng duration của nó làm benchmark. |
+| FE suite sau merge | **Chưa chạy lại toàn bộ** sau merge main. Các thay đổi test FL27 trong stash được restore để đồng bộ selector; stash gốc vẫn giữ nguyên. |
 
 **Không tuyên bố toàn bộ FE xanh.** Trong 22 ca fail của lượt toàn dự án, 5 ca (avatar người lớn, rót nước FL03, dashboard mobile, idle-frame FL27, phụ huynh thiếu mailbox) đã được sửa hoặc bổ sung đúng dependency và được xác minh lại trong hai lượt cuối ở trên. 17 ca khác chưa được sửa/xác minh lại; 8 ca B1 phụ thuộc luồng serial bị bỏ dở. Các nhóm còn mở:
 
@@ -399,4 +401,8 @@ Owner ghi nhận ngoại lệ mở track thứ ba cho FL27 và yêu cầu hoàn 
 
 Các lỗi ngoài FL27 được giữ là kết quả kiểm tra tích hợp, không đổi hợp đồng hay nới assertion sản phẩm để làm xanh toàn bộ. Vì vậy yêu cầu “toàn bộ FE suite không lỗi” **chưa đạt**; cần xử lý các nhóm trên trước khi dùng suite toàn dự án làm release gate. Việc push candidate và publish dữ liệu draft không kích hoạt release và không thay thế review chương trình/khoa học, thiết bị đại diện hoặc OWNER_SIGNOFF.
 
-Cleanup: đã dừng BE 4127, FE 5176/5177, SMTP/mailbox và PostgreSQL tạm; `pg_ctl status` xác nhận không còn server. Đã xóa toàn bộ cluster và scratchpad `C:/Users/LENONO/AppData/Local/Temp/nexalab-fl27-final` (gồm database, log, env helper và artifacts); `Test-Path` trả false. Đã xóa `test-results/`, `output/` của FE và mailbox `.local/` của BE. Không có `.env` tạm trong hai worktree; `.env.example` được giữ. Hai repo ignore `.claude/`; entry `fe-fl27` tạm trong launch config ở workspace đã được bỏ, các entry khác giữ nguyên. Chỉ source, test tái lập, manifest và tài liệu được đưa vào commit; không kèm screenshot/video/log hoặc trailer Co-Authored-By của Claude.
+Cleanup lượt trước đã dừng BE 4127, FE 5176/5177, SMTP/mailbox và PostgreSQL; cluster/scratchpad đã được xóa. Trong lượt phục hồi tiếp sau merge, BE 4127 và mailbox không chạy; PostgreSQL 55427 đã dừng bằng `pg_ctl`, FE Vite 5176 dừng và scratchpad `C:/Users/LENONO/AppData/Local/Temp/nexalab-fe-repair` được xóa sau khi kiểm tra đúng đường dẫn tuyệt đối. Các artifact Playwright `test-results/` và `output/` được tạo lại trong FE và cần xóa trước push. Thư mục mailbox `.local/mailbox` cũ vẫn tồn tại trong BE (chưa xóa vì cần rà nội dung/nguồn tạo). Không có file env tạm mới được tạo trong hai worktree.
+
+Sau merge, build production ở cả FE/BE pass. Supabase MCP SELECT xác nhận Lab `gene-protein`, model `gene-expression@1.0.0`, config v1 và pack v1/v2 đã có; pack v2 còn `draft`, 4/4 golden cases pass, Lab `SHARED_LIBRARY`, `releaseCleared=false`. Không tạo release, không activate, không bind lesson, không ghi OWNER_SIGNOFF. Không chạy importer/apply trên production: script repository chỉ cho phép dedicated loopback database.
+
+Supabase security advisor hiện báo hai bảng public `VideoProgressEvidence` và `VideoPlaybackSession` chưa bật RLS; không tự bật vì chưa có policies và có thể chặn luồng ứng dụng. Cần thiết kế/duyệt policy riêng. Cảnh báo này không phải thay đổi FL27.
