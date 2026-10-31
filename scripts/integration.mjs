@@ -347,8 +347,9 @@ try {
     `/classes/${classroom.id}/assignments`,
     "POST",
     {
-      contentId: "circuit",
-      contentType: "lab",
+      // A group assignment of a seeded lesson; Lab assignments need an active release (covered below).
+      contentId: "lesson-circuit",
+      contentType: "lesson",
       title: "Test task",
       dueDate: new Date(Date.now() + 86400000).toISOString(),
       studentIds: [users.STUDENT.id],
@@ -753,8 +754,8 @@ try {
   const countAfterInvalid = await db.quizAttempt.count({ where: { lessonId: lesson.id } });
   const invalidAnswersRejected = partialQuiz.status === 400 && duplicateQuestion.status === 400 && extraQuestion.status === 400 && countAfterInvalid === countBeforeInvalid;
   check(`partial, duplicate, and extra quiz answers are rejected atomically ${invalidAnswersRejected ? "" : JSON.stringify({ partialStatus: partialQuiz.status, duplicateStatus: duplicateQuestion.status, extraStatus: extraQuestion.status, countBeforeInvalid, countAfterInvalid })}`, invalidAnswersRejected);
-  // D-B1-01: this student also holds a standalone "circuit" lab assignment, so the
-  // A3 gate is asserted on the lesson's own lab step (b1-integration covers both paths).
+  // A3 gate on the lesson's own lab step. Standalone Lab assignments now need an active
+  // Foundational Release, so the unlocked submission below uses the same step.
   const gatedLabStep = completedCards.data.pathway.steps.find((step) => step.type === "LAB" || step.type === "CHALLENGE");
   const deniedPractical = await req("/attempts", "POST", { challengeId: "circuit_001", lessonStepId: gatedLabStep.id, labState: circuit(), durationMs: 100 }, tokens.STUDENT);
   check("lesson lab step submission is rejected before a quiz pass", deniedPractical.status === 403 && deniedPractical.data?.code === "STEP_LOCKED");
@@ -816,7 +817,7 @@ try {
     await db.progress.deleteMany({ where: { studentId: users.STUDENT.id, contentId: lesson.id } });
     runLiveQuizBrowser(lessonTask.data.assignment.id, users.STUDENT.username, changedStudentPassword);
   }
-  const allowedPractical = await req("/attempts", "POST", { challengeId: "circuit_001", labState: circuit(), durationMs: 100 }, tokens.STUDENT);
+  const allowedPractical = await req("/attempts", "POST", { challengeId: "circuit_001", lessonStepId: gatedLabStep.id, labState: circuit(), durationMs: 100 }, tokens.STUDENT);
   check("direct practical submission succeeds after the quiz pass", allowedPractical.status === 201);
   await db.lessonStep.update({
     where: { id: videoStepId },
@@ -931,7 +932,7 @@ try {
     await req(
       "/attempts",
       "POST",
-      { challengeId: "circuit_001", labState: circuit(330), durationMs: 100 },
+      { challengeId: "circuit_001", lessonStepId: gatedLabStep.id, labState: circuit(330), durationMs: 100 },
       tokens.STUDENT,
     )
   ).data;
@@ -951,7 +952,7 @@ try {
     await req(
       "/attempts",
       "POST",
-      { challengeId: "circuit_001", labState: circuit(330), durationMs: 100 },
+      { challengeId: "circuit_001", lessonStepId: gatedLabStep.id, labState: circuit(330), durationMs: 100 },
       tokens.STUDENT,
     )
   ).data;
@@ -968,7 +969,7 @@ try {
     await req(
       "/attempts",
       "POST",
-      { challengeId: "circuit_001", labState: circuit(), durationMs: 100 },
+      { challengeId: "circuit_001", lessonStepId: gatedLabStep.id, labState: circuit(), durationMs: 100 },
       tokens.STUDENT,
     )
   ).data;
@@ -988,8 +989,9 @@ try {
     ).data.simulationResult.current === 0.02,
   );
   // I1: a student practises a standalone lab only when it is released in the
-  // foundational curriculum or assigned as a lab. An unreleased lab is refused to an
-  // unassigned student, then graded through a lab assignment so the model is still covered.
+  // foundational curriculum or assigned through an active Foundational Release. An
+  // unreleased lab is refused to an unassigned student and cannot be assigned without a
+  // release; the model is still covered through the server-side teacher preview.
   const standaloneLab = async (labId, challengeId, labState) => {
     const lab = await db.lab.findUnique({ where: { id: labId } });
     const released = lab.scope === "SHARED_LIBRARY" && lab.releaseCleared && !lab.synthetic && Boolean(lab.topicCode);
@@ -998,8 +1000,9 @@ try {
     const refused = await req("/attempts", "POST", body, outsider.data.accessToken);
     check(`unreleased ${labId} lab is refused to an unassigned student`, refused.status === 404 && refused.data?.code === "LAB_NOT_FOUND");
     const assigned = await req(`/classes/${classroom.id}/assignments`, "POST", { contentId: labId, contentType: "lab", title: `Integration ${labId} lab`, dueDate: new Date(Date.now() + 86400000).toISOString(), studentIds: [users.STUDENT.id] }, tokens.TEACHER);
-    check(`teacher assigns the unreleased ${labId} lab`, assigned.status === 201);
-    return { who: "assigned student", attempt: (await req("/attempts", "POST", body, tokens.STUDENT)).data };
+    check(`unreleased ${labId} lab cannot be assigned without a release`, assigned.status === 400 && assigned.data?.details?.some((issue) => issue.path === "labReleaseId"));
+    const preview = (await req(`/simulate/${labId}`, "POST", labState, tokens.TEACHER)).data;
+    return { who: "teacher preview", attempt: { verdict: preview.verdict, simulationResult: preview } };
   };
   const chemRun = await standaloneLab("chemistry", "chemistry_001", { reactionId: "mg-hcl", molesA: 0.1, molesB: 0.2 });
   check(`${chemRun.who} completes chemistry full stack`, chemRun.attempt.verdict === "passed");
@@ -1062,6 +1065,7 @@ try {
         "POST",
         {
           challengeId: "circuit_001",
+          lessonStepId: gatedLabStep.id,
           labState: circuit(330),
           durationMs: 100,
           verdict: "passed",
