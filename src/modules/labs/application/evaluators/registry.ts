@@ -36,7 +36,7 @@ export function createLabEvaluatorRegistry(evaluators: ReadonlyArray<LabEvaluato
         return fallback.rubricRef;
       const match = evaluators.find((item) =>
         item.activity!.key === activityKey && item.activity!.version === activityVersion && item.modelRefs.includes(modelRef));
-      if (!match) throw new Error(`${activityKey}@${activityVersion} và ${modelRef} không khớp phiên bản`);
+      if (!match) throw new Error(`${activityKey}@${activityVersion} and ${modelRef} are incompatible`);
       return match.rubricRef;
     },
     /** Validates learner data against the pinned rubric, then evaluates it. */

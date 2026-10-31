@@ -136,7 +136,7 @@ export function goldenCaseResults(labId: string, input: VersionInput, modelRef?:
   return input.goldenCases.map((golden) => {
     let actual: string;
     try {
-      if (modelRef && (MODEL_REGISTRY[modelRef]?.observationOnly || modelRef === "mass-conservation@1.0.0")) {
+      if (modelRef && (observationOnlyModel(modelRef) || modelRef === "mass-conservation@1.0.0")) {
         // Observation-only golden cases validate a well-formed observation state.
         // They do not assess learning or treat OPEN as a student failure.
         resolveModel(modelRef!).simulate(golden.labState);

@@ -14,6 +14,7 @@ export const boundedState = z.unknown().refine((v) => v !== undefined && JSON.st
  * assessment behavior must use another implementation and version.
  */
 export function evaluateRunV1(labId: string, state: any, params: ChallengeParams | null, modelRef: string) {
+  if (modelRef === "mass-conservation@1.0.0") throw new Error("FL-10 requires its pinned activity rubric");
   let result: any = resolveModel(modelRef).simulate(state);
   if (params) {
     const unmet: string[] = [];
