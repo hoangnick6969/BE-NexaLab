@@ -9,34 +9,96 @@
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
-import { GENE_MODEL, GENE_RUBRIC } from "../src/modules/labs/application/evaluators/gene-protein-stations.evaluator";
-import { GENE_FIXTURE_NOTICE, seedGeneProteinTuple } from "../src/modules/labs/interface/gene-protein-tuple.fixture";
+import {
+  GENE_MODEL,
+  GENE_RUBRIC,
+} from "../src/modules/labs/application/evaluators/gene-protein-stations.evaluator";
+import {
+  GENE_FIXTURE_NOTICE,
+  seedGeneProteinTuple,
+} from "../src/modules/labs/interface/gene-protein-tuple.fixture";
+import { digest } from "../src/modules/labs/application/lab-run";
 
 function loopbackUrl(name: string): URL {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required`);
   const url = new URL(value);
-  if (!["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname.toLowerCase())) throw new Error(`${name} must be loopback`);
+  if (
+    !["localhost", "127.0.0.1", "[::1]", "::1"].includes(
+      url.hostname.toLowerCase(),
+    )
+  )
+    throw new Error(`${name} must be loopback`);
   return url;
 }
 
 async function main() {
   const database = loopbackUrl("DATABASE_URL");
   const direct = loopbackUrl("DIRECT_URL");
-  if (database.href !== direct.href) throw new Error("DATABASE_URL and DIRECT_URL must name the same isolated target");
-  if (new URL(process.env.NEXALAB_ISOLATED_DATABASE_URL ?? "http://x").href !== database.href)
-    throw new Error("DATABASE_URL does not match NEXALAB_ISOLATED_DATABASE_URL");
+  if (database.href !== direct.href)
+    throw new Error(
+      "DATABASE_URL and DIRECT_URL must name the same isolated target",
+    );
+  if (
+    new URL(process.env.NEXALAB_ISOLATED_DATABASE_URL ?? "http://x").href !==
+    database.href
+  )
+    throw new Error(
+      "DATABASE_URL does not match NEXALAB_ISOLATED_DATABASE_URL",
+    );
 
   const db = new PrismaClient({ datasourceUrl: database.href });
   try {
-    const admin = await db.user.findFirst({ where: { role: "ADMIN" }, orderBy: { createdAt: "asc" } });
-    if (!admin) throw new Error("Run the isolated db:seed first: an ADMIN account is required as creator");
+    const admin = await db.user.findFirst({
+      where: { role: "ADMIN" },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!admin)
+      throw new Error(
+        "Run the isolated db:seed first: an ADMIN account is required as creator",
+      );
     const tuple = await seedGeneProteinTuple(db, admin.id);
-    console.log(JSON.stringify({
-      seeded: "gene-protein (FL-27) isolated fixture", labId: tuple.lab.id, challengeId: tuple.challengeId,
-      configVersionId: tuple.configVersionId, packVersionId: tuple.packVersionId, activityVersionId: tuple.activityVersionId,
-      rubricRef: GENE_RUBRIC, modelRef: GENE_MODEL, notice: GENE_FIXTURE_NOTICE,
-    }, null, 2));
+    // Stable opt-in browser fixture; published assignments pin the exact execution tuple.
+    const student = await db.user.findUniqueOrThrow({
+      where: { username: "student.active" },
+    });
+    const { captureCurrentLabExecution } =
+      await import("../src/modules/labs/application/assignment-lab-execution");
+    await db.$transaction(async (tx) => {
+      const execution = await captureCurrentLabExecution(tx, tuple.lab.id);
+      await tx.assignment.upsert({
+        where: { id: "assignment-fl27-fullstack" },
+        create: {
+          id: "assignment-fl27-fullstack",
+          classId: "class-pilot-a",
+          contentType: "lab",
+          contentId: tuple.lab.id,
+          title: "FL27 isolated full-stack fixture",
+          labExecution: execution as any,
+          labExecutionDigest: digest(execution),
+          dueDate: new Date(Date.now() + 86400000),
+          targets: { create: [{ studentId: student.id }] },
+        },
+        update: { dueDate: new Date(Date.now() + 86400000) },
+      });
+    });
+    console.log(
+      JSON.stringify(
+        {
+          seeded: "gene-protein (FL-27) isolated fixture",
+          labId: tuple.lab.id,
+          challengeId: tuple.challengeId,
+          configVersionId: tuple.configVersionId,
+          packVersionId: tuple.packVersionId,
+          activityVersionId: tuple.activityVersionId,
+          rubricRef: GENE_RUBRIC,
+          modelRef: GENE_MODEL,
+          notice: GENE_FIXTURE_NOTICE,
+        },
+        null,
+        2,
+      ),
+    );
   } finally {
     await db.$disconnect();
   }
@@ -44,6 +106,12 @@ async function main() {
 
 main().catch((error) => {
   const response = (error as any)?.response;
-  console.error(response ? JSON.stringify(response) : error instanceof Error ? error.message : error);
+  console.error(
+    response
+      ? JSON.stringify(response)
+      : error instanceof Error
+        ? error.message
+        : error,
+  );
   process.exitCode = 1;
 });

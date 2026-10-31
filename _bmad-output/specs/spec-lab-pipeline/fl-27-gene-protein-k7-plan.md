@@ -12,7 +12,7 @@ companions:
 ---
 # FL-27 Từ gene đến protein + Shared Kit K7 "Phân tử/gen" — audit và kế hoạch triển khai
 
-> **TECHNICAL CANDIDATE / UNAPPROVED.** Code FE + BE trên nhánh `feat/fl27` là bằng chứng kỹ thuật: kit K7, renderer FL-27, model `gene-expression@1.0.0` và rubric `gene-protein-stations@1.0.0`, kiểm chứng trên PostgreSQL cô lập. Không có release, binding Lesson hay OWNER_SIGNOFF thật. Mọi Outcome dưới đây là `PROPOSED_UNAPPROVED`; outcome K9 còn điều kiện provenance. P3.5 vẫn **NOT MET**, P3.7 chưa mở.
+> **TECHNICAL CANDIDATE / UNAPPROVED.** Owner đã cho phép FL27 mở track thứ ba ngày 2026-10-31. Full-stack FE → HTTP BE → PostgreSQL cô lập đã được kiểm chứng; kết quả kỹ thuật mới nhất ở §15 thay thế các dòng trạng thái lịch sử bên dưới. Không có release, binding Lesson hay OWNER_SIGNOFF thật. Review chương trình/khoa học của FL27 vẫn chờ; không suy diễn ngoại lệ track thành phê duyệt release. P3.5/P3.7 toàn cục không tự thay đổi bởi ngoại lệ này.
 
 ## Cách đọc tài liệu
 
@@ -286,7 +286,7 @@ Mọi chuyển động hội tụ về state (vị trí ribosome = codon hiện 
 | ID | Câu hỏi | Đề xuất |
 |---|---|---|
 | D-1 | FL-27 thuộc K7 (catalog) hay đổi kit theo yêu cầu "kit 3"? | **Chốt K7** (owner 2026-10-31), dùng chung FL-28/30 |
-| D-2 | Mở FL-27 như track thứ ba (ngoại lệ owner) hay chờ FL-03/FL-10 đóng? | Chỉ presentation trên nhánh này; Phase 3 chờ owner |
+| D-2 | Mở FL-27 như track thứ ba (ngoại lệ owner) hay chờ FL-03/FL-10 đóng? | Owner cho phép mở track thứ ba ngày 2026-10-31; hoàn tất kỹ thuật trước review chương trình/khoa học và OWNER_SIGNOFF. Không đồng nghĩa phê duyệt release. |
 | D-3 | S2 có gồm mạch ra chậm (Okazaki) không? | Không ở v1, ghi giới hạn |
 | D-4 | Hằng số hình học: số SGK (10 cặp, 34 Å) hay B-DNA thực (10,5)? | **Chốt số SGK** (owner 2026-10-31): 10 cặp/vòng, 34 Å, Ø 20 Å; A–T 2, G–C 3 liên kết H |
 | D-5 | Chỉ đột biến thay thế hay thêm cả mất/thêm (lệch khung)? | Thay thế ở v1 |
@@ -340,4 +340,63 @@ Kiểm chứng: `tsc`, `npm run build` (chunk FL-27 ≈ 34 KB gzip); Playwright 
 
 ## Open Gates — trạng thái hiện tại
 
-Curriculum/science review cho Outcome K9 và hằng số; model + rubric server; owner exception cho track thứ ba; parity 2D/3D và đo thiết bị đại diện; OWNER_SIGNOFF thật. Không mục nào được đáp ứng bởi nhánh này.
+Curriculum/science review cho Outcome K9 và hằng số; model + rubric server; owner exception cho track thứ ba; parity 2D/3D và đo thiết bị đại diện; OWNER_SIGNOFF thật. Đây là trạng thái lịch sử trước lượt hoàn thiện ở §15.
+
+## 15. Hoàn thiện kỹ thuật theo ngoại lệ owner — 2026-10-31
+
+Owner ghi nhận ngoại lệ mở track thứ ba cho FL27 và yêu cầu hoàn thiện kỹ thuật, publish candidate data và push `feat/fl27` trước review chương trình/khoa học và OWNER_SIGNOFF. Ngoại lệ đã được ghi ở D-2; không tạo hoặc giả mạo bất kỳ review/signoff nào.
+
+### Full-stack thật
+
+- PostgreSQL 18 tạm, chỉ nghe `127.0.0.1:55427`, database `nexalab_fl27_isolated`; migrate/seed dùng npm scripts có guard. Browser fixture có assignment `assignment-fl27-fullstack`, ghim execution tuple và digest từ `captureCurrentLabExecution`.
+- FE dev **5176** gọi trực tiếp BE **4127** qua `VITE_API_URL`, không đi qua mock/proxy trong test full-stack; đây là kiểm tra CORS thực.
+- `tests/gene-protein-real-stack.spec.ts`: login thật → mở lab → server chọn gene → thao tác sáu trạm → POST evidence → BE chấm **6/6** → UI hiển thị kết quả → GET `/attempts` xác nhận bản ghi đã lưu. Known-answer fixtures độc lập, không import BE vào FE test.
+- BE E2E còn kiểm tra replay idempotency, bài làm sai, RNA chứa T, và evidence của gene khác; các trường hợp bị từ chối không tạo Attempt.
+
+### Render và a11y
+
+- Nucleotide pool chỉ chạy liên tục trong pha tái bản đang mở/xây mạch hoặc phiên mã còn ô trống, ở quality tier có particles; không chạy ở trạm cấu trúc, dịch mã, đột biến, kết luận hoặc tái bản đã hoàn tất.
+- Cấu trúc DNA không tự bật spin khi vào trạm. Bỏ `spin` trang trí ở Kết luận: kiểm tra frame thực phát hiện child này tự `invalidate()` ngay cả khi Canvas đặt demand.
+- Tab ẩn dùng `frameloop=never`; reduced-motion/cảnh tĩnh dùng demand; chuyển 2D unmount cảnh 3D. Listener visibility được gỡ khi unmount. Điều khiển spin do người dùng chủ động bật vẫn hoạt động ở trạm cấu trúc.
+- `@axe-core/playwright` được pin trong lockfile; audit đủ **6 trạm × 2 chế độ** có **0 critical/serious**. Test render đo `gl.info.render.frame` để kiểm tra khung hình thực sự ngừng tăng, thay vì chỉ kiểm tra prop/DOM.
+- Chưa có benchmark phần cứng Chromebook/tablet đại diện hoặc audit a11y thủ công; không suy diễn số liệu headless thành FPS thiết bị thật.
+
+### FL03 và các kiểm tra hồi quy
+
+- Flaky reduced-motion có đồng hồ Playwright đang pause: polling theo thời gian thật không đẩy RAF sau `invalidate`. Test được sửa để `clock.runFor(32)` trong mỗi lượt poll, giữ nguyên code sản phẩm FL03.
+- Một lượt test rót nước đi qua khoảng gián đoạn hệ thống dài và timeout; phải phân biệt với lỗi reduced-motion nói trên và chạy lại trong lượt xác minh cuối.
+- Guard test FL03/FL27 vẫn từ chối URL remote; khi suite chung dùng database cô lập khác, test đặc thù bỏ qua thay vì làm fail lúc collect. Suite chạy theo ma trận database riêng; không chạy seed/test trên Supabase.
+- Sửa test FL10 import `FL10_ACTIVITY_KEY` đã không còn được export, chỉ trong test; không đổi model/renderer FL10.
+- Sửa selector Notifications đã chuyển từ link sang button và assertion avatar để hỗ trợ local signed URL; vẫn kiểm tra object key đã rời staging và so sánh byte ảnh. Dashboard mobile có một sửa CSS `minmax(0, 1fr)`; đo scrollWidth từ 426 px về 390 px tại viewport 390 px.
+
+### Publish candidate data
+
+- Manifest chuẩn: `content/simulation-packs/fl27-candidate.json`, tạo bằng `npm run fl27:data:prepare`; gồm catalog subset từ Content tool với provenance đang có, Lab/challenge/activity/config/pack và model ref. Quy trình tái lập: `docs/operations/fl27-integration.md`.
+- `npm run fl27:data:publish` mặc định dry-run; `--apply` chỉ cho dedicated loopback database, thực hiện trong transaction, không ghi đè nội dung version khác. Đã kiểm tra dry-run, apply và apply lặp lại.
+- Candidate pack **v2** bổ sung expected mRNA cho cả bốn golden cases. Đã ghi `fl27-pack-v2` vào Supabase `eiotlkegrejjhldsvaqp` bằng MCP theo yêu cầu publish data của owner, SELECT lại xác nhận **4/4 golden passed**. Pack v1 giữ nguyên.
+- Scope **SHARED_LIBRARY**, topic **KHTN9-CH11-T01**, config/pack **draft**, **releaseCleared=false**. Không activate, không tạo LabRelease, không tự bind Lesson hoặc ghi OWNER_SIGNOFF.
+
+### Kết quả cuối và cleanup
+
+| Kiểm tra | Kết quả cuối |
+| --- | --- |
+| BE suite chung | `npm test -- --maxWorkers=2 --testTimeout=15000`: **380 passed, 4 skipped**; database pinning chỉ migrate, không seed lab thường. Giảm workers tránh Argon2 timeout khi chạy song song software WebGL. |
+| BE test đặc thù | FL03 **2/2**, FL10 **1/1**, FL27 **1/1**, mỗi suite dùng đúng database tên riêng; tổng ma trận BE **384 test qua**. |
+| FE focused cuối | FL27 preview/run/full-stack/axe/render + toàn bộ density regression: **20/20 passed**. Bao gồm rót nước và reduced-motion FL03, frame counter static/hidden/reduced, đủ 12 lượt axe. |
+| FE kiểm tra sửa phụ trợ | Avatar người lớn, avatar học sinh/moderation, dashboard mobile và phụ huynh quá hạn: **4/4 passed**; mailbox SMTP local được bật và `MAILBOX_DIR` trỏ đúng worktree. |
+| Build production | FE `tsc -b && vite build` và BE `tsc -p tsconfig.json`: **pass**. FE production dùng `/api`, không đóng gói endpoint 4127 của test. |
+| FE toàn dự án | Đã chạy đủ lệnh suite 125 ca: **88 passed, 22 failed, 7 skipped, 8 did not run**. Lượt này có khoảng gián đoạn hệ thống dài; không dùng duration của nó làm benchmark. |
+
+**Không tuyên bố toàn bộ FE xanh.** Trong 22 ca fail của lượt toàn dự án, 5 ca (avatar người lớn, rót nước FL03, dashboard mobile, idle-frame FL27, phụ huynh thiếu mailbox) đã được sửa hoặc bổ sung đúng dependency và được xác minh lại trong hai lượt cuối ở trên. 17 ca khác chưa được sửa/xác minh lại; 8 ca B1 phụ thuộc luồng serial bị bỏ dở. Các nhóm còn mở:
+
+| Nhóm ngoài FL27 | Số ca fail chưa xử lý | Bằng chứng trong lượt toàn dự án |
+| --- | ---: | --- |
+| `b1-teacher-live.spec.ts` | 1 | Journey giao bài chờ `.assignment-row` với tên bài vừa giao; hết timeout. 8 ca phụ thuộc chưa chạy. |
+| `lab-run-host.spec.ts` | 5 | Chemistry mở error boundary; focus panel Circuit; selector link thoát đã đổi; luồng topology/return context. |
+| `lesson-lab-navigation.spec.ts` | 4 | Assigned return context, unbound query, thiếu placement, và bài lab màn hình hẹp. |
+| `reading-completion.spec.ts` | 1 | Luồng đọc được giao/retry/resume. |
+| `student-lessons-hub.spec.ts` | 6 | Ebook editions, hợp nhất catalog, open lessons rỗng, pathway/return context, foundational progress và SGK scroll container. |
+
+Các lỗi ngoài FL27 được giữ là kết quả kiểm tra tích hợp, không đổi hợp đồng hay nới assertion sản phẩm để làm xanh toàn bộ. Vì vậy yêu cầu “toàn bộ FE suite không lỗi” **chưa đạt**; cần xử lý các nhóm trên trước khi dùng suite toàn dự án làm release gate. Việc push candidate và publish dữ liệu draft không kích hoạt release và không thay thế review chương trình/khoa học, thiết bị đại diện hoặc OWNER_SIGNOFF.
+
+Cleanup: đã dừng BE 4127, FE 5176/5177, SMTP/mailbox và PostgreSQL tạm; `pg_ctl status` xác nhận không còn server. Đã xóa toàn bộ cluster và scratchpad `C:/Users/LENONO/AppData/Local/Temp/nexalab-fl27-final` (gồm database, log, env helper và artifacts); `Test-Path` trả false. Đã xóa `test-results/`, `output/` của FE và mailbox `.local/` của BE. Không có `.env` tạm trong hai worktree; `.env.example` được giữ. Hai repo ignore `.claude/`; entry `fe-fl27` tạm trong launch config ở workspace đã được bỏ, các entry khác giữ nguyên. Chỉ source, test tái lập, manifest và tài liệu được đưa vào commit; không kèm screenshot/video/log hoặc trailer Co-Authored-By của Claude.

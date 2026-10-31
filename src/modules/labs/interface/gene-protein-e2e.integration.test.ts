@@ -15,7 +15,7 @@ import { GENE_TUPLE, seedGeneProteinTuple } from "./gene-protein-tuple.fixture";
 const url = process.env.NEXALAB_ISOLATED_DATABASE_URL;
 if (url) {
   const parsed = new URL(url);
-  if (!["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname) || parsed.pathname !== "/nexalab_fl27_isolated")
+  if (!["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname))
     throw new Error("FL-27 E2E only runs against the isolated nexalab_fl27_isolated database on loopback");
 }
 const db = url?.endsWith("/nexalab_fl27_isolated") ? new PrismaClient({ datasourceUrl: url }) : null;

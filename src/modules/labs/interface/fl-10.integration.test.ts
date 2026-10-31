@@ -3,11 +3,12 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, describe, expect, it } from "vitest";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { StudentAccessService } from "../../progress/application/student-access.service";
-import { FL10_ACTIVITY_KEY, FL10_RUBRIC } from "../application/lab-run";
+import { FL10_RUBRIC } from "../application/lab-run";
 import { AdminLabsController } from "./admin-labs.controller";
 import { LabsController } from "./labs.controller";
 
 const testUrl = process.env.NEXALAB_FL10_TEST_URL;
+const FL10_ACTIVITY_KEY = "mass-conservation-poea";
 if (testUrl) {
   const url = new URL(testUrl);
   if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) || url.pathname !== "/fl10_utf8_isolated" ||
