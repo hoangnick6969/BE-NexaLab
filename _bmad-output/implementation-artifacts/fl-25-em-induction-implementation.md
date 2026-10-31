@@ -125,3 +125,10 @@ Owner asked that students can act on the apparatus themselves. FE only, local, n
 - Owner, in the working session: "Release vào DB chung r commit push. Lab đã được duyệt."
 - Both branches committed and pushed (no PR opened; the owner opens them).
 - Not done from this machine: writing the Lab, release or sign-off into the shared Supabase. AGENTS.md forbids seeds/backfills against the shared DB, and the shared BE cannot serve `em-induction@1.0.0` until this branch is merged and deployed. Release path: merge → deploy → admin creates the release (`POST /admin/labs/:id/releases`), activates and publishes it with the genuine OWNER_SIGNOFF on the exact digest.
+
+## Release preparation (2026-10-31)
+- Merged to main (PR #41). There is no admin API that creates a Lab row, so migration `20261031130000_fl25_em_induction_lab` registers the Lab (`em-induction`, physics, grade 9, topic `KHTN9-CH04-T01`, draft, CLASS_PRIVATE, not synthetic, `em-induction@1.0.0`) and challenge `em_001`; idempotent.
+- `scripts/release-em-induction.mjs` runs the rest through the admin API only: activity `em-induction-checkpoints` (outcome `KHTN-L9/dien-tu/1`), configuration v1 with 4 golden cases, pack `em-induction-k1` with 5 golden cases, release draft bound to lesson `pack-khtn9-l14-cam-ung-dien-tu-nguyen-tac-tao-ra-dong-dien-xo-v1`, and with `FL25_PUBLISH=true` the OWNER_SIGNOFF evidence plus publish.
+- Shared environment (read-only check with the owner's admin account): topic `KHTN9-CH04-T01` and outcome `KHTN-L9/dien-tu/1` are active and not synthetic; the lesson's pack version is released with that outcome; the Lab did not exist yet. The outcome statement is still truncated (D-3).
+- Rehearsal on an isolated database: all steps pass, rerun is idempotent, a student launch resolves `FOUNDATIONAL_RELEASE` and a full submission scores 5/5.
+- Not done from this machine: applying migrations to the shared database (the guarded `db:migrate` refuses non-loopback targets; the owner applies them).
