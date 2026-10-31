@@ -28,7 +28,23 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run lint
+      # DB integration suites only accept a loopback database named nexalab_pinning_test, and the
+      # isolated-database guard requires every URL of a command to name that same database.
+      - name: Prepare the isolated test database
+        run: |
+          PGPASSWORD=test_password psql -h localhost -U nexalab -d nexalab -c "CREATE DATABASE nexalab_pinning_test"
+          npm run db:migrate
+        env:
+          NEXALAB_ISOLATED_DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
+          DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
+          DIRECT_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
+          NEXALAB_PINNING_TEST_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
       - run: npm test
+        env:
+          NEXALAB_ISOLATED_DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
+          DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
+          DIRECT_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
+          NEXALAB_PINNING_TEST_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
       - run: npm run build
       - run: npm run db:migrate && npm run db:seed
         env:
