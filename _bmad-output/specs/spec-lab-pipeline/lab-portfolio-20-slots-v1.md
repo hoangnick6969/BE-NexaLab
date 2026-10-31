@@ -33,3 +33,54 @@ Chapter labels below are copied from the historical Outcome appendix, not indepe
 2. FL-06 (slot 5), Lever equilibrium: bounded force/distance variables and balance observation. Verify B18/B19 scope and distinguish prediction from physical equipment skill.
 
 These are recommendations for review, not permission to implement. Prefer these bounded K8 candidates over broad SPLIT candidates or conditional K9 scope. No additional Chemistry prototype work is proposed.
+
+## 3. Phân nhóm 20 Lab ưu tiên theo môn, kit và phòng nền
+
+Phạm vi của mục này là đúng 20 slot ở bảng trên. Không thêm trạng thái triển khai hoặc tiến độ cho các discovery ID ngoài shortlist. Các mapping dưới đây vẫn là đề xuất, không phê duyệt curriculum/model hay xác nhận kit đã hoàn thành.
+
+### Phòng nền vật lý dùng chung
+
+`PhysicalLabEnvironment` là **vỏ phòng** được tái sử dụng khi một hoạt động vật lý có cảnh phòng thực hành: sàn gạch, tường, tủ, lababo, bàn nâu và ánh sáng nền. Nó tách biệt với kit apparatus và Lab Space. Nguồn FE hiện có tại `src/features/labs/shared/PhysicalLabEnvironment.tsx`.
+
+- Đã dùng chung trong code cho FL-01 pilot qua K1/`PhysicsStage` và cho cảnh ứng viên FL-10 qua K2/`WetBenchStage`.
+- Với các Lab vật lý còn lại trong bảng, đây là **hướng tái sử dụng**, chưa phải implementation. Nếu Lab chỉ phát hành 2D thì không cần tải scene phòng.
+- K1–K8 chỉ sở hữu dụng cụ/apparatus, cấu hình hoặc cách chiếu sáng theo hoạt động. Sàn, tường, tủ, lababo và bàn nâu không được dựng lại trong kit.
+- Phòng nền không chứa kệ chai hóa chất, rack ống nghiệm hay dụng cụ thí nghiệm. Mỗi Lab/kit thêm đúng dụng cụ mà hoạt động đã review yêu cầu. Reuse cùng source không có nghĩa Canvas chia sẻ GPU geometry.
+- FL-23 có thể cần chế độ giảm sáng cho bàn quang học; đây là cấu hình/lighting của cảnh hoạt động, không tạo một bản sao căn phòng.
+
+### Vật lý — 10 Lab
+
+| Slot / Lab | Kit dụng cụ riêng | Phòng nền vật lý | Ranh giới apparatus |
+|---|---|---|---|
+| 1 / FL-01 — Mạch điện một chiều | K1 — Điện–từ | Đã dùng bởi pilot Circuit | Nguồn, dây, công tắc, bóng/linh kiện theo từng activity; không đặt vào phòng nền. |
+| 2 / FL-03 — Khối lượng riêng | K3 — Chất lưu | Tái sử dụng đề xuất | Cân, vật mẫu, bình tràn/ống đong theo model mật độ; không kéo apparatus FL-04/05 vào activity này mặc định. |
+| 3 / FL-04 — Áp suất chất lỏng/khí quyển | K3 — Chất lưu | Tái sử dụng đề xuất | Cột chất lỏng, màng/áp kế hoặc dụng cụ được review cho bài áp suất. |
+| 4 / FL-05 — Lực đẩy Archimedes | K3 — Chất lưu | Tái sử dụng đề xuất | Lực kế, vật mẫu và bể chất lỏng; model và rubric độc lập FL-03/04. |
+| 5 / FL-06 — Moment lực và đòn bẩy | K5 — Cơ học | Tái sử dụng đề xuất | Thanh đòn, điểm tựa, quả nặng và dụng cụ đo lực theo activity. |
+| 6 / FL-07 — Năng lượng nhiệt | K4 — Nhiệt | Tái sử dụng đề xuất | Nhiệt lượng kế, que đun, joulemeter và nhiệt kế theo model được review. |
+| 7 / FL-08 — Sự truyền nhiệt | K4 — Nhiệt | Tái sử dụng đề xuất | Thanh dẫn nhiệt, nguồn nhiệt và vật chỉ thị; tách model khỏi FL-07. |
+| 16 / FL-23 — Quang học | K6 — Quang học | Tái sử dụng đề xuất, cần cấu hình chiếu sáng | Nguồn sáng, khe, lăng kính/thấu kính và màn; SPLIT vẫn mở theo portfolio. |
+| 17 / FL-24 — Cơ năng, công, công suất | K5 — Cơ học | Tái sử dụng đề xuất | Máng trượt/con lắc và cảm biến; K9 còn điều kiện provenance. |
+| 18 / FL-25 — Cảm ứng điện từ | K1 — Điện–từ | Tái sử dụng đề xuất | Cuộn dây, nam châm và dụng cụ chỉ thị riêng; chưa có implementation FL-25. |
+
+### Hóa học — 6 Lab
+
+| Slot / Lab | Kit dụng cụ riêng | Phòng nền vật lý | Ranh giới apparatus |
+|---|---|---|---|
+| 8 / FL-10 — Mol & tính theo PTHH (SPLIT) | K2 — Hóa ướt | Đã dùng trong activity candidate hiện tại | Activity bảo toàn khối lượng chỉ dùng cân và hai cốc. Không đại diện toàn bộ FL-10 và không có kệ/rack trong phòng nền. |
+| 9 / FL-11 — Dung dịch và nồng độ | K2 — Hóa ướt | Tái sử dụng đề xuất | Cốc, dụng cụ định lượng/khuấy theo thí nghiệm đã review; chưa implement. |
+| 10 / FL-12 — Tốc độ phản ứng & xúc tác | K2 — Hóa ướt | Tái sử dụng đề xuất | Bình phản ứng, gia nhiệt/đo thời gian và thu khí nếu model yêu cầu; chưa implement. |
+| 11 / FL-13 — Acid–base, chỉ thị & pH | K2 — Hóa ướt | Tái sử dụng đề xuất | Chỉ thị, mẫu và dụng cụ đo được chọn theo model đã review; fixture pH cũ không tính là Lab. |
+| 12 / FL-14 — Phản ứng vô cơ & kim loại (SPLIT) | K2 — Hóa ướt | Tái sử dụng đề xuất | Chỉ thêm dụng cụ cho phản ứng con đã chốt; chưa implement và không mặc định dùng chung hóa chất giữa activity. |
+| 13 / FL-15 — An toàn phòng thí nghiệm | K2 — Kịch bản an toàn | Có thể dùng làm bối cảnh nếu scene cần; không bắt buộc phòng 3D | Bài tập nhận diện nguy cơ/PPE là activity riêng; không coi đồ bảo hộ hay dụng cụ minh họa là thao tác an toàn ngoài đời. |
+
+### Sinh học — 4 Lab
+
+| Slot / Lab | Kit / presentation | Phòng nền vật lý | Ranh giới cảnh |
+|---|---|---|---|
+| 14 / FL-20 — Nhân tố & giới hạn sinh thái | K8 — Cảnh nhẹ + HUD | Không dùng phòng thí nghiệm vật lý | Bối cảnh sinh thái và đồ thị giới hạn; không thêm tủ/lababo/bàn nâu. |
+| 15 / FL-21 — Lưới thức ăn & cân bằng | K8 — Cảnh nhẹ + HUD | Không dùng phòng thí nghiệm vật lý | Sơ đồ/sa bàn sinh thái; giữ mô hình quan hệ riêng với FL-20. |
+| 19 / FL-26 — Lai Mendel & di truyền | K8 — Cảnh nhẹ + HUD | Không dùng phòng thí nghiệm vật lý | Bối cảnh di truyền tùy chọn và ma trận Punnett; K9 còn điều kiện provenance. |
+| 20 / FL-27 — Từ gene đến protein | K7 — Procedural phân tử/gen | Không dùng phòng thí nghiệm vật lý | Scene phân tử/gen; tách riêng renderer và dữ liệu khỏi K2 hóa học ướt. |
+
+**Đếm theo danh mục:** Vật lý 10, Hóa học 6, Sinh học 4 — tổng cộng 20 slot. Phòng `PhysicalLabEnvironment` là một lớp không gian nền dùng lại xuyên kit; các K1–K8 vẫn giữ apparatus và tương tác chuyên biệt. Trạng thái “tái sử dụng đề xuất” không có nghĩa Lab/kit đã được implement.
