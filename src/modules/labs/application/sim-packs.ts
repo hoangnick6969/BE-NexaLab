@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, emInduction, eye, eyeParts } from "../../../../packages/sim";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, emInduction, eye, eyeParts, evaluateMassConservation } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -22,6 +22,18 @@ type Model = {
   observationOnly?: true;
 };
 export const MODEL_REGISTRY: Record<string, Model> = {
+  "mass-conservation@1.0.0": {
+    labId: "mass-conservation",
+    engineVersion: "1.0.0",
+    simulate: (input) => {
+      const result = evaluateMassConservation(input);
+      if (!result.ok) throw new Error(`Invalid conservation fixture: ${result.code}`);
+      // Pack golden checks use a valid observation, not a learning verdict.
+      return { ...result.value, verdict: "passed" };
+    },
+    outputs: { beforeScaleMilligrams: "number", afterScaleMilligrams: "number", verdict: "string" },
+    requiredSemanticIds: ["scale", "cup-1", "cup-2"],
+  },
   "circuit@1.0.0": {
     labId: "circuit",
     engineVersion: ENGINE_VERSION,

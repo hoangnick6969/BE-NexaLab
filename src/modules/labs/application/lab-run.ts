@@ -39,7 +39,13 @@ export const runSubmissionSchema = z.union([
 ]);
 
 export { CIRCUIT_BULB_ACTIVITY_KEY, CIRCUIT_BULB_RUBRIC, evaluateCircuitBulbActivity } from "./checkpoint-activities";
+export const FL10_ACTIVITY_KEY = "mass-conservation-poea";
+export const FL10_RUBRIC = "mass-conservation-poea@1.0.0";
 export function rubricRefForActivity(activityKey: string, activityVersion: number, modelRef: string) {
+  if (modelRef === "mass-conservation@1.0.0" || activityKey.startsWith("mass-conservation-")) {
+    if (activityKey !== FL10_ACTIVITY_KEY || activityVersion !== 1 || modelRef !== "mass-conservation@1.0.0") throw new Error("FL-10 model and activity versions are incompatible");
+    return FL10_RUBRIC;
+  }
   const byKey = CHECKPOINT_ACTIVITIES.find((activity) => activity.activityKey === activityKey);
   const byModel = checkpointActivityForModel(modelRef);
   if (byKey || byModel) {
@@ -59,7 +65,7 @@ const executionFieldsSchema = z.object({
   activityDigest: z.string().min(1),
   activityKey: z.string().min(1),
   activityVersion: z.number().int().positive(),
-  rubricRef: z.enum(RUBRIC_REFS),
+  rubricRef: z.enum([...RUBRIC_REFS, FL10_RUBRIC]),
   params: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
   stateSchemaVersion: z.literal(1),
   evidenceSchemaVersion: z.literal(1),
@@ -92,6 +98,7 @@ export const assignmentExecutionSchema = compatibleActivityTuple(executionFields
  * assessment behavior must use another implementation and version.
  */
 export function evaluateRunV1(labId: string, state: any, params: ChallengeParams | null, modelRef: string) {
+  if (modelRef === "mass-conservation@1.0.0") throw new Error("FL-10 requires its pinned activity rubric");
   let result: any = resolveModel(modelRef).simulate(state);
   if (params) {
     const unmet: string[] = [];

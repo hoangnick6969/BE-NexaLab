@@ -272,16 +272,33 @@ Sơ đồ 2D trong mô phỏng cần được phân định rõ theo yêu cầu 
   - **Mô hình tính toán độc lập:** Hàm mô phỏng (`packages/sim`) và engine đánh giá chấm điểm server (`lab-run.ts`, `evaluateCircuitBulbActivity`) giữ nguyên $100\%$ logic, chỉ xử lý dữ liệu thuần tuý (`checkpoint evidence` & `answers`).
   - **Renderer 2D/3D là View hoán đổi được (Swappable View):** Renderer nhận cùng state và phát cùng interaction events qua hợp đồng hiện có; không tự tính science/scoring. Khi cả hai view được xây và kiểm tra tương đương, học sinh có thể chọn 2D hoặc 3D, mặc định 3D cho Lab có 3D ổn định. Preference chỉ lưu cục bộ theo Lab, không đi vào attempt/assignment tuple; mode không làm thay đổi evidence payload hay kết quả chấm. Không hiện lựa chọn renderer chưa thực sự tồn tại.
 
-### 6A.6. Runtime frontend dùng chung và phạm vi đã có (2026-10-30)
+### 6A.6. Runtime frontend dùng chung và phạm vi đã có (cập nhật 2026-10-31)
 
 **Định hướng 8 Shared Kits + 1 Explorer:** Giữ cách phân nhóm K1–K8 ở §6A.3 làm kế hoạch tái sử dụng presentation. Explorer là tài nguyên xem/khám phá không sinh evidence, không tự động là Lab hay một trong 20 slot đề xuất. Bảng này vẫn là proposal: dùng chung phòng, mesh, dụng cụ, HUD hoặc renderer **không** gộp Lab identity, outcome, model khoa học, activity/rubric, quyền truy cập hay assignment. Portfolio vẫn là 30 discovery IDs/20 provisional slots cho tới khi reviewer quyết định; con số 8 kits không phải 8 Lab, 8 release, cũng không chứng minh phủ kín curriculum.
+
+**Physical Room Environment dùng chung xuyên kit — hợp đồng scene:** Đây là lớp không gian vật lý nền, dùng lại giữa các Lab cần cùng kiểu phòng thực hành. Đây không phải kit dụng cụ, không phải Lab Space UI, và không chứa vật dụng riêng cho một thí nghiệm.
+
+Danh sách đầu ra theo đúng 20 slot ưu tiên, chia theo môn học, kit dụng cụ và trạng thái dùng phòng nền, nằm trong [lab-portfolio-20-slots-v1.md — mục 3](lab-portfolio-20-slots-v1.md#3-phan-nhom-20-lab-uu-tien-theo-mon-kit-va-phong-nen). Bảng đó không ghi tiến độ cho candidate ngoài 20 slot.
+
+| Lớp | Nội dung / chủ sở hữu | Không bao gồm |
+|---|---|---|
+| Lab Space UI | Fullscreen viewport, thoát, bảng câu hỏi/kết quả, renderer toggle — `shared/LabSpace.tsx` và component liên quan | Mesh phòng 3D hoặc apparatus |
+| Phòng nền vật lý | Tường, sàn gạch, tủ lưu trữ chung, lababo/vòi nước, bàn thao tác nâu/chân bàn, ánh sáng nền — `shared/PhysicalLabEnvironment.tsx` | Kệ hoá chất, chai reagent, rack ống nghiệm, cân, cốc, dây điện, cuộn dây, bể, cảm biến hay props riêng của kit/Lab |
+| Host/camera | Canvas lifecycle, camera, OrbitControls, WebGL fallback — thuộc stage/host của renderer đang dùng | Hình học phòng và nội dung khoa học |
+| Kit/Lab apparatus | Dụng cụ cần cho activity, đặt trên bàn và render từ folder kit/activity; model/state vẫn riêng theo Lab | Không sửa room shell chỉ để thêm dụng cụ cho một bài |
+
+K1 Circuit, FL-25 private engineering prototype và ứng viên FL-10/K2 hiện cùng compose `PhysicalLabEnvironment`; K1 thêm apparatus điện–từ theo từng activity, FL-10 thêm cân điện tử và hai cốc. FL-10 **không cần** kệ chai, chai hoá chất stock, ống đong, bình rửa hay rack ống nghiệm nên không đưa các props này vào room hoặc scene FL-10. Lab K2 khác chỉ được reuse apparatus khi activity đã chọn thực sự cần nó; membership cùng kit không tự động thêm mọi props. K3–K6 có thể dùng chung room shell khi thiết kế là cảnh phòng thực hành vật lý; K7/K8/Explorer chỉ dùng nếu đúng archetype scene.
+
+**Quy ước phát triển:** Room shell là component ổn định xuyên kit. Dev của kit chỉ import/composition, giữ props trong folder kit/activity và không thêm conditional props/config riêng vào `PhysicalLabEnvironment`. Thay đổi tường, sàn, tủ, lababo, bàn, ánh sáng hoặc tọa độ mặt bàn là thay đổi cross-kit có chủ đích; phải rà tất cả consumer hiện hành, kiểm tra K1 Circuit và FL-10/K2 tối thiểu, cập nhật contract và ghi ảnh/evidence QA. Nếu cần một loại phòng khác, tạo variant/environment ID rõ ràng sau quyết định kiến trúc; không âm thầm làm biến dạng room chung.
+
+**Tải và hiệu năng:** FE dùng chung source module để tránh nhân bản code/geometry definitions và cho phép bundler chia sẻ/cache chunk; chỉ nạp apparatus của Lab hiện hành. Nếu sau này chuyển mesh tĩnh sang GLB/texture, asset cần version/digest bất biến và loader cache. Geometry procedural vẫn khởi tạo theo từng Canvas; không tuyên bố dùng chung GPU buffers. Đo riêng cold/warm download bytes, thời gian đến tương tác, GPU memory, frame pacing và context loss trên thiết bị mục tiêu trước khi kết luận tiết kiệm tải/đạt performance.
 
 **Tra cứu danh mục theo shared kit (proposal, đối chiếu §6A.3):**
 
 | Nhóm/kit | Lab IDs trong catalog | Phạm vi môn/chủ đề | Trạng thái pipeline và view |
 |---|---|---|---|
-| K1 Bàn Điện–Từ | FL-01, FL-02, FL-25 | Vật lý: mạch điện, tĩnh điện, cảm ứng điện từ | FL-01 Circuit bulb/topology có renderer frontend. FL-25 có bản *private engineering prototype* (ngoại lệ owner 2026-10-31, xem `../spec-fl-25-em-induction/`), không phải release hay Lab đã duyệt. FL-02 chưa triển khai. Circuit bulb có 2D schematic + 3D; topology dùng lại React Flow 2D editor cũ + 3D. 3D mặc định; view preference cục bộ. |
-| K2 Bàn hoá ướt | FL-10–FL-15 | Hoá học: mol/PTHH, dung dịch, tốc độ phản ứng, acid–base, phản ứng vô cơ, an toàn | Kit quy hoạch; chưa có scene chemistry production. Chemistry pH fixture chỉ là `TECHNICAL_FIXTURE_ONLY`, không phải Lab đã phát hành. |
+| K1 Bàn Điện–Từ | FL-01, FL-02, FL-25 | Vật lý: mạch điện, tĩnh điện, cảm ứng điện từ | FL-01 Circuit bulb/topology có renderer frontend. FL-25 có private engineering prototype 2D/3D (ngoại lệ owner 2026-10-31, xem `../spec-fl-25-em-induction/`), chưa phát hành; FL-02 chưa triển khai. Circuit topology dùng lại React Flow 2D editor và 3D stage. Phòng nền vật lý dùng chung xuyên K1/K2. |
+| K2 Bàn hoá ướt | FL-10–FL-15 | Hoá học: mol/PTHH, dung dịch, tốc độ phản ứng, acid–base, phản ứng vô cơ, an toàn | K2 pre-production; FL-10 có scene candidate dùng room shell chung + apparatus K2. FL-11–15 chưa triển khai; pH compatibility fixture vẫn `TECHNICAL_FIXTURE_ONLY`, không phải Lab phát hành. |
 | K3 Bàn chất lỏng | FL-03, FL-04, FL-05 | Vật lý: khối lượng riêng, áp suất, Archimedes | Kit quy hoạch; chưa có scene Lab production. Target: 2D trước, 3D bổ sung sau benchmark thiết bị. |
 | K4 Bàn nhiệt | FL-07, FL-08, FL-09 | Vật lý: năng lượng nhiệt, truyền nhiệt, nở vì nhiệt | Kit quy hoạch; chưa có scene Lab production. |
 | K5 Cơ học | FL-06, FL-24 | Vật lý: moment/đòn bẩy; cơ năng, công, công suất | Kit quy hoạch; chưa có scene Lab production. |
@@ -295,10 +312,11 @@ Các ID giữ nguyên decision/wave/provisional status ở bảng §6A.3 và b�
 | Layer | Reuse boundary | Current evidence / next work |
 |---|---|---|
 | Shared FE directory map | Nhóm code theo runtime, pathway, discipline và kit để đặt shared environment gần các Labs dùng chung | `../../../../nexalab-fe/src/features/labs/README.md` ánh xạ cấu trúc code với đúng 20 provisional portfolio slots. Kit folders chưa có renderer chỉ chứa README/status, không giả lập implementation. |
-| K1 / shared physics room | Phòng, bàn, ánh sáng, camera và surface controls được dùng chung; mỗi model/activity cung cấp thiết bị và thao tác riêng | `physics/shared/PhysicsStage.tsx` + `LabRoomEnvironment` cấp scene chung cho Circuit bulb và topology. Cảnh hình học procedural; chưa phải runtime declarative tổng quát hay bằng chứng FL-02/06/07/23/25 đã implement. |
+| Physical Room Environment | Phòng nền dùng chung cho các Lab có cảnh phòng thực hành: tường, sàn gạch, tủ, lababo, bàn nâu và ánh sáng nền; độc lập với kit và Lab Space UI | `shared/PhysicalLabEnvironment.tsx` được `physics/shared/PhysicsStage.tsx` dùng cho K1 và `chemistry/wet-bench/WetBenchStage.tsx` dùng cho ứng viên FL-10/K2. Scene procedural; source dùng chung tránh định nghĩa lặp, nhưng chưa có benchmark bytes/memory/frame-time trên Chromebook. |
+| K1 apparatus / host | Nguồn, dây, công tắc, bóng đèn, cuộn dây, nam châm và thiết bị điện–từ theo từng Lab | `physics/electricity/CircuitBulb3DStage.tsx` hiển thị pilot bulb; `Circuit.tsx` chọn renderer topology. Phòng nền là `PhysicalLabEnvironment`; apparatus riêng theo activity. Đây chưa phải bằng chứng FL-02/25 đã implement. |
 | Pilot apparatus | Nguồn, dây, công tắc, bóng đèn và thiết bị circuit | `physics/electricity/CircuitBulb3DStage.tsx` hiển thị pilot bulb. `Circuit.tsx` chọn renderer topology; `Circuit2DEditor.tsx` khôi phục React Flow 2D component editor từ pre-Lab-Space `Circuit.tsx`; state/evidence vẫn theo contract caller và server tiếp tục chấm. Đây chưa phải Lab successor hay release mới được duyệt. |
 | Lab Space shell | Viewport, thoát, renderer fallback, panel câu hỏi/kết quả dùng chung cho entry points | `shared/LabSpace.tsx` chạy cho standalone Lab và assigned lesson; `shared/LabRendererToggle.tsx` chọn view; `runtime/lab-run-host.ts` giữ launch/draft/submit contract. Không đổi model registry hoặc release policy. |
-| K2–K8 kits | Shared components/assets theo từng archetype; chỉ đổi apparatus/config khi learning interaction và model cho phép | Là kế hoạch. Chưa dựng Wet Chemistry, Fluid, Mechanics, Optics, Molecular, Ecology hoặc Explorer thành scene production. Prototype Chemistry vẫn `TECHNICAL_FIXTURE_ONLY`. |
+| K2–K8 apparatus kits | Props, dụng cụ và widgets theo archetype; chỉ thay apparatus/config khi learning interaction và model cho phép | K2 có scene ứng viên FL-10 (`WetBenchStage`) dùng chung `PhysicalLabEnvironment`; K2 chưa production, FL-11–15 chưa có apparatus. K3–K8 vẫn là kế hoạch/scene chưa production. Chemistry compatibility fixture vẫn `TECHNICAL_FIXTURE_ONLY`, độc lập với FL-10 candidate. |
 
 **Ranh giới K2:** Có thể đề xuất reuse các dụng cụ bench/pipet/ống nghiệm/đồ đo giữa FL-10–15; không coi một căn phòng hay bộ prop hiện thực hóa cả sáu Lab. FL-10 và FL-14 còn `SPLIT`; các models/reactions, state, safety framing, activity/rubric và candidate IDs cần được chốt riêng. Với hoạt động pH → tốc độ phản ứng, chỉ tái dùng room/asset catalog sau khi từng model được review; chất lỏng, bọt khí, màu chỉ là output presentation từ kết quả model có version.
 
@@ -306,7 +324,7 @@ Các ID giữ nguyên decision/wave/provisional status ở bảng §6A.3 và b�
 
 **Low-end device, asset delivery và caching (yêu cầu cho P3.7 design/QA):**
 
-- Lazy-load scene/model theo Lab route; tải đúng kit và apparatus đang dùng. Cache asset bất biến theo version/digest, đặt kích thước và content type rõ, cho phép CDN/browser cache; manifest mới trỏ sang asset version mới thay vì thay file tại chỗ. Không cache attempt/evidence như asset công khai.
+- Lazy-load scene/model theo Lab route; dùng shared room module/chunk hoặc asset và chỉ nạp apparatus của kit đang dùng. Cache chunk và asset bất biến theo version/digest, đặt kích thước và content type rõ, cho phép CDN/browser cache; manifest mới trỏ sang asset version mới thay vì thay file tại chỗ. Không định nghĩa lặp mesh phòng trong từng kit; không cache attempt/evidence như asset công khai. Đo riêng bytes tải, GPU memory và frame-time vì reuse source không đồng nghĩa với chia sẻ GPU geometry giữa các Canvas.
 - Ưu tiên procedural geometry/primitive hoặc mesh GLB ít node; dùng instancing cho vật thể lặp, texture KTX2 và Draco khi pipeline hỗ trợ, giới hạn texture/triangles theo thiết bị. Giải phóng GPU geometry/material/texture khi rời Lab hoặc thay kit.
 - Hạ DPR/quality, shadow map, postprocessing và particle count trên thiết bị yếu; giữ tương tác input và server evaluation hoạt động khi WebGL mất/lỗi. Không buộc GPU rời; Explorer có thể là scene xem nhẹ và không sinh evidence.
 - Đo lạnh/ấm: download bytes, thời gian đến tương tác, memory, frame pacing, context loss và thời gian khởi tạo trên Chromebook/Celeron, tablet và máy mục tiêu đã thống nhất. Ghi actual baseline và ngưỡng trước activation; không suy ra performance pass từ Playwright desktop, bundle size hay cache hit đơn lẻ.
