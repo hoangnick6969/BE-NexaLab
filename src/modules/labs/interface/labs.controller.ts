@@ -14,6 +14,7 @@ import { evaluate, packConfigurationErrors, versionParams } from "../application
 import { FL10_RUBRIC } from "../application/lab-run";
 import { canonical, digest, evaluateRunV1, executionSchema, launchSchema, rubricRefForActivity, runSubmissionSchema, submittedEvidence } from "../application/lab-run";
 import { labEvaluators } from "../application/evaluators/registry";
+import { pickDensitySpecimens } from "../application/evaluators/density-specimens";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { assertLegacyCircuitAssignmentCompatible, resolveFoundationalLabRelease, resolvePinnedAssignmentLab } from "../application/assignment-lab-execution";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
@@ -393,6 +394,8 @@ export class LabsController {
           binding: assignment ? "LEGACY_UNPINNED_LAUNCH" : "FOUNDATIONAL_LAUNCH",
         };
       }
+      // FL-03 draws its specimen pair per run; the pair is pinned in the tuple below.
+      if (labId === "density") execution = { ...execution, params: pickDensitySpecimens() };
       assertLegacyCircuitAssignmentCompatible(labId, assignment, execution.modelRef);
       if (await tx.labPackRevocation.findUnique({ where: { packVersionId: execution.packVersionId } }))
         throw new ConflictException({ code: "RUN_REVOKED" });
@@ -414,6 +417,8 @@ export class LabsController {
           : execution.modelRef === "mass-conservation@1.0.0" ? "mass-conservation" : null,
         expiresAt: run.expiresAt, context: run.context, assignmentId: run.assignmentId,
         versionBinding: execution.binding,
+        // Server-chosen run parameters (e.g. FL-03 specimen pins); the client shows them, the server checks them.
+        runtimeParams: execution.params ?? null,
       };
     }, { timeout: 20000 });
   }

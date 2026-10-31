@@ -3,6 +3,7 @@ import { DENSITY_BLOCK_IDS, DENSITY_EXPLORE_IDS, DENSITY_PEBBLE_IDS } from "../.
 import { resolveModel } from "../sim-packs";
 import { normalizeVerdict } from "../simulation-versions";
 import type { LabEvaluator } from "./lab-evaluator";
+import { densityPinsFrom, type DensityPins } from "./density-specimens";
 
 export const DENSITY_ACTIVITY_KEY = "density-stations";
 export const DENSITY_RUBRIC = "density-stations@1.0.0";
@@ -66,10 +67,13 @@ const within = (reading: number, expected: number, tolerance: number) => Math.ab
 export const DENSITY_CRITERIA = ["balance", "ruler", "cylinder", "calculation", "unitConversion", "concept"] as const;
 export type DensityCriterion = (typeof DENSITY_CRITERIA)[number];
 
-export function evaluateDensityStations(evidence: DensityEvidence) {
+export function evaluateDensityStations(evidence: DensityEvidence, pins: DensityPins) {
+  // The learner works with the specimens the run was launched with, and nothing else.
+  if (evidence.block.specimenId !== pins.blockId || evidence.pebble.specimenId !== pins.pebbleId)
+    throw new Error("Mẫu vật trong bài làm không khớp phiên làm bài đã ghim");
   const truth = resolveModel(DENSITY_MODEL).simulate({
-    blockId: evidence.block.specimenId,
-    pebbleId: evidence.pebble.specimenId,
+    blockId: pins.blockId,
+    pebbleId: pins.pebbleId,
     pouredMl: evidence.water.pouredMl,
     pebbleInitialMl: evidence.pebble.initialMl,
   });
@@ -155,5 +159,5 @@ export const densityStationsEvaluator: LabEvaluator<DensityEvidence> = {
   rendererKey: "density-bench",
   envelope: "evidence",
   evidenceSchema: densityEvidenceSchema,
-  evaluate: (_labRunId, evidence) => evaluateDensityStations(evidence),
+  evaluate: (_labRunId, evidence, config) => evaluateDensityStations(evidence, densityPinsFrom(config.params)),
 };

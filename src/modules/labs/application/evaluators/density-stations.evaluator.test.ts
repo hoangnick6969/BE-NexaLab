@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import { DENSITY_SPECIMENS, densityBench } from "../../../../../packages/sim";
 import { DENSITY_RUBRIC, densityEvidenceSchema, densityToGcm3, evaluateDensityStations, type DensityEvidence } from "./density-stations.evaluator";
 import { labEvaluators } from "./registry";
+import { densityPinsFrom, pickDensitySpecimens } from "./density-specimens";
 import { executionSchema, runSubmissionSchema, submittedEvidence } from "../lab-run";
 
 /** A learner who reads every instrument correctly and follows the textbook method. */
+/** Specimens the server pinned for this run; the default evidence below uses the same pair. */
+const PINS = { blockId: "wood-block-a", pebbleId: "pebble-a" } as const;
+
 const perfect = (): DensityEvidence => ({
   explore: {
     masses: ["iron-1v", "iron-2v", "iron-3v", "aluminium-1v", "copper-1v"].map((specimenId) => ({ specimenId: specimenId as any, massG: DENSITY_SPECIMENS[specimenId as keyof typeof DENSITY_SPECIMENS].massG })),
@@ -18,7 +22,7 @@ const perfect = (): DensityEvidence => ({
 const evaluate = (change: (e: DensityEvidence) => void) => {
   const evidence = perfect();
   change(evidence);
-  return evaluateDensityStations(densityEvidenceSchema.parse(evidence));
+  return evaluateDensityStations(densityEvidenceSchema.parse(evidence), PINS);
 };
 const unmet = (change: (e: DensityEvidence) => void) => evaluate(change).result.assessment.unmetCriteria;
 
@@ -165,7 +169,7 @@ describe("FL-03 evidence validation (no attempt is created)", () => {
 
 describe("FL-03 through the shared runtime", () => {
   const base = { contract: "lab-contract/1" as const, runId: "run", idempotencyKey: "ba8ccedf-ae67-460e-8b58-056146ef5a8a", stateSchemaVersion: 1 as const, evidenceSchemaVersion: 1 as const, durationMs: 10 };
-  const config = { labId: "density", modelRef: "density-bench@1.0.0", engineVersion: "1.0.0", params: null, template: null };
+  const config = { labId: "density", modelRef: "density-bench@1.0.0", engineVersion: "1.0.0", params: { ...PINS }, template: null };
 
   it("pins the rubric to its exact activity and model", () => {
     expect(labEvaluators.rubricRefForActivity("density-stations", 1, "density-bench@1.0.0")).toBe(DENSITY_RUBRIC);
@@ -183,5 +187,34 @@ describe("FL-03 through the shared runtime", () => {
     expect(submitted.envelope).toBe("evidence");
     expect(labEvaluators.evaluate(DENSITY_RUBRIC, "run", submitted.data, config)).toMatchObject({ verdict: "passed" });
     expect(() => labEvaluators.evaluate(DENSITY_RUBRIC, "run", { labState: 1 }, config)).toThrow(/định dạng/);
+  });
+});
+
+describe("FL-03 per-run specimen pins", () => {
+  it("evaluates against the pinned pair and rejects evidence for other specimens", () => {
+    const evidence = densityEvidenceSchema.parse({ ...perfect(), block: { ...perfect().block, specimenId: "wood-block-b" } });
+    expect(() => evaluateDensityStations(evidence, PINS)).toThrow(/không khớp phiên/);
+    expect(() => evaluateDensityStations(densityEvidenceSchema.parse(perfect()), { blockId: "wood-block-b", pebbleId: "pebble-a" })).toThrow(/không khớp phiên/);
+  });
+
+  it("picks a pair deterministically from an injected source and always inside the allowed sets", () => {
+    expect(pickDensitySpecimens(() => 0)).toEqual({ blockId: "wood-block-a", pebbleId: "pebble-a" });
+    expect(pickDensitySpecimens(() => 1)).toEqual({ blockId: "wood-block-b", pebbleId: "pebble-b" });
+    for (let i = 0; i < 20; i++) {
+      const pins = pickDensitySpecimens();
+      expect(["wood-block-a", "wood-block-b"]).toContain(pins.blockId);
+      expect(["pebble-a", "pebble-b"]).toContain(pins.pebbleId);
+    }
+  });
+
+  it("fails closed when the run tuple carries no valid pins", () => {
+    expect(() => densityPinsFrom(null)).toThrow(/thiếu mẫu vật/);
+    expect(() => densityPinsFrom({ blockId: "iron-1v", pebbleId: "pebble-a" })).toThrow(/thiếu mẫu vật/);
+    expect(densityPinsFrom({ blockId: "wood-block-b", pebbleId: "pebble-b" })).toEqual({ blockId: "wood-block-b", pebbleId: "pebble-b" });
+  });
+
+  it("is checked through the registry with the run's own params", () => {
+    const parsed = densityEvidenceSchema.parse({ ...perfect(), pebble: { ...perfect().pebble, specimenId: "pebble-b" } });
+    expect(() => labEvaluators.evaluate(DENSITY_RUBRIC, "run", parsed, { labId: "density", modelRef: "density-bench@1.0.0", engineVersion: "1.0.0", params: { ...PINS }, template: null })).toThrow(/không khớp phiên/);
   });
 });

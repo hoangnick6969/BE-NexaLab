@@ -356,3 +356,20 @@ Built on branch `feat/fl03-runtime-registry` at the owner's request, ahead of th
 | Tests | 19 evaluator/model tests (G1–G6, B1–B2, I1–I3 plus runtime pinning and envelope). Not covered: BE integration (launch, replay, expiry) — needs an isolated PostgreSQL and a seeded density Lab/pack. |
 | FE | `DensityActivity` 2D pilot on the K3 kit, registered as `rendererKey="density-bench"`; guided readiness, notebook tables 13.1–14.3, `K3Hud`. Dev-only previews at `/dev/lab-kits/k3` and `/dev/lab-kits/density`. 3 Playwright tests (mocked API). |
 | Known gaps | Specimen data is duplicated between the FE sample config and the BE table (keep them identical; BE is authoritative). The block and pebble are chosen by the learner, not per run (§5.3 server-chosen variants are not built). 3D is not wired to the activity. Pack/config seeding and a `CHALLENGE_PARAMETERS` entry for `density` are needed before a pack can be validated. |
+
+## 14. Runtime pins and sync — 2026-10-31
+
+| Area | State |
+|---|---|
+| Challenge params | `density` added to `CHALLENGE_PARAMETERS` (modelRef `density-bench@1.0.0`, no learner-tunable parameters, rangeReview pending). |
+| Per-run specimens (§5.3) | Launch picks a block and a pebble with `crypto.randomInt` (`density-specimens.ts`), pins them in the run's execution tuple, and returns them as `runtimeParams`. The evaluator rejects evidence for any other specimen, and an unpinned tuple fails closed. |
+| FE | `DensityActivity` applies `runtimeParams` over local state (`applyRunPins`). Without pins (dev preview) it keeps its own choice. The mass table still comes from `fl03-density.config.ts`, not the payload. |
+| BE↔FE sync | `density-config-sync.test.ts` imports the FE config from the sibling repo and checks instruments, tolerances, specimen masses, sizes, volumes and reference densities against the BE model. It is skipped when the FE repo is absent. |
+| Seed / release | **Not done.** `.env` points at shared Supabase; a write needs owner approval. A LabRelease can only become ACTIVE with a genuine OWNER_SIGNOFF (plan §10), which cannot be fabricated. Proposed next step: a guarded, idempotent seed (`assert-isolated-db`) run first against the isolated loopback DB, then a DRAFT release for owner review. |
+| Verification | BE: 294 unit tests pass; one pre-existing failure in `learning.controller.test.ts` also fails on the original code. FE: Playwright density spec 5/5, lint and build green. Integration tests not run (no isolated PostgreSQL). |
+
+## 15. Seed status — 2026-10-31
+
+- **Isolated DB (done):** a private PostgreSQL 18 instance on `127.0.0.1:54329`, database `nexalab_fl03_isolated`. Base `prisma/seed.ts` ran against it, then `npm run db:seed:fl03-isolated` (idempotent; second run changed nothing). The rows are Lab `density` (synthetic, releaseCleared=false, CLASS_PRIVATE), challenge `density_001`, activity `density-stations@1`, config v1 and pack `density-bench-fixture` v1 (active). No LabRelease was created.
+- **Shared Supabase (not written):** the `.env` database was NOT seeded and no release was activated. Reason: an ACTIVE release needs a genuine OWNER_SIGNOFF (§10), and seeding the shared DB is outside the isolated-only rule in AGENTS.md. Waiting for the owner's decision on the sign-off path.
+- **Pending:** end-to-end launch and submit through the API against the isolated DB still needs an assignment or an active release; not run in this pass.
