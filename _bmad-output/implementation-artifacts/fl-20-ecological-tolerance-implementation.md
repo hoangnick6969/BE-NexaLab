@@ -51,3 +51,24 @@ See `sprint-status.yaml` `fl20_tracking.verification`. No commit, push, shared-d
 - Owner report: "đến khi nộp kết quả lại load lâu". The server answered in about 14 ms, but the result drawer opened behind the question panel. From the owner's side, the submit button only greyed out and nothing appeared.
 - Cause: `shared/LabSpace.css` raises the result drawer above the panel only for `.bulb-activity` and `.em-activity`. Added `.eco-activity` to both selectors.
 - `tests/ecology-tolerance-lab.spec.ts` now checks with `elementFromPoint` that the drawer is not covered. FL-20 and FL-25 mock specs: 8/8 pass.
+
+### Merge with main (2026-10-31, after PR conflicts)
+Main gained FL-03 (density) and FL-10 release work, plus two registry refactors: the BE `LabEvaluator` registry and the FE `activity-renderers` registry.
+
+**BE merge (`c262d84`)**
+- `labs.controller.ts`: took main's `rendererKey` resolution through `labEvaluators`. Main fixed the FL-25 `rendererKey` regression in its own way (`f202ce4`), so this branch's `96af96d` is superseded.
+- `sim-packs.ts`: kept both `density-bench` and `ecology-tolerance`. `observationOnly` now uses main's `{ unsupportedParams }` shape.
+- `evaluators/registry.ts`:
+  - a `checkpointEvaluator(rubricRef)` helper now builds the FL-25 evaluator;
+  - FL-20 is registered through the same helper;
+  - `registry.test.ts` lists the FL-20 rubric.
+
+**FE merge**
+- Took main's `Lab.tsx` and `lab-run-host.ts`.
+- FL-20 is registered in `runtime/activity-renderers.tsx` (checkpoints envelope; guided result through `CircuitBulbResult`, as FL-25 does).
+- `vendor/nexalab-sim-1.3.0.tgz` was repacked from the merged sim (now includes FL-03 `densityBench`); the lockfile integrity was updated.
+
+**Verification**
+- BE: 379 tests passed, including the FL-20 and FL-25 integrations. Lint, build and check:layers ok.
+- Remaining BE failure: `density-e2e.integration.test.ts` (FL-03) refuses every isolated URL except `nexalab_fl03_isolated`. It fails at import whenever `NEXALAB_ISOLATED_DATABASE_URL` is set, so on main and in CI too. Not changed here.
+- FE: lint and build ok. Playwright passed 18/18: FL-20 2, FL-25 6, FL-03 density 10.
