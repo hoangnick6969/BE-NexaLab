@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, emInduction, eye, eyeParts, evaluateMassConservation } from "../../../../packages/sim";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, emInduction, eye, eyeParts, evaluateMassConservation, geneExpression } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -76,6 +76,14 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     outputs: { version: "string", explore: "array" },
     requiredSemanticIds: ["balance", "cylinder", "ruler"],
     observationOnly: { unsupportedParams: "mô hình khối lượng riêng không dùng tham số thử thách" },
+  },
+  "gene-expression@1.0.0": {
+    labId: "gene-protein",
+    engineVersion: ENGINE_VERSION,
+    simulate: geneExpression,
+    outputs: { version: "string", mrna: "string", aminoAcids: "array", codons: "array" },
+    requiredSemanticIds: ["dna", "mrna", "ribosome"],
+    observationOnly: { unsupportedParams: "mô hình từ gene đến protein không dùng tham số thử thách" },
   },
   "chemistry@1.0.0": {
     labId: "chemistry",
