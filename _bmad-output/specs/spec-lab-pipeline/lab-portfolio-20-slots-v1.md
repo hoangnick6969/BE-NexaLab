@@ -42,7 +42,7 @@ Phạm vi của mục này là đúng 20 slot ở bảng trên. Không thêm tr�
 
 `PhysicalLabEnvironment` là **vỏ phòng** được tái sử dụng khi một hoạt động vật lý có cảnh phòng thực hành: sàn gạch, tường, tủ, lababo, bàn nâu và ánh sáng nền. Nó tách biệt với kit apparatus và Lab Space. Nguồn FE hiện có tại `src/features/labs/shared/PhysicalLabEnvironment.tsx`.
 
-- Đã dùng chung trong code cho FL-01 pilot qua K1/`PhysicsStage` và cho cảnh ứng viên FL-10 qua K2/`WetBenchStage`.
+- Đã dùng chung trong code cho FL-01 pilot và FL-25 private engineering prototype qua K1/`PhysicsStage`, cùng cảnh ứng viên FL-10 qua K2/`WetBenchStage`.
 - Với các Lab vật lý còn lại trong bảng, đây là **hướng tái sử dụng**, chưa phải implementation. Nếu Lab chỉ phát hành 2D thì không cần tải scene phòng.
 - K1–K8 chỉ sở hữu dụng cụ/apparatus, cấu hình hoặc cách chiếu sáng theo hoạt động. Sàn, tường, tủ, lababo và bàn nâu không được dựng lại trong kit.
 - Phòng nền không chứa kệ chai hóa chất, rack ống nghiệm hay dụng cụ thí nghiệm. Mỗi Lab/kit thêm đúng dụng cụ mà hoạt động đã review yêu cầu. Reuse cùng source không có nghĩa Canvas chia sẻ GPU geometry.
@@ -61,7 +61,7 @@ Phạm vi của mục này là đúng 20 slot ở bảng trên. Không thêm tr�
 | 7 / FL-08 — Sự truyền nhiệt | K4 — Nhiệt | Tái sử dụng đề xuất | Thanh dẫn nhiệt, nguồn nhiệt và vật chỉ thị; tách model khỏi FL-07. |
 | 16 / FL-23 — Quang học | K6 — Quang học | Tái sử dụng đề xuất, cần cấu hình chiếu sáng | Nguồn sáng, khe, lăng kính/thấu kính và màn; SPLIT vẫn mở theo portfolio. |
 | 17 / FL-24 — Cơ năng, công, công suất | K5 — Cơ học | Tái sử dụng đề xuất | Máng trượt/con lắc và cảm biến; K9 còn điều kiện provenance. |
-| 18 / FL-25 — Cảm ứng điện từ | K1 — Điện–từ | Tái sử dụng đề xuất | Cuộn dây, nam châm và dụng cụ chỉ thị riêng; chưa có implementation FL-25. |
+| 18 / FL-25 — Cảm ứng điện từ | K1 — Điện–từ | Đã dùng trong private engineering prototype, chưa phát hành | Cuộn dây, nam châm và dụng cụ chỉ thị riêng; stage K1 compose phòng nền chung. |
 
 ### Hóa học — 6 Lab
 

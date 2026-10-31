@@ -32,6 +32,10 @@ import {
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { canonical, digest, evaluateRunV1, executionSchema as labRunExecutionSchema } from "../application/lab-run";
 import { RUBRIC_REFS, checkpointActivityForRubric } from "../application/checkpoint-activities";
+import { FL10_RUBRIC } from "../application/lab-run";
+import { evaluateMassConservation } from "../../../../packages/sim";
+import { evaluateFl10Activity } from "../application/fl-10-draft-evidence";
+import type { Fl10Event } from "../application/fl-10-events";
 
 /** PostgreSQL JSON numbers can round at the last floating-point digits. */
 function sameStoredResult(actual: any, expected: any): boolean {
@@ -315,7 +319,7 @@ export class AdminLabsController {
       packVersionId: z.string().nullable(),
       configVersionId: z.string().nullable(),
       params: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
-      rubricRef: z.enum(RUBRIC_REFS).optional(),
+      rubricRef: z.enum([...RUBRIC_REFS, FL10_RUBRIC]).optional(),
     }).strict();
     const execution = rawExecution == null ? null : executionSchema.safeParse(rawExecution);
     if (execution && (!execution.success || execution.data.packVersionId !== attempt.packVersionId || execution.data.configVersionId !== attempt.configVersionId ||
@@ -338,7 +342,15 @@ export class AdminLabsController {
     let reproducedResult: any = null;
     try {
       const checkpointActivity = execution?.success && execution.data.rubricRef ? checkpointActivityForRubric(execution.data.rubricRef) : null;
-      const evaluated = checkpointActivity
+      const evaluated = execution?.success && execution.data.rubricRef === FL10_RUBRIC
+        ? await (async () => {
+            if (!attempt.labRunId) throw new Error("FL-10 requires a pinned run");
+            const model = evaluateMassConservation(params);
+            if (!model.ok) throw new Error("Invalid pinned FL-10 parameters");
+            const events = await this.db.labRunEvent.findMany({ where: { runId: attempt.labRunId }, orderBy: { sequence: "asc" } });
+            return evaluateFl10Activity(attempt.labState, model.value, events.map((row) => row.event as Fl10Event));
+          })()
+        : checkpointActivity
         ? checkpointActivity.evaluate((attempt.labState as any).checkpoints, (attempt.labState as any).explanation)
         : attempt.labRunId || (execution?.success && execution.data.rubricRef === "legacy-challenge@1.0.0")
           ? evaluateRunV1(attempt.challenge.labId, attempt.labState, params ?? null, modelRef!)

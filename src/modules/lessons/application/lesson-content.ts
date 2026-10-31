@@ -40,6 +40,17 @@ export const CHALLENGE_PARAMETERS: Record<
   string,
   { modelRef: string; rangeReview: "pending" | "approved"; params: Record<string, NumberParam | ChoiceParam> }
 > = {
+  "mass-conservation": {
+    modelRef: "mass-conservation@1.0.0",
+    rangeReview: "pending",
+    params: {
+      fixtureId: { kind: "choice", label: "Bộ phản ứng tham chiếu", options: [{ value: "barium-precipitation-reference-v1", label: "Barium chloride và sodium sulfate" }], default: "barium-precipitation-reference-v1" },
+      cup1Milligrams: { kind: "number", label: "Cốc 1 rỗng", unit: "mg", min: 1, max: 1000000, step: 1, default: 100000 },
+      cup2Milligrams: { kind: "number", label: "Cốc 2 rỗng", unit: "mg", min: 1, max: 1000000, step: 1, default: 100000 },
+      solvent1Milligrams: { kind: "number", label: "Dung môi cốc 1", unit: "mg", min: 0, max: 1000000, step: 1, default: 100000 },
+      solvent2Milligrams: { kind: "number", label: "Dung môi cốc 2", unit: "mg", min: 0, max: 1000000, step: 1, default: 100000 },
+    },
+  },
   circuit: {
     modelRef: "circuit@1.0.0",
     rangeReview: "pending",

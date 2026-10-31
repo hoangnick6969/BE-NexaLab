@@ -16,6 +16,20 @@ const input = (overrides: Record<string, unknown> = {}) =>
   });
 
 describe("simulation configuration versions (C2-T3)", () => {
+  it("requires the complete pinned FL-10 mass input and reproduces the technical golden case", () => {
+    const params = { fixtureId: "barium-precipitation-reference-v1", cup1Milligrams: 100000,
+      cup2Milligrams: 100000, solvent1Milligrams: 100000, solvent2Milligrams: 100000 };
+    const pack = { labId: "mass-conservation", modelRef: "mass-conservation@1.0.0", engineVersion: "1.0.0", template: { ranges: {} } };
+    const config = { labId: "mass-conservation", modelRef: pack.modelRef };
+    expect(packConfigurationErrors(pack.labId, pack, config, params)).toEqual([]);
+    expect(packConfigurationErrors(pack.labId, pack, config, { ...params, cup1Milligrams: 0 })).not.toEqual([]);
+    expect(packConfigurationErrors(pack.labId, pack, config, null)).not.toEqual([]);
+    const candidate = versionInputSchema.parse({ challengeParams: { fl10_001: params }, goldenCases: [
+      { challengeId: "fl10_001", label: "Hai cốc 100 g", labState: params, expectedVerdict: "passed" },
+    ], reason: "Fixture kỹ thuật chưa duyệt" });
+    expect(versionErrors(pack.labId, ["fl10_001"], candidate, pack.modelRef)).toEqual([]);
+    expect(goldenCaseResults(pack.labId, candidate, pack.modelRef).every((item) => item.ok)).toBe(true);
+  });
   it("keeps the bulb activity independent of the legacy LED parameter ranges", () => {
     const pack = { labId: "circuit", modelRef: "circuit-bulb@1.0.0", engineVersion: "1.0.0", template: { ranges: {} } };
     const config = { labId: "circuit", modelRef: "circuit-bulb@1.0.0" };

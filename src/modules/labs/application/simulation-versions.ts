@@ -64,6 +64,16 @@ export function packConfigurationErrors(
     if (params && Object.keys(params).length) errors.push(observationParamsError(pack.modelRef));
     return errors;
   }
+  if (pack.modelRef === "mass-conservation@1.0.0") {
+    const input = params ? { ...params } : null;
+    if (!input || !Object.prototype.hasOwnProperty.call(input, "fixtureId") ||
+        Object.keys(input).length !== 5) errors.push("FL-10 cần đủ năm tham số đã pin");
+    else {
+      try { resolveModel(pack.modelRef).simulate(input); }
+      catch { errors.push("Tham số FL-10 không khớp fixture được phép"); }
+    }
+    return errors;
+  }
   if (params) {
     errors.push(...challengeParamErrors(labId, params));
     for (const [name, value] of Object.entries(params)) {
@@ -124,7 +134,7 @@ export function goldenCaseResults(labId: string, input: VersionInput, modelRef?:
   return input.goldenCases.map((golden) => {
     let actual: string;
     try {
-      if (modelRef && MODEL_REGISTRY[modelRef]?.observationOnly) {
+      if (modelRef && (MODEL_REGISTRY[modelRef]?.observationOnly || modelRef === "mass-conservation@1.0.0")) {
         // Observation-only golden cases validate a well-formed observation state.
         // They do not assess learning or treat OPEN as a student failure.
         resolveModel(modelRef).simulate(golden.labState);

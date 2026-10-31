@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CIRCUIT_BULB_RUBRIC, digest, evaluateCircuitBulbActivity, evaluateRunV1, executionSchema, rubricRefForActivity, runSubmissionSchema } from "./lab-run";
+import { CIRCUIT_BULB_RUBRIC, FL10_RUBRIC, digest, evaluateCircuitBulbActivity, evaluateRunV1, executionSchema, rubricRefForActivity, runSubmissionSchema } from "./lab-run";
 import { evaluate } from "./simulation-versions";
 import { EM_INDUCTION_RUBRIC, evaluateEmInductionActivity } from "./checkpoint-activities";
 
@@ -125,5 +125,19 @@ describe("FL-25 em-induction checkpoint activity (private prototype)", () => {
     const wrongChoice = checkpoints();
     wrongChoice[0] = { ...wrongChoice[0], prediction: "ALTERNATING" };
     expect(runSubmissionSchema.safeParse({ ...base, checkpoints: wrongChoice, explanation: "A" }).success).toBe(false);
+  });
+});
+
+describe("FL-10 technical fixture release guard", () => {
+  it("cannot inherit the legacy rubric for an unreviewed model or activity", () => {
+    expect(() => rubricRefForActivity("generic-lab", 1, "mass-conservation@1.0.0")).toThrow(/incompatible/);
+    expect(() => rubricRefForActivity("mass-conservation-poea", 1, "chemistry@1.0.0")).toThrow(/incompatible/);
+    expect(rubricRefForActivity("mass-conservation-poea", 1, "mass-conservation@1.0.0")).toBe(FL10_RUBRIC);
+    expect(() => rubricRefForActivity("mass-conservation-poea", 2, "mass-conservation@1.0.0")).toThrow(/incompatible/);
+    const tuple = { modelRef: "mass-conservation@1.0.0", engineVersion: "1.0.0", packVersionId: "p", configVersionId: "c", activityVersionId: "a", activityDigest: "d", activityKey: "generic-lab", activityVersion: 1, rubricRef: "legacy-challenge@1.0.0", params: null, stateSchemaVersion: 1, evidenceSchemaVersion: 1, template: {} };
+    expect(executionSchema.safeParse(tuple).success).toBe(false);
+    expect(executionSchema.safeParse({ ...tuple, activityKey: "mass-conservation-poea", rubricRef: FL10_RUBRIC }).success).toBe(true);
+    expect(executionSchema.safeParse({ ...tuple, activityKey: "mass-conservation-poea", rubricRef: CIRCUIT_BULB_RUBRIC }).success).toBe(false);
+    expect(() => evaluateRunV1("mass-conservation", {}, null, "mass-conservation@1.0.0")).toThrow(/pinned activity rubric/);
   });
 });

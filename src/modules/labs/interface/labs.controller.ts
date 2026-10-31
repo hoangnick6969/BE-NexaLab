@@ -13,15 +13,80 @@ import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
 import { canonical, digest, evaluateRunV1, executionSchema, launchSchema, rubricRefForActivity, runSubmissionSchema } from "../application/lab-run";
 import { checkpointActivityForModel, checkpointActivityForRubric } from "../application/checkpoint-activities";
+import { FL10_RUBRIC } from "../application/lab-run";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { assertLegacyCircuitAssignmentCompatible, resolveFoundationalLabRelease, resolvePinnedAssignmentLab } from "../application/assignment-lab-execution";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
+import { evaluateMassConservation } from "../../../../packages/sim";
+import { fl10VisibleReadings, nextFl10Event, type Fl10Event } from "../application/fl-10-events";
+import { evaluateFl10Activity } from "../application/fl-10-draft-evidence";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
 @Controller()
 export class LabsController {
   constructor(@Inject(Db) private db: Db, @Inject(StudentAccessService) private access: StudentAccessService, @Inject(RequestRateLimiter) private limiter: RequestRateLimiter) {}
+  private async fl10Run(tx: any, studentId: string, runId: string) {
+    const run = await tx.labRun.findFirst({ where: { id: runId, studentId } });
+    if (!run) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+    if (run.revokedAt || (run.expiresAt && run.expiresAt.getTime() <= Date.now()))
+      throw new ConflictException({ code: run.revokedAt ? "RUN_REVOKED" : "RUN_EXPIRED" });
+    if (run.assignmentId) {
+      const assignment = await tx.assignment.findFirst({ where: {
+        ...applicableAssignmentWhere(studentId), id: run.assignmentId, contentId: run.labId, contentType: "lab",
+      } });
+      if (!assignment) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+    } else {
+      const lab = await tx.lab.findUnique({ where: { id: run.labId } });
+      if (!lab || lab.status !== "published" || lab.scope !== "SHARED_LIBRARY" || !lab.releaseCleared || lab.synthetic || !lab.topicCode)
+        throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+    }
+    const parsed = executionSchema.safeParse(run.execution);
+    if (!parsed.success || digest(run.execution) !== run.executionDigest || run.labId !== "mass-conservation" ||
+        parsed.data.modelRef !== "mass-conservation@1.0.0" || parsed.data.engineVersion !== "1.0.0" ||
+        parsed.data.rubricRef !== FL10_RUBRIC)
+      throw new ConflictException({ code: "LAB_TUPLE_INVALID" });
+    if (await tx.labPackRevocation.findUnique({ where: { packVersionId: parsed.data.packVersionId } }))
+      throw new ConflictException({ code: "RUN_REVOKED" });
+    const result = evaluateMassConservation(parsed.data.params);
+    if (!result.ok) throw new ConflictException({ code: "LAB_TUPLE_INVALID" });
+    return result.value;
+  }
+
+  @Roles("STUDENT") @Get("lab-runs/:runId/events") async fl10Events(@Req() req: any, @Param("runId") runId: string) {
+    const model = await this.fl10Run(this.db, req.user.sub, runId);
+    const rows = await this.db.labRunEvent.findMany({ where: { runId }, orderBy: { sequence: "asc" } });
+    const events = rows.map((row) => row.event as Fl10Event);
+    const historyCheck = nextFl10Event(events, { type: "READ_AFTER" });
+    if (!historyCheck.ok && historyCheck.code === "INVALID_HISTORY")
+      throw new ConflictException({ code: "LAB_EVIDENCE_INVALID" });
+    return { events, readings: fl10VisibleReadings(events, model) };
+  }
+
+  @Roles("STUDENT") @Post("lab-runs/:runId/events") async recordFl10Event(
+    @Req() req: any, @Param("runId") runId: string, @Body() body: unknown,
+  ) {
+    const input = z.object({ idempotencyKey: z.string().uuid(), event: z.unknown() }).strict().parse(body);
+    this.limiter.rate("fl10-event:" + req.user.sub, 30);
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-run:" + runId);
+      const model = await this.fl10Run(tx, req.user.sub, runId);
+      const rows = await tx.labRunEvent.findMany({ where: { runId }, orderBy: { sequence: "asc" } });
+      const events = rows.map((row: any) => row.event as Fl10Event);
+      const existing = rows.find((row: any) => row.idempotencyKey === input.idempotencyKey);
+      if (existing && canonical(existing.event) !== canonical(input.event))
+        throw new ConflictException({ code: "IDEMPOTENCY_KEY_REUSED" });
+      if (!existing) {
+        const transition = nextFl10Event(events, input.event);
+        if (!transition.ok) throw new ConflictException({ code: transition.code });
+        await tx.labRunEvent.create({ data: {
+          runId, sequence: transition.sequence, idempotencyKey: input.idempotencyKey, event: transition.event,
+        } });
+        events.push(transition.event);
+      }
+      return { events, readings: fl10VisibleReadings(events, model) };
+    });
+  }
   /** Standalone lab work counts toward an assignment only when one applies (D3). */
   private async applicableLabAssignment(labId: string, studentId: string, db: any = this.db) {
     return db.assignment.findFirst({
@@ -70,6 +135,8 @@ export class LabsController {
     if (!lab) throw new NotFoundException({ code: "LAB_NOT_FOUND", message: "Không tìm thấy phòng thực hành" });
     if (req.user.role === "STUDENT" && !(lab.status === "published" && lab.scope === "SHARED_LIBRARY" && lab.releaseCleared && !lab.synthetic && lab.topicCode))
       throw new NotFoundException({ code: "LAB_NOT_FOUND", message: "Không tìm thấy phòng thực hành" });
+    if (lab.simulationModelRef === "mass-conservation@1.0.0")
+      throw new BadRequestException({ code: "FL10_USE_LAB_RUN_EVENTS" });
     try {
       return resolveModel(lab.simulationModelRef).simulate(body);
     } catch (e: any) {
@@ -97,6 +164,8 @@ export class LabsController {
       include: { lab: true },
     });
     if (!c || c.lab.status !== "published") throw new NotFoundException();
+    if (c.labId === "mass-conservation" || c.lab.simulationModelRef === "mass-conservation@1.0.0")
+      throw new BadRequestException({ code: "FL10_REQUIRES_LAB_RUN" });
     if (!b.lessonStepId) {
       const applicableStandaloneLab = await this.applicableLabAssignment(c.labId, req.user.sub);
       if (!applicableStandaloneLab && !(c.lab.scope === "SHARED_LIBRARY" && c.lab.releaseCleared && !c.lab.synthetic && c.lab.topicCode))
@@ -338,8 +407,11 @@ export class LabsController {
         contract: "lab-contract/1", runId: run.id, labId, challengeId: challenge.id,
         modelRef: execution.modelRef, engineVersion: execution.engineVersion, activityVersionId: execution.activityVersionId,
         activityVersion: execution.activityVersion, rubricVersion: execution.rubricRef, stateSchemaVersion: 1,
-        evidenceSchemaVersion: 1, constraints: template?.ranges ?? {}, initialState: template?.initialState ?? null,
-        rendererKey: checkpointActivityForModel(execution.modelRef)?.rendererKey ?? null,
+        evidenceSchemaVersion: 1,
+        constraints: execution.modelRef === "mass-conservation@1.0.0" ? {} : template?.ranges ?? {},
+        initialState: execution.modelRef === "mass-conservation@1.0.0" ? null : template?.initialState ?? null,
+        rendererKey: execution.modelRef === "circuit-bulb@1.0.0" ? "circuit-bulb"
+          : execution.modelRef === "mass-conservation@1.0.0" ? "mass-conservation" : null,
         expiresAt: run.expiresAt, context: run.context, assignmentId: run.assignmentId,
         versionBinding: execution.binding,
       };
@@ -386,16 +458,23 @@ export class LabsController {
       let result: any;
       let verdict: string;
       try {
-        const model = resolveModel(execution.modelRef);
-        if (model.labId !== locked.labId || model.engineVersion !== execution.engineVersion)
-          throw new Error("Pinned model is unavailable");
-        const activity = checkpointActivityForRubric(execution.rubricRef);
-        if (activity) {
-          if (!("checkpoints" in b)) throw new Error("Thiếu bằng chứng checkpoint");
-          ({ result, verdict } = activity.evaluate(b.checkpoints, b.explanation));
+        if (execution.rubricRef === FL10_RUBRIC) {
+          if (locked.labId !== "mass-conservation" || execution.engineVersion !== "1.0.0" || !("labState" in b)) throw new Error("FL-10 execution is incompatible");
+          const modelResult = evaluateMassConservation(execution.params);
+          if (!modelResult.ok) throw new Error("Invalid pinned FL-10 parameters");
+          const rows = await tx.labRunEvent.findMany({ where: { runId: locked.id }, orderBy: { sequence: "asc" } });
+          ({ result, verdict } = evaluateFl10Activity(b.labState, modelResult.value, rows.map((row) => row.event as Fl10Event)));
         } else {
+          const model = resolveModel(execution.modelRef);
+          if (model.labId !== locked.labId || model.engineVersion !== execution.engineVersion) throw new Error("Pinned model is unavailable");
+          const activity = checkpointActivityForRubric(execution.rubricRef);
+          if (activity) {
+            if (!("checkpoints" in b)) throw new Error("Thiếu bằng chứng checkpoint");
+            ({ result, verdict } = activity.evaluate(b.checkpoints, b.explanation));
+          } else {
           if (!("labState" in b)) throw new Error("Thiếu trạng thái Lab");
           ({ result, verdict } = evaluateRunV1(locked.labId, b.labState, execution.params, execution.modelRef));
+          }
         }
       } catch (e: any) { throw new BadRequestException(e.message); }
       result = { ...result, _execution: {

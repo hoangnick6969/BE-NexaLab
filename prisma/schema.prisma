@@ -791,9 +791,24 @@ model LabRun {
   revokedById      String?
   revocationReason String?
   attempts         Attempt[]
+  events           LabRunEvent[]
 
   @@index([studentId, createdAt])
   @@index([labId, revokedAt])
+}
+
+/// Ordered server evidence for activities that require a prediction before observation.
+model LabRunEvent {
+  id             String   @id @default(cuid())
+  runId          String
+  run            LabRun   @relation(fields: [runId], references: [id], onDelete: Restrict)
+  sequence       Int
+  idempotencyKey String
+  event          Json
+  createdAt      DateTime @default(now())
+
+  @@unique([runId, sequence])
+  @@unique([runId, idempotencyKey])
 }
 
 model Attempt {
