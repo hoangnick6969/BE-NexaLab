@@ -15,12 +15,18 @@ import { FL10_RUBRIC } from "../application/lab-run";
 import { canonical, digest, evaluateRunV1, executionSchema, launchSchema, rubricRefForActivity, runSubmissionSchema, submittedEvidence } from "../application/lab-run";
 import { labEvaluators } from "../application/evaluators/registry";
 import { pickDensitySpecimens } from "../application/evaluators/density-specimens";
+import { pickGeneVariant } from "../application/evaluators/gene-variants";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { assertLegacyCircuitAssignmentCompatible, resolveFoundationalLabRelease, resolvePinnedAssignmentLab } from "../application/assignment-lab-execution";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
 import { evaluateMassConservation } from "../../../../packages/sim";
 import { fl10VisibleReadings, nextFl10Event, type Fl10Event } from "../application/fl-10-events";
 import { evaluateFl10Activity } from "../application/fl-10-draft-evidence";
+
+/** Client renderer for a pinned rubric; null keeps the client's legacy lookup by Lab id. */
+function rendererKeyFor(rubricRef: string): string | null {
+  try { return labEvaluators.resolve(rubricRef).rendererKey; } catch { return null; }
+}
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -396,6 +402,8 @@ export class LabsController {
       }
       // FL-03 draws its specimen pair per run; the pair is pinned in the tuple below.
       if (labId === "density") execution = { ...execution, params: pickDensitySpecimens() };
+      // FL-27 draws its gene variant per run; the variant is pinned in the tuple below.
+      if (labId === "gene-protein") execution = { ...execution, params: pickGeneVariant() };
       assertLegacyCircuitAssignmentCompatible(labId, assignment, execution.modelRef);
       if (await tx.labPackRevocation.findUnique({ where: { packVersionId: execution.packVersionId } }))
         throw new ConflictException({ code: "RUN_REVOKED" });
@@ -413,6 +421,7 @@ export class LabsController {
         evidenceSchemaVersion: 1,
         constraints: execution.modelRef === "mass-conservation@1.0.0" ? {} : template?.ranges ?? {},
         initialState: execution.modelRef === "mass-conservation@1.0.0" ? null : template?.initialState ?? null,
+        // The pinned rubric's evaluator names the client renderer (e.g. density-bench for the density Lab).
         rendererKey: execution.modelRef === "circuit-bulb@1.0.0"
           ? "circuit-bulb" : labEvaluators.resolve(execution.rubricRef).rendererKey,
         expiresAt: run.expiresAt, context: run.context, assignmentId: run.assignmentId,
@@ -475,8 +484,10 @@ export class LabsController {
           if (model.labId !== locked.labId || model.engineVersion !== execution.engineVersion) throw new Error("Pinned model is unavailable");
           const activity = execution.rubricRef !== "legacy-challenge@1.0.0" ? labEvaluators.resolve(execution.rubricRef) : null;
           if (activity) {
-            if (!("checkpoints" in b)) throw new Error("Thiếu bằng chứng checkpoint");
-            ({ result, verdict } = labEvaluators.evaluate(execution.rubricRef, locked.id, { checkpoints: b.checkpoints, explanation: b.explanation }, { labId: locked.labId, modelRef: execution.modelRef, engineVersion: execution.engineVersion, params: execution.params, template: execution.template }));
+            // Each rubric declares its envelope: Circuit checkpoints, or density-stations evidence.
+            if (submitted.envelope !== activity.envelope)
+              throw new Error(activity.envelope === "checkpoints" ? "Thiếu bằng chứng checkpoint" : "Thiếu bằng chứng hoạt động");
+            ({ result, verdict } = labEvaluators.evaluate(execution.rubricRef, locked.id, submitted.data, { labId: locked.labId, modelRef: execution.modelRef, engineVersion: execution.engineVersion, params: execution.params, template: execution.template }));
           } else {
           if (!("labState" in b)) throw new Error("Thiếu trạng thái Lab");
           ({ result, verdict } = evaluateRunV1(locked.labId, b.labState, execution.params, execution.modelRef));

@@ -2,6 +2,7 @@ import { circuitBulbEvaluator } from "./circuit-bulb-checkpoints.evaluator";
 import { z } from "zod";
 import { CHECKPOINT_ACTIVITIES, ECOLOGY_TOLERANCE_RUBRIC, EM_INDUCTION_RUBRIC } from "../checkpoint-activities";
 import { densityStationsEvaluator } from "./density-stations.evaluator";
+import { geneProteinStationsEvaluator } from "./gene-protein-stations.evaluator";
 import { legacyChallengeEvaluator } from "./legacy-challenge.evaluator";
 import type { LabEvaluation, LabEvaluator, LabRuntimeConfig } from "./lab-evaluator";
 
@@ -76,4 +77,4 @@ const fl10Evaluator: LabEvaluator<any> = {
   evidenceSchema: z.unknown(),
   evaluate: () => { throw new Error("FL-10 requires server event history"); },
 };
-export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, ecologyToleranceEvaluator, fl10Evaluator, densityStationsEvaluator]);
+export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, ecologyToleranceEvaluator, fl10Evaluator, densityStationsEvaluator, geneProteinStationsEvaluator]);
