@@ -325,6 +325,15 @@ Theo ảnh tham khảo của owner (phòng thí nghiệm ảo kiểu PraxiLabs; 
 
 Kiểm chứng: `tsc`, `npm run build`; Playwright `gene-protein-lab.spec.ts` + `gene-protein-run.spec.ts` 7/7 (vào phòng → kính hiển vi → cảnh phân tử → quay lại; evidence không đổi khi đổi cảnh/chế độ xem); soi trực quan 1440 × 900 trong trình duyệt dev.
 
+## 16. Implementation Evidence — kiểu hiển thị phân tử theo ảnh tham khảo (2026-10-31)
+
+Theo hai ảnh tham khảo của owner (mô phỏng PCR kiểu game và mô hình VR bi-que):
+- **Mô hình sơ đồ (mặc định):** khung đường–phosphate là ống bóng ánh kim liền mạch với hạt phosphate, đường là tấm ngũ giác, base là thanh tròn màu gặp nhau ở giữa; ở trạm Cấu trúc DNA chuỗi xoắn đứng dọc (đầu 5' mạch mã hoá ở dưới), thước Å quay theo.
+- **Mô hình nguyên tử (nút "Nguyên tử" ở trạm Cấu trúc DNA):** bi-que minh hoạ, màu CPK (C xám, N xanh dương, O đỏ, P cam), dải xương sống xanh lá; nhóm phosphate, vòng đường 5 cạnh, vòng base (purine 5+6, pyrimidine 6) và các nguyên tử ngoài vòng chính; base dài tới đúng đầu thanh của mô hình sơ đồ nên liên kết H khớp. Có chú giải màu nguyên tố bằng chữ trong HUD. Không phải toạ độ tinh thể học.
+- **Bể nucleotide tự do:** nucleotide (đường, phosphate, thanh base) trôi và xoay chậm quanh cảnh ở trạm Cấu trúc, Tái bản (dNTP) và Phiên mã (NTP). Cần khung hình liên tục nên tắt khi reduced motion hoặc tier low.
+
+Kiểm chứng: `tsc`, `npm run build` (chunk FL-27 ≈ 34 KB gzip); Playwright FL-27 7/7 (gồm chuyển mô hình và chú giải); soi trực quan 1440 × 900. Chưa đo frame time trên thiết bị đại diện với bể nucleotide bật.
+
 ## Open Gates — trạng thái hiện tại
 
 Curriculum/science review cho Outcome K9 và hằng số; model + rubric server; owner exception cho track thứ ba; parity 2D/3D và đo thiết bị đại diện; OWNER_SIGNOFF thật. Không mục nào được đáp ứng bởi nhánh này.
