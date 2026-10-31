@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { resolveModel } from "./sim-packs";
 import { normalizeVerdict } from "./simulation-versions";
+import { CHECKPOINT_ACTIVITIES, LEGACY_RUBRIC, RUBRIC_REFS, checkpointActivityForModel } from "./checkpoint-activities";
 import type { ChallengeParams } from "../../lessons/application/lesson-content";
 
 /** Stable JSON for digests and idempotency; key order is not meaningful. */
@@ -29,30 +30,24 @@ const runSubmissionBase = z.object({
   durationMs: z.number().int().min(0).max(86400000),
 }).strict();
 const boundedState = z.unknown().refine((v) => v !== undefined && JSON.stringify(v).length <= 20000);
-const checkpointSchema = z.object({
-  id: z.enum(["CLOSED", "OPEN"]),
-  state: boundedState,
-  prediction: z.enum(["ON", "OFF"]),
-}).strict();
+const checkpointSubmissions = CHECKPOINT_ACTIVITIES.map((activity) =>
+  runSubmissionBase.extend(activity.submission).strict().superRefine(activity.refine));
 export const runSubmissionSchema = z.union([
   runSubmissionBase.extend({ labState: boundedState }).strict(),
-  runSubmissionBase.extend({
-    checkpoints: z.array(checkpointSchema).length(2),
-    explanation: z.enum(["A", "B", "C"]),
-  }).strict()
-    .refine(({ checkpoints }) => checkpoints[0].id === "CLOSED" && checkpoints[1].id === "OPEN", "Circuit checkpoints must be ordered CLOSED then OPEN")
-    .refine((evidence) => JSON.stringify({ checkpoints: evidence.checkpoints, explanation: evidence.explanation }).length <= 20000, "Evidence is too large"),
+  checkpointSubmissions[0],
+  ...checkpointSubmissions.slice(1),
 ]);
 
-export const CIRCUIT_BULB_ACTIVITY_KEY = "circuit-bulb-checkpoints";
-export const CIRCUIT_BULB_RUBRIC = "circuit-bulb-checkpoints@1.0.0";
+export { CIRCUIT_BULB_ACTIVITY_KEY, CIRCUIT_BULB_RUBRIC, evaluateCircuitBulbActivity } from "./checkpoint-activities";
 export function rubricRefForActivity(activityKey: string, activityVersion: number, modelRef: string) {
-  if (activityKey === CIRCUIT_BULB_ACTIVITY_KEY || modelRef === "circuit-bulb@1.0.0") {
-    if (activityKey !== CIRCUIT_BULB_ACTIVITY_KEY || activityVersion !== 1 || modelRef !== "circuit-bulb@1.0.0")
-      throw new Error("Circuit bulb model and activity versions are incompatible");
-    return CIRCUIT_BULB_RUBRIC;
+  const byKey = CHECKPOINT_ACTIVITIES.find((activity) => activity.activityKey === activityKey);
+  const byModel = checkpointActivityForModel(modelRef);
+  if (byKey || byModel) {
+    if (!byKey || byKey !== byModel || activityVersion !== byKey.activityVersion)
+      throw new Error("Checkpoint model and activity versions are incompatible");
+    return byKey.rubricRef;
   }
-  return "legacy-challenge@1.0.0";
+  return LEGACY_RUBRIC;
 }
 
 const executionFieldsSchema = z.object({
@@ -64,7 +59,7 @@ const executionFieldsSchema = z.object({
   activityDigest: z.string().min(1),
   activityKey: z.string().min(1),
   activityVersion: z.number().int().positive(),
-  rubricRef: z.enum(["legacy-challenge@1.0.0", CIRCUIT_BULB_RUBRIC]),
+  rubricRef: z.enum(RUBRIC_REFS),
   params: z.record(z.string(), z.union([z.number(), z.string()])).nullable(),
   stateSchemaVersion: z.literal(1),
   evidenceSchemaVersion: z.literal(1),
@@ -128,38 +123,4 @@ export function evaluateRunV1(labId: string, state: any, params: ChallengeParams
     result = { ...result, verdict, challengeCheck: { params, unmet } };
   }
   return { result, verdict: normalizeVerdict(result.verdict) };
-}
-
-/** Pinned Circuit bulb activity; model observations and learning rubric stay separate. */
-export function evaluateCircuitBulbActivity(checkpoints: Array<{ id: "CLOSED" | "OPEN"; state: unknown; prediction: "ON" | "OFF" }>, explanation: string) {
-  const byId = new Map(checkpoints.map((checkpoint) => [checkpoint.id, checkpoint]));
-  const evaluated = (["CLOSED", "OPEN"] as const).map((id) => {
-    const checkpoint = byId.get(id);
-    if (!checkpoint) throw new Error("Both Circuit checkpoints are required");
-    const observation = resolveModel("circuit-bulb@1.0.0").simulate(checkpoint.state);
-    const expectedCircuitPath = id === "CLOSED" ? "CLOSED" : "OPEN";
-    if (observation.circuitPath !== expectedCircuitPath)
-      throw new Error(`Trạng thái mạch không khớp checkpoint ${id}`);
-    return {
-      id,
-      scientificObservation: observation,
-      prediction: checkpoint.prediction,
-      predictionCorrect: checkpoint.prediction === observation.bulbState,
-    };
-  });
-  const unmetCriteria = [
-    ...evaluated.filter((checkpoint) => !checkpoint.predictionCorrect).map((checkpoint) => `prediction:${checkpoint.id}`),
-    ...(explanation === "A" ? [] : ["explanation"]),
-  ];
-  const score = 3 - unmetCriteria.length;
-  const rawVerdict = score === 3 ? "passed" : "not_passed";
-  return {
-    result: {
-      version: "1.0.0",
-      observations: evaluated,
-      assessment: { score, maximumScore: 3, unmetCriteria, passed: score === 3 },
-      verdict: rawVerdict,
-    },
-    verdict: normalizeVerdict(rawVerdict),
-  };
 }

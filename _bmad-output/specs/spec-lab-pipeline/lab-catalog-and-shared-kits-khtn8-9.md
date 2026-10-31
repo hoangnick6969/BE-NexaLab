@@ -297,7 +297,7 @@ K1 Circuit và ứng viên FL-10/K2 hiện cùng compose `PhysicalLabEnvironment
 
 | Nhóm/kit | Lab IDs trong catalog | Phạm vi môn/chủ đề | Trạng thái pipeline và view |
 |---|---|---|---|
-| K1 Bàn Điện–Từ | FL-01, FL-02, FL-25 | Vật lý: mạch điện, tĩnh điện, cảm ứng điện từ | Chỉ FL-01 Circuit bulb/topology có renderer frontend; FL-02/25 chưa triển khai. Circuit bulb có 2D schematic + 3D; topology dùng lại React Flow 2D editor cũ + 3D. 3D mặc định; view preference cục bộ. |
+| K1 Bàn Điện–Từ | FL-01, FL-02, FL-25 | Vật lý: mạch điện, tĩnh điện, cảm ứng điện từ | FL-01 Circuit bulb/topology có renderer frontend. FL-25 có private engineering prototype 2D/3D (ngoại lệ owner 2026-10-31, xem `../spec-fl-25-em-induction/`), chưa phát hành; FL-02 chưa triển khai. Circuit topology dùng lại React Flow 2D editor và 3D stage. Phòng nền vật lý dùng chung xuyên K1/K2. |
 | K2 Bàn hoá ướt | FL-10–FL-15 | Hoá học: mol/PTHH, dung dịch, tốc độ phản ứng, acid–base, phản ứng vô cơ, an toàn | K2 pre-production; FL-10 có scene candidate dùng room shell chung + apparatus K2. FL-11–15 chưa triển khai; pH compatibility fixture vẫn `TECHNICAL_FIXTURE_ONLY`, không phải Lab phát hành. |
 | K3 Bàn chất lỏng | FL-03, FL-04, FL-05 | Vật lý: khối lượng riêng, áp suất, Archimedes | Kit quy hoạch; chưa có scene Lab production. Target: 2D trước, 3D bổ sung sau benchmark thiết bị. |
 | K4 Bàn nhiệt | FL-07, FL-08, FL-09 | Vật lý: năng lượng nhiệt, truyền nhiệt, nở vì nhiệt | Kit quy hoạch; chưa có scene Lab production. |

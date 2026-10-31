@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CIRCUIT_BULB_RUBRIC, digest, evaluateCircuitBulbActivity, evaluateRunV1, executionSchema, rubricRefForActivity, runSubmissionSchema } from "./lab-run";
 import { evaluate } from "./simulation-versions";
+import { EM_INDUCTION_RUBRIC, evaluateEmInductionActivity } from "./checkpoint-activities";
 
 describe("frozen LabRun compatibility rubric", () => {
   const circuit = {
@@ -66,5 +67,63 @@ describe("versioned Circuit bulb activity", () => {
     expect(runSubmissionSchema.safeParse({ ...base, labState: { input: 2 } }).success).toBe(true);
     expect(runSubmissionSchema.safeParse({ ...base, checkpoints: [checkpoints[0], checkpoints[0]], explanation: "A" }).success).toBe(false);
     expect(runSubmissionSchema.safeParse({ ...base, checkpoints: [...checkpoints].reverse(), explanation: "A" }).success).toBe(false);
+  });
+});
+
+describe("FL-25 em-induction checkpoint activity (private prototype)", () => {
+  const coil = (magnetPosition: "OUTSIDE" | "INSIDE", motion: "STILL" | "TOWARD" | "AWAY") =>
+    ({ setup: "magnet-coil", circuit: "CLOSED", poleFacingCoil: "N", magnetPosition, motion });
+  const checkpoints = () => [
+    { id: "STILL" as const, state: coil("OUTSIDE", "STILL") as Record<string, unknown>, prediction: "NO_CURRENT" },
+    { id: "PUSH" as const, state: coil("INSIDE", "TOWARD") as Record<string, unknown>, prediction: "CURRENT" },
+    { id: "PULL" as const, state: coil("OUTSIDE", "AWAY") as Record<string, unknown>, prediction: "OPPOSITE" },
+    { id: "ROTATE" as const, state: { setup: "generator", circuit: "CLOSED", rotation: "CW", turns: 1 } as Record<string, unknown>, prediction: "ALTERNATING" },
+  ];
+  const base = { contract: "lab-contract/1" as const, runId: "run", idempotencyKey: "ba8ccedf-ae67-460e-8b58-056146ef5a8a", stateSchemaVersion: 1 as const, evidenceSchemaVersion: 1 as const, durationMs: 10 };
+
+  it("passes 5/5 and keeps NO_CURRENT as a valid observation", () => {
+    const correct = evaluateEmInductionActivity(checkpoints(), "A");
+    expect(correct).toMatchObject({ verdict: "passed", result: { assessment: { score: 5, maximumScore: 5, passed: true, unmetCriteria: [] } } });
+    expect(correct.result.observations[0].scientificObservation).toMatchObject({ inducedCurrent: "ABSENT", direction: "NONE" });
+    expect(correct.result.observations[3].scientificObservation).toMatchObject({ currentKind: "ALTERNATING", reversalsPerTurn: 2 });
+  });
+
+  it.each([
+    { index: 0, prediction: "CURRENT", criterion: "prediction:STILL" },
+    { index: 1, prediction: "NO_CURRENT", criterion: "prediction:PUSH" },
+    { index: 2, prediction: "SAME", criterion: "prediction:PULL" },
+    { index: 3, prediction: "ONE_DIRECTION", criterion: "prediction:ROTATE" },
+  ])("records $criterion as the single unmet criterion", ({ index, prediction, criterion }) => {
+    const evidence = checkpoints();
+    evidence[index] = { ...evidence[index], prediction };
+    expect(evaluateEmInductionActivity(evidence, "A")).toMatchObject({
+      verdict: "needs_practice", result: { assessment: { score: 4, passed: false, unmetCriteria: [criterion] } },
+    });
+  });
+
+  it("fails explanation B or C without invalidating the attempt", () => {
+    expect(evaluateEmInductionActivity(checkpoints(), "B").result.assessment.unmetCriteria).toEqual(["explanation"]);
+    expect(evaluateEmInductionActivity(checkpoints(), "C").verdict).toBe("needs_practice");
+  });
+
+  it("rejects a checkpoint whose state differs from the fixed apparatus step", () => {
+    const southPush = checkpoints();
+    southPush[1] = { ...southPush[1], state: { ...southPush[1].state, poleFacingCoil: "S" } };
+    expect(() => evaluateEmInductionActivity(southPush, "A")).toThrow(/checkpoint PUSH/);
+    const openCircuit = checkpoints();
+    openCircuit[3] = { ...openCircuit[3], state: { ...openCircuit[3].state, circuit: "OPEN" } };
+    expect(() => evaluateEmInductionActivity(openCircuit, "A")).toThrow(/checkpoint ROTATE/);
+    expect(() => evaluateEmInductionActivity(checkpoints().slice(0, 3), "A")).toThrow();
+  });
+
+  it("pins the induction rubric to its model and validates the run envelope", () => {
+    expect(rubricRefForActivity("em-induction-checkpoints", 1, "em-induction@1.0.0")).toBe(EM_INDUCTION_RUBRIC);
+    expect(() => rubricRefForActivity("em-induction-checkpoints", 1, "circuit-bulb@1.0.0")).toThrow();
+    expect(() => rubricRefForActivity("em-induction-checkpoints", 2, "em-induction@1.0.0")).toThrow();
+    expect(runSubmissionSchema.safeParse({ ...base, checkpoints: checkpoints(), explanation: "A" }).success).toBe(true);
+    expect(runSubmissionSchema.safeParse({ ...base, checkpoints: [...checkpoints()].reverse(), explanation: "A" }).success).toBe(false);
+    const wrongChoice = checkpoints();
+    wrongChoice[0] = { ...wrongChoice[0], prediction: "ALTERNATING" };
+    expect(runSubmissionSchema.safeParse({ ...base, checkpoints: wrongChoice, explanation: "A" }).success).toBe(false);
   });
 });

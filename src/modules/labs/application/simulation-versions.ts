@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { VERSION as ENGINE_VERSION, eyeParts } from "../../../../packages/sim";
-import { modelRefForLab, resolveModel } from "./sim-packs";
+import { MODEL_REGISTRY, modelRefForLab, resolveModel } from "./sim-packs";
 import { CHALLENGE_PARAMETERS, type ChallengeParams, challengeParamErrors, evaluateChallenge } from "../../lessons/application/lesson-content";
 
 /**
@@ -37,6 +37,10 @@ export const versionInputSchema = z
 export type VersionInput = z.infer<typeof versionInputSchema>;
 
 /** Check that the configuration actually used by an attempt fits its reviewed pack. */
+const observationParamsError = (modelRef: string) => modelRef === "circuit-bulb@1.0.0"
+  ? "Mô hình bóng đèn không dùng tham số thử thách LED"
+  : "Mô hình quan sát không dùng tham số thử thách";
+
 export function packConfigurationErrors(
   labId: string,
   pack: { labId: string; modelRef: string; engineVersion: string; template: unknown },
@@ -56,8 +60,8 @@ export function packConfigurationErrors(
   }
   const template = pack.template as { ranges?: Record<string, { min: number; max: number }> } | null;
   const ranges = template?.ranges ?? {};
-  if (pack.modelRef === "circuit-bulb@1.0.0") {
-    if (params && Object.keys(params).length) errors.push("Mô hình bóng đèn không dùng tham số thử thách LED");
+  if (MODEL_REGISTRY[pack.modelRef]?.observationOnly) {
+    if (params && Object.keys(params).length) errors.push(observationParamsError(pack.modelRef));
     return errors;
   }
   if (params) {
@@ -100,8 +104,8 @@ export function versionErrors(labId: string, baseChallengeIds: string[], input: 
   const base = new Set(baseChallengeIds);
   for (const [challengeId, params] of Object.entries(input.challengeParams)) {
     if (!base.has(challengeId)) errors.push(`Thử thách "${challengeId}" không thuộc phòng thực hành này`);
-    else if (modelRef === "circuit-bulb@1.0.0") {
-      if (Object.keys(params).length) errors.push(`${challengeId}: mô hình bóng đèn không dùng tham số thử thách LED`);
+    else if (modelRef && MODEL_REGISTRY[modelRef]?.observationOnly) {
+      if (Object.keys(params).length) errors.push(`${challengeId}: ${observationParamsError(modelRef).replace(/^M/, "m")}`);
     } else for (const error of challengeParamErrors(labId, params)) errors.push(`${challengeId}: ${error}`);
   }
   for (const [index, golden] of input.goldenCases.entries()) {
@@ -120,8 +124,8 @@ export function goldenCaseResults(labId: string, input: VersionInput, modelRef?:
   return input.goldenCases.map((golden) => {
     let actual: string;
     try {
-      if (modelRef === "circuit-bulb@1.0.0") {
-        // Circuit bulb golden cases validate a well-formed observation state.
+      if (modelRef && MODEL_REGISTRY[modelRef]?.observationOnly) {
+        // Observation-only golden cases validate a well-formed observation state.
         // They do not assess learning or treat OPEN as a student failure.
         resolveModel(modelRef).simulate(golden.labState);
         actual = "passed";
