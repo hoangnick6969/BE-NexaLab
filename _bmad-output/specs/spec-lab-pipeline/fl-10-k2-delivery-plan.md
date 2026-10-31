@@ -36,7 +36,7 @@ Hồ sơ này chuẩn hóa theo kịch bản hiện đang cài trong FE/BE. Các
 
 ## Evidence pre-release 2026-10-31
 
-- Checkout BE tại commit `70613abd` trùng `origin/f10`; checkout FE tại commit `53d92fa` trùng `origin/f10`.
+- BE implementation được kiểm tra tại commit `70613abd`; FE implementation tại commit `53d92fa`. Commit tài liệu pre-release này là `294f556` trên branch BE `f10`.
 - `npx prisma migrate status` ban đầu phát hiện migration pending `20261031130000_fl10_run_events`. `npx prisma migrate deploy` áp đúng migration Prisma lên Supabase project `eiotlkegrejjhldsvaqp`; status sau đó báo 45 migrations found, schema up to date. Read-only verification xác nhận migration có `finished_at`, bảng `LabRunEvent` có 6 cột và 1 trigger bất biến.
 - Truy vấn production sau migration: `Lab` cho `mass-conservation`, activity `mass-conservation-poea`, config, pack và release đều chưa có bản ghi. `LabRunEvent` là schema duy nhất mới được thêm; chưa tạo nội dung/candidate.
 - Supabase security advisor ghi INFO `rls_enabled_no_policy` cho bảng mới (RLS bật, không có policy cho client trực tiếp) và WARN `function_search_path_mutable` cho `prevent_lab_run_event_mutation`; cần theo dõi remediation trước release. Các cảnh báo này không thay thế review bảo mật.
