@@ -5,6 +5,7 @@ import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { DENSITY_SPECIMENS } from "../../../../packages/sim";
 import { LabsController } from "./labs.controller";
+import { seedDensityReleaseFixture } from "./density-release.fixture";
 
 /**
  * End-to-end FL-03 run through the real launch and submit endpoints, on the
@@ -80,5 +81,32 @@ describe.skipIf(!db)("FL-03 density end-to-end on the isolated database", () => 
     const wrong = { ...submission, idempotencyKey: randomUUID(), evidence: { ...correctEvidence(pins), block: { ...correctEvidence(pins).block, specimenId: other } } };
     await expect(controller.attempt(req, wrong)).rejects.toBeDefined();
     expect(await p.attempt.count({ where: { labRunId: launch.runId, idempotencyKey: wrong.idempotencyKey } })).toBe(0);
+  }, 60000);
+});
+
+describe.skipIf(!db)("FL-03 density through an ACTIVE LabRelease on the isolated database", () => {
+  it("launches without an assignment from the active release, pins specimens and scores 6/6", async () => {
+    const p = db!;
+    const admin = await p.user.findFirstOrThrow({ where: { role: "ADMIN" }, orderBy: { createdAt: "asc" } });
+    const release = await seedDensityReleaseFixture(p, admin.id);
+    expect(release).toMatchObject({ status: "ACTIVE", labId: "density" });
+    const suffix = randomUUID().slice(0, 8);
+    const student = await p.user.create({ data: { username: `e2e-release-${suffix}`, fullName: "E2E release student", passwordHash: "fixture", role: "STUDENT" } });
+    const controller = new LabsController(p as any, new StudentAccessService(p as any), new RequestRateLimiter());
+    const req = { user: { sub: student.id, role: "STUDENT" } };
+
+    const launch = await controller.launchRun("density", req, { challengeId: "density_001" });
+    expect(launch.versionBinding).toBe("FOUNDATIONAL_RELEASE");
+    expect(launch.rendererKey).toBe("density-bench");
+    const pins = launch.runtimeParams as { blockId: string; pebbleId: string };
+    expect(["wood-block-a", "wood-block-b"]).toContain(pins.blockId);
+    expect(["pebble-a", "pebble-b"]).toContain(pins.pebbleId);
+
+    const submission = { contract: "lab-contract/1", runId: launch.runId, idempotencyKey: randomUUID(), stateSchemaVersion: 1, evidenceSchemaVersion: 1, durationMs: 1000, evidence: correctEvidence(pins) };
+    const result: any = await controller.attempt(req, submission);
+    const attempt = result.attempt ?? result;
+    expect(attempt.verdict).toBe("passed");
+    expect(attempt.simulationResult.assessment).toMatchObject({ score: 6, maximumScore: 6, passed: true });
+    expect(attempt.simulationResult._execution.rubricRef).toBe("density-stations@1.0.0");
   }, 60000);
 });

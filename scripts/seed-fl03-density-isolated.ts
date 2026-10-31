@@ -16,6 +16,7 @@ import { PrismaClient } from "@prisma/client";
 import { VERSION as ENGINE_VERSION, DENSITY_INSTRUMENTS } from "../packages/sim";
 import { DENSITY_ACTIVITY_KEY, DENSITY_MODEL, DENSITY_RUBRIC } from "../src/modules/labs/application/evaluators/density-stations.evaluator";
 import { digest } from "../src/modules/labs/application/lab-run";
+import { seedDensityReleaseFixture } from "../src/modules/labs/interface/density-release.fixture";
 
 const LAB_ID = "density";
 const CHALLENGE_ID = "density_001";
@@ -51,7 +52,8 @@ async function main() {
         status: "published", scope: "CLASS_PRIVATE", releaseCleared: false, topicCode: null, synthetic: true,
         simulationModelRef: DENSITY_MODEL, config: { notice: NOTICE }, assets: [],
       },
-      update: { simulationModelRef: DENSITY_MODEL, synthetic: true, releaseCleared: false, config: { notice: NOTICE } },
+      // Release state (synthetic, releaseCleared) belongs to the release chain below; never reset it here.
+      update: { simulationModelRef: DENSITY_MODEL },
     });
 
     await db.challenge.upsert({
@@ -72,7 +74,7 @@ async function main() {
       expectedResult: "TEST FIXTURE ONLY: density consistent with the reference values",
       explanation: "Synthetic data for a mechanics test; not a curriculum or scientific approval.",
       safety: "Virtual instruments only.", limitations: "Idealised instruments; no uncertainty propagation.",
-      modality: "2d-bench", sources: [{ title: "Synthetic test fixture", license: "TEST_ONLY" }],
+      modality: "deterministic-simulation", sources: [{ title: "Synthetic test fixture", license: "TEST_ONLY" }],
     };
     const activityDigest = digest(activitySpec);
     const activity = await db.practicalActivityVersion.upsert({
@@ -103,11 +105,12 @@ async function main() {
       update: {},
     });
 
+    const release = await seedDensityReleaseFixture(db, admin.id);
     console.log(JSON.stringify({
       seeded: "density (FL-03) isolated fixture",
       labId: lab.id, challengeId: CHALLENGE_ID, configVersionId: config.id, packVersionId: pack.id,
       activityVersionId: activity.id, rubricRef: DENSITY_RUBRIC, modelRef: DENSITY_MODEL,
-      releaseCreated: false, notice: NOTICE,
+      releaseId: release.id, releaseStatus: release.status, releaseVersion: release.version, notice: NOTICE,
     }, null, 2));
   } finally {
     await db.$disconnect();
@@ -115,6 +118,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  const response = (error as any)?.response;
+  console.error(response ? JSON.stringify(response) : error instanceof Error ? error.message : error);
   process.exitCode = 1;
 });

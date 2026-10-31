@@ -373,3 +373,12 @@ Built on branch `feat/fl03-runtime-registry` at the owner's request, ahead of th
 - **Isolated DB (done):** a private PostgreSQL 18 instance on `127.0.0.1:54329`, database `nexalab_fl03_isolated`. Base `prisma/seed.ts` ran against it, then `npm run db:seed:fl03-isolated` (idempotent; second run changed nothing). The rows are Lab `density` (synthetic, releaseCleared=false, CLASS_PRIVATE), challenge `density_001`, activity `density-stations@1`, config v1 and pack `density-bench-fixture` v1 (active). No LabRelease was created.
 - **Shared Supabase (not written):** the `.env` database was NOT seeded and no release was activated. Reason: an ACTIVE release needs a genuine OWNER_SIGNOFF (§10), and seeding the shared DB is outside the isolated-only rule in AGENTS.md. Waiting for the owner's decision on the sign-off path.
 - **Pending:** end-to-end launch and submit through the API against the isolated DB still needs an assignment or an active release; not run in this pass.
+
+## 16. Release chain on the isolated database — 2026-10-31
+
+- **Mechanics, through the real service:** `LabReleaseService.createDraft` → `review(OWNER_SIGNOFF)` → `activate`, all in `density-release.fixture.ts`. The release is `ACTIVE`, version 1, and its single review matches the release digest. Lab `density` has `releaseCleared=true`, `scope=SHARED_LIBRARY`, `topicCode` set.
+- **Labelled test fixtures, not approvals:** the outcome `KHTN8-B14-O01`, chapter, topic, lesson and content pack are `TEST FIXTURE ONLY`. The OWNER_SIGNOFF is a mechanics receipt. It is not a real owner review and must not be read as curriculum or scientific approval.
+- **Isolated only:** every write goes to `nexalab_fl03_isolated` on `127.0.0.1:54329`, behind the guard. The shared Supabase database in `.env` was not touched.
+- **Idempotent:** the database was rebuilt from scratch, then the seed ran twice and the E2E ran twice. All passed. `releaseCleared` is owned by activation and is no longer reset by reruns.
+- **E2E (`density-e2e.integration.test.ts`):** (a) assignment path, and (b) launch with no assignment through the ACTIVE release (`versionBinding=FOUNDATIONAL_RELEASE`). Both pin a specimen pair, submit evidence, and get `passed` 6/6, and a wrong-specimen submission creates no attempt.
+- **Caveat:** the activity spec was changed in place (`density-stations` v1 now names `KHTN8-B14-O01`). The seed is the only writer, and it runs only on the isolated database. A real activity must be authored as a new immutable version.
