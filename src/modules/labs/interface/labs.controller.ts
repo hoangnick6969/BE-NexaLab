@@ -11,9 +11,9 @@ import { requestHint } from "../application/hint";
 import { explain } from "../infrastructure/llm";
 import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
-import { canonical, digest, evaluateRunV1, executionSchema, launchSchema, rubricRefForActivity, runSubmissionSchema } from "../application/lab-run";
-import { checkpointActivityForModel, checkpointActivityForRubric } from "../application/checkpoint-activities";
 import { FL10_RUBRIC } from "../application/lab-run";
+import { canonical, digest, evaluateRunV1, executionSchema, launchSchema, rubricRefForActivity, runSubmissionSchema, submittedEvidence } from "../application/lab-run";
+import { labEvaluators } from "../application/evaluators/registry";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { assertLegacyCircuitAssignmentCompatible, resolveFoundationalLabRelease, resolvePinnedAssignmentLab } from "../application/assignment-lab-execution";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
@@ -420,7 +420,8 @@ export class LabsController {
 
   private async submitRun(req: any, body: unknown) {
     const b = runSubmissionSchema.parse(body);
-    const evidence = "checkpoints" in b ? { checkpoints: b.checkpoints, explanation: b.explanation } : b.labState;
+    const submitted = submittedEvidence(b);
+    const evidence = submitted.data;
     return this.db.$transaction(async (tx) => {
       // One key and one run lock serialize retries and revocation with submission.
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:attempt-key:" + req.user.sub + ":" + b.idempotencyKey);
@@ -467,10 +468,10 @@ export class LabsController {
         } else {
           const model = resolveModel(execution.modelRef);
           if (model.labId !== locked.labId || model.engineVersion !== execution.engineVersion) throw new Error("Pinned model is unavailable");
-          const activity = checkpointActivityForRubric(execution.rubricRef);
+          const activity = execution.rubricRef !== "legacy-challenge@1.0.0" ? labEvaluators.resolve(execution.rubricRef) : null;
           if (activity) {
             if (!("checkpoints" in b)) throw new Error("Thiếu bằng chứng checkpoint");
-            ({ result, verdict } = activity.evaluate(b.checkpoints, b.explanation));
+            ({ result, verdict } = labEvaluators.evaluate(execution.rubricRef, locked.id, { checkpoints: b.checkpoints, explanation: b.explanation }, { labId: locked.labId, modelRef: execution.modelRef, engineVersion: execution.engineVersion, params: execution.params, template: execution.template }));
           } else {
           if (!("labState" in b)) throw new Error("Thiếu trạng thái Lab");
           ({ result, verdict } = evaluateRunV1(locked.labId, b.labState, execution.params, execution.modelRef));
