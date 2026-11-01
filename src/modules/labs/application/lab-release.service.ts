@@ -82,10 +82,11 @@ export class LabReleaseService {
       if (b.lessonId && directLessons.length !== 1)
         throw new ConflictException({ code: "LAB_LESSON_BINDING_REQUIRED" });
       const directTopicCodes = [...new Set(directLessons.map((lesson: any) => lesson.curriculumTopicCode).filter(Boolean))];
-      if (directLessons.some((lesson: any) => !lessonSubjectMatchesLab(lab.subjectId, lesson.subjectId) || lesson.grade !== lab.grade) || directTopicCodes.length > 1)
+      const multiLessonLever = labId === "lever-equilibrium" && !b.lessonId && directTopicCodes.length === 2 && directTopicCodes.includes("KHTN8-L18") && directTopicCodes.includes("KHTN8-L19");
+      if (directLessons.some((lesson: any) => !lessonSubjectMatchesLab(lab.subjectId, lesson.subjectId) || lesson.grade !== lab.grade) || (directTopicCodes.length > 1 && !multiLessonLever))
         throw new ConflictException({ code: "LAB_LESSON_BINDING_INVALID" });
       const topicCode = lab.topicCode ?? directTopicCodes[0];
-      if (!topicCode || (lab.topicCode && directTopicCodes.length && directTopicCodes[0] !== lab.topicCode))
+      if (!topicCode || (lab.topicCode && directTopicCodes.length && !directTopicCodes.includes(lab.topicCode)))
         throw new ConflictException({ code: "LAB_TOPIC_MAPPING_REQUIRED" });
       const topic = await tx.curriculumTopic.findUnique({ where: { code: topicCode }, include: { chapter: true } });
       if (!topic || topic.status !== "active" || topic.chapter.status !== "active")
@@ -102,14 +103,18 @@ export class LabReleaseService {
       const outcomes = await tx.curriculumOutcome.findMany({
         where: { code: { in: parsedActivity.data.outcomeCodes }, status: "active", synthetic: false }, select: { code: true },
       });
-      const topicOutcomes = Array.isArray(topic.outcomeCodes) ? topic.outcomeCodes as string[] : [];
+      const otherTopic = multiLessonLever ? await tx.curriculumTopic.findUnique({ where: { code: directTopicCodes.find((code: string) => code !== topicCode)! }, include: { chapter: true } }) : null;
+      if (multiLessonLever && (!otherTopic || otherTopic.status !== "active" || otherTopic.chapter.status !== "active" || otherTopic.chapterCode !== topic.chapterCode))
+        throw new ConflictException({ code: "LAB_TOPIC_MAPPING_REQUIRED" });
+      const topicOutcomes = [ ...(Array.isArray(topic.outcomeCodes) ? topic.outcomeCodes as string[] : []), ...(Array.isArray(otherTopic?.outcomeCodes) ? otherTopic.outcomeCodes as string[] : []) ];
       if (outcomes.length !== parsedActivity.data.outcomeCodes.length || parsedActivity.data.outcomeCodes.some((code) => !topicOutcomes.includes(code)))
         throw new ConflictException({ code: "LAB_OUTCOME_MAPPING_REQUIRED" });
       if (directLessons.some((lesson: any) => {
         const lessonOutcomes = Array.isArray(lesson.outcomeCodes) ? lesson.outcomeCodes as string[] : [];
         const packOutcomes = Array.isArray(lesson.packVersion?.outcomeCodes) ? lesson.packVersion.outcomeCodes as string[] : [];
-        return parsedActivity.data.outcomeCodes.some((code) => !lessonOutcomes.includes(code) || !packOutcomes.includes(code));
-      })) throw new ConflictException({ code: "LAB_OUTCOME_MAPPING_REQUIRED" });
+        return (multiLessonLever ? lessonOutcomes : parsedActivity.data.outcomeCodes).some((code) => !lessonOutcomes.includes(code) || !packOutcomes.includes(code));
+      }) || (multiLessonLever && parsedActivity.data.outcomeCodes.some((code) => !directLessons.some((lesson: any) => (lesson.outcomeCodes as string[]).includes(code)))))
+        throw new ConflictException({ code: "LAB_OUTCOME_MAPPING_REQUIRED" });
 
       const legacyLessonBindings = directLessons.length ? [] : await tx.foundationalCourseLesson.findMany({
         where: { foundationalLabId: labId, courseVersion: { status: "active" }, lesson: { scope: "SHARED_LIBRARY", status: "published" } },
