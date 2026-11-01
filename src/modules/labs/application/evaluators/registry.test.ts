@@ -47,3 +47,5 @@ describe("Lab evaluator registry", () => {
 
   it("keeps the released Circuit identity, renderer and legacy fallback", () => {
     expect(labEvaluators.rubricRefs).toEqual([LEGACY_CHALLENGE_RUBRIC, CIRCUIT_BULB_RUBRIC, "em-induction-checkpoints@1.0.0", "ecology-tolerance-checkpoints@1.0.0", "mass-conservation-poea@1.0.0", "density-stations@1.0.0", "gene-protein-stations@1.0.0"]);
+  });
+});
