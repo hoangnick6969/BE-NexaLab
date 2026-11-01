@@ -4,6 +4,16 @@
 
 **FL-06 execution receipt:** publication completed through the authenticated Admin API at `2026-11-01T17:02:37.270Z`; Supabase readback confirms v1 ACTIVE, `SHARED_LIBRARY`, `releaseCleared=true`. Exact receipt: [`docs/operations/fl06-release-receipt.json`](../../../docs/operations/fl06-release-receipt.json). The operator's explicit authorization covered candidate creation, automated OWNER_SIGNOFF and publication. Credentials are not stored in the receipt or repository.
 
+**FL-06 catalog thumbnail (FE-only asset):** Generated from the production `K5Stage3D` using the shared static thumbnail harness. Fixture and image are in the sibling FE repository: [`lab-thumbnail-capture.tsx`](../../../../nexalab-fe/src/features/labs/dev/lab-thumbnail-capture.tsx), [`lever-equilibrium.webp`](../../../../nexalab-fe/src/features/labs/assets/thumbnails/lever-equilibrium.webp). The image is 1280×720 WebP (18,540 bytes); the exact-ID asset is discovered by `lab-info.ts`. It is not part of the LabRelease digest, SimulationPack, Supabase content, or schema migration.
+
+### Repeatable thumbnail refresh for FL-06 and future Labs
+
+1. In `D:\coding\NEXA\nexalab-fe`, add/update the deterministic scene fixture in `src/features/labs/dev/lab-thumbnail-capture.tsx`, keyed by the exact Lab ID. Reuse the Lab's production 3D stage; keep camera overrides inside the fixture and keep API calls blocked. Never capture a signed-in runtime page or learner data.
+2. Run `npm run capture:lab-thumbnails -- <lab-id>` from the FE repo. The script starts a temporary Vite server and Playwright Chrome, blocks `/api/**`, and writes only `src/features/labs/assets/thumbnails/<lab-id>.webp` at 1280×720 and at most 120 KiB. It creates no LabRun/events and performs no Supabase writes.
+3. Open and visually inspect the WebP: ensure the distinctive apparatus/state is legible and not occluded, labels are readable, and no debug or browser UI appears. If the stage does not fit, adjust only its fixture camera/composition, recapture, and inspect again.
+4. `src/features/labs/lab-info.ts` maps exact-ID WebP files automatically via `import.meta.glob`; do not add per-image imports or add thumbnail data to a release/config/pack. Commit the fixture and asset together in FE. Add one short Lab-specific note to `src/features/labs/README.md`; use this section as the cross-repo pointer for future maintainers.
+5. Thumbnail refresh is independent of schema migration and content publication. Do not create a new release or approval for an image-only change. Check `git status` in both repositories and stage only intended FE fixture/asset/docs so unrelated work remains untouched.
+
 ## Repeatable FL-06 publication (use this path)
 
 Use the compatible BE checkout and FE renderer with the intended database already configured. An authorized local API connected to the shared Supabase database can perform this administrative content operation; a separate hosted deployment workflow is not needed to create the database release. Verify hosted FE/BE rollout separately before claiming the code is available on a hosted site. Push, schema migration, candidate creation and content activation are separate operations.
