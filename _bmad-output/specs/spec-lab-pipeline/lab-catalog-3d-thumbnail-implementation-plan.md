@@ -1,6 +1,6 @@
 # Lab Catalog — kế hoạch dùng thumbnail từ cảnh 3D thật
 
-Trạng thái: **implemented locally; awaiting rendered catalog review**. Phạm vi là thumbnail trong catalog `/labs`; không thay ảnh lesson, ảnh OG hay scene đang chạy trong Lab Space.
+Trạng thái: **implementation is in the fetched FE branch; awaiting rendered catalog review**. Phạm vi là thumbnail trong catalog `/labs`; không thay ảnh lesson, ảnh OG hay scene đang chạy trong Lab Space.
 
 ## Kết luận audit
 
@@ -9,7 +9,7 @@ Trạng thái: **implemented locally; awaiting rendered catalog review**. Phạm
 - Supabase SELECT-only hiện ghi nhận 4 Lab đủ điều kiện catalog cho học sinh, đều có release `ACTIVE` và model/renderer 3D: `circuit` (`circuit-bulb@1.0.0`), `em-induction` (`em-induction@1.0.0`), `density` (`density-bench@1.0.0`) và `mass-conservation` (`mass-conservation@1.0.0`). Đây là ảnh chụp trạng thái hiện tại; khi triển khai phải lấy danh sách từ API/release hiện hành.
 - Scene nguồn đã có, không cần dựng lại model: `CircuitBulb3DStage` + `PhysicsStage`; `EmInduction3DStage`; `Density3DStage` + `FluidBench3D`; `WetBenchStage` + `PhysicalLabEnvironment`.
 - Phòng nền vật lý được chia sẻ ở cấp source giữa các scene phù hợp. Thumbnail FL-10 được chụp từ chính scene có cân và hai cốc; không thêm dụng cụ vào phòng nền.
-- `src/features/labs/README.md` còn mô tả FL-25 cảm ứng điện từ là prototype chưa phát hành, trong khi DB hiện có release ACTIVE. Cần đồng bộ ghi chú này khi triển khai, nhưng không dùng README cũ làm tiêu chí lọc thumbnail.
+- **Đã đồng bộ 2026-11-01:** FE README now identifies FL-25 as active; catalog cards are still filtered by `GET /labs`, and this plan's release list remains a dated snapshot rather than a source of truth.
 
 ## Quyết định triển khai
 

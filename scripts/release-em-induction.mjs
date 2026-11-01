@@ -7,7 +7,7 @@
 //   NEXALAB_ADMIN_EMAIL      the owner's ADMIN account
 //   NEXALAB_ADMIN_PASSWORD
 //   FL25_LESSON_ID           published shared-library lesson to bind (default below)
-//   FL25_PUBLISH=true        sign OWNER_SIGNOFF with the evidence below and publish; without it the
+//   FL25_PUBLISH=true        record DEV_APPROVAL and publish; requires FL25_DEV_CHECK and FL25_AGENT_CHECK.
 //                            script stops after the release draft and prints what would be signed.
 //
 // Every step is idempotent: re-running reuses the same activity, configuration, pack and draft.
@@ -153,13 +153,16 @@ console.log(`release v${draft.version} ${draft.status} digest ${draft.digest}${d
 
 if (draft.status === "ACTIVE") console.log("Release is already active.");
 else if (!publish) {
-  console.log("\nNot published. OWNER_SIGNOFF evidence that FL25_PUBLISH=true will sign on this digest:");
-  console.log(JSON.stringify(evidence, null, 2));
+  console.log("\nNot published. Admin approval requires developer and agent check notes on this digest.");
 } else {
+  const developerCheck = process.env.FL25_DEV_CHECK?.trim();
+  const agentCheck = process.env.FL25_AGENT_CHECK?.trim();
+  if (!developerCheck || developerCheck.length < 10 || !agentCheck || agentCheck.length < 10)
+    throw new Error("Set FL25_DEV_CHECK and FL25_AGENT_CHECK with actual review notes before publishing.");
   const published = await call(`/admin/labs/${LAB}/releases/${draft.id}/publish`, "POST", {
-    reason: "FL-25 em-induction: owner đã duyệt, publish release đầu tiên.",
+    reason: "FL-25 em-induction: admin approved developer and agent double check.",
     releaseDigest: draft.digest,
-    evidence,
+    evidence: { developerCheck, agentCheck },
   });
   console.log(`release v${published.version ?? draft.version} ${published.status ?? "published"}`);
 }

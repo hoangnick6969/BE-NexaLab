@@ -8,7 +8,7 @@ import { captureCurrentLabExecution, resolvePinnedAssignmentLab } from "./assign
 import { digest } from "./lab-run";
 import { goldenCaseResults, versionErrors, versionInputSchema } from "./simulation-versions";
 
-export const LAB_REVIEW_KINDS = ["CURRICULUM", "SUBJECT", "MODEL", "SAFETY", "RIGHTS", "RANGE", "OWNER_SIGNOFF"] as const;
+export const LAB_REVIEW_KINDS = ["CURRICULUM", "SUBJECT", "MODEL", "SAFETY", "RIGHTS", "RANGE", "OWNER_SIGNOFF", "DEV_APPROVAL"] as const;
 const REVIEW_KIND = z.enum(LAB_REVIEW_KINDS);
 const delegatedReviewKind = z.enum(["CURRICULUM", "SUBJECT", "MODEL", "SAFETY", "RIGHTS", "RANGE"]);
 const ownerEvidence = z.object({
@@ -19,8 +19,9 @@ const ownerEvidence = z.object({
   safetyAssessment: z.string().trim().min(10),
   rightsAssessment: z.string().trim().min(10),
 }).strict();
+const developmentEvidence = z.object({ developerCheck: z.string().trim().min(10), agentCheck: z.string().trim().min(10) }).strict();
 const releaseReason = z.string().trim().min(5).max(500);
-const requiredReviewKinds = (_ranges: unknown) => ["OWNER_SIGNOFF"];
+const requiredReviewKinds = (_ranges: unknown) => ["DEV_APPROVAL"];
 
 function missingReviewKinds(snapshot: any, reviews: Array<{ kind: string; decision: string; releaseDigest: string; reviewerId: string }>) {
   const required: string[] = snapshot.requiredReviewKinds;
@@ -152,7 +153,7 @@ export class LabReleaseService {
           grade: binding.courseVersion.grade, version: binding.courseVersion.version, sourceVersion: binding.courseVersion.sourceVersion,
           lessonId: binding.lesson.id, lessonTopicCode: binding.lesson.curriculumTopicCode, officialOrder: binding.officialOrder,
         })),
-        reviewPolicy: "OWNER_SIGNOFF_V1",
+        reviewPolicy: "DEV_APPROVAL_V1",
         requiredReviewKinds: required,
       };
       const releaseDigest = digest(snapshot);
@@ -169,7 +170,7 @@ export class LabReleaseService {
   }
 
   async review(releaseId: string, req: any, body: unknown) {
-    const b = z.object({ kind: REVIEW_KIND, decision: z.enum(["APPROVE", "REQUEST_CHANGES"]), releaseDigest: z.string().regex(/^[a-f0-9]{64}$/), note: z.string().trim().min(5).max(1000), evidence: ownerEvidence.optional() }).strict().parse(body);
+    const b = z.object({ kind: REVIEW_KIND, decision: z.enum(["APPROVE", "REQUEST_CHANGES"]), releaseDigest: z.string().regex(/^[a-f0-9]{64}$/), note: z.string().trim().min(5).max(1000), evidence: z.union([ownerEvidence, developmentEvidence]).optional() }).strict().parse(body);
     return this.db.$transaction(async (tx) => {
       const release = await tx.labRelease.findUnique({ where: { id: releaseId }, include: { lab: true, reviews: true } });
       if (!release) throw new NotFoundException({ code: "LAB_RELEASE_NOT_FOUND" });
@@ -178,12 +179,12 @@ export class LabReleaseService {
         throw new ConflictException({ code: "LAB_RELEASE_DIGEST_MISMATCH" });
       if (release.status !== "DRAFT") throw new ConflictException({ code: "LAB_RELEASE_NOT_REVIEWABLE" });
       if (!snapshot.requiredReviewKinds.includes(b.kind)) throw new BadRequestException({ code: "LAB_REVIEW_KIND_NOT_REQUIRED" });
-      if (b.kind === "OWNER_SIGNOFF") {
+      if (b.kind === "OWNER_SIGNOFF" || b.kind === "DEV_APPROVAL") {
         const owner = await tx.user.findUnique({ where: { id: req.user.sub }, select: { role: true, status: true, disabledAt: true } });
         if (!owner || owner.role !== "ADMIN" || owner.status !== "active" || owner.disabledAt)
-          throw new ForbiddenException({ code: "LAB_OWNER_SIGNOFF_NOT_AUTHORIZED" });
-        if (b.decision === "APPROVE" && !b.evidence)
-          throw new BadRequestException({ code: "LAB_OWNER_SIGNOFF_EVIDENCE_REQUIRED" });
+          throw new ForbiddenException({ code: b.kind === "DEV_APPROVAL" ? "LAB_DEV_APPROVAL_NOT_AUTHORIZED" : "LAB_OWNER_SIGNOFF_NOT_AUTHORIZED" });
+        if (b.decision === "APPROVE" && !(b.kind === "DEV_APPROVAL" ? developmentEvidence.safeParse(b.evidence).success : ownerEvidence.safeParse(b.evidence).success))
+          throw new BadRequestException({ code: b.kind === "DEV_APPROVAL" ? "LAB_DEV_APPROVAL_EVIDENCE_REQUIRED" : "LAB_OWNER_SIGNOFF_EVIDENCE_REQUIRED" });
       } else {
         const authorization = await tx.labReviewerAuthorization.findFirst({
           where: { userId: req.user.sub, subjectId: release.lab.subjectId, kind: b.kind, active: true },
@@ -201,7 +202,7 @@ export class LabReleaseService {
       }
       const review = await tx.labReleaseReview.create({ data: {
         releaseId, reviewerId: req.user.sub, kind: b.kind, decision: b.decision, releaseDigest: release.digest, note: b.note,
-        evidence: b.kind === "OWNER_SIGNOFF" ? b.evidence ?? undefined : undefined,
+        evidence: b.kind === "OWNER_SIGNOFF" || b.kind === "DEV_APPROVAL" ? b.evidence ?? undefined : undefined,
       } });
       const allReviews = [...release.reviews, review];
       const missing = missingReviewKinds({ ...snapshot, digest: release.digest }, allReviews);
@@ -219,19 +220,19 @@ export class LabReleaseService {
 
   /** Explicit ADMIN publication records its evidence and activates atomically. */
   async publish(labId: string, releaseId: string, req: any, body: unknown) {
-    const b = z.object({ reason: releaseReason, releaseDigest: z.string().regex(/^[a-f0-9]{64}$/), evidence: ownerEvidence }).strict().parse(body);
+    const b = z.object({ reason: releaseReason, releaseDigest: z.string().regex(/^[a-f0-9]{64}$/), evidence: developmentEvidence }).strict().parse(body);
     return this.db.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-release:" + labId);
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
       const admin = await tx.user.findUnique({ where: { id: req.user.sub }, select: { role: true, status: true, disabledAt: true } });
       if (req.user.role !== "ADMIN" || !admin || admin.role !== "ADMIN" || admin.status !== "active" || admin.disabledAt)
-        throw new ForbiddenException({ code: "LAB_OWNER_SIGNOFF_NOT_AUTHORIZED" });
+        throw new ForbiddenException({ code: "LAB_DEV_APPROVAL_NOT_AUTHORIZED" });
       const release = await tx.labRelease.findFirst({ where: { id: releaseId, labId }, include: { reviews: true } });
       if (!release) throw new NotFoundException({ code: "LAB_RELEASE_NOT_FOUND" });
       const snapshot = release.snapshot as any;
       if (release.digest !== b.releaseDigest || digest(snapshot) !== release.digest)
         throw new ConflictException({ code: "LAB_RELEASE_DIGEST_MISMATCH" });
-      if (snapshot.reviewPolicy !== "OWNER_SIGNOFF_V1" || snapshot.requiredReviewKinds?.length !== 1 || snapshot.requiredReviewKinds[0] !== "OWNER_SIGNOFF")
+      if (snapshot.reviewPolicy !== "DEV_APPROVAL_V1" || snapshot.requiredReviewKinds?.length !== 1 || snapshot.requiredReviewKinds[0] !== "DEV_APPROVAL")
         throw new ConflictException({ code: "LAB_RELEASE_POLICY_MISMATCH" });
       if (release.status === "ACTIVE") {
         if (missingReviewKinds({ ...snapshot, digest: release.digest }, release.reviews).length)
@@ -240,10 +241,10 @@ export class LabReleaseService {
       }
       if (release.status !== "DRAFT") throw new ConflictException({ code: "LAB_RELEASE_NOT_REVIEWABLE" });
       await this.validateReleaseScience(tx, snapshot);
-      const existing = release.reviews.find((review) => review.kind === "OWNER_SIGNOFF");
+      const existing = release.reviews.find((review) => review.kind === "DEV_APPROVAL");
       if (existing) throw new ConflictException({ code: "LAB_RELEASE_ALREADY_REVIEWED" });
       const receipt = await tx.labReleaseReview.create({ data: {
-        releaseId, reviewerId: req.user.sub, kind: "OWNER_SIGNOFF", decision: "APPROVE",
+        releaseId, reviewerId: req.user.sub, kind: "DEV_APPROVAL", decision: "APPROVE",
         releaseDigest: release.digest, note: b.reason, evidence: b.evidence,
       } });
       await audit(tx, { actor: req.user, action: "lab_release.review", targetType: "LabRelease", targetId: releaseId, reason: b.reason,

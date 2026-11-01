@@ -67,7 +67,7 @@ Phạm vi của mục này là đúng 20 slot ở bảng trên. Không thêm tr�
 
 | Slot / Lab | Kit dụng cụ riêng | Phòng nền vật lý | Ranh giới apparatus |
 |---|---|---|---|
-| 8 / FL-10 — Mol & tính theo PTHH (SPLIT) | K2 — Hóa ướt | Đã dùng trong activity candidate hiện tại | Activity bảo toàn khối lượng chỉ dùng cân và hai cốc. Không đại diện toàn bộ FL-10 và không có kệ/rack trong phòng nền. |
+| 8 / FL-10 — Mol & tính theo PTHH (SPLIT) | K2 — Hóa ướt | Mass Conservation v1 is active for one limited activity; remaining FL-10 scope is not implemented | Activity bảo toàn khối lượng chỉ dùng cân và hai cốc. Không đại diện toàn bộ FL-10 và không có kệ/rack trong phòng nền. |
 | 9 / FL-11 — Dung dịch và nồng độ | K2 — Hóa ướt | Tái sử dụng đề xuất | Cốc, dụng cụ định lượng/khuấy theo thí nghiệm đã review; chưa implement. |
 | 10 / FL-12 — Tốc độ phản ứng & xúc tác | K2 — Hóa ướt | Tái sử dụng đề xuất | Bình phản ứng, gia nhiệt/đo thời gian và thu khí nếu model yêu cầu; chưa implement. |
 | 11 / FL-13 — Acid–base, chỉ thị & pH | K2 — Hóa ướt | Tái sử dụng đề xuất | Chỉ thị, mẫu và dụng cụ đo được chọn theo model đã review; fixture pH cũ không tính là Lab. |

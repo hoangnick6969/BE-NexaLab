@@ -125,7 +125,7 @@ development_status:
   p3-5-second-model-gate: backlog
   p3-6-lab-factory-operations: done
   p3-7-class-lab: ready-for-dev
-  # FL-25 em-induction — ../specs/spec-fl-25-em-induction/; private engineering prototype under owner exception D-1 (P3.5 gate still not met).
+  # FL-25 em-induction — v1 is ACTIVE in shared DB; P3.5 tracking and curriculum/device follow-ups remain open.
   fl-25-t0-owner-decisions: in-progress
   fl-25-t1-blueprint: review
   fl-25-t2-activity-registry: done
@@ -137,7 +137,7 @@ development_status:
   fl-25-t8-panel-2d-a11y: done
   fl-25-t9-verification: done
   fl-25-t10-device-qa: in-progress
-  fl-25-t11-release-candidate: backlog
+  fl-25-t11-release-candidate: released
   # Teacher AI increment (TAI) — plan ../planning-artifacts/increment-tai-teacher-ai.md; all blocked on gate G-1 (TAI-T0).
   epic-tai-01-authoring: backlog
   tai-01-t0-activate-fr21-scope: backlog
@@ -197,17 +197,18 @@ fl25_tracking:
   owner_approval: 'owner statement in the working session 2026-10-31: "Lab đã được duyệt" and asked to release to the shared DB, commit and push. Release is not written to the shared DB from a dev machine: it goes through the deployed admin release flow (POST /admin/labs/:id/releases → activate → publish) with the genuine OWNER_SIGNOFF on the exact digest, after the branch is merged and deployed.'
   scope: 'FL-25 cảm ứng điện từ & dòng xoay chiều (K1, K9 cond.): qualitative model em-induction@1.0.0, activity em-induction-checkpoints v1 (4 predictions + explanation), BE activity registry generalisation, FE 3D apparatus + equivalent 2D view.'
   audit_findings:
-    - 'A1 blocking: P3.5 gate NOT MET; phase plan says do not open a second Lab implementation track.'
+    - 'A1: FL-25 was activated while P3.5 remains tracked NOT MET; reconcile the approved exception and gate record. Active release does not prove the phase gate passed.'
     - 'A2/A3: FL-25 is W4 with lowest score; catalog says 2D-first, 3D optional after QA, yet Tier A scene-first.'
     - 'A4: register outcome 9/dien-tu/1 is truncated and the induction-condition requirement is missing; KHTN9 provenance CONDITIONAL.'
-    - 'A5: BE runtime hard-codes the Circuit bulb rubric/evidence (rubricRef enum, sim-packs.ts:282, assignment-lab-execution.ts:17); needs an activity registry before a second activity.'
+    - 'A5 resolved: BE activity dispatch supports the FL-25 activity and the shared DB has an active release; keep the allowlisted model/activity tuple pinned.'
   open_decisions:
-    D-1: 'decided 2026-10-31 — owner: record an exception; build FL-25 in parallel as a private synthetic engineering prototype (no release, catalog, Lesson binding or shared DB). P3.5 stays NOT MET.'
+    D-1: 'superseded 2026-10-31 — owner authorized publication after the prototype work; FL-25 v1 is ACTIVE in the shared DB. P3.5 remains tracked NOT MET, so record this as an approved release exception, not as evidence that the gate passed.'
     D-2: 'open — 3D as default view; recommendation: build 2D and 3D on one state, default 3D only after equivalence check.'
     D-3: 'open — curriculum reviewer fixes KHTN9 Điện từ outcome text and provenance.'
     D-4: 'open — no speed/Faraday numerics in v1 (recommended).'
     D-5: 'open — rubric 5 criteria, pass 5/5 (recommended provisionally).'
-  verification: 'Local only, throwaway PostgreSQL 18 cluster on 127.0.0.1:55432 (scratchpad, stopped afterwards; shared Supabase never touched). BE npm test 47 files / 293 tests passed, 0 skipped (all DB suites incl. em-induction integration); build, check:layers ok; route manifest identical to main. FE lint + build pass; em-induction-lab.spec 5/5 (2D flow + F5, 3D phone, 3D desktop, free explore, WebGL context loss); em-induction-real-stack.spec 1/1 (Vite → API → isolated DB; server scored 4/5 with unmetCriteria prediction:PUSH; Attempt + LabRun rows confirmed); existing lab specs 12 pass / 10 fail, same cases as main. Sloplint 0 FAIL, 1 WARN waived. No commit, push, shared DB, release or signoff.'
+  pre_release_verification: 'Before shared release: throwaway PostgreSQL 18 on 127.0.0.1:55432; BE npm test 47 files / 293 passed, build, check:layers and route manifest passed. FE lint/build passed; em-induction-lab.spec 5/5 and em-induction-real-stack.spec 1/1 on isolated DB. Existing lab specs 12 pass / 10 fail, same cases as main. M1 Pro + Chrome only; no school-device or accessibility acceptance. This was pre-release evidence, not the current shared-release state.'
+  shared_release_readback_2026_11_01: 'Read-only SELECT confirmed FL-25 LabRelease v1 ACTIVE, SHARED_LIBRARY, releaseCleared=true, pack active, and one matching OWNER_SIGNOFF APPROVE on the release digest. The same readback confirmed active releases for Circuit v2, Density v1 and Mass Conservation v1. No deployed FE/API browser journey was run in this audit.'
   t10_measurements: 'M1 Pro + Chrome only (not a school device): 16.7 ms frames incl. CPU throttle 4x/6x; 250 draws/frame desktop (main 201, shadow 49), 174 phone; 38k main-pass triangles; heap 43-47 MB; mount ~2.1 s. Above the 120-call discussion threshold mainly from the shared K1 room (~155 objects vs ~93 FL-25 apparatus); merging PhysicsStage static geometry proposed as a separate ticket (affects Circuit).'
   fixes_outside_fl25:
     - 'BE catalog.controller.ts: foundational-labs list and catalog no longer 500 when an ACTIVE LabRelease snapshot has no lessonBindings (failed on main too).'
@@ -218,11 +219,10 @@ fl25_tracking:
     - 'BE migration 20261031120000_lesson_scope_teacher_private: Lesson_scope_check also allows TEACHER_PRIVATE (code default); teacher-private lesson creation returned 500 on any database with 20261025150000. Applies to the shared DB only through the normal deploy.'
     - 'BE scripts/integration.mjs aligned with Foundational Release rules: group assignment uses a seeded lesson; circuit practicals go through the lesson lab step; unreleased chemistry/eye labs assert assignment refusal and are graded via teacher preview. 99 assertions pass locally.'
   next:
-    - 'Curriculum reviewer: D-3 KHTN 9 Điện từ outcome text/provenance; owner confirms D-2, D-4, D-5.'
-    - 'FL25-T10 on agreed school hardware, screen reader pass, GPU memory release on leave.'
-    - 'Optional ticket: merge static geometry of the shared PhysicsStage room (draw calls).'
-    - 'Merged to main (PR #41). Apply pending migrations 20261031120000_lesson_scope_teacher_private and 20261031130000_fl25_em_induction_lab to the shared DB through the owner process (db:migrate is loopback-guarded), then run scripts/release-em-induction.mjs against the API with the owner ADMIN account; FL25_PUBLISH=true signs OWNER_SIGNOFF with the printed evidence and publishes.'
-    - 'Release rehearsal 2026-10-31 on an isolated database (local stand-ins for the KHTN9 Điện từ topic, outcome KHTN-L9/dien-tu/1 and lesson pack-khtn9-l14-…): activity, configuration v1, pack em-induction-k1 v1, release v1 draft → publish → ACTIVE; rerun idempotent; student foundational launch and submit scored 5/5.'
+    - 'Curriculum review: resolve D-3 KHTN 9 Điện từ outcome text/provenance; confirm D-2, D-4 and D-5 decisions.'
+    - 'FL25-T10: school-device and screen-reader QA; verify GPU resources are released when leaving the scene.'
+    - 'Verify the deployed FE/API student and teacher journeys against the active shared release.'
+    - 'Optional: measure and reduce shared PhysicsStage draw calls; keep as a separate performance task because it affects Circuit too.'
   pre_existing_issues:
     - 'FE main: 10 Playwright cases in lab-run-host/lesson-lab-navigation are stale against the current Lab Space UI (labels such as "Thoát phòng thực hành", "Câu hỏi · 1/6", chemistry button names); they are Circuit/P3.5 evidence, so left for their owners.'
 
