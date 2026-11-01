@@ -1,12 +1,12 @@
 # FL-06 — Moment lực và đòn bẩy (K5 Cơ học): kế hoạch đề xuất
 
-> **Cập nhật quyết định 2026-11-01:** [Model Slice Spec FL-06](fl-06-lever-model-slice-spec.md) là contract mới nhất cho v1 và thay các câu hỏi/giả định trái ngược bên dưới: chỉ B18/B19, bỏ B31; chỉ copy `vi`; hằng số và mapping gắn nhãn **Technical Assumption**; không chờ reviewer độc lập ở Bước 0; owner ký `OWNER_SIGNOFF` exact digest. Code release gate trên nhánh FL-06 đã được đổi cho draft FL-06; chưa deploy lên môi trường đích. Phần dưới giữ lịch sử kế hoạch ban đầu để đối chiếu, không phải quyết định hiện hành khi khác spec mới.
+> **Cập nhật quyết định 2026-11-01:** [Model Slice Spec FL-06](fl-06-lever-model-slice-spec.md) là contract mới nhất cho v1 và thay các câu hỏi/giả định trái ngược bên dưới: chỉ B18/B19, bỏ B31; chỉ copy `vi`; hằng số và mapping gắn nhãn **Technical Assumption**; không chờ reviewer độc lập ở Bước 0; owner ký `OWNER_SIGNOFF` exact digest. Release gate FL-06 đã phục vụ qua Admin API local kết nối Supabase và đã phát hành v1; điều này không xác nhận rollout trên hosting khác. Phần dưới giữ lịch sử kế hoạch ban đầu để đối chiếu, không phải quyết định hiện hành khi khác spec mới.
 
-> **Readback Supabase 2026-11-01:** mã outcome thực trong registry là `KHTN8-B18-O01`, `KHTN8-B18-O02`, `KHTN8-B19-O01`, `KHTN8-B19-O02`; `B18-O01`… trong kế hoạch là alias. Hai Lesson pack B18/B19 đã published trong SHARED_LIBRARY với đúng outcome tương ứng. FL-06 (`lever-equilibrium`) chưa có Lab/Challenge/Release. Migration `20261031130000_fl10_run_events` đã áp dụng; không có migration schema riêng cho FL-06. Không tạo release digest trước khi tuple và code đích được triển khai.
+> **Publication readback:** FL-06 v1 đã ACTIVE trên Supabase qua Admin API, receipt `OWNER_SIGNOFF` khớp digest `fff052879326482b47f5eeb59cc01852ccf11df228e8f3b4f3117b8b082f99bd`. Mã outcome thực là `KHTN8-B18-O01/O02`, `KHTN8-B19-O01/O02`; mã ngắn bên dưới là alias. Hai Lesson pack B18/B19 được pin nguyên trạng trong release. Migration `20261031130000_fl10_run_events` đã áp dụng; FL-06 không cần schema riêng. Lệnh lặp lại: `npm run release:fl06 -- --publish` với credential Admin trong environment; xem runbook và `docs/operations/fl06-release-receipt.json`.
 
 **Ngày:** 2026-11-01
 **Nhánh:** `codex/fl-06-lever-equilibrium` ở BE và FE
-**Trạng thái:** kế hoạch; chưa triển khai model, activity, kit, dữ liệu hay release. Người dùng đã xác nhận FL-06 là đòn bẩy K5 và yêu cầu dạy/chấm `M = F·d`, `F₁d₁ = F₂d₂` trong v1. Công thức, miền tham số, rubric và mapping vẫn cần review khoa học/chương trình trước phát hành.
+**Trạng thái:** model, activity, K5 2D/3D, registry, candidate và release v1 đã triển khai; ACTIVE trên Supabase. Công thức `M = F·d`, `F₁d₁ = F₂d₂` và mapping được owner chấp thuận dưới nhãn Technical Assumption; không phải chứng nhận khoa học độc lập. Phần kế hoạch bên dưới là lịch sử, các quyết định mới nhất và receipt ở đầu tài liệu có ưu tiên.
 
 ## 1. Căn cứ và giới hạn chứng cứ
 

@@ -2,6 +2,21 @@
 
 **Verified against source and read-only release inventory: 2026-11-01.** Recheck the target before acting; this document is not a production authorization.
 
+**FL-06 execution receipt:** publication completed through the authenticated Admin API at `2026-11-01T17:02:37.270Z`; Supabase readback confirms v1 ACTIVE, `SHARED_LIBRARY`, `releaseCleared=true`. Exact receipt: [`docs/operations/fl06-release-receipt.json`](../../../docs/operations/fl06-release-receipt.json). The operator's explicit authorization covered candidate creation, automated OWNER_SIGNOFF and publication. Credentials are not stored in the receipt or repository.
+
+## Repeatable FL-06 publication (use this path)
+
+Use the compatible BE checkout and FE renderer with the intended database already configured. An authorized local API connected to the shared Supabase database can perform this administrative content operation; a separate hosted deployment workflow is not needed to create the database release. Verify hosted FE/BE rollout separately before claiming the code is available on a hosted site. Push, schema migration, candidate creation and content activation are separate operations.
+
+1. Set `NEXALAB_API`, `NEXALAB_ADMIN_EMAIL` and `NEXALAB_ADMIN_PASSWORD` in the current shell or secret store. Example API: `http://127.0.0.1:4000/api`. Use the actual Admin account password; `SEED_PASSWORD` only describes seed configuration and may differ from the current account. Never reset a shared Admin password or print tokens to repair a login failure.
+2. Run `npm run release:fl06` for a read-only authentication/inventory preflight. Review `content/simulation-packs/fl06-candidate.json`, including owner evidence. It pins four real registry codes `KHTN8-B18-O01/O02`, `KHTN8-B19-O01/O02`, both released Lesson packs and the six model golden cases.
+3. With authorization to create the candidate, run `npm run release:fl06 -- --apply`. `POST /admin/labs` checks the registered model, active topic and existing LabRunEvent schema, then creates an audited **private draft Lab + Challenge**. Existing different content is rejected. Existing APIs create/reuse the immutable practical, validate configuration and pack golden cases, activate their technical versions and snapshot the two Lesson bindings. No shared Lesson is edited. No SQL seed or direct database insert is used.
+4. With explicit authorization to approve/publish, run `npm run release:fl06 -- --publish`. This includes step 3, verifies the snapshot SHA-256, exact model/rubric/config/pack/activity and Lesson/Outcome bindings, then submits the manifest's evidence through the authenticated ADMIN `/publish` endpoint. The server records OWNER_SIGNOFF for that exact digest and activates atomically. Set `FL06_EXPECTED_DIGEST` to enforce an externally supplied digest as an additional check. `--publish` is explicit authorization to sign the verified candidate automatically; no independent subject review is implied.
+5. Optionally set `FL06_RECEIPT_PATH` to save the non-secret receipt. The script reads back ACTIVE status, shared visibility and matching approval receipt, and compares all other Labs' visibility and release fingerprints before/after. Running the same command again reuses the same candidate and ACTIVE release; it does not issue another approval or rewrite a snapshot. Changed candidates require a reviewed successor and compatible activity/rubric versions.
+6. Use Supabase SELECT-only readback to independently verify the Lab, active config/pack, release digest and receipt. Verify discovery with a real authorized UI session; run scored/persistence E2E against isolated PostgreSQL, not the shared database. The FL-06 live UI smoke used the real student session and submitted no attempt.
+
+**Migration precondition:** FL-06 adds no Prisma schema. The existing `20261031130000_fl10_run_events` migration supplies the generic `LabRunEvent` table (evidence isolated by runId), and the owner-signoff migration supplies approval evidence. Both were verified on Supabase. The candidate-create API fails with `LAB_SCHEMA_MIGRATION_REQUIRED` before writing a Lab if the event table is absent. Candidate provisioning is a data operation through Admin APIs; a schema migration never creates the Lab automatically. Do not invent a duplicate table or empty migration. For genuinely missing DDL use the approved schema deployment procedure below; the content script does not bypass the isolated migration guard.
+
 ## 1. Keep the three operations separate
 
 | Operation | Changes | Current mechanism/evidence | Must not be confused with |
@@ -71,11 +86,13 @@ Activation supersedes the previous active release; it does not rewrite its snaps
 | Density / FL-03 (K3) | v1 | `SHARED_LIBRARY` / true | `OWNER_SIGNOFF` | Active limited-scope activity; curriculum/source and QA gates remain |
 | EM Induction / FL-25 (K1) | v1 | `SHARED_LIBRARY` / true | `OWNER_SIGNOFF` | Active does not imply P3.5/P3.6 gate completion; outcome/source, device, accessibility remain |
 | Mass Conservation / FL-10 (K2) | v1 | `SHARED_LIBRARY` / true | `OWNER_SIGNOFF` | One activity only; does not complete broader mol/stoichiometry portfolio |
-| Chemistry, Eye, gene-protein | none | `CLASS_PRIVATE` / false | n/a | No active shared LabRelease in this readback; prototypes/rows are not shared releases |
+| Gene Protein / FL-27 | v1 | `SHARED_LIBRARY` / true | `OWNER_SIGNOFF` | Fresh Supabase readback; independent subject/device acceptance is a separate claim |
+| Lever Equilibrium / FL-06 (K5) | v1 | `SHARED_LIBRARY` / true | `OWNER_SIGNOFF` | Digest `fff052879326482b47f5eeb59cc01852ccf11df228e8f3b4f3117b8b082f99bd`; Technical Assumption B18/B19; full receipt linked above |
+| Chemistry, Eye | none | `CLASS_PRIVATE` / false | n/a | No active shared LabRelease in this readback; prototypes/rows are not shared releases |
 
 These are current database facts, not proof of production FE/API deployment, school-device acceptance, independent review or all curriculum outcomes. Re-query the target before a release decision.
 
-**FL-20 check:** The portfolio documents FL-20 as a proposed KEEP/W4 ecology activity (tolerance curve, population density and age-structure concepts), with source/mapping and model assumptions still requiring review. No FL-20 implementation spec or active release was found in the checked artifacts. The `gene-protein` DB row is a separate candidate (portfolio FL-27), currently private with no active release; do not count it as FL-20 work or as a completed release.
+**FL-20 check:** The portfolio documents FL-20 as a proposed KEEP/W4 ecology activity (tolerance curve, population density and age-structure concepts), with source/mapping and model assumptions still requiring review. `gene-protein` is the separate FL-27 release; its ACTIVE status does not count as FL-20 acceptance.
 
 ## 8. P3.1–P3.7 status and reuse map
 

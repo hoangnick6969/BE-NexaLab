@@ -98,6 +98,44 @@ export class AdminLabsController {
   }
 
   // ───────────────────────── C2-T3 simulation versions ─────────────────────────
+  @Post("labs")
+  @ApiOperation({ summary: "Create an unpublished allowlisted Lab and base challenge; publication uses the release lifecycle" })
+  async createLab(@Req() req: any, @Body() body: unknown) {
+    const input = z.object({
+      id: z.string().regex(/^[a-z0-9-]{2,40}$/), modelRef: z.string().max(60), topicCode: z.string().min(1).max(80),
+      title: z.string().trim().min(1).max(200), learningObjective: z.string().trim().min(1).max(500),
+      challengeId: z.string().regex(/^[a-z0-9_-]{2,80}$/), reason,
+    }).strict().parse(body);
+    let model;
+    try { model = resolveModel(input.modelRef); }
+    catch { throw new BadRequestException({ code: "LAB_MODEL_INVALID" }); }
+    if (model.labId !== input.id || !CHALLENGE_PARAMETERS[input.id]) throw new BadRequestException({ code: "LAB_MODEL_INVALID" });
+    return this.db.$transaction(async tx => {
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-create:" + input.id);
+      if (input.id === "lever-equilibrium") {
+        const [schema] = await tx.$queryRawUnsafe<Array<{ ready: boolean }>>(`SELECT to_regclass('public."LabRunEvent"') IS NOT NULL AS ready`);
+        if (!schema.ready) throw new ConflictException({ code: "LAB_SCHEMA_MIGRATION_REQUIRED", message: "Apply the existing LabRunEvent schema migration before publication" });
+      }
+      const topic = await tx.curriculumTopic.findUnique({ where: { code: input.topicCode }, include: { chapter: true } });
+      if (!topic || topic.status !== "active" || topic.chapter.status !== "active") throw new BadRequestException({ code: "LAB_TOPIC_MAPPING_REQUIRED" });
+      const expected = { subjectId: topic.chapter.subjectId, grade: topic.chapter.grade, title: input.title, topic: topic.title,
+        learningObjective: input.learningObjective, simulationModelRef: input.modelRef, topicCode: input.topicCode };
+      const old = await tx.lab.findUnique({ where: { id: input.id } });
+      const challenge = await tx.challenge.findUnique({ where: { id: input.challengeId } });
+      if (old) {
+        if (Object.entries(expected).some(([key, value]) => (old as any)[key] !== value) || !challenge || challenge.labId !== input.id || challenge.objective !== input.learningObjective || canonical(challenge.constraints) !== canonical({ params: {} }) || challenge.difficulty !== "intermediate")
+          throw new ConflictException({ code: "LAB_CANDIDATE_MISMATCH" });
+        return { ...old, unchanged: true };
+      }
+      if (challenge) throw new ConflictException({ code: "LAB_CANDIDATE_MISMATCH" });
+      const lab = await tx.lab.create({ data: { id: input.id, ...expected, status: "draft", scope: "CLASS_PRIVATE", releaseCleared: false, synthetic: false } });
+      await tx.challenge.create({ data: { id: input.challengeId, labId: input.id, objective: input.learningObjective, constraints: { params: {} }, difficulty: "intermediate" } });
+      await audit(tx, { actor: req.user, action: "lab.create", targetType: "Lab", targetId: input.id, reason: input.reason,
+        after: { status: lab.status, modelRef: input.modelRef, challengeId: input.challengeId } });
+      return lab;
+    });
+  }
+
   @Get("labs")
   @ApiOperation({ summary: "Labs with challenges, active configuration version and model allowlist" })
   async labs() {

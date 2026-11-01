@@ -63,7 +63,9 @@ export class LabReleaseService {
   }
 
   async createDraft(labId: string, req: any, body: unknown) {
-    const b = z.object({ reason: releaseReason, lessonId: z.string().min(1).max(200).optional() }).strict().parse(body);
+    const b = z.object({ reason: releaseReason, lessonId: z.string().min(1).max(200).optional(), lessonIds: z.array(z.string().min(1).max(200)).min(1).max(20).optional() }).strict()
+      .refine(value => !(value.lessonId && value.lessonIds), "Choose lessonId or lessonIds")
+      .refine(value => !value.lessonIds || new Set(value.lessonIds).size === value.lessonIds.length, "Duplicate Lesson IDs").parse(body);
     return this.db.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-release:" + labId);
       const lab = await tx.lab.findUnique({ where: { id: labId } });
@@ -72,14 +74,14 @@ export class LabReleaseService {
       const execution = await captureCurrentLabExecution(tx, labId);
       const directLessons = await tx.lesson.findMany({
         where: {
-          ...(b.lessonId ? { id: b.lessonId } : { labId }),
+          ...(b.lessonId ? { id: b.lessonId } : b.lessonIds ? { id: { in: b.lessonIds } } : { labId }),
           status: "published", scope: "SHARED_LIBRARY", synthetic: false,
           packVersion: { status: "released", synthetic: false },
         },
         include: { packVersion: true },
         orderBy: [{ curriculumOrder: "asc" }, { id: "asc" }],
       });
-      if (b.lessonId && directLessons.length !== 1)
+      if ((b.lessonId && directLessons.length !== 1) || (b.lessonIds && directLessons.length !== b.lessonIds.length))
         throw new ConflictException({ code: "LAB_LESSON_BINDING_REQUIRED" });
       const directTopicCodes = [...new Set(directLessons.map((lesson: any) => lesson.curriculumTopicCode).filter(Boolean))];
       const multiLessonLever = labId === "lever-equilibrium" && !b.lessonId && directTopicCodes.length === 2 && directTopicCodes.includes("KHTN8-L18") && directTopicCodes.includes("KHTN8-L19");
