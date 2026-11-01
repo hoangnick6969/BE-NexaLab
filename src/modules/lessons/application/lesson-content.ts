@@ -83,6 +83,12 @@ export const CHALLENGE_PARAMETERS: Record<
     rangeReview: "pending",
     params: {},
   },
+  // FL-27: no learner-tunable parameters. The gene variant is pinned per run by the server (gene-variants.ts).
+  "gene-protein": {
+    modelRef: "gene-expression@1.0.0",
+    rangeReview: "pending",
+    params: {},
+  },
   eye: {
     modelRef: "eye@1.0.0",
     rangeReview: "pending",
@@ -93,6 +99,12 @@ export const CHALLENGE_PARAMETERS: Record<
   // FL-25 private prototype: observation-only model with a pinned checkpoint rubric; no challenge parameters.
   "em-induction": {
     modelRef: "em-induction@1.0.0",
+    rangeReview: "pending",
+    params: {},
+  },
+  // FL-20: observation-only model with a pinned checkpoint rubric; no challenge parameters.
+  "ecology-tolerance": {
+    modelRef: "ecology-tolerance@1.0.0",
     rangeReview: "pending",
     params: {},
   },

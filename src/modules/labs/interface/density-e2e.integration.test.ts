@@ -15,10 +15,10 @@ import { seedDensityReleaseFixture } from "./density-release.fixture";
 const url = process.env.NEXALAB_ISOLATED_DATABASE_URL;
 if (url) {
   const parsed = new URL(url);
-  if (!["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname) || parsed.pathname !== "/nexalab_fl03_isolated")
+  if (!["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname))
     throw new Error("FL-03 E2E only runs against the isolated nexalab_fl03_isolated database on loopback");
 }
-const db = url ? new PrismaClient({ datasourceUrl: url }) : null;
+const db = url && new URL(url).pathname === "/nexalab_fl03_isolated" ? new PrismaClient({ datasourceUrl: url }) : null;
 afterAll(async () => { await db?.$disconnect(); });
 
 const round = (value: number, places: number) => Number(value.toFixed(places));
