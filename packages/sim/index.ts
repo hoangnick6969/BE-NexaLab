@@ -1,5 +1,6 @@
 import { z } from "zod";
 export { evaluateMassConservation } from "./mass-conservation";
+export { evaluateLeverBench, classifyLeverCase } from "./lever-bench";
 export * from "./gene-expression";
 export { ecologyTolerance, ecologyToleranceSchema, ECOLOGY_SPECIES, ECOLOGY_SITES, ECOLOGY_POPULATIONS, ECOLOGY_AGE_SAMPLES, fraction, pyramidFor } from "./ecology-tolerance";
 export type { EcologyToleranceState, Fraction } from "./ecology-tolerance";

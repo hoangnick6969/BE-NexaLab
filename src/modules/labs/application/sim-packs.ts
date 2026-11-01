@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, eye, eyeParts, evaluateMassConservation, geneExpression } from "../../../../packages/sim";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, eye, eyeParts, evaluateMassConservation, evaluateLeverBench, geneExpression } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -26,6 +26,17 @@ type Model = {
   observationOnly?: { unsupportedParams: string };
 };
 export const MODEL_REGISTRY: Record<string, Model> = {
+  "lever-bench@1.0.0": {
+    labId: "lever-equilibrium", engineVersion: "1.0.0",
+    simulate: (state) => {
+      const result = evaluateLeverBench(state);
+      if (!result.ok) throw new Error(`Invalid lever state: ${result.code}`);
+      return result.value;
+    },
+    outputs: { netMomentMilliNewtonMillimetres: "number", displayState: "string", balance: "string" },
+    requiredSemanticIds: ["lever", "fulcrum", "weight", "force-gauge"],
+    observationOnly: { unsupportedParams: "mô hình đòn bẩy dùng trạng thái móc đã kiểm tra thay vì tham số thử thách" },
+  },
   "mass-conservation@1.0.0": {
     labId: "mass-conservation",
     engineVersion: "1.0.0",
