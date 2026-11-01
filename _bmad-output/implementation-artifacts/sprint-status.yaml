@@ -137,7 +137,7 @@ development_status:
   fl-25-t8-panel-2d-a11y: done
   fl-25-t9-verification: done
   fl-25-t10-device-qa: in-progress
-  fl-25-t11-release-candidate: backlog
+  fl-25-t11-release-candidate: released
   # FL-20 ecology-tolerance — ../specs/spec-fl-20-ecological-tolerance/; D-1 decided 2026-10-31 (second track with FL-10); built and verified locally, not released.
   fl-20-t0-owner-decisions: in-progress
   fl-20-t1-blueprint: review

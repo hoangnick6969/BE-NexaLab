@@ -6,7 +6,7 @@ import { ISOLATED_NOTICE } from "./density-fixture-notice";
 /**
  * FL-03 release chain for an ISOLATED database only (plan §10 and §15).
  *
- * It drives the real LabReleaseService: createDraft → review (OWNER_SIGNOFF) →
+ * It drives the real LabReleaseService: createDraft → review (DEV_APPROVAL) →
  * activate. Every curriculum row, lesson, content pack and sign-off here is a
  * labelled TEST FIXTURE. The sign-off is a mechanics receipt, not a real owner
  * review, and no shared database is touched. Idempotent: rerunning reuses rows.
@@ -125,7 +125,7 @@ export async function seedDensityReleaseFixture(db: any, adminId: string) {
   const draft = await service.createDraft(FIXTURE.labId, admin, { reason: ISOLATED_NOTICE, lessonId: FIXTURE.lesson });
   let release = await db.labRelease.findUniqueOrThrow({ where: { id: draft.id } });
   if (release.status === "DRAFT") {
-    await service.review(release.id, admin, { kind: "OWNER_SIGNOFF", decision: "APPROVE", releaseDigest: release.digest, note: ISOLATED_NOTICE, evidence });
+    await service.review(release.id, admin, { kind: "DEV_APPROVAL", decision: "APPROVE", releaseDigest: release.digest, note: ISOLATED_NOTICE, evidence: { developerCheck: ISOLATED_NOTICE, agentCheck: ISOLATED_NOTICE } });
     release = await db.labRelease.findUniqueOrThrow({ where: { id: release.id } });
   }
   if (release.status === "APPROVED") await service.activate(FIXTURE.labId, release.id, admin, { reason: ISOLATED_NOTICE });

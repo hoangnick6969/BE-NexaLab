@@ -37,7 +37,7 @@ Nguồn đã đọc: `spec-lab-pipeline/*` (SPEC, phase plan, catalog §1–§7 
 | State không hợp lệ → lỗi validation, không tạo attempt | lab-definition Circuit §Rubric | Áp dụng nguyên |
 | Renderer 2D/3D là view hoán đổi được; mặc định 3D chỉ khi cả hai đã có và tương đương; lựa chọn view lưu cục bộ, không vào attempt | catalog §6A.5 | FL-25 có cả 2D schematic và 3D |
 | Không tải code/công thức từ pack; renderer nằm trong allowlist | contract-v1 §Shared host | Thêm một entry vào registry FE |
-| Release cần OWNER_SIGNOFF thật trên digest chính xác | SPEC.md, data-model | Không nằm trong plan này |
+| Release mới cần ADMIN `DEV_APPROVAL` trên digest chính xác sau dev/agent double check; FL-25 v1 giữ receipt lịch sử `OWNER_SIGNOFF` | SPEC.md, data-model | Không nằm trong plan này |
 
 ### 1.2 Phát hiện (findings)
 
@@ -65,6 +65,8 @@ Nguồn đã đọc: `spec-lab-pipeline/*` (SPEC, phase plan, catalog §1–§7 
 | D-3 | Văn bản outcome KHTN 9 Điện từ đầy đủ và provenance | Curriculum reviewer đối chiếu Chương trình GDPT 2018 môn KHTN lớp 9 (chủ đề Điện từ) và SGK, sửa register (cắt cụt/gộp), rồi mới map. |
 | D-4 | Phạm vi model: có mô phỏng ảnh hưởng tốc độ chuyển động lên độ lệch kim không? | **Không** trong v1 (catalog: "No Faraday numerics"). Biên độ kim cố định, định tính; ghi rõ trong giới hạn model. |
 | D-5 | Rubric 5 tiêu chí, đạt = 5/5 (giống Circuit đạt = 3/3)? | Đồng ý tạm thời; reviewer có thể đổi. |
+
+**Cập nhật trạng thái 2026-11-01:** quyết định D-1 về prototype riêng đã được supersede bởi owner authorization ngày 2026-10-31: FL-25 release v1 đang ACTIVE trong shared database, bound tới outcome `KHTN-L9/dien-tu/1` và Lesson pack ghi trong release snapshot. P3.5 vẫn được tracking là NOT MET. D-3 về outcome text/provenance và representative-device/accessibility QA còn mở. Release dùng `OWNER_SIGNOFF_V1`; đây là owner approval trên digest, không phải independent curriculum/science certification.
 
 ## 3. Phạm vi
 

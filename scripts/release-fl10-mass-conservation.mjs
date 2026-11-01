@@ -1,8 +1,8 @@
 // FL-10 release lifecycle via the existing admin API; never writes directly to the database.
 // Required env: NEXALAB_API, NEXALAB_ADMIN_EMAIL, NEXALAB_ADMIN_PASSWORD.
 // Optional: FL10_EXPECTED_DIGEST, FL10_CREATE_DRAFT=true, FL10_LESSON_ID,
-//           FL10_PUBLISH=true, FL10_OWNER_EVIDENCE_JSON (JSON string).
-// Safe default is list-only. Draft creation and OWNER_SIGNOFF publication each require
+//           FL10_PUBLISH=true, FL10_APPROVAL_EVIDENCE_JSON (JSON string).
+// Safe default is list-only. Draft creation and DEV_APPROVAL publication each require
 // explicit opt-in. Publication must match FL10_EXPECTED_DIGEST exactly.
 
 const api = process.env.NEXALAB_API ?? "http://127.0.0.1:4000/api";
@@ -65,24 +65,22 @@ if (release.status === "ACTIVE") {
   process.exit(0);
 }
 if (!publish) {
-  console.log("Not published. Set FL10_PUBLISH=true, the exact FL10_EXPECTED_DIGEST, and Owner evidence JSON to publish.");
+  console.log("Not published. Set FL10_PUBLISH=true, the exact FL10_EXPECTED_DIGEST, and developer/agent check evidence JSON to publish.");
   process.exit(0);
 }
 if (release.status !== "DRAFT") throw new Error(`Cannot publish release status ${release.status}.`);
 
 let evidence;
 try {
-  evidence = JSON.parse(process.env.FL10_OWNER_EVIDENCE_JSON ?? "");
+  evidence = JSON.parse(process.env.FL10_APPROVAL_EVIDENCE_JSON ?? "");
 } catch {
-  throw new Error("FL10_PUBLISH requires FL10_OWNER_EVIDENCE_JSON to contain valid JSON.");
+  throw new Error("FL10_PUBLISH requires FL10_APPROVAL_EVIDENCE_JSON to contain valid JSON.");
 }
-const evidenceFields = ["curriculumMapping", "sourceReferences", "scientificGoldenCases", "rubric", "safetyAssessment", "rightsAssessment"];
+const evidenceFields = ["developerCheck", "agentCheck"];
 if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)
   || evidenceFields.some((field) => !(field in evidence))
-  || evidenceFields.filter((field) => field !== "sourceReferences").some((field) => typeof evidence[field] !== "string" || evidence[field].trim().length < 10)
-  || !Array.isArray(evidence.sourceReferences) || !evidence.sourceReferences.length
-  || evidence.sourceReferences.some((source) => typeof source !== "string" || source.trim().length < 5)) {
-  throw new Error(`Owner evidence JSON must include: ${evidenceFields.join(", ")}.`);
+  || evidenceFields.some((field) => typeof evidence[field] !== "string" || evidence[field].trim().length < 10)) {
+  throw new Error(`Approval evidence JSON must include: ${evidenceFields.join(", ")}.`);
 }
 
 const published = await call(`/admin/labs/${labId}/releases/${release.id}/publish`, "POST", {

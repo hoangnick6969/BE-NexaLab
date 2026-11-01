@@ -1,6 +1,6 @@
 # FL-10 / K2 — đặc tả để triển khai
 
-Trạng thái: **model thuần và bản triển khai ứng viên BE/FE đã có; integration DB, review nguồn/khoa học và release chưa xong**. Xem [delivery plan](fl-10-k2-delivery-plan.md) để biết từng gate. Không xem tài liệu này là duyệt khoa học, nguồn SGK, OWNER_SIGNOFF hay ghi đè gate trong `lab-pipeline-phase-plan.md`. Phạm vi là một ứng viên hoạt động bảo toàn khối lượng thuộc FL-10; quyết định SPLIT toàn FL-10 vẫn mở.
+Trạng thái 2026-11-01: **Mass Conservation v1 đang ACTIVE trong shared database cho một activity**. Đây không hoàn tất toàn bộ FL-10 (mol/stoichiometry), và không phải independent expert certification: release policy hiện yêu cầu owner `OWNER_SIGNOFF_V1` với assessment evidence, không bắt buộc reviewer CURRICULUM/SUBJECT/MODEL/SAFETY/RIGHTS riêng. Không xem tài liệu này là duyệt khoa học/toàn bộ nguồn SGK hay ghi đè các gate còn mở trong `lab-pipeline-phase-plan.md`. Quyết định SPLIT toàn FL-10 vẫn mở.
 
 ## 1. Mục tiêu, bằng chứng và phạm vi
 
@@ -106,11 +106,11 @@ Bản nháp nội dung D3/D4 của chủ dự án đã được ghi riêng tại
 
 ### Đối chiếu code 2026-10-31
 
-Kế hoạch triển khai và quyết định kỹ thuật D1/D2 sau khi đối chiếu code: [fl-10-k2-delivery-plan.md](fl-10-k2-delivery-plan.md). D1 chọn event log server trước khi công bố số đo; D2 chọn tuple pin hiện có và rubric FL-10 độc lập. **Chưa có event API, rubric runtime, cấu hình được review hay release**. Bảng bên dưới giữ các acceptance gate cho implementation, không còn có nghĩa là D1/D2 chưa có hướng giải quyết.
+Kế hoạch triển khai và quyết định kỹ thuật D1/D2 sau khi đối chiếu code: [fl-10-k2-delivery-plan.md](fl-10-k2-delivery-plan.md). Server event flow, run tuple và activity/rubric runtime đã được triển khai; Mass Conservation v1 đã được publish. Bảng dưới đây giữ các acceptance gates cho phạm vi nội dung và review đầy đủ của FL-10; không còn có nghĩa là chưa có release.
 
 - `src/modules/labs/interface/labs.controller.ts` hiện tạo `LabRun` với `execution` và `executionDigest`, rồi chỉ nhận evidence tại `submitRun`; `src/features/labs/runtime/lab-run-host.ts` lưu bản nháp cục bộ. Contract Circuit hiện tại là **replay khi nộp**. Nó không chứng minh thời điểm học sinh dự đoán trước quan sát. FL-10 sẽ dùng endpoint/event log mới; không diễn đạt replay như xác thực từng bước.
 - `src/modules/labs/application/lab-run.ts` kiểm tra activity/model/rubric tuple bằng `rubricRefForActivity` và `executionSchema`; `assignmentExecutionSchema` và digest pin tuple. Rubric Circuit chấm độ đúng dự đoán và không phù hợp FL-10. `mass-conservation@1.0.0` cùng activity key `mass-conservation-*` hiện bị chặn khỏi rubric legacy bằng kiểm tra fail closed và test. D2 vẫn cần định nghĩa rubric FL-10 riêng, tham số được review, snapshot/digest và migration tương thích trước khi đăng ký model.
-- Model kỹ thuật chưa có tham số dung môi được duyệt, nội dung POEA và review nguồn/an toàn. Không đăng ký registry, renderer, LabRun hay release dựa trên fixture này. D3–D5 vẫn mở.
+- Một activity đã được đăng ký, chạy qua LabRun và có release active. Tham số/assumption của mô hình, nội dung POEA và review nguồn/an toàn vẫn cần rà soát; không mở rộng activity hoặc claim toàn FL-10 dựa trên fixture này. D3–D5 vẫn mở.
 
 | Quyết định | Cần chốt trước | Evidence cần có |
 |---|---|---|
@@ -122,7 +122,7 @@ Kế hoạch triển khai và quyết định kỹ thuật D1/D2 sau khi đối 
 
 ## 4. Các lát cắt sau D1–D5
 
-Đối chiếu Circuit: các bước sau phải đi qua shared host/LabRun, registry allowlist, activity/rubric, tuple pin, backend đánh giá, assignment và release digest tương tự pilot, nhưng cần đăng ký và kiểm tra tương thích riêng cho FL-10. Circuit 3D dùng R3F/Drei, `PhysicsStage`, camera/ánh sáng và scene qua `LabSpace`. K2 candidate `WetBenchStage` dùng lại `shared/PhysicalLabEnvironment.tsx` (phòng, sàn, lababo, tủ, bàn nâu, ánh sáng nền) và chỉ thêm apparatus hoá học, cân và hai cốc; vẫn cần QA thiết bị/hoạt cảnh và review nội dung. Không sao chép logic Circuit hoặc dựng lại phòng nền trong kit. D1/D2 đã có quyết định và code ứng viên; integration DB, D3/D4/D5 review và release vẫn là gate.
+Đối chiếu Circuit: FL-10 đi qua shared host/LabRun, registry allowlist, activity/rubric, tuple pin, backend đánh giá, assignment và immutable release digest; compatibility vẫn cần theo dõi riêng. Circuit 3D dùng R3F/Drei, `PhysicsStage`, camera/ánh sáng và scene qua `LabSpace`. `WetBenchStage` dùng lại `shared/PhysicalLabEnvironment.tsx` và chỉ thêm apparatus cần cho activity Mass Conservation: cân và hai cốc. Đây là active release giới hạn một activity; review nội dung đầy đủ, accessibility và QA thiết bị/hoạt cảnh còn mở. Không sao chép logic Circuit hoặc dựng lại phòng nền trong kit.
 
 ### Đề xuất thiết kế activity, UI và hoạt cảnh — chưa chốt
 
