@@ -1,6 +1,6 @@
 ---
 id: SPEC-fl-20-ecological-tolerance
-status: in-progress
+status: released
 date: '2026-10-31'
 branch: feat/fl-20-ecological-tolerance (BE + FE, from main BE 0ac700a, FE 0a8cf73)
 companions:
@@ -16,7 +16,7 @@ upstream:
 ---
 # FL-20 — Nhân tố và giới hạn sinh thái, đặc trưng quần thể (K8 Cảnh nhẹ + HUD)
 
-**Trạng thái:** đã build và kiểm chứng local (2026-10-31), chờ review và owner duyệt; chưa release. Đây không phải phê duyệt chương trình, khoa học hay release. Mọi outcome, model, số liệu minh hoạ và rubric dưới đây là `PROPOSED_UNAPPROVED`.
+**Trạng thái:** đã release trên môi trường dùng chung ngày 2026-11-02 (LabRelease v1 ACTIVE, OWNER_SIGNOFF của owner; owner yêu cầu bỏ qua review). Lab gắn Bài 41 và outcome `KHTN8-B41-O03`; phần Bài 42 là luyện tập bổ trợ, không gắn outcome (xem D-2). Đây không phải phê duyệt chương trình, khoa học hay release. Mọi outcome, model, số liệu minh hoạ và rubric dưới đây là `PROPOSED_UNAPPROVED`.
 
 Tài liệu gồm 3 phần, theo mẫu FL-25:
 - `SPEC.md` (file này): audit nguồn và spec, các xung đột cổng và quyết định cần owner.
