@@ -21,7 +21,7 @@ const ownerEvidence = z.object({
 }).strict();
 const developmentEvidence = z.object({ developerCheck: z.string().trim().min(10), agentCheck: z.string().trim().min(10) }).strict();
 const releaseReason = z.string().trim().min(5).max(500);
-const requiredReviewKinds = (_ranges: unknown) => ["DEV_APPROVAL"];
+const requiredReviewKinds = (labId: string) => [labId === "lever-equilibrium" ? "OWNER_SIGNOFF" : "DEV_APPROVAL"];
 
 function missingReviewKinds(snapshot: any, reviews: Array<{ kind: string; decision: string; releaseDigest: string; reviewerId: string }>) {
   const required: string[] = snapshot.requiredReviewKinds;
@@ -142,7 +142,7 @@ export class LabReleaseService {
       const packCheck = packValidation(packInput.data, { labModelRef: execution.modelRef, activity: { spec: activity.spec }, glb, visualReady });
       if (packCheck.errors.length) throw new ConflictException({ code: "LAB_PACK_VALIDATION_FAILED", details: { errors: packCheck.errors } });
 
-      const required = requiredReviewKinds((pack.template as any)?.ranges);
+      const required = requiredReviewKinds(labId);
       const snapshot = {
         lab: { id: lab.id, subjectId: lab.subjectId, grade: lab.grade, title: lab.title, topic: lab.topic, topicCode, learningObjective: lab.learningObjective },
         execution,
@@ -153,7 +153,7 @@ export class LabReleaseService {
           grade: binding.courseVersion.grade, version: binding.courseVersion.version, sourceVersion: binding.courseVersion.sourceVersion,
           lessonId: binding.lesson.id, lessonTopicCode: binding.lesson.curriculumTopicCode, officialOrder: binding.officialOrder,
         })),
-        reviewPolicy: "DEV_APPROVAL_V1",
+        reviewPolicy: labId === "lever-equilibrium" ? "OWNER_SIGNOFF_V1" : "DEV_APPROVAL_V1",
         requiredReviewKinds: required,
       };
       const releaseDigest = digest(snapshot);
@@ -220,7 +220,7 @@ export class LabReleaseService {
 
   /** Explicit ADMIN publication records its evidence and activates atomically. */
   async publish(labId: string, releaseId: string, req: any, body: unknown) {
-    const b = z.object({ reason: releaseReason, releaseDigest: z.string().regex(/^[a-f0-9]{64}$/), evidence: developmentEvidence }).strict().parse(body);
+    const b = z.object({ reason: releaseReason, releaseDigest: z.string().regex(/^[a-f0-9]{64}$/), evidence: z.union([developmentEvidence, ownerEvidence]) }).strict().parse(body);
     return this.db.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-release:" + labId);
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
@@ -232,8 +232,12 @@ export class LabReleaseService {
       const snapshot = release.snapshot as any;
       if (release.digest !== b.releaseDigest || digest(snapshot) !== release.digest)
         throw new ConflictException({ code: "LAB_RELEASE_DIGEST_MISMATCH" });
-      if (snapshot.reviewPolicy !== "DEV_APPROVAL_V1" || snapshot.requiredReviewKinds?.length !== 1 || snapshot.requiredReviewKinds[0] !== "DEV_APPROVAL")
+      const ownerPolicy = snapshot.reviewPolicy === "OWNER_SIGNOFF_V1" && labId === "lever-equilibrium";
+      const reviewKind = ownerPolicy ? "OWNER_SIGNOFF" : "DEV_APPROVAL";
+      if ((!ownerPolicy && snapshot.reviewPolicy !== "DEV_APPROVAL_V1") || snapshot.requiredReviewKinds?.length !== 1 || snapshot.requiredReviewKinds[0] !== reviewKind)
         throw new ConflictException({ code: "LAB_RELEASE_POLICY_MISMATCH" });
+      if (!(ownerPolicy ? ownerEvidence : developmentEvidence).safeParse(b.evidence).success)
+        throw new BadRequestException({ code: ownerPolicy ? "LAB_OWNER_SIGNOFF_EVIDENCE_REQUIRED" : "LAB_DEV_APPROVAL_EVIDENCE_REQUIRED" });
       if (release.status === "ACTIVE") {
         if (missingReviewKinds({ ...snapshot, digest: release.digest }, release.reviews).length)
           throw new ConflictException({ code: "LAB_RELEASE_REVIEWS_MISSING" });
@@ -241,10 +245,10 @@ export class LabReleaseService {
       }
       if (release.status !== "DRAFT") throw new ConflictException({ code: "LAB_RELEASE_NOT_REVIEWABLE" });
       await this.validateReleaseScience(tx, snapshot);
-      const existing = release.reviews.find((review) => review.kind === "DEV_APPROVAL");
+      const existing = release.reviews.find((review) => review.kind === reviewKind);
       if (existing) throw new ConflictException({ code: "LAB_RELEASE_ALREADY_REVIEWED" });
       const receipt = await tx.labReleaseReview.create({ data: {
-        releaseId, reviewerId: req.user.sub, kind: "DEV_APPROVAL", decision: "APPROVE",
+        releaseId, reviewerId: req.user.sub, kind: reviewKind, decision: "APPROVE",
         releaseDigest: release.digest, note: b.reason, evidence: b.evidence,
       } });
       await audit(tx, { actor: req.user, action: "lab_release.review", targetType: "LabRelease", targetId: releaseId, reason: b.reason,

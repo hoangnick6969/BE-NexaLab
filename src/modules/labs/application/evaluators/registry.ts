@@ -77,4 +77,11 @@ const fl10Evaluator: LabEvaluator<any> = {
   evidenceSchema: z.unknown(),
   evaluate: () => { throw new Error("FL-10 requires server event history"); },
 };
-export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, ecologyToleranceEvaluator, fl10Evaluator, densityStationsEvaluator, geneProteinStationsEvaluator]);
+const fl06Evaluator: LabEvaluator<any> = {
+  rubricRef: "lever-investigation@1.0.0",
+  activity: { key: "lever-investigation", version: 1 },
+  modelRefs: ["lever-bench@1.0.0"], rendererKey: "lever-bench", envelope: "labState",
+  evidenceSchema: z.object({}).strict(),
+  evaluate: () => { throw new Error("FL-06 requires server event history"); },
+};
+export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, ecologyToleranceEvaluator, fl10Evaluator, fl06Evaluator, densityStationsEvaluator, geneProteinStationsEvaluator]);
