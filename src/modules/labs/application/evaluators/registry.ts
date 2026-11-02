@@ -1,4 +1,5 @@
 import { circuitBulbEvaluator } from "./circuit-bulb-checkpoints.evaluator";
+import { eyeOpticsEvaluator } from "./eye-anatomy-optics.evaluator";
 import { z } from "zod";
 import { CHECKPOINT_ACTIVITIES, EM_INDUCTION_RUBRIC } from "../checkpoint-activities";
 import { densityStationsEvaluator } from "./density-stations.evaluator";
@@ -71,4 +72,4 @@ const fl10Evaluator: LabEvaluator<any> = {
   evidenceSchema: z.unknown(),
   evaluate: () => { throw new Error("FL-10 requires server event history"); },
 };
-export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, fl10Evaluator, densityStationsEvaluator]);
+export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, fl10Evaluator, densityStationsEvaluator, eyeOpticsEvaluator]);
