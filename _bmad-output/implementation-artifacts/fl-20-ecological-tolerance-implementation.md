@@ -78,3 +78,40 @@ Main gained FL-03 (density) and FL-10 release work, plus two registry refactors:
 - Fix: the suite now skips (`describe.skipIf`) outside the loopback FL-03 database. It still never runs anywhere else.
 - Local run with the CI database: 57 files passed, 2 skipped; 381 tests passed, 3 skipped.
 - FE merged main again (`522cf5e`, catalog thumbnails). `package.json` conflict resolved by keeping main's `capture:lab-thumbnails` script together with the sim 1.3.0 tarball. FE lint and build ok.
+
+## Session 2026-11-02 — release (T10)
+
+The owner asked for "Rehersal và publish lab fl20" and then said "bỏ qua review", so D-2…D-7 use the SPEC recommendations, subject to the server constraints below.
+
+### Server constraints found
+- A release maps one curriculum topic, and every bound lesson must hold every activity outcome. The release therefore binds only Bài 41 (`KHTN8-L41`, `KHTN8-B41-O03`); `KHTN8-B42-O02` cannot join.
+- Release binding requires the Lab subject to match the lesson subject. The lessons use `khtn`, so the Lab subject is `khtn`.
+
+### What was added
+- BE migration `20261102090000_fl20_ecology_tolerance_lab`: Lab `ecology-tolerance` (draft, CLASS_PRIVATE) and challenge `eco_001`.
+- BE `scripts/release-ecology-tolerance.mjs`: admin API only and idempotent. Env: `NEXALAB_API`, `NEXALAB_ADMIN_EMAIL`, `NEXALAB_ADMIN_PASSWORD`, `FL20_LESSON_ID`, `FL20_PUBLISH`.
+- FE: library card (`lab-info.ts`, entry 07) and a fish icon (`LabLibrary.tsx`).
+
+### Rehearsal (isolated `nexalab_fl20_release`)
+- The curriculum rows were stand-ins with the same lesson id, topic and outcomes as the shared environment.
+- Results: draft created → published v1 ACTIVE; a rerun changed nothing.
+- Student check: the library listed the card; the launch was FOUNDATIONAL_RELEASE; the submit returned 201, passed 7/7, with no page errors.
+
+### Shared environment
+1. The first script run hit `LAB_NOT_FOUND`: the migration was not yet applied to the database the API uses. That run had already created only the activity version.
+2. The owner then ran `prisma migrate deploy`, which applied `20261102090000_fl20_ecology_tolerance_lab`.
+3. The API on :4000 had stopped. It was restarted on this branch (`tsx src/main.ts`), and the script was run with `FL20_PUBLISH=true`.
+
+Verified result:
+
+| Check | Value |
+|---|---|
+| Release | v1 ACTIVE, digest `a2c2638296dd4048b2b0fdde119cf9e8fdff9f30fa721a37006929c8078e7ef0` |
+| Review | OWNER_SIGNOFF:APPROVE |
+| Outcome | `KHTN8-B41-O03` |
+| Lesson binding | Bài 41 |
+| Lab | published, SHARED_LIBRARY, releaseCleared |
+| `GET /labs` | lists the Lab |
+| Bài 41 foundational-labs | returns `ecology-tolerance` |
+
+No student run was made on the shared environment.
