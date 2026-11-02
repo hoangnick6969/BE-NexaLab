@@ -166,6 +166,40 @@ Trước khi tối ưu: 133 648 triangles và 21→22 geometries mỗi lần đ�
 - **Seed.** `scripts/seed-fl16-eye-optics-shared.ts` + `src/modules/labs/interface/eye-optics-tuple.seed.ts`: chỉ tạo mới (upsert, `update: {}`), cần token `FL16_SHARED_WRITE_APPROVED`, có `--dry-run`. Activity spec và pack template qua đúng validator strict của luồng release (có test). Không tạo LabRelease, không ghi OWNER_SIGNOFF, không gắn lesson.
 - **Gắn bài học.** Gắn Lab vào lesson đi qua `FoundationalCourseLesson.foundationalLabId` và chỉ hợp lệ sau release có OWNER_SIGNOFF thật (luồng duyệt release trong Admin). Seed không ghi thẳng binding để không vượt cổng release.
 
+## 8C. Bàn giao 2026-11-02 — commit, test, seed thủ công
+
+**Commit (nhánh `feat/fl16-eye-optics`, đã push):**
+
+| Repo | Commit | Nội dung |
+|---|---|---|
+| BE | `dba9021` | model `eye-optics@1.0.0`, rubric `eye-anatomy-optics@1.0.0`, registry, seed tuple + script, test, catalog/plan/checklist SME |
+| BE | (commit tài liệu này) | cập nhật §8C |
+| FE | `4ff9e6f` | kit EX-A, activity/result, renderer, dev preview, catalog Lab `eye-optics`, parity + E2E spec |
+| FE | `581a585` | đánh dấu tiêu điểm thật (điểm đỏ) khi ảnh không rơi trên màng lưới |
+
+Thay đổi FL-03/K3 chưa commit của người khác vẫn nằm nguyên trên working tree, không nằm trong các commit này.
+
+**Kiểm thử tại thời điểm bàn giao:**
+- BE `npx vitest run`: 343/343 pass (11 test integration skip vì không có DB cô lập). `npm run build` pass.
+- FE `npm run build` (tsc -b + vite) pass; chunk FL-16 12 kB (gzip 5 kB), dev preview không vào bản production.
+- Parity `tests/constants-parity.spec.ts`: 7/7 pass.
+- E2E `tests/eye-optics-lab.spec.ts`: pass; rubric server chấm 11/11. Chạy với `--trace=off` (lỗi trace Playwright của máy dev, cũng gặp ở `k3-kit-preview`).
+
+**Seed thủ công cho admin (Supabase chung).** Agent không ghi vào DB chung; admin tự chạy từ máy có `.env` trỏ tới DB đích:
+
+```bash
+cd BE-NexaLab
+git switch feat/fl16-eye-optics
+# 1. Chỉ đọc: kiểm admin, lớp class-pilot-a, học sinh student-active, outcome KHTN8-B37-O04, và record FL-16 đã có hay chưa
+npx tsx scripts/seed-fl16-eye-optics-shared.ts --dry-run
+# 2. Ghi (chỉ tạo mới; chạy lại không đổi gì)
+FL16_SHARED_WRITE_APPROVED=owner-approved-fl16-shared-2026-11-02 npx tsx scripts/seed-fl16-eye-optics-shared.ts
+```
+
+Record được tạo: Lab `eye-optics` (CLASS_PRIVATE, releaseCleared=false, config có kitId EX-A), challenge `eye_optics_001`, activity `eye-anatomy-optics` v1, config v1 (active), pack `eye-optics-ex-a` v1 (active), 1 assignment cho `student-active` ở `class-pilot-a`. Không tạo LabRelease, không ghi OWNER_SIGNOFF, không gắn lesson; Lab `eye` cũ không bị chạm. Script in JSON chứa id các record để đối chiếu.
+
+**Cổng còn lại:** SME trả lời checklist; owner duyệt release qua Admin (OWNER_SIGNOFF thật); sau đó mới gắn lesson. Phase plan vẫn ghi P3.5 chưa đạt.
+
 ## 9. Phase gates và việc còn lại
 
 | Gate | Việc | Trạng thái |
