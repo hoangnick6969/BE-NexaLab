@@ -569,7 +569,7 @@ model LabReleaseReview {
   decision      String
   releaseDigest String
   note          String
-  /// Required structured assessments for OWNER_SIGNOFF; null for historical delegated reviews.
+  /// Structured evidence for owner signoff and developer approval receipts.
   evidence      Json?
   createdAt     DateTime   @default(now())
 

@@ -7,6 +7,10 @@ Branch: `feat/fl-25-electromagnetic-induction` in BE (from `adaee7f`) and FE (fr
 
 Owner decision D-1, 2026-10-31, in the working session: "Ghi nhận ngoại lệ, làm FL-25 song song dạng thử nghiệm". FL-25 is a **private engineering prototype**: synthetic data only, no student catalog, no release, no Lesson binding, no shared database write, not counted in the ≤2 track cap. The P3.5 gate stays NOT MET and Circuit still needs its genuine OWNER_SIGNOFF. D-2..D-5 use the SPEC recommendations; D-3 (KHTN 9 outcome text and provenance) remains open with the curriculum reviewer.
 
+### Post-release status — 2026-11-01
+
+The prototype-only state above was superseded after owner authorization to publish. Read-only shared DB verification confirms FL-25 LabRelease v1 ACTIVE, `SHARED_LIBRARY`, `releaseCleared=true`, with one matching `OWNER_SIGNOFF` approval on its digest. P3.5 remains tracked NOT MET; the release does not close D-3 outcome provenance or representative-device/accessibility QA. The release policy requires owner signoff only, not separate delegated curriculum/science/safety/rights reviews.
+
 ## Session 2026-10-31
 
 ### BE

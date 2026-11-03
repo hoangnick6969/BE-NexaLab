@@ -113,7 +113,7 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       nodes: [{ id: "battery", type: "battery" }, { id: "bulb", type: "bulb" }, { id: "switch", type: "switch", closed }],
       edges: [{ source: "battery", target: "bulb" }, { source: "bulb", target: "switch" }, { source: "switch", target: "battery" }],
     });
-    const reviewerKinds = ["OWNER_SIGNOFF"] as const;
+    const reviewerKinds = ["DEV_APPROVAL"] as const;
     let httpApp: INestApplication | undefined;
     const previousJwtSecret = process.env.JWT_SECRET;
     try {
@@ -247,16 +247,12 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       const reviewBody = (kind: typeof reviewerKinds[number]) => ({
         kind, decision: "APPROVE" as const, releaseDigest, note: `TEST FIXTURE ONLY — synthetic ${kind} approval mechanics, not a real review`,
         evidence: {
-          curriculumMapping: "TEST FIXTURE ONLY — isolated B22 mapping mechanics",
-          sourceReferences: ["TEST FIXTURE ONLY — synthetic source"],
-          scientificGoldenCases: "TEST FIXTURE ONLY — CLOSED ON and OPEN OFF",
-          rubric: "TEST FIXTURE ONLY — predictions plus explanation",
-          safetyAssessment: "TEST FIXTURE ONLY — no physical electricity",
-          rightsAssessment: "TEST FIXTURE ONLY — no external assets",
+          developerCheck: "TEST FIXTURE ONLY — developer checked source, model and release tuple",
+          agentCheck: "TEST FIXTURE ONLY — agent checked contract and release risks",
         },
       });
-      await expect(service.review(draftA.id, { user: { sub: unauthorized.id } }, reviewBody("OWNER_SIGNOFF")))
-        .rejects.toMatchObject({ response: { code: "LAB_OWNER_SIGNOFF_NOT_AUTHORIZED" } });
+      await expect(service.review(draftA.id, { user: { sub: unauthorized.id } }, reviewBody("DEV_APPROVAL")))
+        .rejects.toMatchObject({ response: { code: "LAB_DEV_APPROVAL_NOT_AUTHORIZED" } });
       let activationError: unknown;
       try { await service.activate(labId, draftA.id, adminReq, { reason: "TEST FIXTURE ONLY — incomplete review must not activate" }); }
       catch (error) { activationError = error; }
@@ -264,12 +260,12 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       expect((activationError as ConflictException).getResponse()).toMatchObject({ code: "LAB_RELEASE_NOT_APPROVED" });
 
       await expect(service.review(draftA.id, adminReq, {
-        ...reviewBody("OWNER_SIGNOFF"), releaseDigest: "0".repeat(64),
+        ...reviewBody("DEV_APPROVAL"), releaseDigest: "0".repeat(64),
       })).rejects.toMatchObject({ response: { code: "LAB_RELEASE_DIGEST_MISMATCH" } });
       expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id } })).toBe(0);
-      await expect(service.review(draftA.id, adminReq, { ...reviewBody("OWNER_SIGNOFF"), evidence: undefined }))
-        .rejects.toMatchObject({ response: { code: "LAB_OWNER_SIGNOFF_EVIDENCE_REQUIRED" } });
-      const publishBody = { reason: "TEST ONLY explicit ADMIN publish", releaseDigest, evidence: reviewBody("OWNER_SIGNOFF").evidence };
+      await expect(service.review(draftA.id, adminReq, { ...reviewBody("DEV_APPROVAL"), evidence: undefined }))
+        .rejects.toMatchObject({ response: { code: "LAB_DEV_APPROVAL_EVIDENCE_REQUIRED" } });
+      const publishBody = { reason: "TEST ONLY explicit ADMIN publish", releaseDigest, evidence: reviewBody("DEV_APPROVAL").evidence };
       process.env.JWT_SECRET = "isolated-p36-http-only-secret-at-least-32-characters";
       httpApp = await NestFactory.create({
         module: class IsolatedPublishTestModule {},
@@ -304,11 +300,11 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       expect((await http(publishPath, undefined, publishBody)).status).toBe(401);
       expect((await http(publishPath, studentToken, publishBody)).status).toBe(403);
       await expect(service.publish(labId, draftA.id, { user: { sub: unauthorized.id, role: "TEACHER" } }, publishBody))
-        .rejects.toMatchObject({ response: { code: "LAB_OWNER_SIGNOFF_NOT_AUTHORIZED" } });
+        .rejects.toMatchObject({ response: { code: "LAB_DEV_APPROVAL_NOT_AUTHORIZED" } });
       await expect(service.publish(labId, draftA.id, adminReq, { ...publishBody, releaseDigest: "0".repeat(64) }))
         .rejects.toMatchObject({ response: { code: "LAB_RELEASE_DIGEST_MISMATCH" } });
       await expect(service.publish(labId, draftA.id, adminReq, { ...publishBody, evidence: undefined })).rejects.toThrow();
-      await expect(service.publish(labId, draftA.id, adminReq, { ...publishBody, evidence: { ...publishBody.evidence, rightsAssessment: "" } })).rejects.toThrow();
+      await expect(service.publish(labId, draftA.id, adminReq, { ...publishBody, evidence: { ...publishBody.evidence, agentCheck: "" } })).rejects.toThrow();
       const originalGolden = configA.goldenCases;
       await p.simulationConfigVersion.update({ where: { id: configA.id }, data: { goldenCases: [{ challengeId, label: "Wrong scientific case", labState: state(true), expectedVerdict: "not_passed" }] } });
       await expect(service.publish(labId, draftA.id, adminReq, publishBody)).rejects.toMatchObject({ response: { code: "LAB_CONFIG_VALIDATION_FAILED" } });
@@ -329,7 +325,7 @@ describe.skipIf(!db)("isolated Foundational Lab release lifecycle", () => {
       expect(retriedA.id).toBe(activeA.id);
       expect(await p.labReleaseReview.count({ where: { releaseId: draftA.id } })).toBe(1);
       const receipt = await p.labReleaseReview.findFirstOrThrow({ where: { releaseId: draftA.id } });
-      expect(receipt).toMatchObject({ reviewerId: admin.id, kind: "OWNER_SIGNOFF", releaseDigest, evidence: publishBody.evidence });
+      expect(receipt).toMatchObject({ reviewerId: admin.id, kind: "DEV_APPROVAL", releaseDigest, evidence: publishBody.evidence });
       expect(receipt.createdAt).toBeInstanceOf(Date);
       expect((await p.labRelease.findUniqueOrThrow({ where: { id: draftA.id } })).snapshot).toEqual(draftA.snapshot);
       expect(await p.attempt.findMany({ where: { challengeId }, orderBy: { id: "asc" } })).toEqual(historicalRows);

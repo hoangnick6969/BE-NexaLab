@@ -1,7 +1,7 @@
 ---
 id: PLAN-FL-03-K3
-status: technical-candidate-unapproved
-updated: 2026-10-31
+status: active-release-limited-scope
+updated: 2026-11-01
 supersedes-draft: fl-03-density-lab-plan.md (untracked draft 2026-10-30; see §2 A1)
 companions:
   - SPEC.md
@@ -11,7 +11,7 @@ companions:
 ---
 # FL-03 Khối lượng riêng + Shared Kit K3 "Bàn chất lỏng" — audit và kế hoạch triển khai
 
-> **TECHNICAL CANDIDATE / UNAPPROVED.** Code và fixture FL-03 là bằng chứng kỹ thuật, không duyệt Outcome mapping, hằng số khoa học, rubric, quyền tài sản hay release. Receipt `OWNER_SIGNOFF` trong isolated DB chỉ kiểm thử cơ chế, không phải signoff thật. P3.5 chưa đạt và P3.7 chưa mở; mọi Outcome dưới đây vẫn `PROPOSED_UNAPPROVED`.
+> **Trạng thái 2026-11-01: FL-03 Density v1 đang ACTIVE trong shared database.** SELECT-only readback xác nhận `SHARED_LIBRARY`, `releaseCleared=true`, pack active và `OWNER_SIGNOFF` thật trên digest. Release hiện có phạm vi activity density đã bind, không đồng nghĩa toàn bộ K3/FL-03 portfolio đã xong hay có reviewer độc lập. `OWNER_SIGNOFF_V1` chỉ bắt buộc owner ADMIN ký; nguồn, khoa học, rubric, an toàn và rights được ghi trong evidence của owner, chưa có các reviewer độc lập bắt buộc. P3.5 vẫn được tracking là NOT MET; các outcome/provenance và QA thiết bị/accessibility còn mở.
 
 ## Cách đọc tài liệu
 
@@ -318,7 +318,7 @@ v1 dựng toàn bộ bằng procedural geometry + CanvasTexture, không GLB, kh�
 | **3. Model + rubric BE** | M-1 `density-bench@1.0.0` + schema + fixtures G/B/I (§5.7). M-2 activity/rubric `density-stations@1` trong registry. M-3 pack/config/biến thể (synthetic, isolated DB). M-4 integration: launch, submit, replay, idempotency, expiry, revoke. | Golden/invalid xanh trong isolated PG | 4–5 ngày |
 | **4. FL-03 FE** | F-1 `DensityNotebook` (5 tab, bảng SGK). F-2 `Density2DStage`. F-3 `Density3DStage` ghép K3. F-4 draft/F5 restore theo run + schema. F-5 kết quả theo R1–R7, phản hồi theo trạm. F-6 i18n vi/en. | 2D và 3D cho cùng evidence với cùng thao tác | 7–9 ngày |
 | **5. QA** | Q-1 Playwright mocked (2D, 3D, mobile 390×844, keyboard-only, reduced motion). Q-2 browser thật FE → BE → isolated PG, 1 attempt `passed` + 1 `needs_practice`. Q-3 parity test 2D/3D (so evidence). Q-4 đo hiệu năng trên Chromebook/Celeron, tablet, điện thoại tầm trung. Q-5 audit a11y (axe + thủ công). | Báo cáo đo thực tế, không suy diễn | 3–4 ngày |
-| **6. Release** | Freeze tuple, digest; OWNER_SIGNOFF thật; bind lesson B13/B14 (đã review); activation; Class Lab assignment reuse | Release FL-03 | Theo lịch owner |
+| **6. Release** | Freeze tuple, digest; dev/agent double check và ADMIN `DEV_APPROVAL` cho draft mới; bind lesson đã review; activation; Class Lab assignment reuse | Release FL-03 | Theo lịch release |
 
 Phase 2 và Phase 3 chạy song song được (khác repo, khác file). Phase 4 cần cả hai.
 
@@ -392,7 +392,7 @@ Built on branch `feat/fl03-runtime-registry` at the owner's request, ahead of th
 
 ## Open Gates — trạng thái hiện tại
 
-- **FL-03 và FL-10 đều là Technical Candidate.** Code, test và dữ liệu DB/receipt fixture chỉ chứng minh cơ chế kỹ thuật trong phạm vi đã ghi; không chứng minh nội dung học liệu, khoa học, an toàn hay quyền sử dụng đã được duyệt. FL-10 có implementation spec riêng nhưng không kế thừa approval từ FL-03 hoặc ngược lại.
-- **P3.5 chưa đạt:** cần owner thật xác nhận chính xác mapping và model Circuit trên digest thật trước khi mở track Lab thứ hai theo phase plan. Receipt giả lập trong isolated DB không đáp ứng gate này. Các triển khai FL-03/FL-10 đã làm trước gate phải được ghi là ngoại lệ/kỹ thuật, không diễn giải lại phase gate thành đã đạt.
-- **Trước release FL-03/FL-10:** cần review nguồn/Outcome, model, rubric, safety/rights; `OWNER_SIGNOFF` thật trên immutable release digest, QA accessibility và thiết bị đại diện, rồi xác minh activation/access. Chưa có bằng chứng các điều kiện này hoàn tất.
+- **FL-03 / FL-10 release state:** FL-03 Density v1 and FL-10 Mass Conservation v1 are active in the shared DB as of 2026-11-01. FL-10 is one conservation-of-mass activity, not full FL-10 stoichiometry coverage. Their publication does not transfer approval between Labs.
+- **Remaining review and QA:** `OWNER_SIGNOFF_V1` requires one owner ADMIN signoff and records the owner's source/curriculum/science/rubric/safety/rights assessment. Separate subject-matter reviewer approvals are not required by current code. Resolve outstanding source/outcome issues, accessibility and representative-device QA; do not describe these as completed independent reviews.
+- **P3.5 remains tracked NOT MET:** the later releases are owner-authorized releases, not retroactive evidence that every phase gate passed. Reconcile the recorded exception and complete remaining compatibility/review evidence before expanding the portfolio.
 - **P3.7 chưa mở:** không suy từ số Lab có code, seed, hay `ACTIVE` trong isolated DB ra tiến độ portfolio/release production. Xem [phase plan](lab-pipeline-phase-plan.md) là nguồn chuẩn cho phase và gate.

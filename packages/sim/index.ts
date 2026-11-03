@@ -1,6 +1,10 @@
 import { z } from "zod";
 export { evaluateMassConservation } from "./mass-conservation";
 export { simulateBuoyancy } from "./buoyancy";
+export { evaluateLeverBench, classifyLeverCase } from "./lever-bench";
+export * from "./gene-expression";
+export { ecologyTolerance, ecologyToleranceSchema, ECOLOGY_SPECIES, ECOLOGY_SITES, ECOLOGY_POPULATIONS, ECOLOGY_AGE_SAMPLES, fraction, pyramidFor } from "./ecology-tolerance";
+export type { EcologyToleranceState, Fraction } from "./ecology-tolerance";
 export const VERSION = "1.0.0";
 const part = z.object({
   id: z.string().min(1).max(60),

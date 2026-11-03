@@ -1,0 +1,66 @@
+{
+  "lab": {
+    "id": "lever-equilibrium",
+    "modelRef": "lever-bench@1.0.0",
+    "topicCode": "KHTN8-L18",
+    "title": "Moment lực và đòn bẩy",
+    "learningObjective": "Mô tả tác dụng làm quay của lực; tính M = F·d; kiểm tra F₁d₁ = F₂d₂ và phân tích tình huống đòn bẩy.",
+    "challengeId": "fl06_001",
+    "reason": "Owner yêu cầu tạo và phát hành FL-06 K5 theo B18/B19; các thông số là giả định kỹ thuật đã chốt."
+  },
+  "lessonIds": [
+    "pack-structured-941e733a8148b29a2860f45dd12302baf2aebf0b-v1",
+    "pack-structured-82f423acb626f6880e86029916d078eee5361525-v1"
+  ],
+  "activity": {
+    "key": "lever-investigation",
+    "outcomeCodes": ["KHTN8-B18-O01", "KHTN8-B18-O02", "KHTN8-B19-O01", "KHTN8-B19-O02"],
+    "objective": "Mô tả tác dụng làm quay của lực; tính moment; tìm cân bằng và vận dụng đòn bẩy trong mô hình lý tưởng.",
+    "materials": ["Thanh đòn 500 mm với 11 lỗ", "Điểm tựa cố định O", "Quả nặng 0,5–5,0 N", "Lực kế 0–5,0 N, độ chia 0,1 N"],
+    "setup": "O ở 0 mm. Mỗi bên có 5 lỗ cách nhau 50 mm. Bàn A–C chỉ có lực kéo xuống; D dùng sơ đồ riêng.",
+    "procedure": ["A: dự đoán rồi quan sát tải ở trái, tại O và phải", "B: ghi F, d và tính M = F·d với d ở thanh ngang", "C: dự đoán rồi điều chỉnh lực kế trên preset C1, C2 hoặc C3 để kiểm tra cân bằng", "D: xác định vị trí O, tải, lực tác dụng; kết luận lợi về lực và đổi hướng lực"],
+    "variables": [{"name":"Lực F","unit":"N","role":"independent"},{"name":"Cánh tay đòn d","unit":"m","role":"independent"},{"name":"Moment M","unit":"N·m","role":"dependent"}],
+    "observations": ["Chiều quay hoặc nằm ngang", "Moment phụ thuộc lực và khoảng cách tới O", "Hai moment đối chiều bằng nhau khi cân bằng"],
+    "expectedResult": "Lực qua O có moment bằng 0; bên trái tạo moment CCW dương; cân bằng khi tổng moment bằng 0. C1: 0,5 N; C2: 3,0 N; C3: 2,5 N.",
+    "explanation": "M = F·d với d là khoảng cách vuông góc từ trục tới giá lực. Tại thanh ngang, lực kéo xuống nên d bằng trị tuyệt đối vị trí móc. Lợi về lực khi cánh tay đòn lực tác dụng dài hơn cánh tay đòn tải. Đổi hướng lực khi O nằm giữa tải và lực tác dụng.",
+    "safety": "Thí nghiệm ảo; không suy diễn sức nâng hoặc tải trọng an toàn của dụng cụ thật.",
+    "limitations": "Giả định kỹ thuật: thanh cứng, bỏ qua khối lượng thanh và ma sát trục, g = 10 m/s². Chỉ tính moment ở thanh ngang; góc nghiêng là hiển thị định tính. Không thay thế kỹ năng thao tác dụng cụ thật hoặc chứng nhận khoa học độc lập.",
+    "modality": "deterministic-simulation",
+    "sources": [{"title":"FL-06 Model Slice Spec và kế hoạch K5, 2026-11-01; tham chiếu B18/B19 KHTN8, mapping owner-authorized Technical Assumption","license":"INTERNAL"}],
+    "reviews": {"ownerSignoffPending":true}
+  },
+  "pack": {
+    "key": "lever-bench",
+    "labId": "lever-equilibrium",
+    "modelRef": "lever-bench@1.0.0",
+    "activityVersionId": "pending-api-id",
+    "template": {
+      "units": {"force":"mN","position":"mm","moment":"mN_mm"},
+      "ranges": {},
+      "initialState": {"fixtureId":"lever-bench-reference-v1","attachments":[]},
+      "limitations": "Giả định kỹ thuật: thanh lý tưởng, O cố định, lực kéo xuống; d = |position| chỉ tại theta = 0. Góc nghiêng là hiển thị định tính. D là sơ đồ ứng dụng riêng.",
+      "goldenCases": [
+        {"label":"Tải trái","state":{"fixtureId":"lever-bench-reference-v1","attachments":[{"kind":"WEIGHT","positionMillimetres":-100,"forceMilliNewtons":1000}]},"expectedVerdict":"passed","expectedOutputs":{"displayState":"TILT_LEFT","netMomentMilliNewtonMillimetres":100000},"tolerance":0},
+        {"label":"Tải tại O","state":{"fixtureId":"lever-bench-reference-v1","attachments":[{"kind":"WEIGHT","positionMillimetres":0,"forceMilliNewtons":1000}]},"expectedVerdict":"passed","expectedOutputs":{"displayState":"LEVEL","netMomentMilliNewtonMillimetres":0},"tolerance":0},
+        {"label":"Tải phải","state":{"fixtureId":"lever-bench-reference-v1","attachments":[{"kind":"WEIGHT","positionMillimetres":100,"forceMilliNewtons":1000}]},"expectedVerdict":"passed","expectedOutputs":{"displayState":"TILT_RIGHT","netMomentMilliNewtonMillimetres":-100000},"tolerance":0},
+        {"label":"C1 cân bằng 0,5 N","state":{"fixtureId":"lever-bench-reference-v1","attachments":[{"kind":"WEIGHT","positionMillimetres":-100,"forceMilliNewtons":1000},{"kind":"GAUGE","positionMillimetres":200,"forceMilliNewtons":500}]},"expectedVerdict":"passed","expectedOutputs":{"balance":"BALANCED","netMomentMilliNewtonMillimetres":0},"tolerance":0},
+        {"label":"C2 cân bằng 3,0 N","state":{"fixtureId":"lever-bench-reference-v1","attachments":[{"kind":"WEIGHT","positionMillimetres":150,"forceMilliNewtons":2000},{"kind":"GAUGE","positionMillimetres":-100,"forceMilliNewtons":3000}]},"expectedVerdict":"passed","expectedOutputs":{"balance":"BALANCED","netMomentMilliNewtonMillimetres":0},"tolerance":0},
+        {"label":"C3 cân bằng 2,5 N","state":{"fixtureId":"lever-bench-reference-v1","attachments":[{"kind":"WEIGHT","positionMillimetres":-250,"forceMilliNewtons":500},{"kind":"GAUGE","positionMillimetres":50,"forceMilliNewtons":2500}]},"expectedVerdict":"passed","expectedOutputs":{"balance":"BALANCED","netMomentMilliNewtonMillimetres":0},"tolerance":0}
+      ]
+    },
+    "visualAssetVersionId": null,
+    "semanticMap": {"lever":"lever","fulcrum":"fulcrum","weight":"weight","force-gauge":"force-gauge"},
+    "bindings": [],
+    "challengeTemplates": [],
+    "reviews": {"ownerSignoffPending":true},
+    "reason": "FL-06 K5: apparatus procedural 2D/3D; sáu golden cases tính trên model server."
+  },
+  "ownerEvidence": {
+    "curriculumMapping": "Owner cho phép mapping Technical Assumption B18/B19; bốn outcome KHTN8-B18-O01/O02, KHTN8-B19-O01/O02 và hai Lesson pack B18/B19 được kiểm tra trên Supabase. Không tuyên bố thao tác dụng cụ thật.",
+    "sourceReferences": ["_bmad-output/specs/spec-lab-pipeline/fl-06-lever-model-slice-spec.md", "_bmad-output/specs/spec-lab-pipeline/fl-06-lever-k5-plan.md", "Hai Lesson pack KHTN8-L18 và KHTN8-L19 đã released trên Supabase"],
+    "scientificGoldenCases": "Model integer mN/mm; M = F·d, net moment CCW−CW; sáu golden cases trái/O/phải và nghiệm C1 500 mN, C2 3000 mN, C3 2500 mN. Đây là mô hình giáo dục lý tưởng với giả định kỹ thuật owner-authorized.",
+    "rubric": "lever-investigation@1.0.0: sáu event tuần tự; server tính lại chiều quay, F/d/M, dự đoán cân bằng, lực cân bằng và phân loại ứng dụng; câu trả lời sai không được renderer tự chấm đạt.",
+    "safetyAssessment": "Chỉ mô phỏng ảo; giới hạn lực 5 N và vị trí ±250 mm. Không đưa ra giới hạn an toàn cho dụng cụ thực.",
+    "rightsAssessment": "Geometry procedural, SVG và lời hướng dẫn nội bộ; không sao chép hình SGK. Tham chiếu nguồn B18/B19 được ghi trong candidate; owner chấp thuận phát hành với nhãn Technical Assumption."
+  }
+}

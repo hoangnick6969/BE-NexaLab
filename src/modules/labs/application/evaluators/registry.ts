@@ -1,9 +1,10 @@
 import { circuitBulbEvaluator } from "./circuit-bulb-checkpoints.evaluator";
 import { eyeOpticsEvaluator } from "./eye-anatomy-optics.evaluator";
 import { z } from "zod";
-import { CHECKPOINT_ACTIVITIES, EM_INDUCTION_RUBRIC } from "../checkpoint-activities";
+import { CHECKPOINT_ACTIVITIES, ECOLOGY_TOLERANCE_RUBRIC, EM_INDUCTION_RUBRIC } from "../checkpoint-activities";
 import { densityStationsEvaluator } from "./density-stations.evaluator";
 import { buoyancyLabEvaluator } from "./buoyancy-lab.evaluator";
+import { geneProteinStationsEvaluator } from "./gene-protein-stations.evaluator";
 import { legacyChallengeEvaluator } from "./legacy-challenge.evaluator";
 import type { LabEvaluation, LabEvaluator, LabRuntimeConfig } from "./lab-evaluator";
 
@@ -54,16 +55,21 @@ export function createLabEvaluatorRegistry(evaluators: ReadonlyArray<LabEvaluato
 export type LabEvaluatorRegistry = ReturnType<typeof createLabEvaluatorRegistry>;
 
 /** Every released activity rubric. Add new Lab evaluators here; never edit a released one. */
-const inductionActivity = CHECKPOINT_ACTIVITIES.find((activity) => activity.rubricRef === EM_INDUCTION_RUBRIC)!;
-const inductionEvaluator: LabEvaluator<any> = {
-  rubricRef: inductionActivity.rubricRef,
-  activity: { key: inductionActivity.activityKey, version: inductionActivity.activityVersion },
-  modelRefs: [inductionActivity.modelRef],
-  rendererKey: inductionActivity.rendererKey,
-  envelope: "checkpoints",
-  evidenceSchema: z.object(inductionActivity.submission).strict().superRefine(inductionActivity.refine),
-  evaluate: (_labRunId, evidence) => inductionActivity.evaluate(evidence.checkpoints, evidence.explanation),
-};
+/** Checkpoint activities submit `checkpoints` + `explanation` and are scored by their own evaluator. */
+function checkpointEvaluator(rubricRef: string): LabEvaluator<any> {
+  const activity = CHECKPOINT_ACTIVITIES.find((item) => item.rubricRef === rubricRef)!;
+  return {
+    rubricRef: activity.rubricRef,
+    activity: { key: activity.activityKey, version: activity.activityVersion },
+    modelRefs: [activity.modelRef],
+    rendererKey: activity.rendererKey,
+    envelope: "checkpoints",
+    evidenceSchema: z.object(activity.submission).strict().superRefine(activity.refine),
+    evaluate: (_labRunId, evidence) => activity.evaluate(evidence.checkpoints, evidence.explanation),
+  };
+}
+const inductionEvaluator = checkpointEvaluator(EM_INDUCTION_RUBRIC);
+const ecologyToleranceEvaluator = checkpointEvaluator(ECOLOGY_TOLERANCE_RUBRIC);
 const fl10Evaluator: LabEvaluator<any> = {
   rubricRef: "mass-conservation-poea@1.0.0",
   activity: { key: "mass-conservation-poea", version: 1 },
@@ -73,4 +79,11 @@ const fl10Evaluator: LabEvaluator<any> = {
   evidenceSchema: z.unknown(),
   evaluate: () => { throw new Error("FL-10 requires server event history"); },
 };
-export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, fl10Evaluator, densityStationsEvaluator, eyeOpticsEvaluator, buoyancyLabEvaluator]);
+const fl06Evaluator: LabEvaluator<any> = {
+  rubricRef: "lever-investigation@1.0.0",
+  activity: { key: "lever-investigation", version: 1 },
+  modelRefs: ["lever-bench@1.0.0"], rendererKey: "lever-bench", envelope: "labState",
+  evidenceSchema: z.object({}).strict(),
+  evaluate: () => { throw new Error("FL-06 requires server event history"); },
+};
+export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, ecologyToleranceEvaluator, fl10Evaluator, fl06Evaluator, densityStationsEvaluator, geneProteinStationsEvaluator, eyeOpticsEvaluator, buoyancyLabEvaluator]);

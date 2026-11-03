@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { simulateBuoyancy, buoyancyConfigSchema } from "../../../../packages/sim/buoyancy";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, emInduction, eye, eyeParts, evaluateMassConservation } from "../../../../packages/sim";
 import { eyeOptics } from "../../../../packages/sim/eye-optics";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, eye, eyeParts, evaluateMassConservation, evaluateLeverBench, geneExpression } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -35,6 +35,17 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     outputs: { weightN: "number", buoyantForceN: "number", springForceN: "number", overflowM3: "number" },
     requiredSemanticIds: ["specimen", "dynamometer", "overflow-can", "collector"],
     observationOnly: { unsupportedParams: "buoyancy model uses pinned specimen and fluid parameters" },
+  },
+  "lever-bench@1.0.0": {
+    labId: "lever-equilibrium", engineVersion: "1.0.0",
+    simulate: (state) => {
+      const result = evaluateLeverBench(state);
+      if (!result.ok) throw new Error(`Invalid lever state: ${result.code}`);
+      return result.value;
+    },
+    outputs: { netMomentMilliNewtonMillimetres: "number", displayState: "string", balance: "string" },
+    requiredSemanticIds: ["lever", "fulcrum", "weight", "force-gauge"],
+    observationOnly: { unsupportedParams: "mô hình đòn bẩy dùng trạng thái móc đã kiểm tra thay vì tham số thử thách" },
   },
   "mass-conservation@1.0.0": {
     labId: "mass-conservation",
@@ -86,6 +97,22 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     outputs: { version: "string", explore: "array" },
     requiredSemanticIds: ["balance", "cylinder", "ruler"],
     observationOnly: { unsupportedParams: "mô hình khối lượng riêng không dùng tham số thử thách" },
+  },
+  "gene-expression@1.0.0": {
+    labId: "gene-protein",
+    engineVersion: ENGINE_VERSION,
+    simulate: geneExpression,
+    outputs: { version: "string", mrna: "string", aminoAcids: "array", codons: "array" },
+    requiredSemanticIds: ["dna", "mrna", "ribosome"],
+    observationOnly: { unsupportedParams: "mô hình từ gene đến protein không dùng tham số thử thách" },
+  },
+  "ecology-tolerance@1.0.0": {
+    labId: "ecology-tolerance",
+    engineVersion: ENGINE_VERSION,
+    simulate: ecologyTolerance,
+    outputs: { setup: "string", zone: "string", widthDeciC: "number", candidates: "array", count: "number", amount: "number", unit: "string", pyramid: "string" },
+    requiredSemanticIds: ["pond", "thermometer", "tolerance-graph", "population-plot", "age-pyramid"],
+    observationOnly: { unsupportedParams: "mô hình sinh thái không dùng tham số thử thách" },
   },
   "chemistry@1.0.0": {
     labId: "chemistry",

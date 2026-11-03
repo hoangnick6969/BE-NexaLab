@@ -40,6 +40,11 @@ export const CHALLENGE_PARAMETERS: Record<
   string,
   { modelRef: string; rangeReview: "pending" | "approved"; params: Record<string, NumberParam | ChoiceParam> }
 > = {
+  "lever-equilibrium": {
+    modelRef: "lever-bench@1.0.0",
+    rangeReview: "pending",
+    params: {},
+  },
   "mass-conservation": {
     modelRef: "mass-conservation@1.0.0",
     rangeReview: "pending",
@@ -86,6 +91,12 @@ export const CHALLENGE_PARAMETERS: Record<
   buoyancy: { modelRef: "buoyancy@1.0.0", rangeReview: "pending", params: {} },
   // FL-16: observation-only model, no teacher-adjustable challenge parameters.
   "eye-optics": { modelRef: "eye-optics@1.0.0", rangeReview: "pending", params: {} },
+  // FL-27: no learner-tunable parameters. The gene variant is pinned per run by the server (gene-variants.ts).
+  "gene-protein": {
+    modelRef: "gene-expression@1.0.0",
+    rangeReview: "pending",
+    params: {},
+  },
   eye: {
     modelRef: "eye@1.0.0",
     rangeReview: "pending",
@@ -96,6 +107,12 @@ export const CHALLENGE_PARAMETERS: Record<
   // FL-25 private prototype: observation-only model with a pinned checkpoint rubric; no challenge parameters.
   "em-induction": {
     modelRef: "em-induction@1.0.0",
+    rangeReview: "pending",
+    params: {},
+  },
+  // FL-20: observation-only model with a pinned checkpoint rubric; no challenge parameters.
+  "ecology-tolerance": {
+    modelRef: "ecology-tolerance@1.0.0",
     rangeReview: "pending",
     params: {},
   },
