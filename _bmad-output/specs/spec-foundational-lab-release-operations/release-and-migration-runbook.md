@@ -2,6 +2,8 @@
 
 **Verified against source and read-only release inventory: 2026-11-01.** Recheck the target before acting; this document is not a production authorization.
 
+**FL-07 preparation:** see [`docs/operations/fl07-publication-readiness.md`](../../../docs/operations/fl07-publication-readiness.md) and `npm run release:fl07`. The candidate binds the read-only verified B27 Lesson/Outcome. Preparation and exact-digest owner publication are separate explicit operations; no FL-07 shared release or approval is implied by this pointer.
+
 **FL-06 execution receipt:** publication completed through the authenticated Admin API at `2026-11-01T17:02:37.270Z`; Supabase readback confirms v1 ACTIVE, `SHARED_LIBRARY`, `releaseCleared=true`. Exact receipt: [`docs/operations/fl06-release-receipt.json`](../../../docs/operations/fl06-release-receipt.json). The operator's explicit authorization covered candidate creation, automated OWNER_SIGNOFF and publication. Credentials are not stored in the receipt or repository.
 
 **FL-06 catalog thumbnail (FE-only asset):** Generated from the production `K5Stage3D` using the shared static thumbnail harness. Fixture and image are in the sibling FE repository: [`lab-thumbnail-capture.tsx`](../../../../nexalab-fe/src/features/labs/dev/lab-thumbnail-capture.tsx), [`lever-equilibrium.webp`](../../../../nexalab-fe/src/features/labs/assets/thumbnails/lever-equilibrium.webp). The image is 1280×720 WebP (18,540 bytes); the exact-ID asset is discovered by `lab-info.ts`. It is not part of the LabRelease digest, SimulationPack, Supabase content, or schema migration.

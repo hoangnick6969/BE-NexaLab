@@ -18,6 +18,7 @@
     "predb:seed:fl27-isolated": "node scripts/assert-isolated-db.mjs database seed",
     "db:seed:fl27-isolated": "tsx scripts/seed-fl27-gene-isolated.ts",
     "release:fl06": "node scripts/release-fl06-lever.mjs",
+    "release:fl07": "node scripts/release-fl07-thermal.mjs",
     "fl27:data:prepare": "tsx scripts/prepare-fl27-publication.ts",
     "prefl27:data:publish": "node scripts/assert-isolated-db.mjs FL27 candidate publication",
     "fl27:data:publish": "tsx scripts/publish-fl27-candidate.ts",

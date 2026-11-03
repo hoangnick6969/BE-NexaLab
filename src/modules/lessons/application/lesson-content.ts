@@ -40,6 +40,7 @@ export const CHALLENGE_PARAMETERS: Record<
   string,
   { modelRef: string; rangeReview: "pending" | "approved"; params: Record<string, NumberParam | ChoiceParam> }
 > = {
+  "thermal-energy": { modelRef: "thermal-bench@1.0.0", rangeReview: "pending", params: {} },
   "lever-equilibrium": {
     modelRef: "lever-bench@1.0.0",
     rangeReview: "pending",
