@@ -115,3 +115,27 @@ Verified result:
 | Bài 41 foundational-labs | returns `ecology-tolerance` |
 
 No student run was made on the shared environment.
+
+## v1.1 — K8 EcoStage 3D pond (2026-11-03)
+
+Spec: `../specs/spec-fl-20-ecological-tolerance/k8-ecostage-v1.1.md`. FE branch `feat/fl-20-k8-ecostage` (worktree). Committed and pushed 2026-11-03 on owner request "Publish lại L20"; the owner opens the PRs. The server release v1 was not re-run because the activity is unchanged and the digest stays valid (V-5). Learners see v1.1 once the FE PR is merged and deployed.
+
+### What changed (FE only)
+- New kit `src/features/labs/biology/ecology/kit/`: `EcoStage`, `PondDiorama3D`, `FishSchool3D` + `fish-geometry.ts`, `Thermometer3D`, tiers, palette, motion tokens, dev preview `/dev/lab-kits/k8`.
+- `tolerance/PondView3D.tsx` renders the diorama with the same `.eco-pond[data-fish]` contract; `EcologyToleranceActivity` shows it by default, the tolerance graph becomes a card, "Xem sơ đồ 2D" toggles to the SVG scene.
+- READMEs (`labs/README.md`, `ecology/README.md`) updated.
+- 2026-11-03 owner review: the dev preview now follows the tilapia model by default ("auto" mood); out of range fish no longer fade but show the heat / cold response of V-6 (`FishSchool3D` moods `heat`, `cold`, `ECO_MOTION.stressSeconds` 6). Lab copy for `gone` updated.
+- 2026-11-03 owner review (V-7): per-question review block (`eco-review`, `eco-next`, chosen answer kept in view during the act phase); the result drawer now takes the question panel's box with one title and hides the panel underneath. Spec test updated for the extra "Câu tiếp theo" step; 3/3.
+
+### Verification
+| Check | Result |
+|---|---|
+| `tsc --noEmit`, `npm run build` | ok |
+| `tests/ecology-tolerance-lab.spec.ts` (separate Vite 5301, mocked API) | 3/3, including the new 3D/2D toggle test; re-run 3/3 after V-6 |
+| `tests/gene-protein-lab.spec.ts` (shared 3D code paths) | 4/4 |
+| Screenshots light 1440, dark 1280, phone 390 | no page errors; headless swiftshader runs tier low, shadows not judged |
+| sloplint | 0 FAIL |
+
+### Not done
+- Owner visual review of the 3D level; real-GPU check of the high tier (shadows, frame rate) on a school machine.
+- No change to BE code, release or shared data.

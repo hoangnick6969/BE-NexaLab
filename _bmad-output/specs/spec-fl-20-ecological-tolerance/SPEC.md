@@ -10,6 +10,8 @@ upstream:
   - ../spec-lab-pipeline/SPEC.md
   - ../spec-lab-pipeline/lab-pipeline-phase-plan.md
   - ../spec-lab-pipeline/lab-catalog-and-shared-kits-khtn8-9.md
+revisions:
+  - k8-ecostage-v1.1.md (2026-11-03, 3D pond diorama, presentation only, in review)
   - ../spec-lab-pipeline/lab-portfolio-20-slots-v1.md
   - ../spec-lab-pipeline/contract-v1.md
   - ../spec-fl-25-em-induction/SPEC.md
