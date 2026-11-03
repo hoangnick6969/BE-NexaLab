@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import { resolveModel } from "./sim-packs";
 import { normalizeVerdict } from "./simulation-versions";
@@ -254,7 +255,86 @@ const ecologyToleranceActivity: CheckpointActivity = {
   evaluate: (checkpoints, explanation) => evaluateEcologyToleranceActivity(checkpoints as any, explanation),
 };
 
-export const CHECKPOINT_ACTIVITIES: readonly CheckpointActivity[] = [circuitBulbActivity, emInductionActivity, ecologyToleranceActivity];
+// FL-21 food-web (see spec-fl-21-food-web)
+export const FOOD_WEB_ACTIVITY_KEY = "food-web-checkpoints";
+export const FOOD_WEB_RUBRIC = "food-web-checkpoints@1.0.0";
+const FOOD_WEB_MODEL = "food-web@1.0.0";
+const FW_CHECKPOINTS = ["ROLES", "CHAIN", "ENERGY", "HUNT", "DEFOREST", "CAUSES"] as const;
+type FwCheckpointId = (typeof FW_CHECKPOINTS)[number];
+/** Fixed state per checkpoint; CHAIN is learner-built and only schema-checked. */
+const FW_REQUIRED_STATE: Record<Exclude<FwCheckpointId, "CHAIN">, Record<string, unknown>> = {
+  ROLES: { setup: "roles", webId: "W1" },
+  ENERGY: { setup: "energy", webId: "W1", chain: ["co", "chau-chau", "ech", "ran"] },
+  HUNT: { setup: "remove", webId: "W1", speciesId: "ran" },
+  DEFOREST: { setup: "remove", webId: "W1", speciesId: "cay-xanh" },
+  CAUSES: { setup: "causes", webId: "W1" },
+};
+/** The species each removal question asks about. */
+const FW_ASKED: Record<"HUNT" | "DEFOREST", string> = { HUNT: "ech", DEFOREST: "sau" };
+const FW_ROLE_ITEMS = ["co", "ech", "nam-vi-khuan"] as const;
+const FW_CAUSE_IDS = ["bao-ton", "khai-thac", "o-nhiem", "pha-rung", "san-bat", "trong-rung"] as const;
+const fwRole = z.enum(["PRODUCER", "CONSUMER", "DECOMPOSER"]);
+const fwEffect = z.enum(["INCREASE", "DECREASE", "NO_DIRECT_EFFECT"]);
+const fwPrediction = {
+  ROLES: z.object({ co: fwRole, ech: fwRole, "nam-vi-khuan": fwRole }).strict(),
+  CHAIN: z.literal("CHAIN"),
+  ENERGY: z.object({ value: z.string().regex(/^\d{1,9}([.,]\d{1,3})?$/) }).strict(),
+  HUNT: fwEffect,
+  DEFOREST: fwEffect,
+  CAUSES: z.array(z.enum(FW_CAUSE_IDS)).max(FW_CAUSE_IDS.length)
+    .refine((ids) => ids.every((id, i) => i === 0 || ids[i - 1] < id), "Causes must be sorted and distinct"),
+} satisfies Record<FwCheckpointId, z.ZodTypeAny>;
+
+export function evaluateFoodWebActivity(checkpoints: Array<{ id: FwCheckpointId; state: unknown; prediction: unknown }>, explanation: string) {
+  const byId = new Map(checkpoints.map((checkpoint) => [checkpoint.id, checkpoint]));
+  const model = resolveModel(FOOD_WEB_MODEL);
+  const evaluated = FW_CHECKPOINTS.map((id) => {
+    const checkpoint = byId.get(id);
+    if (!checkpoint) throw new Error("All six food-web checkpoints are required");
+    // Deep equality ignores object key order, which stored JSONB does not keep.
+    if (id !== "CHAIN" && !isDeepStrictEqual(checkpoint.state, FW_REQUIRED_STATE[id]))
+      throw new Error(`Trạng thái thí nghiệm không khớp checkpoint ${id}`);
+    const observation = model.simulate(checkpoint.state);
+    const answer = fwPrediction[id].parse(checkpoint.prediction) as any;
+    let predictionCorrect: boolean;
+    if (id === "ROLES") predictionCorrect = FW_ROLE_ITEMS.every((item) => answer[item] === observation.roles[item]);
+    else if (id === "CHAIN") predictionCorrect = observation.valid && observation.startsWithProducer && observation.length >= 4;
+    else if (id === "ENERGY") {
+      const given = decimalFraction(answer.value);
+      predictionCorrect = given.num === observation.levelsKJ[observation.levelsKJ.length - 1] * given.den;
+    } else if (id === "HUNT" || id === "DEFOREST") predictionCorrect = answer === observation.effects[FW_ASKED[id]].effect;
+    else {
+      const expected = Object.entries(observation.causes).filter(([, cause]: any) => cause.disturbs).map(([cause]) => cause).sort();
+      predictionCorrect = JSON.stringify(answer) === JSON.stringify(expected);
+    }
+    return { id, scientificObservation: observation, prediction: checkpoint.prediction, predictionCorrect };
+  });
+  return assessment(evaluated, explanation === "A");
+}
+
+const foodWebActivity: CheckpointActivity = {
+  activityKey: FOOD_WEB_ACTIVITY_KEY,
+  activityVersion: 1,
+  modelRef: FOOD_WEB_MODEL,
+  rubricRef: FOOD_WEB_RUBRIC,
+  rendererKey: "food-web",
+  submission: {
+    checkpoints: z.array(z.object({ id: z.enum(FW_CHECKPOINTS), state: boundedState, prediction: z.unknown() }).strict()).length(6),
+    explanation: z.enum(["A", "B", "C"]),
+  },
+  refine: (evidence, ctx) => {
+    evidence.checkpoints.forEach((checkpoint: { id: FwCheckpointId; prediction: unknown }, index: number) => {
+      if (checkpoint.id !== FW_CHECKPOINTS[index])
+        ctx.addIssue({ code: "custom", message: "Food-web checkpoints must be ordered ROLES, CHAIN, ENERGY, HUNT, DEFOREST, CAUSES" });
+      else if (!fwPrediction[checkpoint.id].safeParse(checkpoint.prediction).success)
+        ctx.addIssue({ code: "custom", message: `Prediction is not a choice of checkpoint ${checkpoint.id}` });
+    });
+    limitEvidenceSize(evidence, ctx);
+  },
+  evaluate: (checkpoints, explanation) => evaluateFoodWebActivity(checkpoints as any, explanation),
+};
+
+export const CHECKPOINT_ACTIVITIES: readonly CheckpointActivity[] = [circuitBulbActivity, emInductionActivity, ecologyToleranceActivity, foodWebActivity];
 export const LEGACY_RUBRIC = "legacy-challenge@1.0.0";
 export const RUBRIC_REFS = [LEGACY_RUBRIC, ...CHECKPOINT_ACTIVITIES.map((activity) => activity.rubricRef)] as [string, ...string[]];
 export const checkpointActivityForRubric = (rubricRef: string) => CHECKPOINT_ACTIVITIES.find((activity) => activity.rubricRef === rubricRef) ?? null;

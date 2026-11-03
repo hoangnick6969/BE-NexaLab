@@ -4,6 +4,8 @@ export { evaluateLeverBench, classifyLeverCase } from "./lever-bench";
 export * from "./gene-expression";
 export { ecologyTolerance, ecologyToleranceSchema, ECOLOGY_SPECIES, ECOLOGY_SITES, ECOLOGY_POPULATIONS, ECOLOGY_AGE_SAMPLES, fraction, pyramidFor } from "./ecology-tolerance";
 export type { EcologyToleranceState, Fraction } from "./ecology-tolerance";
+export { foodWeb, foodWebSchema, foodWebChains, FOOD_WEB_SPECIES, FOOD_WEB_EDGES, FOOD_WEB_CAUSES, FOOD_WEB_ENERGY_CHAIN } from "./food-web";
+export type { FoodWebState, FoodWebSpeciesId, FoodWebRole, FoodWebCauseId } from "./food-web";
 export const VERSION = "1.0.0";
 const part = z.object({
   id: z.string().min(1).max(60),
