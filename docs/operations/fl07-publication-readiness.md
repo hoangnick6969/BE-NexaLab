@@ -1,6 +1,10 @@
-# FL-07 publication preparation
+# FL-07 publication readiness and execution record
 
 The production entry is `/labs/thermal-energy`, using the shared LabSpace and pinned LabRun. `/dev/lab-kits/thermal-energy` is a development preview and creates no learning evidence.
+
+## Production publication (2026-11-03)
+
+The user-authorized `npm run release:fl07 -- --publish` flow published `thermal-energy` through the authenticated Admin API. Supabase readback confirms Lab status `published`, scope `SHARED_LIBRARY`, `releaseCleared=true`; release v1 `ACTIVE`, ID `cmw0ik9c8000klw0shlremnhw`, digest `abf54034d30b61bdda2cbc522af34e02f1518b8c903140e8f3bd3dfd9b231fa0`. An `OWNER_SIGNOFF` review is stored against the same digest. No schema migration, seed command or direct SQL write was used. The script verified the exact B27 source binding and unchanged inventory for other Labs. An authenticated student `GET /labs` through the local API connected to the target Supabase returned FL-07; this is not a hosted FE/API browser check. No production LabRun or Attempt was created. Technical assumptions remain as stated below; hosted FE/API rollout, representative-device and accessibility acceptance remain separate.
 
 ## Authoring inputs
 
@@ -34,4 +38,4 @@ All numerical apparatus constants and ideal calorimeter assumptions remain techn
 - Static thumbnail uses the production `ThermalBench3D` via the common harness: 1280×720 WebP, 16,704 bytes, visually inspected. No API/database access during capture.
 - Independent scoped code reviews covered server, frontend and authoring. Two concrete findings were fixed: an already-APPROVED candidate now uses activation after checking its exact owner receipt, and both expandable notebook/assumption summaries have 44 px touch targets. No remaining concrete defect was reported by those reviews. Final FE rebuild passed after the CSS correction.
 
-The local fixture Lab/releases/users are explicitly TEST FIXTURE ONLY. No shared authoring, approval, publication, push or hosted deployment occurred. Remaining release operations are owner review of the prepared real B27 candidate, target-authorized DRAFT creation, exact-digest OWNER_SIGNOFF and rollout/target-environment acceptance. Physical-device and assistive-technology certification are not inferred from desktop viewport checks.
+The local fixture Lab/releases/users remain TEST FIXTURE ONLY and were not used for the production publication. The production release record above is separate from those fixtures. Hosted FE/API rollout, representative-device testing and assistive-technology acceptance remain unverified; desktop and isolated-browser evidence does not certify them.
