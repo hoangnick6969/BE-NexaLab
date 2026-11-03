@@ -10,9 +10,11 @@
  *   ...  node scripts/release-fl16-eye-optics.mjs publish <releaseId> <digest>
  *
  * `draft` binds the reviewed lesson (DIRECT_LESSON) in the release snapshot; `publish`
- * records OWNER_SIGNOFF with the evidence below and activates the release, which turns
- * the Lab into SHARED_LIBRARY with releaseCleared = true. Nothing is written directly
- * to the database.
+ * records the approval receipt the snapshot policy requires and activates the release,
+ * which turns the Lab into SHARED_LIBRARY with releaseCleared = true. On main the policy
+ * is DEV_APPROVAL_V1 ({developerCheck, agentCheck}); OWNER_SIGNOFF_V1 takes the six-field
+ * owner evidence. After `draft`, the approval can also be given in Admin, "Duyệt phát
+ * hành Lab". Nothing is written directly to the database.
  */
 const LAB_ID = "eye-optics";
 /** "Hệ thần kinh và các giác quan ở người" (topic KHTN8-L37), published, pack released, outcome KHTN8-B37-O04. Read-only check 2026-11-03. */
@@ -29,6 +31,12 @@ const EVIDENCE = {
   rubric: "eye-anatomy-optics@1.0.0: 8 part-name criteria (retina accepts Võng mạc or Màng lưới, case and diacritics ignored) + 3 optics scenarios (in focus within 0.5 D, distance within 2 cm, glasses sign, relaxed lens when far). Passed 11/11, partial from 6.",
   safetyAssessment: "Virtual model only; on-screen disclaimer that it is illustrative and not an eye examination or medical advice.",
   rightsAssessment: "All geometry and textures are procedural code in the repository; no third-party images, meshes or HDR files are shipped. Reference pictures were used only as visual guidance.",
+};
+
+/** DEV_APPROVAL_V1 evidence: what the developer and the agent checked before release. */
+const DEV_EVIDENCE = {
+  developerCheck: "Owner reviewed FL-16 on 2026-11-03: FL-16 branch merged with main; seed rows verified read-only (Lab eye-optics, config v1, pack eye-optics-ex-a v1, activity eye-anatomy-optics v1). SME checklist not yet signed; released on owner authority.",
+  agentCheck: "BE tests green after merging main; FE build, parity 7/7 and E2E (server rubric 11/11) green; activity spec and pack template pass the strict release validators; legacy eye Lab untouched.",
 };
 
 const api = process.env.NEXALAB_API ?? "http://127.0.0.1:4000/api";
@@ -74,10 +82,12 @@ async function main() {
     const releases = await call(`/admin/labs/${LAB_ID}/releases`, "GET", token);
     const release = releases.find((item) => item.id === releaseId);
     if (!release || release.digest !== digest) throw new Error("Release not found or digest differs from the draft you reviewed");
+    const policy = release.snapshot?.reviewPolicy;
+    if (policy !== "DEV_APPROVAL_V1" && policy !== "OWNER_SIGNOFF_V1") throw new Error("Unknown review policy " + policy);
     const active = await call(`/admin/labs/${LAB_ID}/releases/${releaseId}/publish`, "POST", token, {
-      reason: "Owner sign-off FL-16 (Kit EX-A) 2026-11-03",
+      reason: "Owner approval FL-16 (Kit EX-A) 2026-11-03",
       releaseDigest: digest,
-      evidence: EVIDENCE,
+      evidence: policy === "DEV_APPROVAL_V1" ? DEV_EVIDENCE : EVIDENCE,
     });
     console.log(JSON.stringify({ releaseId: active.id, version: active.version, status: active.status, activatedAt: active.activatedAt }, null, 1));
     return;

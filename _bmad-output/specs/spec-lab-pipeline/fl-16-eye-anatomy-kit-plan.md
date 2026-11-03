@@ -1,6 +1,6 @@
 ---
 id: PLAN-FL-16-EYE-OPTICS
-status: owner-approved-release-pending-activation
+status: released-owner-approved
 updated: 2026-11-02
 companions:
   - lab-catalog-and-shared-kits-khtn8-9.md
@@ -228,7 +228,28 @@ node scripts/release-fl16-eye-optics.mjs publish <releaseId> <digest>   # OWNER_
 
 **Gắn bài học.** Bản nháp gắn trực tiếp (DIRECT_LESSON) bài "Hệ thần kinh và các giác quan ở người" (`pack-structured-224cf04f147bbd206755a21b6189dda45903460d-v1`, topic `KHTN8-L37`, pack đã released, có outcome `KHTN8-B37-O04`). Kiểm tra chỉ đọc ngày 2026-11-03 cho thấy điều kiện tạo bản nháp đã đủ. Không ghi tay `foundationalLabId`: luồng release hiện tại dùng binding trực tiếp trong snapshot.
 
+**Sau khi gộp `main` (2026-11-03):** `main` dùng policy `DEV_APPROVAL_V1` cho mọi Lab trừ `lever-equilibrium`; bằng chứng là `{developerCheck, agentCheck}`, và màn Admin "Duyệt phát hành Lab" trên `main` duyệt được bản nháp loại này. Script tự chọn bằng chứng theo `snapshot.reviewPolicy`. Bản nháp vẫn phải tạo qua API (`draft`) vì giao diện chưa có nút tạo.
+
 Khi `publish` chạy xong, đổi `status` của tài liệu này sang `released-owner-approved` và ghi id release, digest.
+
+## 8E. Release đã kích hoạt (2026-11-03)
+
+Owner chạy `scripts/release-fl16-eye-optics.mjs` bằng tài khoản admin qua API local trỏ tới DB chung. Kiểm tra chỉ đọc sau đó:
+
+| Mục | Giá trị |
+|---|---|
+| Release | `cmw0c71b30003nm08dst26buj`, v1, **ACTIVE**, kích hoạt 2026-11-03T06:59:14Z |
+| Digest | `0ca46b5a0fea4e36fe0ea4751f2c8b46fe983e03e70e737b41a5200394a1aa31` |
+| Policy | `OWNER_SIGNOFF_V1` (API local chạy mã trước khi gộp `main`) |
+| Review | OWNER_SIGNOFF, APPROVE, reviewer `admin` |
+| Lab | `eye-optics`: SHARED_LIBRARY, releaseCleared=true, topicCode `KHTN8-L37` |
+| Bài học gắn | DIRECT_LESSON `pack-structured-224cf04f147bbd206755a21b6189dda45903460d-v1` |
+
+Lần đầu tạo bản nháp bị `LAB_CONFIG_VALIDATION_FAILED` vì `eye-optics` thiếu mục trong `CHALLENGE_PARAMETERS`; đã sửa ở `be990c4` kèm test kiểm `versionErrors`.
+
+Ảnh thẻ catalog: `FE assets/thumbnails/eye-optics.webp`, chụp từ cảnh mắt cắt dọc (FE `824bb19`).
+
+Còn lại: SME ký checklist; merge PR vào `main` và deploy (bản production chưa có mã FL-16).
 
 ## 9. Phase gates và việc còn lại
 
