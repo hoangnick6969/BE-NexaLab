@@ -154,3 +154,7 @@ Spec: `../specs/spec-fl-20-ecological-tolerance/k8-ecostage-v1.1.md`. FE branch 
 ### Not done
 - Owner visual review of the 3D level; real-GPU check of the high tier (shadows, frame rate) on a school machine.
 - No change to BE code, release or shared data.
+
+## Catalog thumbnail (2026-11-04)
+
+- FE `dev/lab-thumbnail-capture.tsx` gained an FL-20 fixture: the production K8 `PondView3D` at 28 °C with the school swimming. Output `assets/thumbnails/ecology-tolerance.webp` (29 KB, 1280×720), captured with `npm run capture:lab-thumbnails -- ecology-tolerance` (local Vite, `/api/**` blocked, no DB writes). FE commit `c9b6fde`, pushed on `feat/fl-20-k8-ecostage`.
