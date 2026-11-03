@@ -9,7 +9,7 @@ const evidenceSchema = z.object({
   measuredBuoyantForceN: z.number().finite().min(0).max(50),
 }).strict();
 
-export type BuoyancyEvidence = z.infer<typeof evidenceSchema>;
+type BuoyancyEvidence = z.infer<typeof evidenceSchema>;
 export const buoyancyLabEvaluator: LabEvaluator<BuoyancyEvidence> = {
   rubricRef: "buoyancy-archimedes@1.0.0",
   activity: { key: "buoyancy-archimedes", version: 1 },
@@ -26,8 +26,8 @@ export const buoyancyLabEvaluator: LabEvaluator<BuoyancyEvidence> = {
     const truth = simulateBuoyancy({ massKg: specimen.massG / 1000, volumeM3: specimen.volumeMl / 1e6, submergedVolumeM3: submergedMl / 1e6, fluidDensityKgM3: template.fluidDensityKgM3, gravity: template.gravity });
     const volumeErrorMl = Math.abs(evidence.overflowMl - submergedMl);
     const forceErrorN = Math.abs(evidence.measuredBuoyantForceN - truth.buoyantForceN);
-    const volumeOk = volumeErrorMl <= (template?.volumeToleranceMl ?? 1) && Math.abs(evidence.submergedVolumeMl - submergedMl) <= (template?.volumeToleranceMl ?? 1);
-    const forceOk = forceErrorN <= (template?.forceToleranceN ?? 0.05);
+    const volumeOk = volumeErrorMl <= template.volumeToleranceMl && Math.abs(evidence.submergedVolumeMl - submergedMl) <= template.volumeToleranceMl;
+    const forceOk = forceErrorN <= template.forceToleranceN;
     return { verdict: volumeOk && forceOk ? "passed" : "needs_practice", result: { assessment: { score: Number(volumeOk) + Number(forceOk), maximumScore: 2, unmetCriteria: [...(volumeOk ? [] : ["overflow"]), ...(forceOk ? [] : ["force"])] }, volumeErrorMl, forceErrorN, expected: truth } };
   },
 };

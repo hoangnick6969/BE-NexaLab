@@ -1,19 +1,16 @@
-/** Isolated DB by default; the exact 2026-11-03 owner-approved candidate has a scoped remote exception. Creates authoring rows only. */
+/** Creates authoring rows only, in a dedicated isolated database. */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { readFile } from "node:fs/promises";
 import { digestOf } from "../src/modules/content/application/content-pack";
 import { packInputSchema, activitySpecSchema } from "../src/modules/labs/application/sim-packs";
 
-export async function seedFl05Candidate(remoteApprovalDigest?: string) {
-  if (remoteApprovalDigest !== "3afb7388188b213bb8eb255093ff38db6a31f5ef972f024ba2a98530265f34cc") {
-    const urls = ["DATABASE_URL", "DIRECT_URL", "NEXALAB_ISOLATED_DATABASE_URL"].map((key) => new URL(process.env[key] ?? ""));
-    if (urls.some((url) => !["postgres:", "postgresql:"].includes(url.protocol) || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) || url.pathname === "/postgres" || url.pathname === "/") || urls.some((url) => url.host !== urls[0].host || url.pathname !== urls[0].pathname)) throw new Error("All database URLs must match a dedicated isolated loopback database");
-  }
+async function seedFl05Candidate() {
+  const urls = ["DATABASE_URL", "DIRECT_URL", "NEXALAB_ISOLATED_DATABASE_URL"].map((key) => new URL(process.env[key] ?? ""));
+  if (urls.some((url) => !["postgres:", "postgresql:"].includes(url.protocol) || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) || url.pathname === "/postgres" || url.pathname === "/") || urls.some((url) => url.host !== urls[0].host || url.pathname !== urls[0].pathname)) throw new Error("All database URLs must match a dedicated isolated loopback database");
   const bundle = JSON.parse(await readFile("content/fl05/release-candidate.json", "utf8"));
   const hashes = JSON.parse(await readFile("content/fl05/digests.json", "utf8"));
   if (digestOf(bundle) !== hashes.candidateDigest) throw new Error("Candidate digest mismatch; run prepare-fl05");
-  if (remoteApprovalDigest && hashes.candidateDigest !== remoteApprovalDigest) throw new Error("Remote override does not approve this candidate");
   const pack = packInputSchema.parse(bundle.pack);
   const { reviews, ...activity } = activitySpecSchema.parse(bundle.activity);
   const db = new PrismaClient();
