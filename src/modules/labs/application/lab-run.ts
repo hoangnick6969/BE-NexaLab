@@ -45,6 +45,7 @@ export function submittedEvidence(submission: RunSubmission): { envelope: Eviden
 export { CIRCUIT_BULB_ACTIVITY_KEY, CIRCUIT_BULB_RUBRIC, evaluateCircuitBulbActivity } from "./evaluators/circuit-bulb-checkpoints.evaluator";
 export { LEGACY_CHALLENGE_RUBRIC, evaluateRunV1 } from "./evaluators/legacy-challenge.evaluator";
 export const FL10_RUBRIC = "mass-conservation-poea@1.0.0";
+export const FL06_RUBRIC = "lever-investigation@1.0.0";
 export const rubricRefForActivity = labEvaluators.rubricRefForActivity;
 
 const executionFieldsSchema = z.object({

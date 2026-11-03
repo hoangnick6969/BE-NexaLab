@@ -67,7 +67,7 @@ Phạm vi của mục này là đúng 20 slot ở bảng trên. Không thêm tr�
 
 | Slot / Lab | Kit dụng cụ riêng | Phòng nền vật lý | Ranh giới apparatus |
 |---|---|---|---|
-| 8 / FL-10 — Mol & tính theo PTHH (SPLIT) | K2 — Hóa ướt | Đã dùng trong activity candidate hiện tại | Activity bảo toàn khối lượng chỉ dùng cân và hai cốc. Không đại diện toàn bộ FL-10 và không có kệ/rack trong phòng nền. |
+| 8 / FL-10 — Mol & tính theo PTHH (SPLIT) | K2 — Hóa ướt | Mass Conservation v1 is active for one limited activity; remaining FL-10 scope is not implemented | Activity bảo toàn khối lượng chỉ dùng cân và hai cốc. Không đại diện toàn bộ FL-10 và không có kệ/rack trong phòng nền. |
 | 9 / FL-11 — Dung dịch và nồng độ | K2 — Hóa ướt | Tái sử dụng đề xuất | Cốc, dụng cụ định lượng/khuấy theo thí nghiệm đã review; chưa implement. |
 | 10 / FL-12 — Tốc độ phản ứng & xúc tác | K2 — Hóa ướt | Tái sử dụng đề xuất | Bình phản ứng, gia nhiệt/đo thời gian và thu khí nếu model yêu cầu; chưa implement. |
 | 11 / FL-13 — Acid–base, chỉ thị & pH | K2 — Hóa ướt | Tái sử dụng đề xuất | Chỉ thị, mẫu và dụng cụ đo được chọn theo model đã review; fixture pH cũ không tính là Lab. |
@@ -81,6 +81,6 @@ Phạm vi của mục này là đúng 20 slot ở bảng trên. Không thêm tr�
 | 14 / FL-20 — Nhân tố & giới hạn sinh thái | K8 — Cảnh nhẹ + HUD | Không dùng phòng thí nghiệm vật lý | Bối cảnh sinh thái và đồ thị giới hạn; không thêm tủ/lababo/bàn nâu. |
 | 15 / FL-21 — Lưới thức ăn & cân bằng | K8 — Cảnh nhẹ + HUD | Không dùng phòng thí nghiệm vật lý | Sơ đồ/sa bàn sinh thái; giữ mô hình quan hệ riêng với FL-20. |
 | 19 / FL-26 — Lai Mendel & di truyền | K8 — Cảnh nhẹ + HUD | Không dùng phòng thí nghiệm vật lý | Bối cảnh di truyền tùy chọn và ma trận Punnett; K9 còn điều kiện provenance. |
-| 20 / FL-27 — Từ gene đến protein | K7 — Procedural phân tử/gen | Không dùng phòng thí nghiệm vật lý | Scene phân tử/gen; tách riêng renderer và dữ liệu khỏi K2 hóa học ướt. |
+| 20 / FL-27 — Từ gene đến protein | K7 — Procedural phân tử/gen | Dùng ở **cảnh vào**: bàn sinh học phân tử (kính hiển vi, máy PCR, giá ống PCR) trong phòng nền; cảnh phân tử không dùng phòng | Bấm kính hiển vi để vào scene phân tử/gen; tách riêng renderer và dữ liệu khỏi K2 hóa học ướt. Technical candidate trên `feat/fl27`, chưa release. |
 
 **Đếm theo danh mục:** Vật lý 10, Hóa học 6, Sinh học 4 — tổng cộng 20 slot. Phòng `PhysicalLabEnvironment` là một lớp không gian nền dùng lại xuyên kit; các K1–K8 vẫn giữ apparatus và tương tác chuyên biệt. Trạng thái “tái sử dụng đề xuất” không có nghĩa Lab/kit đã được implement.

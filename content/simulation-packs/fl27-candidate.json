@@ -1,0 +1,694 @@
+{
+  "catalog": {
+    "source": "NexaLAB_Content tool/catalog-registry.json",
+    "exportedAt": "2026-10-25T11:47:32.211Z",
+    "chapter": {
+      "code": "KHTN9-CH11",
+      "subjectId": "khtn",
+      "grade": 9,
+      "domain": "KHTN",
+      "title": "Chương XI. Di truyền học Mendel và cơ sở phân tử",
+      "status": "active",
+      "synthetic": false,
+      "officialOrder": 11
+    },
+    "topic": {
+      "code": "KHTN9-CH11-T01",
+      "chapterCode": "KHTN9-CH11",
+      "officialOrder": 1,
+      "title": "Di truyền học Mendel và cơ sở phân tử",
+      "outcomeCodes": [
+        "KHTN-L9/hien-tuong-di-truyen-mendel/1",
+        "KHTN-L9/hien-tuong-di-truyen-mendel/2",
+        "KHTN-L9/hien-tuong-di-truyen/1",
+        "KHTN-L9/hien-tuong-di-truyen/2",
+        "KHTN-L9/tu-gene-den-protein/1",
+        "KHTN-L9/tu-gene-den-protein/2",
+        "KHTN-L9/tu-gene-den-protein/3",
+        "KHTN-L9/tu-gene-den-protein/4",
+        "KHTN-L9/tu-gene-den-protein/5",
+        "KHTN-L9/tu-gene-den-protein/6",
+        "KHTN-L9/tu-gene-den-protein/7",
+        "KHTN-L9/tu-gene-den-protein/8"
+      ],
+      "status": "active"
+    },
+    "outcomes": [
+      {
+        "code": "KHTN-L9/hien-tuong-di-truyen-mendel/1",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Hiện tượng di truyền (Mendel và khái niệm nhân tố di truyền)",
+        "statement": "Dựa vào công thức lai 1 cặp tính trạng và kết quả lai trong thí nghiệm của Mendel, phát biểu được quy luật phân li; giải thích được kết quả thí nghiệm theo Mendel.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "3fae3270fa9717be9fba91768d363f7fcc538475dd2e8693ca5d13ea7e972c5a",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-37]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 164: Dựa vào công thức lai một tính trạng và kết quả lai trong thí nghiệm của Mendel; giải thích được kết quả thí nghiệm theo Mendel; phát biểu được quy luật phân li.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0164-b0004",
+                "printedPageLabel": "162",
+                "physicalPageIndex": 164
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.535Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      },
+      {
+        "code": "KHTN-L9/hien-tuong-di-truyen-mendel/2",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Hiện tượng di truyền (Mendel và khái niệm nhân tố di truyền)",
+        "statement": "Dựa vào công thức lai 2 cặp tính trạng và kết quả lai trong thí nghiệm của Mendel, phát biểu được quy luật phân li độc lập và tổ hợp tự do.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "5ee6bbdcd201255e3185bc5c5b0bb1ec5db123436a85e27b03bf0a9a41058979",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-37]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 164: Dựa vào công thức lai hai tính trạng và kết quả lai trong thí nghiệm của Mendel. Giải thích được kết quả thí nghiệm theo Mendel. Phát biểu được quy luật phân li độc lập.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0164-b0006",
+                "printedPageLabel": "162",
+                "physicalPageIndex": 164
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.535Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      },
+      {
+        "code": "KHTN-L9/hien-tuong-di-truyen/1",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Hiện tượng di truyền",
+        "statement": "Nêu được khái niệm di truyền, khái niệm biến dị.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "c6072f24abe5d1436b4230e47e217c386f7d3980762d69028754e64ef2cf9126",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-36]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 161: Nêu được khái niệm di truyền, khái niệm biến dị.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0161-b0005",
+                "printedPageLabel": "159",
+                "physicalPageIndex": 161
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.536Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      },
+      {
+        "code": "KHTN-L9/hien-tuong-di-truyen/2",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Hiện tượng di truyền",
+        "statement": "Nêu được gene quy định di truyền và biến dị ở sinh vật, qua đó gene được xem là trung tâm – Gene của di truyền học.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "b6f728df5e8d0a8610bc9293d899f9a6dc87a624eb7194d0169b5346c2ea12c8",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-36]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 161: Nêu được gene quy định di truyền và biến dị ở sinh vật, qua đó gene được xem là trung tâm của di truyền học.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0161-b0006",
+                "printedPageLabel": "159",
+                "physicalPageIndex": 161
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.537Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      },
+      {
+        "code": "KHTN-L9/tu-gene-den-protein/1",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Từ gene đến protein",
+        "statement": "Nêu được khái niệm nucleic acid.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "32b7943f8116c343588c60a2af36cf34462db9ed338f40f06e36546588d0ebbc",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-38]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 168: Nêu được khái niệm nucleic acid. Kể tên được các loại nucleic acid: DNA và RNA.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0168-b0004",
+                "printedPageLabel": "166",
+                "physicalPageIndex": 168
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.549Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      },
+      {
+        "code": "KHTN-L9/tu-gene-den-protein/2",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Từ gene đến protein",
+        "statement": "Thông qua hình ảnh, mô tả được DNA có cấu trúc xoắn kép, gồm các đơn phân là 4 loại nucleotide, các nucleotide liên kết giữa 2 mạch theo nguyên tắc bổ sung.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "d4d67aadcf32fdd68c3ed7db09c3e5e569c083f0dc2e727ec910060f7da7ce5b",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-38]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 168: Nêu được khái niệm nucleic acid. Kể tên được các loại nucleic acid: DNA và RNA.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0168-b0004",
+                "printedPageLabel": "166",
+                "physicalPageIndex": 168
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.549Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      },
+      {
+        "code": "KHTN-L9/tu-gene-den-protein/3",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Từ gene đến protein",
+        "statement": "Nêu được khái niệm gene.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "4db5ff790a838c6783789ff96ee126ee81e858ed2c76c470e8084553fa448b12",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-38]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 168: Nêu được khái niệm nucleic acid. Kể tên được các loại nucleic acid: DNA và RNA.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0168-b0004",
+                "printedPageLabel": "166",
+                "physicalPageIndex": 168
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.549Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      },
+      {
+        "code": "KHTN-L9/tu-gene-den-protein/4",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Từ gene đến protein",
+        "statement": "Quan sát hình ảnh (hoặc sơ đồ), mô tả sơ lược quá trình tái bản của DNA gồm các giai đoạn: tháo xoắn tách hai mạch đơn, các nucleotide tự do trong môi trường tế bào kết hợp 2 mạch đơn theo nguyên tắc bổ sung.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "b1f3e1ef41ace8871b2de3f221ba6b281b70a410b5908421eb90fecafc1b4595",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-39]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 172: Quan sát hình ảnh (hoặc sơ đổ), mô tả sơ lược quá trình tái bản của DNA và kết quả của quá trình.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0172-b0004",
+                "printedPageLabel": "170",
+                "physicalPageIndex": 172
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.550Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      },
+      {
+        "code": "KHTN-L9/tu-gene-den-protein/5",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Từ gene đến protein",
+        "statement": "Dựa vào sơ đồ, hình ảnh quá trình phiên mã, nêu được khái niệm phiên mã.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "6e4d609de77591a790a6a7417dab8e76e4aadfd34c3d1b0b2a516a43a623a3c1",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-39]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 172: Dựa vào hình ảnh (sơ đồ) quá trình phiên mã, nêu được khái niệm phiên mã.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0172-b0006",
+                "printedPageLabel": "170",
+                "physicalPageIndex": 172
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.550Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      },
+      {
+        "code": "KHTN-L9/tu-gene-den-protein/6",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Từ gene đến protein",
+        "statement": "Nêu được khái niệm mã di truyền, giải thích được từ 4 loại nucleotide tạo ra được sự đa dạng của mã di truyền; nêu được ý nghĩa của đa dạng mã di truyền, mã di truyền quy định 72 Nội dung Yêu cầu cần đạt thành phần hoá học và cấu trúc của protein.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "12fa30712088f1f8bba858669bea541da5de2287d6522d7bc387bba042c6d92d",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-40]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 175: Nêu được khái niệm mã di truyền; giải thích được từ bốn loại nucleotide tạo ra được sự đa dạng của mã di truyền; nêu được ý nghĩa của đa dạng mã di truyền, mã di truyền quy định thành phần hoá học và cấu trúc của protein.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0175-b0004",
+                "printedPageLabel": "173",
+                "physicalPageIndex": 175
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.551Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      },
+      {
+        "code": "KHTN-L9/tu-gene-den-protein/7",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Từ gene đến protein",
+        "statement": "Dựa vào sơ đồ, nêu được mối quan hệ giữa DNA – RNA – protein – tính trạng thông qua phiên mã, dịch mã và ý nghĩa di truyền của mối quan hệ này.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "ede08d9f016cad0d184ca0f5a0b23965c9a37428a082ca8fa3c181c3bb47791e",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-40]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 175: Dựa vào sơ đồ, hình ảnh, nêu được mối quan hệ giữa DNA – mRNA – protein – tính trạng thông qua phiên mã, dịch mã và ý nghĩa di truyền của mối quan hệ này.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0175-b0006",
+                "printedPageLabel": "173",
+                "physicalPageIndex": 175
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.551Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      },
+      {
+        "code": "KHTN-L9/tu-gene-den-protein/8",
+        "grade": 9,
+        "domain": "LIVING",
+        "chapter": "Từ gene đến protein",
+        "statement": "Phát biểu được khái niệm đột biến gene.",
+        "sourceEvidence": [
+          {
+            "evidenceId": "c974ab4c1bfaac9be1537299572298d1a61060fd0c034c62d20d43ab7527547c",
+            "originType": "textbook_derived_internal",
+            "sourceDigest": "713a90824767aec90291f1cf3ff4f8a91deb3d426c5d7b3c3c1c31f1054d4a3d",
+            "sourceIdentity": "Khoa học tự nhiên 9 - Kết nối tri thức với cuộc sống [sgk-khtn9-kntt:chapter-xi:src-lesson-khtn9-41]",
+            "sourceLocators": [
+              {
+                "locator": "Hộp MỤC TIÊU — PDF trang 180: Phát biểu được khái niệm đột biến gene. Lấy được ví dụ minh hoạ.",
+                "sourceBlockId": "sgk-khtn9-kntt-tai-ban-2-2026-p0180-b0004",
+                "printedPageLabel": "178",
+                "physicalPageIndex": 180
+              }
+            ],
+            "reviewReference": {
+              "reason": "Chủ dự án phê duyệt ngày 2026-10-25; đối chiếu hộp MỤC TIÊU và source blocks của SGK Kết nối tri thức với cuộc sống",
+              "decision": "approved_internal",
+              "reviewId": "owner-review-130812191f3f4f3cf61bf41f",
+              "reviewedAt": "2026-10-25T09:35:16.551Z",
+              "reviewerName": "Quản trị NexaLab",
+              "reviewerEmail": "admin@nexalab.local",
+              "proposalVersion": "130812191f3f4f3cf61bf41f1c6bfc9ac2ffb508f268d459d203747bad23769d"
+            }
+          }
+        ],
+        "synthetic": false,
+        "status": "active"
+      }
+    ]
+  },
+  "lab": {
+    "id": "gene-protein",
+    "subjectId": "khtn",
+    "title": "Từ gene đến protein",
+    "grade": 9,
+    "topic": "Từ gene đến protein",
+    "learningObjective": "Mô tả cấu trúc DNA, tái bản, phiên mã, dịch mã và tác động của đột biến điểm.",
+    "status": "published",
+    "simulationModelRef": "gene-expression@1.0.0",
+    "config": {
+      "reviewStatus": "PROPOSED_UNAPPROVED",
+      "notice": "Mô hình giáo dục giản lược; gene mẫu tổng hợp, không phải gene thực. Kích thước enzyme không theo tỉ lệ. Chỉ mô phỏng đột biến thay thế một nucleotide. Chưa duyệt phát hành."
+    },
+    "assets": [],
+    "scope": "SHARED_LIBRARY",
+    "releaseCleared": false,
+    "topicCode": "KHTN9-CH11-T01",
+    "synthetic": false
+  },
+  "challenge": {
+    "id": "gene_protein_001",
+    "labId": "gene-protein",
+    "objective": "Mô tả cấu trúc DNA, tái bản, phiên mã, dịch mã và tác động của đột biến điểm.",
+    "constraints": {
+      "params": {}
+    },
+    "difficulty": "intermediate"
+  },
+  "activity": {
+    "id": "fl27-activity-v1",
+    "key": "gene-protein-stations",
+    "version": 1,
+    "digest": "47cbd148c818384d181c1d22a42936b834e20fce37f8bcd766749b35058b95f4",
+    "spec": {
+      "key": "gene-protein-stations",
+      "outcomeCodes": [
+        "KHTN-L9/tu-gene-den-protein/2",
+        "KHTN-L9/tu-gene-den-protein/4",
+        "KHTN-L9/tu-gene-den-protein/5",
+        "KHTN-L9/tu-gene-den-protein/6",
+        "KHTN-L9/tu-gene-den-protein/7"
+      ],
+      "objective": "Mô tả cấu trúc DNA, tái bản, phiên mã, dịch mã và tác động của đột biến điểm.",
+      "materials": [
+        "Mô hình DNA, RNA polymerase, ribosome, tRNA và bảng mã di truyền"
+      ],
+      "setup": "Chọn trạm để quan sát mô hình phân tử 3D hoặc sơ đồ 2D và ghi kết quả vào sổ thực hành.",
+      "procedure": [
+        "Đọc cấu trúc DNA",
+        "Ghép mạch DNA mới",
+        "Tạo mRNA theo mạch khuôn",
+        "Dịch mã từ AUG đến bộ ba kết thúc",
+        "So sánh đột biến điểm",
+        "Kết luận quan hệ gene–protein–tính trạng"
+      ],
+      "variables": [
+        {
+          "name": "Biến thể gene",
+          "unit": "",
+          "role": "independent"
+        },
+        {
+          "name": "Chuỗi polypeptide",
+          "unit": "amino acid",
+          "role": "dependent"
+        }
+      ],
+      "observations": [
+        "Nguyên tắc bổ sung",
+        "Chiều đọc và khung đọc",
+        "Tác động của thay thế một nucleotide"
+      ],
+      "expectedResult": "Trình tự DNA, RNA và amino acid phù hợp với biến thể gene được ghim cho phiên làm bài.",
+      "explanation": "DNA được tái bản theo nguyên tắc bổ sung; thông tin được phiên mã thành RNA và dịch mã thành protein.",
+      "safety": "Thí nghiệm ảo, không dùng mẫu sinh học hay hóa chất.",
+      "limitations": "Mô hình giáo dục giản lược; gene mẫu tổng hợp, không phải gene thực. Kích thước enzyme không theo tỉ lệ. Chỉ mô phỏng đột biến thay thế một nucleotide. Chưa duyệt phát hành.",
+      "modality": "deterministic-simulation",
+      "sources": [
+        {
+          "title": "SGK KHTN 9, Bài 38–41 (tham chiếu trong kế hoạch FL27; provenance chờ duyệt)",
+          "license": "PENDING_REVIEW"
+        }
+      ]
+    },
+    "reviews": {
+      "ownerSignoffPending": true
+    },
+    "createdById": "admin"
+  },
+  "config": {
+    "id": "fl27-config-v1",
+    "labId": "gene-protein",
+    "version": 1,
+    "modelRef": "gene-expression@1.0.0",
+    "challengeParams": {
+      "gene_protein_001": {}
+    },
+    "goldenCases": [
+      {
+        "challengeId": "gene_protein_001",
+        "label": "gene-a-missense",
+        "labState": {
+          "variantId": "gene-a-missense"
+        },
+        "expectedVerdict": "passed"
+      },
+      {
+        "challengeId": "gene_protein_001",
+        "label": "gene-a-nonsense",
+        "labState": {
+          "variantId": "gene-a-nonsense"
+        },
+        "expectedVerdict": "passed"
+      },
+      {
+        "challengeId": "gene_protein_001",
+        "label": "gene-a-silent",
+        "labState": {
+          "variantId": "gene-a-silent"
+        },
+        "expectedVerdict": "passed"
+      },
+      {
+        "challengeId": "gene_protein_001",
+        "label": "gene-b-missense",
+        "labState": {
+          "variantId": "gene-b-missense"
+        },
+        "expectedVerdict": "passed"
+      }
+    ],
+    "status": "draft",
+    "reason": "Owner requested FL27 data publication to Supabase on 2026-10-31; release reviews pending.",
+    "createdById": "admin"
+  },
+  "pack": {
+    "id": "fl27-pack-v2",
+    "key": "gene-expression",
+    "version": 2,
+    "labId": "gene-protein",
+    "modelRef": "gene-expression@1.0.0",
+    "engineVersion": "1.0.0",
+    "activityVersionId": "fl27-activity-v1",
+    "template": {
+      "units": {},
+      "ranges": {},
+      "initialState": null,
+      "limitations": "Mô hình giáo dục giản lược; gene mẫu tổng hợp, không phải gene thực. Kích thước enzyme không theo tỉ lệ. Chỉ mô phỏng đột biến thay thế một nucleotide. Chưa duyệt phát hành.",
+      "goldenCases": [
+        {
+          "label": "gene-a-missense",
+          "state": {
+            "variantId": "gene-a-missense"
+          },
+          "expectedVerdict": "passed",
+          "expectedOutputs": {
+            "mrna": "AUGUUCGGAUGGCAUUAA"
+          },
+          "tolerance": 0.000001
+        },
+        {
+          "label": "gene-a-nonsense",
+          "state": {
+            "variantId": "gene-a-nonsense"
+          },
+          "expectedVerdict": "passed",
+          "expectedOutputs": {
+            "mrna": "AUGUUCGGAUGGCAUUAA"
+          },
+          "tolerance": 0.000001
+        },
+        {
+          "label": "gene-a-silent",
+          "state": {
+            "variantId": "gene-a-silent"
+          },
+          "expectedVerdict": "passed",
+          "expectedOutputs": {
+            "mrna": "AUGUUCGGAUGGCAUUAA"
+          },
+          "tolerance": 0.000001
+        },
+        {
+          "label": "gene-b-missense",
+          "state": {
+            "variantId": "gene-b-missense"
+          },
+          "expectedVerdict": "passed",
+          "expectedOutputs": {
+            "mrna": "AUGGAACCCUACGGUUGA"
+          },
+          "tolerance": 0.000001
+        }
+      ]
+    },
+    "visualAssetVersionId": null,
+    "semanticMap": {
+      "dna": "dna",
+      "mrna": "mrna",
+      "ribosome": "ribosome"
+    },
+    "bindings": [],
+    "challengeTemplates": [],
+    "reviews": {
+      "ownerSignoffPending": true
+    },
+    "status": "draft",
+    "validation": {
+      "golden": [
+        {
+          "label": "gene-a-missense",
+          "expectedVerdict": "passed",
+          "actualVerdict": "passed",
+          "mismatches": [],
+          "ok": true,
+          "problem": null
+        },
+        {
+          "label": "gene-a-nonsense",
+          "expectedVerdict": "passed",
+          "actualVerdict": "passed",
+          "mismatches": [],
+          "ok": true,
+          "problem": null
+        },
+        {
+          "label": "gene-a-silent",
+          "expectedVerdict": "passed",
+          "actualVerdict": "passed",
+          "mismatches": [],
+          "ok": true,
+          "problem": null
+        },
+        {
+          "label": "gene-b-missense",
+          "expectedVerdict": "passed",
+          "actualVerdict": "passed",
+          "mismatches": [],
+          "ok": true,
+          "problem": null
+        }
+      ],
+      "glbNodes": null
+    },
+    "reason": "Owner requested FL27 data publication to Supabase on 2026-10-31; release reviews pending.",
+    "createdById": "admin"
+  }
+}

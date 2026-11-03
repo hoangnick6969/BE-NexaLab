@@ -1,5 +1,7 @@
 # Circuit finalization — evidence and remaining gates (2026-10-29)
 
+> Historical snapshot, superseded for current release status by `lab-pipeline-phase-plan.md` and the 2026-11-01 readback. The security and readiness evidence below describes the 2026-10-29 state; do not use its “no release” statements as current state.
+
 ## Security
 
 Shared Supabase inspection was SELECT-only. anon/authenticated retain all seven table privileges on LabRelease, LabReviewerAuthorization and LabReleaseReview. Session pgrst.db_schemas is NULL; authenticator role and database settings do not reveal exposed schemas. Thus dashboard/Data API configuration remains unverified; absence of the GUC is not evidence that public is unexposed.
