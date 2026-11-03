@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, eye, eyeParts, evaluateMassConservation, evaluateLeverBench, geneExpression } from "../../../../packages/sim";
+import { eyeOptics } from "../../../../packages/sim/eye-optics";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -125,6 +126,15 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     simulate: eye,
     outputs: { score: "number", correct: "array", verdict: "string" },
     requiredSemanticIds: eyeParts.map((p) => p.id),
+  },
+  // FL-16 is its own Lab, so its active config/pack never replace the legacy eye@1.0.0 ones.
+  "eye-optics@1.0.0": {
+    labId: "eye-optics",
+    engineVersion: ENGINE_VERSION,
+    simulate: eyeOptics,
+    outputs: { version: "string", phase1: "array", phase2: "array" },
+    requiredSemanticIds: eyeParts.map((p) => p.id),
+    observationOnly: { unsupportedParams: "mô hình mắt không dùng tham số thử thách" },
   },
 };
 /** Allowlisted model resolution replacing dispatch on hardcoded lab IDs. Unknown references fail closed. */
