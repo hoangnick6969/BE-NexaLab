@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { simulateBuoyancy, buoyancyConfigSchema } from "../../../../packages/sim/buoyancy";
 import { eyeOptics } from "../../../../packages/sim/eye-optics";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, eye, eyeParts, evaluateMassConservation, evaluateLeverBench, evaluateThermalBench, geneExpression } from "../../../../packages/sim";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, foodWeb, eye, eyeParts, evaluateMassConservation, evaluateLeverBench, evaluateThermalBench, geneExpression } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -108,6 +108,14 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     outputs: { version: "string", explore: "array" },
     requiredSemanticIds: ["balance", "cylinder", "ruler"],
     observationOnly: { unsupportedParams: "mô hình khối lượng riêng không dùng tham số thử thách" },
+  },
+  "food-web@1.0.0": {
+    labId: "food-web",
+    engineVersion: ENGINE_VERSION,
+    simulate: foodWeb,
+    outputs: { setup: "string", removed: "string", length: "number", brokenChains: "number", levelsKJ: "array", heatKJ: "array" },
+    requiredSemanticIds: ["food-web", "energy-pyramid", "causes"],
+    observationOnly: { unsupportedParams: "mô hình lưới thức ăn không dùng tham số thử thách" },
   },
   "gene-expression@1.0.0": {
     labId: "gene-protein",

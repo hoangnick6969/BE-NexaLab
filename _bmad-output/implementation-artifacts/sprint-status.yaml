@@ -155,6 +155,18 @@ development_status:
   fl-20-v11-t2-pond-3d-integration: done
   fl-20-v11-t3-verification: done
   fl-20-v11-t4-owner-visual-review: in-progress
+  # FL-21 food-web — ../specs/spec-fl-21-food-web/; owner accepted all recommendations 2026-11-02; built and verified locally, not released.
+  fl-21-t0-owner-decisions: done
+  fl-21-t1-blueprint: review
+  fl-21-t2-food-web-model: done
+  fl-21-t3-activity-integration: done
+  fl-21-t4-fe-runtime-entry: done
+  fl-21-t5-food-web-scene: done
+  fl-21-t6-energy-causes-panel: done
+  fl-21-t7-verification: done
+  fl-21-t8-device-qa: in-progress
+  fl-21-t9-release: in-progress
+  fl-21-v11-t1-3d-meadow-scene: review
   # Teacher AI increment (TAI) — plan ../planning-artifacts/increment-tai-teacher-ai.md; all blocked on gate G-1 (TAI-T0).
   epic-tai-01-authoring: backlog
   tai-01-t0-activate-fr21-scope: backlog
@@ -203,6 +215,37 @@ development_status:
   tai-06-t3-draft-lab-challenge-job-routes: backlog
   tai-06-t4-teacher-proposal-review-ux: backlog
   tai-06-t5-golden-evaluation-e2e: backlog
+
+fl21_tracking:
+  spec: ../specs/spec-fl-21-food-web/SPEC.md
+  status: in-progress
+  decisions: 'owner 2026-11-02: "đồng ý theo khuyến nghị" (D-1…D-7 as recommended).'
+  verification: 'Local only (throwaway PostgreSQL 55432, stopped afterwards; shared Supabase untouched). BE: 66 test files / 472 tests passed (CI-like isolated URL), incl. 17 food-web golden, activity tests and food-web.integration (persist, replay, idempotency, tuple pinning); lint, build, check:layers ok; route manifest identical to main. FE: lint + build ok; food-web-lab.spec 2/2 (mock: keyboard chain, F5 restore, broken-link display, review-after-check, payload, result drawer on top, phone); FL-20 and FL-25 specs pass. Real stack (Vite → API → isolated DB) at 1440/390/1280 dark: launch rendererKey food-web, submit 201 scored 6/7 with unmetCriteria prediction:HUNT (deliberate), no page errors, no horizontal scroll. Sloplint 0 FAIL (WARN 29 waived, F7 answered).'
+  rehearsal: 'Isolated nexalab_fl21_release 2026-11-02 (curriculum stand-ins with the shared Bài 44 lesson id, topic KHTN8-L44 and outcomes): migration 20261102120000_fl21_food_web_lab applied; scripts/release-food-web.mjs created activity, config, pack food-web-k8 and release v1, published under main''s new DEV_APPROVAL_V1 policy (evidence developerCheck + agentCheck) → v1 ACTIVE, DEV_APPROVAL:APPROVE, Lab published SHARED_LIBRARY releaseCleared; rerun idempotent; student library card shown and launch FOUNDATIONAL_RELEASE. Shared-environment publish not done.'
+  release_notes:
+    - 'Pack golden expectedOutputs accept scalars only; the energy golden checks setup (values are covered by the model golden tests).'
+    - 'main (93681ce) requires DEV_APPROVAL evidence { developerCheck, agentCheck } for every Lab except FL-06; the script records the detailed review notes and sends that strict shape.'
+  build_notes:
+    - 'Fixed-state comparison ignores key order (stored JSONB reorders keys); found by the integration replay.'
+    - 'Board keeps each checked result (chain, pyramid values, removals) until the learner answers the next question or presses "Câu tiếp theo".'
+    - 'Energy step shows the compact board with the checked chain beside the pyramid (side by side from 1100 px).'
+  date: '2026-11-02'
+  record: fl-21-food-web-implementation.md
+  branch: 'feat/fl-21-food-web in BE and FE, pushed 2026-11-04 (FE includes the FL-20 commits until FL-20 merges)'
+  scope: 'FL-21 lưới thức ăn & cân bằng tự nhiên (K8, 2D SVG): model food-web@1.0.0 on an illustrative 11-species web (roles, chain validity, energy with a 10 % teaching convention, first-order removal effects, human causes), activity food-web-checkpoints v1 (6 checkpoints + explanation, pass 7/7 proposed).'
+  sources: 'Read-only admin GETs on the local API (:4000 -> shared DB) 2026-11-02: topics KHTN8-L43/L44/L46 and outcomes active; lessons Bài 43/44/46 published SHARED_LIBRARY khtn grade 8. SGK text: producer/consumer/decomposer definitions (p0182-b0019..21), chain/web/common link (p0184-b0008..12), energy one-way and decreasing as heat (p0185-b0002), natural balance and causes of imbalance (p0190-b0010, p0192-b0005..06). No writes.'
+  audit_findings:
+    - 'C1: one release maps one topic; bind Bài 44 (B44-O02, B44-O03); B46-O02 scored as practice only.'
+    - 'C2: species in Hình 44.3/44.4/46.4 and any 10 % efficiency are not in the SGK text; web and 10 % are labelled illustrative.'
+    - 'C3: OCR errors in the shared lesson text (quân xã, thấp sinh thái, mất xích chung); Lab copy written fresh.'
+  open_decisions:
+    D-1: 'open — FL-20 released, so FL-21 fits the ≤2 track cap (recommended: open).'
+    D-2: 'open — bind Bài 44 only (recommended).'
+    D-3: 'open — curriculum reviewer fixes OCR in register.'
+    D-4: 'open — illustrative W1 web and 10 % convention, labelled.'
+    D-5: 'open — first-order removal effects only.'
+    D-6: 'open — 7 criteria, pass 7/7.'
+    D-7: 'open — any valid learner chain from a producer with ≥ 4 links.'
 
 fl20_tracking:
   spec: ../specs/spec-fl-20-ecological-tolerance/SPEC.md

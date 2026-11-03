@@ -1,7 +1,7 @@
 import { circuitBulbEvaluator } from "./circuit-bulb-checkpoints.evaluator";
 import { eyeOpticsEvaluator } from "./eye-anatomy-optics.evaluator";
 import { z } from "zod";
-import { CHECKPOINT_ACTIVITIES, ECOLOGY_TOLERANCE_RUBRIC, EM_INDUCTION_RUBRIC } from "../checkpoint-activities";
+import { CHECKPOINT_ACTIVITIES, ECOLOGY_TOLERANCE_RUBRIC, EM_INDUCTION_RUBRIC, FOOD_WEB_RUBRIC } from "../checkpoint-activities";
 import { densityStationsEvaluator } from "./density-stations.evaluator";
 import { buoyancyLabEvaluator } from "./buoyancy-lab.evaluator";
 import { geneProteinStationsEvaluator } from "./gene-protein-stations.evaluator";
@@ -70,6 +70,7 @@ function checkpointEvaluator(rubricRef: string): LabEvaluator<any> {
 }
 const inductionEvaluator = checkpointEvaluator(EM_INDUCTION_RUBRIC);
 const ecologyToleranceEvaluator = checkpointEvaluator(ECOLOGY_TOLERANCE_RUBRIC);
+const foodWebEvaluator = checkpointEvaluator(FOOD_WEB_RUBRIC);
 const fl10Evaluator: LabEvaluator<any> = {
   rubricRef: "mass-conservation-poea@1.0.0",
   activity: { key: "mass-conservation-poea", version: 1 },
@@ -93,4 +94,4 @@ const fl07Evaluator: LabEvaluator<any> = {
   evidenceSchema: z.object({}).strict(),
   evaluate: () => { throw new Error("FL-07 requires server event history"); },
 };
-export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, ecologyToleranceEvaluator, fl10Evaluator, fl06Evaluator, fl07Evaluator, densityStationsEvaluator, geneProteinStationsEvaluator, eyeOpticsEvaluator, buoyancyLabEvaluator]);
+export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, ecologyToleranceEvaluator, foodWebEvaluator, fl10Evaluator, fl06Evaluator, fl07Evaluator, densityStationsEvaluator, geneProteinStationsEvaluator, eyeOpticsEvaluator, buoyancyLabEvaluator]);
