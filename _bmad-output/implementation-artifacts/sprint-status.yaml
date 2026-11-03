@@ -166,7 +166,7 @@ development_status:
   fl-21-t7-verification: done
   fl-21-t8-device-qa: in-progress
   fl-21-t9-release: in-progress
-  fl-21-v11-t1-3d-meadow-scene: in-progress
+  fl-21-v11-t1-3d-meadow-scene: review
   # Teacher AI increment (TAI) — plan ../planning-artifacts/increment-tai-teacher-ai.md; all blocked on gate G-1 (TAI-T0).
   epic-tai-01-authoring: backlog
   tai-01-t0-activate-fr21-scope: backlog
@@ -231,7 +231,7 @@ fl21_tracking:
     - 'Energy step shows the compact board with the checked chain beside the pyramid (side by side from 1100 px).'
   date: '2026-11-02'
   record: fl-21-food-web-implementation.md
-  branch: 'feat/fl-21-food-web in BE (from e424524) and FE (from ab7776b); not pushed'
+  branch: 'feat/fl-21-food-web in BE and FE, pushed 2026-11-04 (FE includes the FL-20 commits until FL-20 merges)'
   scope: 'FL-21 lưới thức ăn & cân bằng tự nhiên (K8, 2D SVG): model food-web@1.0.0 on an illustrative 11-species web (roles, chain validity, energy with a 10 % teaching convention, first-order removal effects, human causes), activity food-web-checkpoints v1 (6 checkpoints + explanation, pass 7/7 proposed).'
   sources: 'Read-only admin GETs on the local API (:4000 -> shared DB) 2026-11-02: topics KHTN8-L43/L44/L46 and outcomes active; lessons Bài 43/44/46 published SHARED_LIBRARY khtn grade 8. SGK text: producer/consumer/decomposer definitions (p0182-b0019..21), chain/web/common link (p0184-b0008..12), energy one-way and decreasing as heat (p0185-b0002), natural balance and causes of imbalance (p0190-b0010, p0192-b0005..06). No writes.'
   audit_findings:
