@@ -1,0 +1,42 @@
+{
+  "lab": {
+    "id": "thermal-energy", "modelRef": "thermal-bench@1.0.0", "topicCode": "KHTN8-L27",
+    "title": "Năng lượng nhiệt", "learningObjective": "Đọc joulemeter và nhiệt kế, ghi độ tăng nhiệt độ của nước và giải thích giới hạn nhiệt lượng kế lý tưởng.",
+    "challengeId": "fl07_001", "reason": "Prepare FL-07 thermal energy candidate with explicit technical assumptions and pending exact-digest owner approval."
+  },
+  "lessonIds": ["pack-structured-08ed449d58fd5a1cbfa84a6fee3f2f0c88a7b95f-v1"],
+  "sourceBindings": [{"lessonId":"pack-structured-08ed449d58fd5a1cbfa84a6fee3f2f0c88a7b95f-v1","contentPackVersionId":"cmvmmpjhd001rlw14azpwmk52","contentPackVersionDigest":"618b1e879742f149bfb04596061c2abb950a372845b5dcc929a62c51add94fb5"}],
+  "activity": {
+    "key": "thermal-energy-investigation", "outcomeCodes": ["KHTN8-B27-O01"],
+    "objective": "Đọc điện năng cấp vào và nhiệt độ ở 50 s, 100 s; đối chiếu độ tăng nhiệt và điều kiện bằng nhau giữa điện năng và nhiệt mẫu.",
+    "materials": ["Nước cố định 100 g", "Nhiệt lượng kế lý tưởng", "Heater 42 W", "Joulemeter độ chia 1 J", "Nhiệt kế độ chia 0,1 °C"],
+    "setup": "Nước ban đầu 25,0 °C, heater 42 W; tiến trình liên tục 0→50→100 s. Các thông số thiết bị và điều kiện lý tưởng là giả định kỹ thuật.",
+    "procedure": ["Dự đoán chiều biến đổi nhiệt độ", "Bắt đầu đun và ghi E, T, ΔT tại 50 s", "Dự đoán ΔT tại 100 s so với 50 s", "Ghi E, T, ΔT tại 100 s", "Chọn quan hệ ΔT và điều kiện calorimeter lý tưởng", "Nộp sổ thí nghiệm để server chấm"],
+    "variables": [{"name":"Thời gian đun","unit":"s","role":"independent"},{"name":"Điện năng cấp vào","unit":"J","role":"dependent"},{"name":"Nhiệt độ nước","unit":"°C","role":"dependent"},{"name":"Khối lượng nước","unit":"g","role":"controlled"}],
+    "observations": ["50 s: 2100 J; 30,0 °C; ΔT=5,0 °C", "100 s: 4200 J; 35,0 °C; ΔT=10,0 °C", "Joulemeter đo điện năng; nhiệt mẫu bằng điện năng chỉ trong mô hình lý tưởng"],
+    "expectedResult": "ΔT ở 100 s gấp đôi ΔT ở 50 s; tổng 6 tiêu chí, đạt từ 5/6. Dự đoán sai không bị trừ điểm dự đoán.",
+    "explanation": "Model dùng nhiệt dung cố định nội bộ để phát sinh nhiệt độ. Học sinh không tính mcΔT. Đây là mô phỏng lý tưởng bỏ qua thất thoát và nhiệt dung cốc; không mô tả số đo thực nghiệm chính xác.",
+    "safety": "Thí nghiệm ảo; không hướng dẫn tái tạo tại nhà. Giới hạn 100 s và 35 °C là giả định kỹ thuật của fixture, không phải giới hạn an toàn thiết bị thật.",
+    "limitations": "Technical Assumption: mẫu nước 100 g, nhiệt dung 4,2 J/g/K cố định, không thất thoát, không nhiệt dung cốc. Hỗ trợ chuẩn bị thực hành; không chứng minh kỹ năng dùng dụng cụ thật. Công thức mcΔT trong SGK KHTN8 chưa được xác minh.",
+    "modality": "deterministic-simulation",
+    "sources": [{"title":"KHTN8 B27, hộp MỤC TIÊU, PDF111 / trang in109, block sgk-khtn8-nxbgd-2026-p0111-b0004; registry approved_internal provenance checked read-only 2026-11-03; not FL07 release approval","license":"INTERNAL"},{"title":"FL-07 thermal energy design sections 10–11; model constants and ideal calorimeter are technical assumptions pending owner approval","license":"INTERNAL"}],
+    "reviews": {"ownerSignoffPending": true}
+  },
+  "pack": {
+    "key": "thermal-bench", "labId": "thermal-energy", "modelRef": "thermal-bench@1.0.0", "activityVersionId": "pending-api-id",
+    "template": {
+      "units": {"energy":"mJ","temperature":"m°C","time":"ms"}, "ranges": {},
+      "initialState": {"fixtureId":"water-calorimeter-v1","elapsedMilliseconds":0},
+      "limitations": "Fixed ideal 100 g water fixture; no heat loss or container heat capacity; technical assumptions pending exact-digest owner approval.",
+      "goldenCases": [
+        {"label":"Initial 25 °C","state":{"fixtureId":"water-calorimeter-v1","elapsedMilliseconds":0},"expectedVerdict":"passed","expectedOutputs":{"inputEnergyMilliJoules":0,"temperatureMilliCelsius":25000,"heaterState":"OFF"},"tolerance":0},
+        {"label":"First second","state":{"fixtureId":"water-calorimeter-v1","elapsedMilliseconds":1000},"expectedVerdict":"passed","expectedOutputs":{"inputEnergyMilliJoules":42000,"temperatureMilliCelsius":25100,"heaterState":"ON"},"tolerance":0},
+        {"label":"50 s measurement","state":{"fixtureId":"water-calorimeter-v1","elapsedMilliseconds":50000},"expectedVerdict":"passed","expectedOutputs":{"inputEnergyMilliJoules":2100000,"temperatureMilliCelsius":30000,"riseMilliCelsius":5000},"tolerance":0},
+        {"label":"100 s automatic stop","state":{"fixtureId":"water-calorimeter-v1","elapsedMilliseconds":100000},"expectedVerdict":"passed","expectedOutputs":{"inputEnergyMilliJoules":4200000,"temperatureMilliCelsius":35000,"riseMilliCelsius":10000,"heaterState":"AUTO_STOP"},"tolerance":0}
+      ]
+    },
+    "visualAssetVersionId": null, "semanticMap": {"calorimeter":"calorimeter","heater":"heater","joulemeter":"joulemeter","thermometer":"thermometer"},
+    "bindings": [], "challengeTemplates": [], "reviews": {"ownerSignoffPending":true},
+    "reason": "FL-07 procedural K4 apparatus with shared room; four deterministic model golden cases; no approval receipt."
+  }
+}

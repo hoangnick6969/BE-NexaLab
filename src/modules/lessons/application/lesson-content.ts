@@ -40,6 +40,7 @@ export const CHALLENGE_PARAMETERS: Record<
   string,
   { modelRef: string; rangeReview: "pending" | "approved"; params: Record<string, NumberParam | ChoiceParam> }
 > = {
+  "thermal-energy": { modelRef: "thermal-bench@1.0.0", rangeReview: "pending", params: {} },
   "lever-equilibrium": {
     modelRef: "lever-bench@1.0.0",
     rangeReview: "pending",
@@ -88,12 +89,15 @@ export const CHALLENGE_PARAMETERS: Record<
     rangeReview: "pending",
     params: {},
   },
+  buoyancy: { modelRef: "buoyancy@1.0.0", rangeReview: "pending", params: {} },
   // FL-27: no learner-tunable parameters. The gene variant is pinned per run by the server (gene-variants.ts).
   "gene-protein": {
     modelRef: "gene-expression@1.0.0",
     rangeReview: "pending",
     params: {},
   },
+  // FL-16: observation-only model, no teacher-adjustable challenge parameters.
+  "eye-optics": { modelRef: "eye-optics@1.0.0", rangeReview: "pending", params: {} },
   eye: {
     modelRef: "eye@1.0.0",
     rangeReview: "pending",

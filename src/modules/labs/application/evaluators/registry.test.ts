@@ -46,6 +46,19 @@ describe("Lab evaluator registry", () => {
   });
 
   it("keeps the released Circuit identity, renderer and legacy fallback", () => {
-    expect(labEvaluators.rubricRefs).toEqual([LEGACY_CHALLENGE_RUBRIC, CIRCUIT_BULB_RUBRIC, "em-induction-checkpoints@1.0.0", "ecology-tolerance-checkpoints@1.0.0", "mass-conservation-poea@1.0.0", "lever-investigation@1.0.0", "density-stations@1.0.0", "gene-protein-stations@1.0.0"]);
+    expect(labEvaluators.rubricRefs).toEqual([LEGACY_CHALLENGE_RUBRIC, CIRCUIT_BULB_RUBRIC, "em-induction-checkpoints@1.0.0", "ecology-tolerance-checkpoints@1.0.0", "mass-conservation-poea@1.0.0", "lever-investigation@1.0.0", "thermal-energy-investigation@1.0.0", "density-stations@1.0.0", "gene-protein-stations@1.0.0", "eye-anatomy-optics@1.0.0", "buoyancy-archimedes@1.0.0"]);
+    expect(labEvaluators.resolve("em-induction-checkpoints@1.0.0").rendererKey).toBe("em-induction");
+    expect(labEvaluators.resolve(CIRCUIT_BULB_RUBRIC).rendererKey).toBe("circuit-bulb");
+    expect(labEvaluators.resolve(LEGACY_CHALLENGE_RUBRIC).rendererKey).toBeNull();
+    const tuple = { modelRef: "eye@1.0.0", engineVersion: "1.0.0", packVersionId: "p", configVersionId: "c", activityVersionId: "a", activityDigest: "d", activityKey: "x", activityVersion: 1, rubricRef: "synthetic-ratio@1.0.0", params: null, stateSchemaVersion: 1, evidenceSchemaVersion: 1, template: {} };
+    expect(executionSchema.safeParse(tuple).success).toBe(false);
+  });
+
+  it("accepts the generic evidence envelope beside the stored legacy shapes", () => {
+    const base = { contract: "lab-contract/1" as const, runId: "run", idempotencyKey: "ba8ccedf-ae67-460e-8b58-056146ef5a8a", stateSchemaVersion: 1 as const, evidenceSchemaVersion: 1 as const, durationMs: 10 };
+    const parsed = runSubmissionSchema.parse({ ...base, evidence: { answer: 7 } });
+    expect(submittedEvidence(parsed)).toEqual({ envelope: "evidence", data: { answer: 7 } });
+    expect(submittedEvidence(runSubmissionSchema.parse({ ...base, labState: { a: 1 } }))).toEqual({ envelope: "labState", data: { a: 1 } });
+    expect(runSubmissionSchema.safeParse({ ...base, evidence: { a: 1 }, labState: { a: 1 } }).success).toBe(false);
   });
 });

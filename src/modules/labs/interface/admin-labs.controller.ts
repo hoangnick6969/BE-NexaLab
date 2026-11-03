@@ -30,10 +30,11 @@ import {
   versionParams,
 } from "../application/simulation-versions";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
-import { FL10_RUBRIC } from "../application/lab-run";
+import { FL10_RUBRIC, FL07_RUBRIC } from "../application/lab-run";
 import { evaluateMassConservation } from "../../../../packages/sim";
 import { evaluateFl10Activity } from "../application/fl-10-draft-evidence";
 import type { Fl10Event } from "../application/fl-10-events";
+import { evaluateFl07Activity } from "../application/fl-07-activity";
 import { canonical, digest, evaluateRunV1, executionSchema as labRunExecutionSchema, LEGACY_CHALLENGE_RUBRIC } from "../application/lab-run";
 import { labEvaluators } from "../application/evaluators/registry";
 /** PostgreSQL JSON numbers can round at the last floating-point digits. */
@@ -112,7 +113,7 @@ export class AdminLabsController {
     if (model.labId !== input.id || !CHALLENGE_PARAMETERS[input.id]) throw new BadRequestException({ code: "LAB_MODEL_INVALID" });
     return this.db.$transaction(async tx => {
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-create:" + input.id);
-      if (input.id === "lever-equilibrium") {
+      if (input.id === "lever-equilibrium" || input.id === "thermal-energy") {
         const [schema] = await tx.$queryRawUnsafe<Array<{ ready: boolean }>>(`SELECT to_regclass('public."LabRunEvent"') IS NOT NULL AS ready`);
         if (!schema.ready) throw new ConflictException({ code: "LAB_SCHEMA_MIGRATION_REQUIRED", message: "Apply the existing LabRunEvent schema migration before publication" });
       }
@@ -347,6 +348,7 @@ export class AdminLabsController {
       runBinding = parsed.data.binding ?? null;
       const resultExecution = (attempt.simulationResult as any)?._execution;
       if (!resultExecution || resultExecution.modelRef !== parsed.data.modelRef ||
+          (parsed.data.rubricRef === FL07_RUBRIC && resultExecution.rubricRef !== parsed.data.rubricRef) ||
           canonical(resultExecution.params) !== canonical(parsed.data.params))
         throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID", message: "Kết quả không khớp phiên chạy" });
     }    const originalResult = attempt.simulationResult as any;
@@ -377,8 +379,14 @@ export class AdminLabsController {
     let reproduced: string;
     let reproducedResult: any = null;
     try {
-      const checkpointActivity = execution?.success && execution.data.rubricRef && execution.data.rubricRef !== FL10_RUBRIC && execution.data.rubricRef !== LEGACY_CHALLENGE_RUBRIC ? labEvaluators.resolve(execution.data.rubricRef) : null;
-      const evaluated = execution?.success && execution.data.rubricRef === FL10_RUBRIC
+      const checkpointActivity = execution?.success && execution.data.rubricRef && execution.data.rubricRef !== FL10_RUBRIC && execution.data.rubricRef !== FL07_RUBRIC && execution.data.rubricRef !== LEGACY_CHALLENGE_RUBRIC ? labEvaluators.resolve(execution.data.rubricRef) : null;
+      const evaluated = execution?.success && execution.data.rubricRef === FL07_RUBRIC
+        ? await (async () => {
+            if (!attempt.labRunId || attempt.challenge.labId !== "thermal-energy" || modelRef !== "thermal-bench@1.0.0") throw new Error("FL-07 requires its pinned run");
+            const events = await this.db.labRunEvent.findMany({ where: { runId: attempt.labRunId }, orderBy: { sequence: "asc" } });
+            return evaluateFl07Activity(attempt.labState, events.map((row) => row.event));
+          })()
+        : execution?.success && execution.data.rubricRef === FL10_RUBRIC
         ? await (async () => {
             if (!attempt.labRunId) throw new Error("FL-10 requires a pinned run");
             const model = evaluateMassConservation(params);
