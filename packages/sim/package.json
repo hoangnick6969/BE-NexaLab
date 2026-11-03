@@ -4,5 +4,17 @@
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
-  "files": ["index.ts", "mass-conservation.ts", "gene-expression.ts", "ecology-tolerance.ts", "lever-bench.ts", "thermal-bench.ts"]
+  "files": [
+    "index.ts",
+    "mass-conservation.ts",
+    "gene-expression.ts",
+    "ecology-tolerance.ts",
+    "lever-bench.ts",
+    "thermal-bench.ts",
+    "buoyancy.ts",
+    "eye-optics.ts"
+  ],
+  "dependencies": {
+    "zod": "^3.25.0"
+  }
 }

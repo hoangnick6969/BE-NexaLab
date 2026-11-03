@@ -30,7 +30,7 @@ Decision meanings: KEEP = distinct proposed identity; SHARE = retain identity bu
 | FL-13 | SHARE | 11 | Indicator/acid-base shares only reviewed bench components with other chemistry; separate model/rubric from FL-10 |
 | FL-14 | SPLIT | 12 | Broad reaction family needs narrower modes and curated reaction data before model/identity decisions |
 | FL-15 | KEEP | 13 | Safety scenarios need a separate safety review and evidence rubric |
-| FL-16 | NO LAB | — | Current eye/anatomy labelling is provisionally a Lesson resource; reconsider a Lab only if interaction yields distinct learning evidence |
+| FL-16 | LAB (owner decision 2026-11-01) | Showcase Pilot (Kit EX-A) | Eye structure labelling (phase 1) + accommodation/corrective-lens optics (phase 2) with server rubric; shares kit `EX-A` with FL-17. **Outside the 20 core slots**: it does not displace or count toward any of them until SME and owner sign off ([fl-16-sme-review-checklist.md](fl-16-sme-review-checklist.md)). Supersedes the earlier NO LAB row. See [fl-16-eye-anatomy-kit-plan.md](fl-16-eye-anatomy-kit-plan.md) |
 | FL-17 | DEFER | — | Circulation/respiration model tractability and health framing unresolved |
 | FL-18 | DEFER | — | Nutrition table rights, child-facing framing and reviewer need unresolved |
 | FL-19 | DEFER | — | Physiological feedback assumptions and tractability unresolved |
@@ -233,7 +233,7 @@ Sơ đồ 2D trong mô phỏng cần được phân định rõ theo yêu cầu 
 | FL-13 | Acid – base, chỉ thị & pH | SHARE / W2 | K2 Bàn hoá ướt | Tier B (Bench) | 2D | Tuỳ chọn (bảng thang pH) | Khay ống nghiệm axit/bazo, giấy chỉ thị, bút đo pH |
 | FL-14 | Bàn phản ứng vô cơ & kim loại | SPLIT / W3 | K2 Bàn hoá ướt | Tier B (Bench) | 2D | Tuỳ chọn (bảng tính tan) | Dãy ống nghiệm phản ứng trao đổi, dãy điện hoá kim loại |
 | FL-15 | An toàn phòng thí nghiệm | KEEP / W4 | K2 Bàn hoá ướt | Tier B (Bench) | 2D (First-person tuỳ chọn) | Tuỳ chọn (biển báo) | Bàn kịch bản quy tắc an toàn, chọn dụng cụ/thiết bị bảo hộ |
-| FL-16 | Cấu tạo mắt & cơ thể người | NO LAB / W4 | Explorer đề xuất | Tier A (Scene-first) | 3D xem (không tạo Lab) | Tuỳ chọn (đường truyền sáng) | Tài nguyên xem/bóc tách nhãn cầu 3D, không chấm điểm (*Lưu ý:* mâu thuẫn giữa Table 1 NO LAB vs §5 xếp W4 là điểm chờ reviewer chuẩn hoá) |
+| FL-16 | Cấu tạo mắt & điều tiết (phase 1 giải phẫu, phase 2 quang sinh học) | LAB / W4 (owner 2026-11-01) — Showcase Pilot, ngoài 20 core slot | EX-A Giải phẫu & Quang sinh học (tách khỏi K3) | Tier A (Scene-first) | 3D + 2D tương đương | Bắt buộc cho phase 2 (đường truyền tia Snell) | Chấm điểm bằng rubric server `eye-anatomy-optics@1.0.0`; scope phase 2 cận/viễn cần reviewer đối chiếu B37-O04 |
 | FL-17 | Tuần hoàn và hô hấp | DEFER / BL | Explorer đề xuất | Tier A (Scene-first) | 3D xem (không tạo Lab) | Tuỳ chọn (sơ đồ vòng tuần hoàn) | Hoạt ảnh 3D dòng chảy qua tim và phổi; không chẩn đoán bệnh |
 | FL-18 | Xây dựng khẩu phần ăn | DEFER / W4 | K8 Cảnh nhẹ + HUD | Tier C (Light scene + HUD) | 2D (HUD) | Tuỳ chọn (tháp dinh dưỡng) | HUD chọn món ăn, tính tổng calo và dưỡng chất |
 | FL-19 | Điều hoà thân nhiệt | DEFER / BL | K8 Cảnh nhẹ + HUD | Tier C (Light scene + HUD) | 2D (HUD) | Tuỳ chọn (sơ đồ phản hồi) | Minh hoạ phản hồi thân nhiệt định tính |
@@ -306,7 +306,7 @@ K1 Circuit/FL-25, K3 Density, K2 Mass Conservation and the K7 entry bench compos
 | K6 Bàn quang học | FL-23 | Vật lý: quang học K9 | Một candidate SPLIT; cần chốt modes/model. 2D evidence drawing là yêu cầu riêng, không thể thay bằng chỉ đổi camera. |
 | K7 Phân tử/gen | FL-27, FL-28, FL-30 | Sinh học: gene–protein, phân bào; Hoá học: phân tử hữu cơ/polymer | **Technical candidate trên `feat/fl27` (FE + BE):** kit K7 (bàn sinh học phân tử trong phòng nền → kính hiển vi → `MolecularStage` không phòng; mô hình sơ đồ/nguyên tử; sơ đồ 2D "Đọc"). FL-27 có model `gene-expression@1.0.0`, rubric `gene-protein-stations@1.0.0`, fixture và E2E trên DB cô lập; chưa review curriculum/khoa học, chưa release (xem [FL-27 plan](fl-27-gene-protein-k7-plan.md)). FL-28/30 vẫn DEFER theo catalog. |
 | K8 Cảnh nhẹ + HUD | FL-18–FL-22, FL-26, FL-29 | Sinh học/sinh thái, dinh dưỡng, khí hậu, di truyền | Kit quy hoạch; chưa có scene production. Phần lớn là HUD/2D-first; 3D chỉ thêm khi cải thiện học tập và qua QA. |
-| Explorer (không phải kit/Lab) | FL-16, FL-17 (đề xuất) | Sinh học/cơ thể người | Nội dung xem/khám phá, không tạo evidence và không phải release Lab; giữ đúng trạng thái NO LAB/DEFER trong catalog. |
+| EX-A Giải phẫu & Quang sinh học | FL-16 (LAB, Showcase Pilot), FL-17 (DEFER) | Sinh học/cơ thể người, quang học của mắt | FL-16 có technical candidate: model `eye-optics@1.0.0`, rubric `eye-anatomy-optics@1.0.0`, renderer 3D + DOM tương đương, dev preview `/dev/lab-kits/eye-optics`. Chưa release, ngoài 20 core slot, chờ SME/owner. FL-17 chưa triển khai. |
 
 Các ID giữ nguyên decision/wave/provisional status ở bảng §6A.3 và bảng portfolio; bảng trên chỉ trả lời “dùng chung presentation kit nào”, không nâng status `DEFER`, `SPLIT`, `NO LAB` thành `SHARE`/`implemented`. Nếu một candidate chưa có state schema/model/activity đã review, mock-up 2D/3D cũng không được ghi là pipeline implementation.
 

@@ -1,0 +1,9 @@
+{
+  "candidateDigest": "3afb7388188b213bb8eb255093ff38db6a31f5ef972f024ba2a98530265f34cc",
+  "contentDigest": "85b4a42dbd7909e6c87d86b0f5b6a021021f6fd2f11dcbdb47dc621b724cef46",
+  "activityDigest": "a8a5f0a177f0bc3a6af6d80bc3a422941bbbdc208bf81278d51d19faa33542a4",
+  "packDigest": "40e8914da405695475e58394930a56a929521cf41a5be3cedb7a5c2cd62a192e",
+  "rubricDigest": "5084b68e62a0dee102188b0c730626573eb1908730ab6fa3a8eb2a0adad9af09",
+  "releaseDigest": null,
+  "note": "Release digest is computed by LabReleaseService from the DB snapshot. Never sign candidateDigest as releaseDigest."
+}

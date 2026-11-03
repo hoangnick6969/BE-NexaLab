@@ -1,5 +1,6 @@
 import { z } from "zod";
 export { evaluateMassConservation } from "./mass-conservation";
+export { simulateBuoyancy } from "./buoyancy";
 export { evaluateLeverBench, classifyLeverCase } from "./lever-bench";
 export { evaluateThermalBench } from "./thermal-bench";
 export * from "./gene-expression";

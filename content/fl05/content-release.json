@@ -1,0 +1,87 @@
+{
+  "name": "fl05-buoyancy-v1",
+  "namespace": "baseline",
+  "sources": [],
+  "packs": [
+    {
+      "key": "khtn8-fl05-buoyancy",
+      "title": "Lực đẩy Ác-si-mét",
+      "grade": 8,
+      "domain": "MATTER",
+      "chapter": "Khối lượng riêng và áp suất",
+      "topic": "Lực đẩy Ác-si-mét",
+      "subjectId": "khtn",
+      "outcomeCodes": [
+        "KHTN8-B17-O01"
+      ],
+      "synthetic": false,
+      "sources": [
+        {
+          "id": "openstax-buoyancy",
+          "title": "University Physics Volume 1, 14.4 Archimedes’ Principle and Buoyancy",
+          "author": "William Moebs, Samuel J. Ling, Jeff Sanny",
+          "url": "https://openstax.org/books/university-physics-volume-1/pages/14-4-archimedes-principle-and-buoyancy",
+          "accessedAt": "2026-11-03",
+          "license": "REFERENCE_ONLY",
+          "attribution": "OpenStax; reference for physical law only. No text, image, or exercise reproduced.",
+          "authoritative": true
+        },
+        {
+          "id": "nasa-buoyancy",
+          "title": "Buoyancy: Archimedes Principle",
+          "author": "Carol Hodanbosi; NASA Glenn Research Center",
+          "url": "https://www.grc.nasa.gov/WWW/K-12/WindTunnel/Activities/buoy_Archimedes",
+          "accessedAt": "2026-11-03",
+          "license": "REFERENCE_ONLY",
+          "attribution": "NASA Glenn; scientific reference only; no source text or images copied.",
+          "authoritative": true
+        }
+      ],
+      "knowledgeUnits": [
+        {
+          "id": "archimedes-law",
+          "outcomeCodes": [
+            "KHTN8-B17-O01"
+          ],
+          "claims": [
+            {
+              "id": "displaced-weight",
+              "text": "Trong chất lỏng đứng yên, lực đẩy lên vật bằng trọng lượng phần chất lỏng bị vật chiếm chỗ.",
+              "important": true,
+              "sourceIds": [
+                "openstax-buoyancy",
+                "nasa-buoyancy"
+              ]
+            },
+            {
+              "id": "apparent-weight",
+              "text": "Với vật treo đứng yên và dây căng, số chỉ lực kế giảm một lượng bằng lực đẩy của chất lỏng.",
+              "important": true,
+              "sourceIds": [
+                "openstax-buoyancy",
+                "nasa-buoyancy"
+              ]
+            }
+          ],
+          "terms": [
+            "Lực đẩy",
+            "Thể tích chiếm chỗ",
+            "Trọng lượng riêng"
+          ],
+          "misconceptions": [
+            "Thể tích toàn bộ vật chỉ bằng thể tích chiếm chỗ khi vật chìm hoàn toàn."
+          ]
+        }
+      ],
+      "lesson": {
+        "learningObjective": "Đo trọng lượng biểu kiến, đo nước tràn và kiểm chứng F_A = ρgV khi vật chìm hoàn toàn.",
+        "prerequisites": "Khối lượng riêng; trọng lượng; đổi mL sang m³.",
+        "content": "<h2>Kiểm chứng lực đẩy Ác-si-mét</h2><p>Treo mẫu vật vào lực kế và ghi P₀ khi vật ở ngoài không khí. Đặt bình tràn đã đầy tới vòi và cốc hứng rỗng đúng dưới vòi. Nhúng vật một phần rồi hoàn toàn, giữ vật không chạm đáy. Ghi số chỉ F của lực kế và thể tích nước tràn V. Tính P₀ − F và so sánh với ρgV. Trong phép tính này dùng nước lý tưởng ρ = 1000 kg/m³ và g = 9,81 m/s²; 1 mL = 10⁻⁶ m³. Các mẫu là vật ảo có kích thước và khối lượng cấu hình, không phải dữ liệu đo vật liệu ngoài đời.</p><p>Chỉ thao tác trong mô phỏng. Mô hình bỏ qua sức căng bề mặt, lực cản và sai số thiết bị thực.</p>",
+        "materials": [],
+        "questions": [],
+        "labId": "buoyancy"
+      },
+      "reviews": {}
+    }
+  ]
+}
