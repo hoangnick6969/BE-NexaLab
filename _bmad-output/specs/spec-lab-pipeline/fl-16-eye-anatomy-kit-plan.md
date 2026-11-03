@@ -228,6 +228,8 @@ node scripts/release-fl16-eye-optics.mjs publish <releaseId> <digest>   # OWNER_
 
 **Gắn bài học.** Bản nháp gắn trực tiếp (DIRECT_LESSON) bài "Hệ thần kinh và các giác quan ở người" (`pack-structured-224cf04f147bbd206755a21b6189dda45903460d-v1`, topic `KHTN8-L37`, pack đã released, có outcome `KHTN8-B37-O04`). Kiểm tra chỉ đọc ngày 2026-11-03 cho thấy điều kiện tạo bản nháp đã đủ. Không ghi tay `foundationalLabId`: luồng release hiện tại dùng binding trực tiếp trong snapshot.
 
+**Sau khi gộp `main` (2026-11-03):** `main` dùng policy `DEV_APPROVAL_V1` cho mọi Lab trừ `lever-equilibrium`; bằng chứng là `{developerCheck, agentCheck}`, và màn Admin "Duyệt phát hành Lab" trên `main` duyệt được bản nháp loại này. Script tự chọn bằng chứng theo `snapshot.reviewPolicy`. Bản nháp vẫn phải tạo qua API (`draft`) vì giao diện chưa có nút tạo.
+
 Khi `publish` chạy xong, đổi `status` của tài liệu này sang `released-owner-approved` và ghi id release, digest.
 
 ## 9. Phase gates và việc còn lại
