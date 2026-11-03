@@ -88,6 +88,7 @@ export const CHALLENGE_PARAMETERS: Record<
     rangeReview: "pending",
     params: {},
   },
+  buoyancy: { modelRef: "buoyancy@1.0.0", rangeReview: "pending", params: {} },
   // FL-27: no learner-tunable parameters. The gene variant is pinned per run by the server (gene-variants.ts).
   "gene-protein": {
     modelRef: "gene-expression@1.0.0",

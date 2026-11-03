@@ -4,5 +4,15 @@
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
-  "files": ["index.ts", "mass-conservation.ts", "gene-expression.ts", "ecology-tolerance.ts", "lever-bench.ts"]
+  "files": [
+    "index.ts",
+    "mass-conservation.ts",
+    "gene-expression.ts",
+    "ecology-tolerance.ts",
+    "lever-bench.ts",
+    "buoyancy.ts"
+  ],
+  "dependencies": {
+    "zod": "^3.25.0"
+  }
 }

@@ -66,7 +66,10 @@
     "content:release": "tsx scripts/content-release.ts",
     "content:studio:validate": "tsx scripts/content-studio-validate.ts",
     "mailbox": "node scripts/mailbox.mjs",
-    "format": "prettier --write src packages prisma scripts"
+    "format": "prettier --write src packages prisma scripts",
+    "prepare:fl05": "tsx scripts/prepare-fl05.ts",
+    "predb:seed:fl05-candidate": "node scripts/assert-isolated-db.mjs FL05-candidate",
+    "db:seed:fl05-candidate": "tsx scripts/seed-fl05-candidate.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1140.0",

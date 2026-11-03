@@ -3,6 +3,7 @@ import { eyeOpticsEvaluator } from "./eye-anatomy-optics.evaluator";
 import { z } from "zod";
 import { CHECKPOINT_ACTIVITIES, ECOLOGY_TOLERANCE_RUBRIC, EM_INDUCTION_RUBRIC } from "../checkpoint-activities";
 import { densityStationsEvaluator } from "./density-stations.evaluator";
+import { buoyancyLabEvaluator } from "./buoyancy-lab.evaluator";
 import { geneProteinStationsEvaluator } from "./gene-protein-stations.evaluator";
 import { legacyChallengeEvaluator } from "./legacy-challenge.evaluator";
 import type { LabEvaluation, LabEvaluator, LabRuntimeConfig } from "./lab-evaluator";
@@ -85,4 +86,4 @@ const fl06Evaluator: LabEvaluator<any> = {
   evidenceSchema: z.object({}).strict(),
   evaluate: () => { throw new Error("FL-06 requires server event history"); },
 };
-export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, ecologyToleranceEvaluator, fl10Evaluator, fl06Evaluator, densityStationsEvaluator, geneProteinStationsEvaluator, eyeOpticsEvaluator]);
+export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, ecologyToleranceEvaluator, fl10Evaluator, fl06Evaluator, densityStationsEvaluator, geneProteinStationsEvaluator, eyeOpticsEvaluator, buoyancyLabEvaluator]);
