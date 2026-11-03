@@ -136,6 +136,13 @@ Spec: `../specs/spec-fl-20-ecological-tolerance/k8-ecostage-v1.1.md`. FE branch 
 | Screenshots light 1440, dark 1280, phone 390 | no page errors; headless swiftshader runs tier low, shadows not judged |
 | sloplint | 0 FAIL |
 
+- 2026-11-03 owner request "Sửa luôn cho Lab bóng đèn và cảm ứng điện từ": the result drawer rules moved from the FL-20 CSS to `shared/LabSpace.css` for all three guided labs (FL-25 bulb, FL-25 induction, FL-20). The drawer is a solid card in the panel's box with one title, and the question panel and badge are hidden while it is open. `EmInductionActivity.css` matches the drawer width and surface to `--em-panel-w` and `--em-panel-solid`. Specs `lab-run-host` (bulb) and `em-induction-lab` now assert that the panel is hidden after submit. Run on Vite 5302: 16 of 18 passed in lab-run-host, em-induction, ecology-tolerance and circuit. The 2 failures, `Lab Space pilot fills viewport` at 1440 and 390 (`toBeFocused`), fail the same way without this change. Not committed.
+
+### PR conflicts and CI (2026-11-03)
+- FE: merged `origin/main` (`6421596`, FL-07). The conflict in `src/features/labs/README.md` was resolved by keeping main's EX-A anatomy line and the v1.1 ecology line. Merge `1304d34` pushed. tsc and build ok. `lab-run-host` P3.2b and `Lab Space pilot fills viewport` (1440, 390) fail the same way on a clean `origin/main` checkout, so they are not caused by this branch.
+- BE: merged `origin/main` (`9618c70`, FL-07). CI "API checks" failed on `fl-07.integration.test.ts`, which throws in CI without `NEXALAB_FL07_TEST_URL`. Its fixture only accepts the loopback database `fl07_isolated`, with every URL equal to it. `ci.yml` now excludes the file from `npm test` and runs it in its own step against a new `fl07_isolated` database.
+- Reproduced both steps on the throwaway loopback cluster (127.0.0.1:55432, CI=true): `npm test` 70 files passed, 3 skipped (470 tests); FL-07 step 1/1. Lint and build ok.
+
 ### Not done
 - Owner visual review of the 3D level; real-GPU check of the high tier (shadows, frame rate) on a school machine.
 - No change to BE code, release or shared data.
