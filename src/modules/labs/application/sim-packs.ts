@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { simulateBuoyancy, buoyancyConfigSchema } from "../../../../packages/sim/buoyancy";
 import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, emInduction, eye, eyeParts, evaluateMassConservation } from "../../../../packages/sim";
 import { eyeOptics } from "../../../../packages/sim/eye-optics";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
@@ -27,6 +28,14 @@ type Model = {
   observationOnly?: { unsupportedParams: string };
 };
 export const MODEL_REGISTRY: Record<string, Model> = {
+  "buoyancy@1.0.0": {
+    labId: "buoyancy",
+    engineVersion: "1.0.0",
+    simulate: (input) => simulateBuoyancy(z.object({ massKg: z.number().positive(), volumeM3: z.number().positive(), submergedVolumeM3: z.number().nonnegative(), fluidDensityKgM3: z.number().positive(), gravity: z.number().positive().optional() }).strict().parse(input)),
+    outputs: { weightN: "number", buoyantForceN: "number", springForceN: "number", overflowM3: "number" },
+    requiredSemanticIds: ["specimen", "dynamometer", "overflow-can", "collector"],
+    observationOnly: { unsupportedParams: "buoyancy model uses pinned specimen and fluid parameters" },
+  },
   "mass-conservation@1.0.0": {
     labId: "mass-conservation",
     engineVersion: "1.0.0",
@@ -179,6 +188,7 @@ export const packInputSchema = z
         ranges: z.record(z.string().max(40), z.object({ min: z.number(), max: z.number() }).strict()),
         initialState: z.unknown(),
         limitations: text(1000),
+        buoyancy: buoyancyConfigSchema.optional(),
         goldenCases: z
           .array(
             z
@@ -279,6 +289,7 @@ export function packValidation(
   if (!model) return { errors: [`Mô hình ${input.modelRef} không nằm trong danh sách cho phép`], golden: [] };
   if (model.labId !== input.labId) errors.push(`mô hình ${input.modelRef} không thuộc phòng ${input.labId}`);
   if (ctx.labModelRef && ctx.labModelRef !== input.modelRef) errors.push(`phòng đang dùng ${ctx.labModelRef}, khác ${input.modelRef}`);
+  if (input.modelRef === "buoyancy@1.0.0" && !input.template.buoyancy) errors.push("thiếu cấu hình buoyancy đã ghim");
   if (!ctx.activity) errors.push("thiếu hoạt động thực hành");
   const allowed = CHALLENGE_PARAMETERS[input.labId]?.params ?? {};
   for (const [name, range] of Object.entries(input.template.ranges)) {

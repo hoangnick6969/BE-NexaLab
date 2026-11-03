@@ -19,3 +19,6 @@ docs/BLUEPRINT.md
 
 # BMAD personal installer answers; team configuration lives in _bmad/custom/config.toml.
 _bmad/config.user.toml
+
+# Owner-filled local FL-05 review material; the unsigned template is tracked.
+content/fl05/review-receipt.local*.json

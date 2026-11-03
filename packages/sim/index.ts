@@ -1,5 +1,6 @@
 import { z } from "zod";
 export { evaluateMassConservation } from "./mass-conservation";
+export { simulateBuoyancy } from "./buoyancy";
 export const VERSION = "1.0.0";
 const part = z.object({
   id: z.string().min(1).max(60),

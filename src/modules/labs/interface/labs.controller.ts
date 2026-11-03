@@ -22,6 +22,11 @@ import { evaluateMassConservation } from "../../../../packages/sim";
 import { fl10VisibleReadings, nextFl10Event, type Fl10Event } from "../application/fl-10-events";
 import { evaluateFl10Activity } from "../application/fl-10-draft-evidence";
 
+/** Client renderer for a pinned rubric; null keeps the client's legacy lookup by Lab id. */
+function rendererKeyFor(rubricRef: string): string | null {
+  try { return labEvaluators.resolve(rubricRef).rendererKey; } catch { return null; }
+}
+
 @ApiTags("NexaLab")
 @ApiBearerAuth()
 @Controller()
@@ -413,12 +418,13 @@ export class LabsController {
         evidenceSchemaVersion: 1,
         constraints: execution.modelRef === "mass-conservation@1.0.0" ? {} : template?.ranges ?? {},
         initialState: execution.modelRef === "mass-conservation@1.0.0" ? null : template?.initialState ?? null,
-        rendererKey: execution.modelRef === "circuit-bulb@1.0.0" ? "circuit-bulb"
-          : execution.modelRef === "mass-conservation@1.0.0" ? "mass-conservation" : null,
+        // The pinned rubric's evaluator names the client renderer (e.g. density-bench for the density Lab).
+        rendererKey: rendererKeyFor(execution.rubricRef),
         expiresAt: run.expiresAt, context: run.context, assignmentId: run.assignmentId,
         versionBinding: execution.binding,
         // Server-chosen run parameters (e.g. FL-03 specimen pins); the client shows them, the server checks them.
         runtimeParams: execution.params ?? null,
+        ...(execution.modelRef === "buoyancy@1.0.0" ? { runtimeConfig: template?.buoyancy } : {}),
       };
     }, { timeout: 20000 });
   }
@@ -475,8 +481,10 @@ export class LabsController {
           if (model.labId !== locked.labId || model.engineVersion !== execution.engineVersion) throw new Error("Pinned model is unavailable");
           const activity = execution.rubricRef !== "legacy-challenge@1.0.0" ? labEvaluators.resolve(execution.rubricRef) : null;
           if (activity) {
-            if (!("checkpoints" in b)) throw new Error("Thiếu bằng chứng checkpoint");
-            ({ result, verdict } = labEvaluators.evaluate(execution.rubricRef, locked.id, { checkpoints: b.checkpoints, explanation: b.explanation }, { labId: locked.labId, modelRef: execution.modelRef, engineVersion: execution.engineVersion, params: execution.params, template: execution.template }));
+            // Each rubric declares its envelope: Circuit checkpoints, or density-stations evidence.
+            if (submitted.envelope !== activity.envelope)
+              throw new Error(activity.envelope === "checkpoints" ? "Thiếu bằng chứng checkpoint" : "Thiếu bằng chứng hoạt động");
+            ({ result, verdict } = labEvaluators.evaluate(execution.rubricRef, locked.id, submitted.data, { labId: locked.labId, modelRef: execution.modelRef, engineVersion: execution.engineVersion, params: execution.params, template: execution.template }));
           } else {
           if (!("labState" in b)) throw new Error("Thiếu trạng thái Lab");
           ({ result, verdict } = evaluateRunV1(locked.labId, b.labState, execution.params, execution.modelRef));

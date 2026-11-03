@@ -1,0 +1,45 @@
+{
+  "verifiedAt": "2026-11-03T07:20:01.061Z",
+  "candidateDigest": "3afb7388188b213bb8eb255093ff38db6a31f5ef972f024ba2a98530265f34cc",
+  "authorization": "Project Owner explicit session approval, 2026-11-03; scoped remote DB and signoff override",
+  "lab": {
+    "id": "buoyancy",
+    "title": "Lực đẩy Ác-si-mét",
+    "scope": "SHARED_LIBRARY",
+    "releaseCleared": true,
+    "status": "published",
+    "topicCode": "KHTN8-L17"
+  },
+  "release": {
+    "id": "cmw0coqyb0001nmy47y49dycq",
+    "digest": "3f5a2e02406d6552002fa1038fd9c8cff55ec114d0f66ddff23c831088622cfb",
+    "status": "ACTIVE",
+    "activatedAt": "2026-11-03T07:12:37.827Z"
+  },
+  "reviews": [
+    {
+      "kind": "OWNER_SIGNOFF",
+      "decision": "APPROVE",
+      "reviewerId": "admin",
+      "releaseDigest": "3f5a2e02406d6552002fa1038fd9c8cff55ec114d0f66ddff23c831088622cfb"
+    }
+  ],
+  "lessonBindings": [
+    {
+      "grade": 8,
+      "lessonId": "pack-structured-2bbbebc2843a163b51fd8b4d2088c884565c2ea8-v1",
+      "subjectId": "khtn",
+      "bindingType": "DIRECT_LESSON",
+      "curriculumOrder": 17,
+      "lessonTopicCode": "KHTN8-L17",
+      "lessonChapterCode": "KHTN8-CH03",
+      "lessonOutcomeCodes": [
+        "KHTN8-B17-O01"
+      ],
+      "contentPackReleaseId": "cmvncqdhd000blwuctzmobm2z",
+      "contentPackVersionId": "cmvmmpkoa001xlw14el20d9y5",
+      "contentPackVersionDigest": "75745c3144cb2d578fd12c2f5dfb518588caad0a57c7160ddac7189baa75c3a1"
+    }
+  ],
+  "mappingNote": "Existing approved curriculum ENERGY domain retained; local MATTER content candidate was not imported."
+}
