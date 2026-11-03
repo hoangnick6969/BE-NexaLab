@@ -115,3 +115,34 @@ Verified result:
 | Bài 41 foundational-labs | returns `ecology-tolerance` |
 
 No student run was made on the shared environment.
+
+## v1.1 — K8 EcoStage 3D pond (2026-11-03)
+
+Spec: `../specs/spec-fl-20-ecological-tolerance/k8-ecostage-v1.1.md`. FE branch `feat/fl-20-k8-ecostage` (worktree). Committed and pushed 2026-11-03 on owner request "Publish lại L20"; the owner opens the PRs. The server release v1 was not re-run because the activity is unchanged and the digest stays valid (V-5). Learners see v1.1 once the FE PR is merged and deployed.
+
+### What changed (FE only)
+- New kit `src/features/labs/biology/ecology/kit/`: `EcoStage`, `PondDiorama3D`, `FishSchool3D` + `fish-geometry.ts`, `Thermometer3D`, tiers, palette, motion tokens, dev preview `/dev/lab-kits/k8`.
+- `tolerance/PondView3D.tsx` renders the diorama with the same `.eco-pond[data-fish]` contract; `EcologyToleranceActivity` shows it by default, the tolerance graph becomes a card, "Xem sơ đồ 2D" toggles to the SVG scene.
+- READMEs (`labs/README.md`, `ecology/README.md`) updated.
+- 2026-11-03 owner review: the dev preview now follows the tilapia model by default ("auto" mood); out of range fish no longer fade but show the heat / cold response of V-6 (`FishSchool3D` moods `heat`, `cold`, `ECO_MOTION.stressSeconds` 6). Lab copy for `gone` updated.
+- 2026-11-03 owner review (V-7): per-question review block (`eco-review`, `eco-next`, chosen answer kept in view during the act phase); the result drawer now takes the question panel's box with one title and hides the panel underneath. Spec test updated for the extra "Câu tiếp theo" step; 3/3.
+
+### Verification
+| Check | Result |
+|---|---|
+| `tsc --noEmit`, `npm run build` | ok |
+| `tests/ecology-tolerance-lab.spec.ts` (separate Vite 5301, mocked API) | 3/3, including the new 3D/2D toggle test; re-run 3/3 after V-6 |
+| `tests/gene-protein-lab.spec.ts` (shared 3D code paths) | 4/4 |
+| Screenshots light 1440, dark 1280, phone 390 | no page errors; headless swiftshader runs tier low, shadows not judged |
+| sloplint | 0 FAIL |
+
+- 2026-11-03 owner request "Sửa luôn cho Lab bóng đèn và cảm ứng điện từ": the result drawer rules moved from the FL-20 CSS to `shared/LabSpace.css` for all three guided labs (FL-25 bulb, FL-25 induction, FL-20). The drawer is a solid card in the panel's box with one title, and the question panel and badge are hidden while it is open. `EmInductionActivity.css` matches the drawer width and surface to `--em-panel-w` and `--em-panel-solid`. Specs `lab-run-host` (bulb) and `em-induction-lab` now assert that the panel is hidden after submit. Run on Vite 5302: 16 of 18 passed in lab-run-host, em-induction, ecology-tolerance and circuit. The 2 failures, `Lab Space pilot fills viewport` at 1440 and 390 (`toBeFocused`), fail the same way without this change. Not committed.
+
+### PR conflicts and CI (2026-11-03)
+- FE: merged `origin/main` (`6421596`, FL-07). The conflict in `src/features/labs/README.md` was resolved by keeping main's EX-A anatomy line and the v1.1 ecology line. Merge `1304d34` pushed. tsc and build ok. `lab-run-host` P3.2b and `Lab Space pilot fills viewport` (1440, 390) fail the same way on a clean `origin/main` checkout, so they are not caused by this branch.
+- BE: merged `origin/main` (`9618c70`, FL-07). CI "API checks" failed on `fl-07.integration.test.ts`, which throws in CI without `NEXALAB_FL07_TEST_URL`. Its fixture only accepts the loopback database `fl07_isolated`, with every URL equal to it. `ci.yml` now excludes the file from `npm test` and runs it in its own step against a new `fl07_isolated` database.
+- Reproduced both steps on the throwaway loopback cluster (127.0.0.1:55432, CI=true): `npm test` 70 files passed, 3 skipped (470 tests); FL-07 step 1/1. Lint and build ok.
+
+### Not done
+- Owner visual review of the 3D level; real-GPU check of the high tier (shadows, frame rate) on a school machine.
+- No change to BE code, release or shared data.
