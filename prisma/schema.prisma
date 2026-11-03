@@ -612,10 +612,13 @@ model EbookEdition {
   version              String
   fallbackPhysicalPage Int                  @default(1)
   isCurrent            Boolean              @default(false)
+  coverAssetVersionId  String?
+  coverAssetVersion    AssetVersion?        @relation(fields: [coverAssetVersionId], references: [id], onDelete: Restrict)
   locators             LessonEbookLocator[]
   createdAt            DateTime             @default(now())
 
   @@unique([subjectId, version])
+  @@index([coverAssetVersionId])
 }
 
 model LessonEbookLocator {
@@ -1028,6 +1031,7 @@ model AssetVersion {
   createdById    String
   createdAt      DateTime  @default(now())
   readyAt        DateTime?
+  ebookCovers    EbookEdition[]
 
   @@unique([assetId, version])
   @@index([status, expiresAt])

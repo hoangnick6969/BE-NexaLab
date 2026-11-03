@@ -29,3 +29,6 @@
 - source_spec: none
   summary: Redesign the student Lessons, Class Space, and Assignments surfaces around the hierarchy subject and grade, chapter, then lesson or activity.
   evidence: The user explicitly chose to clean obsolete and duplicate specification artifacts first, so the UI information-architecture implementation is deferred to the next work item.
+- source_spec: `D:\coding\NEXA\nexalab-be\_bmad-output\implementation-artifacts\spec-book-cover-thumbnail-r2-sync.md`
+  summary: Add focused cover verification for student authorization and fallbacks, ADMIN attach/clear auditing, attribution persistence, rights-gated uploads, edition-matched rendering, and failed-attach retry reuse.
+  evidence: The verification-gap review found no tests for these changed contracts; the governing task instruction prohibits adding or running tests, so these remain unverified beyond lint, build, and compile checks.

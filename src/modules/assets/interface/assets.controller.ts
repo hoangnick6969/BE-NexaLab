@@ -120,6 +120,10 @@ export class AssetsController {
       sha256: ready.sha256,
       bytes: ready.bytes,
       url: "assetv:" + ready.id,
+      assetStatus: ready.asset.status,
+      scope: ready.asset.scope,
+      kind: ready.asset.kind,
+      mime: ready.mime,
     };
   }
 

@@ -104,6 +104,52 @@ export class AdminCurriculumController {
       outcomes: outcomes.map((o) => ({ ...o, lessons: usage.get(o.code) ?? 0 })),
     };
   }
+  @Get("ebook-editions")
+  @ApiOperation({ summary: "List ebook editions for the local cover upload workflow" })
+  async ebookEditions() {
+    const editions = await this.db.ebookEdition.findMany({
+      select: {
+        id: true,
+        subjectId: true,
+        url: true,
+        version: true,
+        fallbackPhysicalPage: true,
+        coverAssetVersionId: true,
+        subject: { select: { name: true } },
+      },
+      orderBy: [{ subjectId: "asc" }, { version: "asc" }, { id: "asc" }],
+    });
+    return editions.map(({ subject, ...edition }) => ({ ...edition, subjectName: subject.name }));
+  }
+  @Put("ebook-editions/:id/cover")
+  @ApiOperation({ summary: "Attach or clear an audited, rights-cleared shared JPEG cover" })
+  async setEbookCover(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
+    const b = z.object({ assetVersionId: z.string().regex(/^[a-z0-9]{20,40}$/).nullable(), rightsConfirmed: z.literal(true).optional(), reason }).strict().parse(body);
+    if (b.assetVersionId && b.rightsConfirmed !== true)
+      throw new BadRequestException({ code: "EBOOK_COVER_RIGHTS_CONFIRMATION_REQUIRED", message: "Xác nhận quyền xuất bản ảnh bìa trước khi gắn vào ebook" });
+    return this.db.$transaction(async (tx) => {
+      const edition = await tx.ebookEdition.findUnique({ where: { id } });
+      if (!edition) throw notFound("ebook edition");
+      if (b.assetVersionId) {
+        const version = await tx.assetVersion.findUnique({ where: { id: b.assetVersionId }, include: { asset: true } });
+        if (!version) throw notFound("asset version");
+        const rightsReady = Boolean(version.asset.license?.trim() && version.asset.source?.trim() && version.asset.attribution?.trim());
+        if (version.status !== "READY" || version.asset.status !== "ACTIVE" || version.asset.scope !== "SHARED_LIBRARY" || version.asset.kind !== "image" || version.mime !== "image/jpeg" || !rightsReady)
+          throw new ConflictException({ code: "EBOOK_COVER_NOT_READY", message: "Ảnh bìa phải là JPEG READY, đang hoạt động trong thư viện chung và có giấy phép, nguồn, attribution" });
+      }
+      const updated = await tx.ebookEdition.update({ where: { id }, data: { coverAssetVersionId: b.assetVersionId } });
+      await audit(tx, {
+        actor: req.user,
+        action: b.assetVersionId ? "ebookEdition.cover.attach" : "ebookEdition.cover.clear",
+        targetType: "EbookEdition",
+        targetId: id,
+        reason: b.reason,
+        before: { coverAssetVersionId: edition.coverAssetVersionId },
+        after: { coverAssetVersionId: updated.coverAssetVersionId, rightsConfirmed: b.rightsConfirmed === true },
+      });
+      return updated;
+    });
+  }
   @Get("curriculum-target")
   @ApiOperation({ summary: "Return sanitized database target safety for local curriculum sync" })
   async curriculumTarget() {

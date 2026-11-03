@@ -32,7 +32,7 @@ export class CatalogController {
           id: true,
           name: true,
           ebookUrl: true,
-          ebookEditions: { select: { id: true, version: true, url: true, fallbackPhysicalPage: true }, orderBy: [{ version: "asc" }, { id: "asc" }] },
+          ebookEditions: { select: { id: true, version: true, url: true, fallbackPhysicalPage: true, isCurrent: true, coverAssetVersionId: true }, orderBy: [{ version: "asc" }, { id: "asc" }] },
         },
       }),
       this.db.curriculumChapter.findMany({

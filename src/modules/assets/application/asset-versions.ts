@@ -34,6 +34,7 @@ export const initSchema = z
     scope: z.enum(["TEACHER_PRIVATE", "SHARED_LIBRARY"]).default("TEACHER_PRIVATE"),
     license: z.enum(LICENSES).optional(),
     source: z.string().trim().min(3).max(300).optional(),
+    attribution: z.string().trim().min(3).max(300).optional(),
     expectedSha256: z
       .string()
       .regex(/^[0-9a-f]{64}$/)
@@ -189,6 +190,10 @@ export async function canReadVersion(db: any, user: { sub: string; role: string 
       LIMIT 1`;
     if ((sourceLessons as any[]).length) return true;
   }
+  if (user.role === "STUDENT" && version.asset.scope === "SHARED_LIBRARY" && version.asset.kind === "image" && version.mime === "image/jpeg") {
+    const attachedCover = await db.ebookEdition.findFirst({ where: { coverAssetVersionId: version.id }, select: { id: true } });
+    if (attachedCover) return true;
+  }
   const needle = `%assetv:${version.id}%`;
   const [lessons, labs] = await Promise.all([
     db.$queryRaw`SELECT 1 FROM "Lesson" l LEFT JOIN "LessonStep" s ON s."lessonId" = l.id
@@ -201,7 +206,7 @@ export async function canReadVersion(db: any, user: { sub: string; role: string 
 /** Lessons, steps and labs whose JSON references any version of the asset (or a given version), and simulation packs using a version as their visual. */
 export async function assetReferences(db: any, ids: { versionIds: string[]; legacyFileId?: string | null }) {
   const needles = [...ids.versionIds.map((id) => `%assetv:${id}%`), ...(ids.legacyFileId ? [`%asset:${ids.legacyFileId}%`] : [])];
-  if (!needles.length) return { lessons: [], labs: [], simPacks: [] };
+  if (!needles.length) return { lessons: [], labs: [], simPacks: [], ebookEditions: [] };
   const lessons: any[] = [];
   const labs: any[] = [];
   for (const needle of needles) {
@@ -218,7 +223,13 @@ export async function assetReferences(db: any, ids: { versionIds: string[]; lega
         select: { id: true, key: true, version: true, status: true },
       })
     : [];
-  return { lessons: unique(lessons), labs: unique(labs), simPacks };
+  const ebookEditions = ids.versionIds.length
+    ? await db.ebookEdition.findMany({
+        where: { coverAssetVersionId: { in: ids.versionIds } },
+        select: { id: true, subjectId: true, version: true },
+      })
+    : [];
+  return { lessons: unique(lessons), labs: unique(labs), simPacks, ebookEditions };
 }
 
 /** Validates an upload request and creates the asset (or its next version) in PENDING state. */
@@ -263,6 +274,7 @@ export async function startVersion(db: any, user: { sub: string; role: string },
           kind: type.kind,
           license: b.license ?? null,
           source: b.source ?? null,
+          attribution: b.attribution ?? null,
         },
       });
     const last = await tx.assetVersion.findFirst({
