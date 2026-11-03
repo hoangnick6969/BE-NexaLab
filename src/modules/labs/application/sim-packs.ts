@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, foodWeb, eye, eyeParts, evaluateMassConservation, evaluateLeverBench, geneExpression } from "../../../../packages/sim";
+import { simulateBuoyancy, buoyancyConfigSchema } from "../../../../packages/sim/buoyancy";
+import { eyeOptics } from "../../../../packages/sim/eye-optics";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, foodWeb, eye, eyeParts, evaluateMassConservation, evaluateLeverBench, evaluateThermalBench, geneExpression } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -26,6 +28,25 @@ type Model = {
   observationOnly?: { unsupportedParams: string };
 };
 export const MODEL_REGISTRY: Record<string, Model> = {
+  "thermal-bench@1.0.0": {
+    labId: "thermal-energy", engineVersion: "1.0.0",
+    simulate: (state) => {
+      const result = evaluateThermalBench(state);
+      if (!result.ok) throw new Error(`Invalid thermal state: ${result.code}`);
+      return result.value;
+    },
+    outputs: { inputEnergyMilliJoules: "number", temperatureMilliCelsius: "number", riseMilliCelsius: "number", heaterState: "string" },
+    requiredSemanticIds: ["calorimeter", "heater", "joulemeter", "thermometer"],
+    observationOnly: { unsupportedParams: "mô hình nhiệt dùng fixture cố định thay vì tham số thử thách" },
+  },
+  "buoyancy@1.0.0": {
+    labId: "buoyancy",
+    engineVersion: "1.0.0",
+    simulate: (input) => simulateBuoyancy(z.object({ massKg: z.number().positive(), volumeM3: z.number().positive(), submergedVolumeM3: z.number().nonnegative(), fluidDensityKgM3: z.number().positive(), gravity: z.number().positive().optional() }).strict().parse(input)),
+    outputs: { weightN: "number", buoyantForceN: "number", springForceN: "number", overflowM3: "number" },
+    requiredSemanticIds: ["specimen", "dynamometer", "overflow-can", "collector"],
+    observationOnly: { unsupportedParams: "buoyancy model uses pinned specimen and fluid parameters" },
+  },
   "lever-bench@1.0.0": {
     labId: "lever-equilibrium", engineVersion: "1.0.0",
     simulate: (state) => {
@@ -134,6 +155,15 @@ export const MODEL_REGISTRY: Record<string, Model> = {
     outputs: { score: "number", correct: "array", verdict: "string" },
     requiredSemanticIds: eyeParts.map((p) => p.id),
   },
+  // FL-16 is its own Lab, so its active config/pack never replace the legacy eye@1.0.0 ones.
+  "eye-optics@1.0.0": {
+    labId: "eye-optics",
+    engineVersion: ENGINE_VERSION,
+    simulate: eyeOptics,
+    outputs: { version: "string", phase1: "array", phase2: "array" },
+    requiredSemanticIds: eyeParts.map((p) => p.id),
+    observationOnly: { unsupportedParams: "mô hình mắt không dùng tham số thử thách" },
+  },
 };
 /** Allowlisted model resolution replacing dispatch on hardcoded lab IDs. Unknown references fail closed. */
 export function resolveModel(modelRef: string) {
@@ -204,6 +234,7 @@ export const packInputSchema = z
         ranges: z.record(z.string().max(40), z.object({ min: z.number(), max: z.number() }).strict()),
         initialState: z.unknown(),
         limitations: text(1000),
+        buoyancy: buoyancyConfigSchema.optional(),
         goldenCases: z
           .array(
             z
@@ -304,6 +335,7 @@ export function packValidation(
   if (!model) return { errors: [`Mô hình ${input.modelRef} không nằm trong danh sách cho phép`], golden: [] };
   if (model.labId !== input.labId) errors.push(`mô hình ${input.modelRef} không thuộc phòng ${input.labId}`);
   if (ctx.labModelRef && ctx.labModelRef !== input.modelRef) errors.push(`phòng đang dùng ${ctx.labModelRef}, khác ${input.modelRef}`);
+  if (input.modelRef === "buoyancy@1.0.0" && !input.template.buoyancy) errors.push("thiếu cấu hình buoyancy đã ghim");
   if (!ctx.activity) errors.push("thiếu hoạt động thực hành");
   const allowed = CHALLENGE_PARAMETERS[input.labId]?.params ?? {};
   for (const [name, range] of Object.entries(input.template.ranges)) {

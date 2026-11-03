@@ -39,12 +39,24 @@ jobs:
           DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
           DIRECT_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
           NEXALAB_PINNING_TEST_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
-      - run: npm test
+      # FL-07 fixtures only accept their own loopback database fl07_isolated, so that suite runs in
+      # the next step instead of with the pinning database.
+      - run: npm test -- --exclude src/modules/labs/interface/fl-07.integration.test.ts
         env:
           NEXALAB_ISOLATED_DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
           DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
           DIRECT_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
           NEXALAB_PINNING_TEST_URL: postgresql://nexalab:test_password@localhost:5432/nexalab_pinning_test?schema=public
+      - name: FL-07 integration on its own isolated database
+        run: |
+          PGPASSWORD=test_password psql -h localhost -U nexalab -d nexalab -c "CREATE DATABASE fl07_isolated"
+          npm run db:migrate
+          npx vitest run src/modules/labs/interface/fl-07.integration.test.ts
+        env:
+          NEXALAB_ISOLATED_DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/fl07_isolated?schema=public
+          DATABASE_URL: postgresql://nexalab:test_password@localhost:5432/fl07_isolated?schema=public
+          DIRECT_URL: postgresql://nexalab:test_password@localhost:5432/fl07_isolated?schema=public
+          NEXALAB_FL07_TEST_URL: postgresql://nexalab:test_password@localhost:5432/fl07_isolated?schema=public
       - run: npm run build
       - run: npm run db:migrate && npm run db:seed
         env:

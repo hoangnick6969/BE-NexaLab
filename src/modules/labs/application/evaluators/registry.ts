@@ -1,7 +1,9 @@
 import { circuitBulbEvaluator } from "./circuit-bulb-checkpoints.evaluator";
+import { eyeOpticsEvaluator } from "./eye-anatomy-optics.evaluator";
 import { z } from "zod";
 import { CHECKPOINT_ACTIVITIES, ECOLOGY_TOLERANCE_RUBRIC, EM_INDUCTION_RUBRIC, FOOD_WEB_RUBRIC } from "../checkpoint-activities";
 import { densityStationsEvaluator } from "./density-stations.evaluator";
+import { buoyancyLabEvaluator } from "./buoyancy-lab.evaluator";
 import { geneProteinStationsEvaluator } from "./gene-protein-stations.evaluator";
 import { legacyChallengeEvaluator } from "./legacy-challenge.evaluator";
 import type { LabEvaluation, LabEvaluator, LabRuntimeConfig } from "./lab-evaluator";
@@ -85,4 +87,11 @@ const fl06Evaluator: LabEvaluator<any> = {
   evidenceSchema: z.object({}).strict(),
   evaluate: () => { throw new Error("FL-06 requires server event history"); },
 };
-export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, ecologyToleranceEvaluator, foodWebEvaluator, fl10Evaluator, fl06Evaluator, densityStationsEvaluator, geneProteinStationsEvaluator]);
+const fl07Evaluator: LabEvaluator<any> = {
+  rubricRef: "thermal-energy-investigation@1.0.0",
+  activity: { key: "thermal-energy-investigation", version: 1 },
+  modelRefs: ["thermal-bench@1.0.0"], rendererKey: "thermal-bench", envelope: "labState",
+  evidenceSchema: z.object({}).strict(),
+  evaluate: () => { throw new Error("FL-07 requires server event history"); },
+};
+export const labEvaluators = createLabEvaluatorRegistry([circuitBulbEvaluator, inductionEvaluator, ecologyToleranceEvaluator, foodWebEvaluator, fl10Evaluator, fl06Evaluator, fl07Evaluator, densityStationsEvaluator, geneProteinStationsEvaluator, eyeOpticsEvaluator, buoyancyLabEvaluator]);

@@ -11,7 +11,7 @@ import { requestHint } from "../application/hint";
 import { explain } from "../infrastructure/llm";
 import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
-import { FL10_RUBRIC, FL06_RUBRIC } from "../application/lab-run";
+import { FL10_RUBRIC, FL06_RUBRIC, FL07_RUBRIC } from "../application/lab-run";
 import { canonical, digest, evaluateRunV1, executionSchema, launchSchema, rubricRefForActivity, runSubmissionSchema, submittedEvidence } from "../application/lab-run";
 import { labEvaluators } from "../application/evaluators/registry";
 import { pickDensitySpecimens } from "../application/evaluators/density-specimens";
@@ -24,6 +24,8 @@ import { fl10VisibleReadings, nextFl10Event, type Fl10Event } from "../applicati
 import { evaluateFl10Activity } from "../application/fl-10-draft-evidence";
 import { nextFl06Event, validateFl06History, type Fl06Event } from "../application/fl-06-events";
 import { evaluateFl06Activity } from "../application/fl-06-activity";
+import { nextFl07Event, validateFl07History, fl07Snapshot, type Fl07Event } from "../application/fl-07-events";
+import { evaluateFl07Activity } from "../application/fl-07-activity";
 
 /** Client renderer for a pinned rubric; null keeps the client's legacy lookup by Lab id. */
 function rendererKeyFor(rubricRef: string): string | null {
@@ -81,9 +83,36 @@ export class LabsController {
     if (await tx.labPackRevocation.findUnique({ where: { packVersionId: parsed.data.packVersionId } })) throw new ConflictException({ code: "RUN_REVOKED" });
     return run;
   }
+  private async fl07Run(tx: any, studentId: string, runId: string) {
+    const run = await tx.labRun.findFirst({ where: { id: runId, studentId } });
+    if (!run) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+    if (run.revokedAt || (run.expiresAt && run.expiresAt.getTime() <= Date.now()))
+      throw new ConflictException({ code: run.revokedAt ? "RUN_REVOKED" : "RUN_EXPIRED" });
+    if (run.assignmentId) {
+      const assignment = await tx.assignment.findFirst({ where: { ...applicableAssignmentWhere(studentId), id: run.assignmentId, contentId: run.labId, contentType: "lab" } });
+      if (!assignment) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+    } else {
+      const lab = await tx.lab.findUnique({ where: { id: run.labId } });
+      if (!lab || lab.status !== "published" || lab.scope !== "SHARED_LIBRARY" || !lab.releaseCleared || lab.synthetic || !lab.topicCode)
+        throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+    }
+    const parsed = executionSchema.safeParse(run.execution);
+    if (!parsed.success || digest(run.execution) !== run.executionDigest || run.labId !== "thermal-energy" ||
+      parsed.data.modelRef !== "thermal-bench@1.0.0" || parsed.data.engineVersion !== "1.0.0" || parsed.data.rubricRef !== FL07_RUBRIC)
+      throw new ConflictException({ code: "LAB_TUPLE_INVALID" });
+    if (await tx.labPackRevocation.findUnique({ where: { packVersionId: parsed.data.packVersionId } })) throw new ConflictException({ code: "RUN_REVOKED" });
+    return run;
+  }
 
   @Roles("STUDENT") @Get("lab-runs/:runId/events") async fl10Events(@Req() req: any, @Param("runId") runId: string) {
     const run = await this.db.labRun.findFirst({ where: { id: runId, studentId: req.user.sub }, select: { labId: true } });
+    if (run?.labId === "thermal-energy") {
+      await this.fl07Run(this.db, req.user.sub, runId);
+      const rows = await this.db.labRunEvent.findMany({ where: { runId }, orderBy: { sequence: "asc" } });
+      const events = rows.map((row) => row.event as Fl07Event);
+      if (!validateFl07History(events).ok) throw new ConflictException({ code: "LAB_EVIDENCE_INVALID" });
+      return fl07Snapshot(events);
+    }
     if (run?.labId === "lever-equilibrium") {
       await this.fl06Run(this.db, req.user.sub, runId);
       const rows = await this.db.labRunEvent.findMany({ where: { runId }, orderBy: { sequence: "asc" } });
@@ -106,6 +135,21 @@ export class LabsController {
     const input = z.object({ idempotencyKey: z.string().uuid(), event: z.unknown() }).strict().parse(body);
     this.limiter.rate("fl10-event:" + req.user.sub, 30);
     const run = await this.db.labRun.findFirst({ where: { id: runId, studentId: req.user.sub }, select: { labId: true } });
+    if (run?.labId === "thermal-energy") return this.db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-run:" + runId);
+      await this.fl07Run(tx, req.user.sub, runId);
+      const rows = await tx.labRunEvent.findMany({ where: { runId }, orderBy: { sequence: "asc" } });
+      const events = rows.map((row: any) => row.event as Fl07Event);
+      const existing = rows.find((row: any) => row.idempotencyKey === input.idempotencyKey);
+      if (existing && canonical(existing.event) !== canonical(input.event)) throw new ConflictException({ code: "IDEMPOTENCY_KEY_REUSED" });
+      if (!existing) {
+        const transition = nextFl07Event(events, input.event);
+        if (!transition.ok) throw new ConflictException({ code: transition.code });
+        await tx.labRunEvent.create({ data: { runId, sequence: transition.sequence, idempotencyKey: input.idempotencyKey, event: transition.event } });
+        events.push(transition.event);
+      }
+      return fl07Snapshot(events);
+    });
     if (run?.labId === "lever-equilibrium") return this.db.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-run:" + runId);
       await this.fl06Run(tx, req.user.sub, runId);
@@ -192,6 +236,8 @@ export class LabsController {
       throw new BadRequestException({ code: "FL10_USE_LAB_RUN_EVENTS" });
     if (lab.simulationModelRef === "lever-bench@1.0.0")
       throw new BadRequestException({ code: "FL06_USE_LAB_RUN_EVENTS" });
+    if (lab.simulationModelRef === "thermal-bench@1.0.0")
+      throw new BadRequestException({ code: "FL07_USE_LAB_RUN_EVENTS" });
     try {
       return resolveModel(lab.simulationModelRef).simulate(body);
     } catch (e: any) {
@@ -223,6 +269,8 @@ export class LabsController {
       throw new BadRequestException({ code: "FL10_REQUIRES_LAB_RUN" });
     if (c.labId === "lever-equilibrium" || c.lab.simulationModelRef === "lever-bench@1.0.0")
       throw new BadRequestException({ code: "FL06_REQUIRES_LAB_RUN" });
+    if (c.labId === "thermal-energy" || c.lab.simulationModelRef === "thermal-bench@1.0.0")
+      throw new BadRequestException({ code: "FL07_REQUIRES_LAB_RUN" });
     if (!b.lessonStepId) {
       const applicableStandaloneLab = await this.applicableLabAssignment(c.labId, req.user.sub);
       if (!applicableStandaloneLab && !(c.lab.scope === "SHARED_LIBRARY" && c.lab.releaseCleared && !c.lab.synthetic && c.lab.topicCode))
@@ -469,15 +517,15 @@ export class LabsController {
         modelRef: execution.modelRef, engineVersion: execution.engineVersion, activityVersionId: execution.activityVersionId,
         activityVersion: execution.activityVersion, rubricVersion: execution.rubricRef, stateSchemaVersion: 1,
         evidenceSchemaVersion: 1,
-        constraints: execution.modelRef === "mass-conservation@1.0.0" ? {} : template?.ranges ?? {},
-        initialState: execution.modelRef === "mass-conservation@1.0.0" ? null : template?.initialState ?? null,
+        constraints: execution.modelRef === "mass-conservation@1.0.0" || execution.modelRef === "thermal-bench@1.0.0" ? {} : template?.ranges ?? {},
+        initialState: execution.modelRef === "mass-conservation@1.0.0" || execution.modelRef === "thermal-bench@1.0.0" ? null : template?.initialState ?? null,
         // The pinned rubric's evaluator names the client renderer (e.g. density-bench for the density Lab).
-        rendererKey: execution.modelRef === "circuit-bulb@1.0.0"
-          ? "circuit-bulb" : labEvaluators.resolve(execution.rubricRef).rendererKey,
+        rendererKey: rendererKeyFor(execution.rubricRef),
         expiresAt: run.expiresAt, context: run.context, assignmentId: run.assignmentId,
         versionBinding: execution.binding,
         // Server-chosen run parameters (e.g. FL-03 specimen pins); the client shows them, the server checks them.
         runtimeParams: execution.params ?? null,
+        ...(execution.modelRef === "buoyancy@1.0.0" ? { runtimeConfig: template?.buoyancy } : {}),
       };
     }, { timeout: 20000 });
   }
@@ -500,6 +548,14 @@ export class LabsController {
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + run.labId);
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-run:" + run.id);
       const locked = await tx.labRun.findUniqueOrThrow({ where: { id: run.id } });
+      if (locked.labId === "thermal-energy") {
+        if (submitted.envelope !== "labState") throw new BadRequestException("FL-07 requires labState evidence");
+        const completed = await tx.attempt.findFirst({ where: { labRunId: locked.id, studentId: req.user.sub } });
+        if (completed) {
+          if (canonical(completed.labState) !== canonical(evidence)) throw new ConflictException({ code: "LAB_RUN_ALREADY_SUBMITTED" });
+          return { ...completed, attempt: completed, retryGuidance: this.access.retryGuidance(locked.labId, completed.verdict, completed.simulationResult) };
+        }
+      }
       if (locked.revokedAt) throw new ConflictException({ code: "RUN_REVOKED" });
       if (locked.expiresAt && locked.expiresAt.getTime() <= Date.now()) throw new ConflictException({ code: "RUN_EXPIRED" });
       let assignment: any = null;
@@ -523,7 +579,11 @@ export class LabsController {
       let result: any;
       let verdict: string;
       try {
-        if (execution.rubricRef === FL06_RUBRIC) {
+        if (execution.rubricRef === FL07_RUBRIC) {
+          if (locked.labId !== "thermal-energy" || execution.engineVersion !== "1.0.0" || !("labState" in b)) throw new Error("FL-07 execution is incompatible");
+          const rows = await tx.labRunEvent.findMany({ where: { runId: locked.id }, orderBy: { sequence: "asc" } });
+          ({ result, verdict } = evaluateFl07Activity(b.labState, rows.map((row) => row.event as Fl07Event)));
+        } else if (execution.rubricRef === FL06_RUBRIC) {
           if (locked.labId !== "lever-equilibrium" || execution.engineVersion !== "1.0.0" || !("labState" in b)) throw new Error("FL-06 execution is incompatible");
           const rows = await tx.labRunEvent.findMany({ where: { runId: locked.id }, orderBy: { sequence: "asc" } });
           ({ result, verdict } = evaluateFl06Activity(b.labState, rows.map((row) => row.event as Fl06Event)));

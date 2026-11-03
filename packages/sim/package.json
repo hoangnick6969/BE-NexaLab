@@ -1,8 +1,21 @@
 {
   "name": "@nexalab/sim",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
-  "files": ["index.ts", "mass-conservation.ts", "gene-expression.ts", "ecology-tolerance.ts", "lever-bench.ts", "food-web.ts"]
+  "files": [
+    "index.ts",
+    "mass-conservation.ts",
+    "gene-expression.ts",
+    "ecology-tolerance.ts",
+    "lever-bench.ts",
+    "thermal-bench.ts",
+    "buoyancy.ts",
+    "eye-optics.ts",
+    "food-web.ts"
+  ],
+  "dependencies": {
+    "zod": "^3.25.0"
+  }
 }

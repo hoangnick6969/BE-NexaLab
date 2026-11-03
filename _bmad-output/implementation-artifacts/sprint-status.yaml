@@ -150,6 +150,11 @@ development_status:
   fl-20-t8-verification: done
   fl-20-t9-device-qa: in-progress
   fl-20-t10-release: done
+  # FL-20 v1.1 K8 EcoStage — ../specs/spec-fl-20-ecological-tolerance/k8-ecostage-v1.1.md; 3D pond diorama, presentation only, owner reviews the 3D level.
+  fl-20-v11-t1-k8-kit: done
+  fl-20-v11-t2-pond-3d-integration: done
+  fl-20-v11-t3-verification: done
+  fl-20-v11-t4-owner-visual-review: in-progress
   # FL-21 food-web — ../specs/spec-fl-21-food-web/; owner accepted all recommendations 2026-11-02; built and verified locally, not released.
   fl-21-t0-owner-decisions: done
   fl-21-t1-blueprint: review
@@ -161,6 +166,7 @@ development_status:
   fl-21-t7-verification: done
   fl-21-t8-device-qa: in-progress
   fl-21-t9-release: in-progress
+  fl-21-v11-t1-3d-meadow-scene: in-progress
   # Teacher AI increment (TAI) — plan ../planning-artifacts/increment-tai-teacher-ai.md; all blocked on gate G-1 (TAI-T0).
   epic-tai-01-authoring: backlog
   tai-01-t0-activate-fr21-scope: backlog
@@ -268,6 +274,14 @@ fl20_tracking:
   fixes_outside_fl20:
     - 'BE labs.controller.ts launchRun: the FL-10 merge (75ebad1) replaced the registry lookup of rendererKey with a Circuit/FL-10-only ternary, so main launched the released FL-25 Lab with rendererKey null (em-induction.integration failed on main). Restored the registry lookup with the FL-10 fallback; FL-25 integration passes again.'
   sim_package: '@nexalab/sim 1.3.0 (ecology-tolerance.ts added; engine VERSION stays 1.0.0); FE vendor/nexalab-sim-1.3.0.tgz replaces 1.2.0.'
+  v1_1:
+    spec: ../specs/spec-fl-20-ecological-tolerance/k8-ecostage-v1.1.md
+    status: in-review
+    date: '2026-11-03'
+    branch: 'feat/fl-20-k8-ecostage in FE (from main bae1b00) and BE docs (from main ac4b8aa); committed and pushed 2026-11-03 on owner request "Publish lại L20" (owner opens the PRs). Server release v1 not re-run: unchanged activity, digest still valid (V-5); the new version goes live when the FE PR is merged and deployed.'
+    scope: 'K8 kit (EcoStage, pond diorama, instanced procedural tilapia, thermometer, tiers, 2D fallback, /dev/lab-kits/k8) and FL-20 PondView3D; model, activity, rubric and release v1 unchanged (no re-release, snapshot holds no FE code).'
+    verification: 'FE tsc + build ok; tests/ecology-tolerance-lab.spec.ts 3/3 on a separate Vite (incl. new 3D/2D toggle test), gene-protein spec 4/4; screenshots light 1440, dark 1280, phone 390 (headless swiftshader, tier low); sloplint 0 FAIL (waive 29 extended to the graph card). After V-6/V-7: spec 3/3, tsc + build ok.'
+    skill: 'User-level skill ~/.claude/skills/nexalab-k8-bio-scene (FE .claude/ is git-ignored).'
 
 fl25_tracking:
   spec: ../specs/spec-fl-25-em-induction/SPEC.md

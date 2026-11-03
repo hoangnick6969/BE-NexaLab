@@ -1,0 +1,16 @@
+{
+  "candidateDigest": "3afb7388188b213bb8eb255093ff38db6a31f5ef972f024ba2a98530265f34cc",
+  "releaseId": null,
+  "kind": "OWNER_SIGNOFF",
+  "decision": "APPROVE",
+  "releaseDigest": null,
+  "note": "",
+  "evidence": {
+    "curriculumMapping": "",
+    "sourceReferences": [],
+    "scientificGoldenCases": "",
+    "rubric": "",
+    "safetyAssessment": "",
+    "rightsAssessment": ""
+  }
+}
