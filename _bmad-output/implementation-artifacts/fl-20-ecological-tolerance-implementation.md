@@ -143,6 +143,14 @@ Spec: `../specs/spec-fl-20-ecological-tolerance/k8-ecostage-v1.1.md`. FE branch 
 - BE: merged `origin/main` (`9618c70`, FL-07). CI "API checks" failed on `fl-07.integration.test.ts`, which throws in CI without `NEXALAB_FL07_TEST_URL`. Its fixture only accepts the loopback database `fl07_isolated`, with every URL equal to it. `ci.yml` now excludes the file from `npm test` and runs it in its own step against a new `fl07_isolated` database.
 - Reproduced both steps on the throwaway loopback cluster (127.0.0.1:55432, CI=true): `npm test` 70 files passed, 3 skipped (470 tests); FL-07 step 1/1. Lint and build ok.
 
+### Clean-up (2026-11-03, owner request "clean code, remove redundant")
+- New `kit/procedural.ts` holds `seeded` and `paint`. The pond (soil layers, floor, weeds) and the fish now share them instead of four hand-written vertex-colour loops and two seeded generators. `paint` copies each colour at once, so the per-vertex `Color.clone()` calls are gone.
+- `FishSchool3D` uses three's `smoothstep` and `clamp`. Unused or redundant pieces removed: `bodyTop` export, the lily-pad `useMemo` (now a module constant), and the thermometer's zero position.
+- `PondView3D` exports `POND_VIEW`, `THERMOMETER_AT`, `stressAt` and `vigorAt`, which the Lab and the dev preview had each copied. The preview uses `formatDeciC`.
+- The dev-only `.k8-*` styles moved from the Lab stylesheet to `kit/dev/K8KitPreview.css`, so they no longer ship with the Lab. The redundant `[data-limit]` rule is merged.
+- `EcologyToleranceActivity`: `checkpointOf` and `awaitingCheck` replace repeated lookups and conditions.
+- Verification: tsc and build ok; no unused locals in ecology files; ecology-tolerance and em-induction specs 9/9; K8 preview screenshot without page errors; sloplint 0 FAIL. Not committed.
+
 ### Not done
 - Owner visual review of the 3D level; real-GPU check of the high tier (shadows, frame rate) on a school machine.
 - No change to BE code, release or shared data.
