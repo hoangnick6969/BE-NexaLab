@@ -1,6 +1,6 @@
 ---
 id: PLAN-FL-16-EYE-OPTICS
-status: lab-technical-candidate-unapproved
+status: owner-approved-release-pending-activation
 updated: 2026-11-02
 companions:
   - lab-catalog-and-shared-kits-khtn8-9.md
@@ -199,6 +199,36 @@ FL16_SHARED_WRITE_APPROVED=owner-approved-fl16-shared-2026-11-02 npx tsx scripts
 Record được tạo: Lab `eye-optics` (CLASS_PRIVATE, releaseCleared=false, config có kitId EX-A), challenge `eye_optics_001`, activity `eye-anatomy-optics` v1, config v1 (active), pack `eye-optics-ex-a` v1 (active), 1 assignment cho `student-active` ở `class-pilot-a`. Không tạo LabRelease, không ghi OWNER_SIGNOFF, không gắn lesson; Lab `eye` cũ không bị chạm. Script in JSON chứa id các record để đối chiếu.
 
 **Cổng còn lại:** SME trả lời checklist; owner duyệt release qua Admin (OWNER_SIGNOFF thật); sau đó mới gắn lesson. Phase plan vẫn ghi P3.5 chưa đạt.
+
+## 8D. Owner sign-off và seed (2026-11-03)
+
+**Quyết định owner.** Owner phê duyệt release FL-16 trong phiên làm việc ngày 2026-11-03, trên BE `dba9021` (tài liệu bàn giao `7a4c1a1`) và FE `814b158`. Kết quả test tại thời điểm duyệt: BE 343/343, parity 7/7, E2E được rubric server chấm 11/11. Checklist SME **chưa** được ký; owner duyệt dựa trên thẩm quyền owner, và bằng chứng sign-off ghi rõ điều này.
+
+**Seed đã chạy trên DB chung** (chạy từ worktree sạch của `7a4c1a1`, token owner, chỉ tạo mới):
+
+| Record | Id |
+|---|---|
+| Lab | `eye-optics` (CLASS_PRIVATE, releaseCleared=false, kit EX-A) |
+| Challenge | `eye_optics_001` |
+| Activity `eye-anatomy-optics` v1 | `cmw0b94ie0000nmfo8xs52oqx` |
+| Config v1 (active, `eye-optics@1.0.0`) | `cmw0b94sr0001nmfo68803ssk` |
+| Pack `eye-optics-ex-a` v1 (active) | `cmw0b95390002nmfojgxk7f6u` |
+| Assignment (class-pilot-a → student-active) | `cmw0b95jl0004nmfo90hv385t` |
+
+Kiểm tra chỉ đọc sau seed: launch chọn config v1 + pack `eye-optics-ex-a` → rubric `eye-anatomy-optics@1.0.0` → renderer `eye-anatomy-optics`; Lab `eye` cũ không có config nào bị thêm; 0 LabRelease, 0 binding.
+
+**Kích hoạt release (owner tự chạy).** OWNER_SIGNOFF trong nền tảng ghi lại tài khoản ADMIN đã đăng nhập, nên phải do owner thực hiện bằng tài khoản của mình. Màn Admin "Duyệt phát hành Lab" hiện không dùng được cho release này: giao diện chỉ hiện nút duyệt cho policy `DEV_APPROVAL_V1` và gửi `{developerCheck, agentCheck}`, còn BE yêu cầu `OWNER_SIGNOFF_V1` với 6 trường bằng chứng; giao diện cũng không có nút tạo bản nháp. Vì vậy dùng script gọi đúng API:
+
+```bash
+cd BE-NexaLab
+export NEXALAB_API=<url API>/api NEXALAB_ADMIN_EMAIL=<email admin của owner> NEXALAB_ADMIN_PASSWORD=<mật khẩu>
+node scripts/release-fl16-eye-optics.mjs draft      # tạo bản nháp, gắn bài học, in digest
+node scripts/release-fl16-eye-optics.mjs publish <releaseId> <digest>   # OWNER_SIGNOFF + kích hoạt
+```
+
+**Gắn bài học.** Bản nháp gắn trực tiếp (DIRECT_LESSON) bài "Hệ thần kinh và các giác quan ở người" (`pack-structured-224cf04f147bbd206755a21b6189dda45903460d-v1`, topic `KHTN8-L37`, pack đã released, có outcome `KHTN8-B37-O04`). Kiểm tra chỉ đọc ngày 2026-11-03 cho thấy điều kiện tạo bản nháp đã đủ. Không ghi tay `foundationalLabId`: luồng release hiện tại dùng binding trực tiếp trong snapshot.
+
+Khi `publish` chạy xong, đổi `status` của tài liệu này sang `released-owner-approved` và ghi id release, digest.
 
 ## 9. Phase gates và việc còn lại
 
