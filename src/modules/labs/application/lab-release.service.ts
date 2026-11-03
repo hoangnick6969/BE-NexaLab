@@ -21,7 +21,8 @@ const ownerEvidence = z.object({
 }).strict();
 const developmentEvidence = z.object({ developerCheck: z.string().trim().min(10), agentCheck: z.string().trim().min(10) }).strict();
 const releaseReason = z.string().trim().min(5).max(500);
-const requiredReviewKinds = (labId: string) => [labId === "lever-equilibrium" ? "OWNER_SIGNOFF" : "DEV_APPROVAL"];
+const ownerSignoffLab = (labId: string) => labId === "lever-equilibrium" || labId === "thermal-energy";
+const requiredReviewKinds = (labId: string) => [ownerSignoffLab(labId) ? "OWNER_SIGNOFF" : "DEV_APPROVAL"];
 
 function missingReviewKinds(snapshot: any, reviews: Array<{ kind: string; decision: string; releaseDigest: string; reviewerId: string }>) {
   const required: string[] = snapshot.requiredReviewKinds;
@@ -160,7 +161,7 @@ export class LabReleaseService {
           grade: binding.courseVersion.grade, version: binding.courseVersion.version, sourceVersion: binding.courseVersion.sourceVersion,
           lessonId: binding.lesson.id, lessonTopicCode: binding.lesson.curriculumTopicCode, officialOrder: binding.officialOrder,
         })),
-        reviewPolicy: labId === "lever-equilibrium" ? "OWNER_SIGNOFF_V1" : "DEV_APPROVAL_V1",
+        reviewPolicy: ownerSignoffLab(labId) ? "OWNER_SIGNOFF_V1" : "DEV_APPROVAL_V1",
         requiredReviewKinds: required,
       };
       const releaseDigest = digest(snapshot);
@@ -239,7 +240,7 @@ export class LabReleaseService {
       const snapshot = release.snapshot as any;
       if (release.digest !== b.releaseDigest || digest(snapshot) !== release.digest)
         throw new ConflictException({ code: "LAB_RELEASE_DIGEST_MISMATCH" });
-      const ownerPolicy = snapshot.reviewPolicy === "OWNER_SIGNOFF_V1" && labId === "lever-equilibrium";
+      const ownerPolicy = snapshot.reviewPolicy === "OWNER_SIGNOFF_V1" && ownerSignoffLab(labId);
       const reviewKind = ownerPolicy ? "OWNER_SIGNOFF" : "DEV_APPROVAL";
       if ((!ownerPolicy && snapshot.reviewPolicy !== "DEV_APPROVAL_V1") || snapshot.requiredReviewKinds?.length !== 1 || snapshot.requiredReviewKinds[0] !== reviewKind)
         throw new ConflictException({ code: "LAB_RELEASE_POLICY_MISMATCH" });

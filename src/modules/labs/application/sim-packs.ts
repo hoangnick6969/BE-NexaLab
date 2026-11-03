@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, eye, eyeParts, evaluateMassConservation, evaluateLeverBench, geneExpression } from "../../../../packages/sim";
+import { VERSION as ENGINE_VERSION, circuit, circuitBulb, chemistry, densityBench, ecologyTolerance, emInduction, eye, eyeParts, evaluateMassConservation, evaluateLeverBench, evaluateThermalBench, geneExpression } from "../../../../packages/sim";
 import { CHALLENGE_PARAMETERS } from "../../lessons/application/lesson-content";
 import { digestOf } from "../../content/application/content-pack";
 
@@ -26,6 +26,17 @@ type Model = {
   observationOnly?: { unsupportedParams: string };
 };
 export const MODEL_REGISTRY: Record<string, Model> = {
+  "thermal-bench@1.0.0": {
+    labId: "thermal-energy", engineVersion: "1.0.0",
+    simulate: (state) => {
+      const result = evaluateThermalBench(state);
+      if (!result.ok) throw new Error(`Invalid thermal state: ${result.code}`);
+      return result.value;
+    },
+    outputs: { inputEnergyMilliJoules: "number", temperatureMilliCelsius: "number", riseMilliCelsius: "number", heaterState: "string" },
+    requiredSemanticIds: ["calorimeter", "heater", "joulemeter", "thermometer"],
+    observationOnly: { unsupportedParams: "mô hình nhiệt dùng fixture cố định thay vì tham số thử thách" },
+  },
   "lever-bench@1.0.0": {
     labId: "lever-equilibrium", engineVersion: "1.0.0",
     simulate: (state) => {

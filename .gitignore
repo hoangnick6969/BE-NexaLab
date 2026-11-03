@@ -8,6 +8,8 @@ uploads/
 .tmp/
 .claude/
 test-results/
+.playwright-mcp/
+.local-fixtures/
 tools/nexalab-ingest/out/
 tools/nexalab-ingest/python/__pycache__/
 tools/nexalab-ingest/.venv/
