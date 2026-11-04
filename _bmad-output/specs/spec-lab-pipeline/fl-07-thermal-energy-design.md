@@ -1,8 +1,8 @@
 # FL-07 — Năng lượng nhiệt (K4): Design Pack và Model Slice Spec
 
-**Trạng thái:** TECHNICALLY VERIFIED / OWNER REVIEW PENDING — production-route LabSpace, model, server activity/rubric, authoring manifest and isolated persisted browser flow implemented and verified; exact-digest publication approval and hosted rollout remain pending.
+**Trạng thái:** TECHNICALLY VERIFIED / V1 PUBLISHED — release `cmw0ik9c8000klw0shlremnhw` is ACTIVE with exact-digest `OWNER_SIGNOFF` for digest `abf54034d30b61bdda2cbc522af34e02f1518b8c903140e8f3bd3dfd9b231fa0`; hosted FE/API rollout, representative-device/accessibility acceptance and independent subject review remain unverified. Technical Assumptions remain as documented.
 
-**Ngày:** 2026-11-02
+**Ngày:** 2026-11-03
 
 **Kit:** K4 — Nhiệt
 

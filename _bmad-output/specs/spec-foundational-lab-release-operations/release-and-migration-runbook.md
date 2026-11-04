@@ -1,8 +1,8 @@
 # Foundational Lab release and migration runbook
 
-**Verified against source and read-only release inventory: 2026-11-01.** Recheck the target before acting; this document is not a production authorization.
+**Verified against source and read-only release inventory: 2026-11-03.** Recheck the target before acting; this document is not a production authorization.
 
-**FL-07 preparation:** see [`docs/operations/fl07-publication-readiness.md`](../../../docs/operations/fl07-publication-readiness.md) and `npm run release:fl07`. The candidate binds the read-only verified B27 Lesson/Outcome. Preparation and exact-digest owner publication are separate explicit operations; no FL-07 shared release or approval is implied by this pointer.
+**FL-07 execution receipt (2026-11-03):** the user-authorized `npm run release:fl07 -- --publish` flow recorded the exact-digest `OWNER_SIGNOFF` through the authenticated Admin API. Supabase readback confirms `thermal-energy` is `published`, `SHARED_LIBRARY`, `releaseCleared=true`; release v1 is `ACTIVE` with digest `abf54034d30b61bdda2cbc522af34e02f1518b8c903140e8f3bd3dfd9b231fa0` and release ID `cmw0ik9c8000klw0shlremnhw`. A student-authenticated `GET /labs` against the API connected to this database returned FL-07. The script verified its exact B27 source binding and that other Labs' release inventory was unchanged. No schema migration, seed, or direct SQL write was used. This verifies the production content release and API catalog response; hosted FE/API rollout and a real production LabRun were not verified. See [`docs/operations/fl07-publication-readiness.md`](../../../docs/operations/fl07-publication-readiness.md) for the candidate evidence and scope limits.
 
 **FL-06 execution receipt:** publication completed through the authenticated Admin API at `2026-11-01T17:02:37.270Z`; Supabase readback confirms v1 ACTIVE, `SHARED_LIBRARY`, `releaseCleared=true`. Exact receipt: [`docs/operations/fl06-release-receipt.json`](../../../docs/operations/fl06-release-receipt.json). The operator's explicit authorization covered candidate creation, automated OWNER_SIGNOFF and publication. Credentials are not stored in the receipt or repository.
 
@@ -27,7 +27,17 @@ Use the compatible BE checkout and FE renderer with the intended database alread
 5. Optionally set `FL06_RECEIPT_PATH` to save the non-secret receipt. The script reads back ACTIVE status, shared visibility and matching approval receipt, and compares all other Labs' visibility and release fingerprints before/after. Running the same command again reuses the same candidate and ACTIVE release; it does not issue another approval or rewrite a snapshot. Changed candidates require a reviewed successor and compatible activity/rubric versions.
 6. Use Supabase SELECT-only readback to independently verify the Lab, active config/pack, release digest and receipt. Verify discovery with a real authorized UI session; run scored/persistence E2E against isolated PostgreSQL, not the shared database. The FL-06 live UI smoke used the real student session and submitted no attempt.
 
-**Migration precondition:** FL-06 adds no Prisma schema. The existing `20261031130000_fl10_run_events` migration supplies the generic `LabRunEvent` table (evidence isolated by runId), and the owner-signoff migration supplies approval evidence. Both were verified on Supabase. The candidate-create API fails with `LAB_SCHEMA_MIGRATION_REQUIRED` before writing a Lab if the event table is absent. Candidate provisioning is a data operation through Admin APIs; a schema migration never creates the Lab automatically. Do not invent a duplicate table or empty migration. For genuinely missing DDL use the approved schema deployment procedure below; the content script does not bypass the isolated migration guard.
+**Migration precondition:** FL-06 and FL-07 add no Prisma schema. The existing `20261031130000_fl10_run_events` migration supplies the generic `LabRunEvent` table (evidence isolated by runId), and the owner-signoff migration supplies approval evidence. Both were verified on Supabase. The candidate-create API fails with `LAB_SCHEMA_MIGRATION_REQUIRED` before writing a Lab if the event table is absent. Candidate provisioning is a data operation through Admin APIs; a schema migration never creates the Lab automatically. Do not invent a duplicate table or empty migration. For genuinely missing DDL use the approved schema deployment procedure below; the content script does not bypass the isolated migration guard.
+
+## Repeatable FL-07 publication
+
+Use the target-authorized BE checkout, the actual Admin API and [`docs/operations/fl07-publication-readiness.md`](../../../docs/operations/fl07-publication-readiness.md). FL-07 has no schema migration; do not run SQL, seed or migration commands to create its content.
+
+1. Set `NEXALAB_API`, `NEXALAB_ADMIN_EMAIL` and `NEXALAB_ADMIN_PASSWORD`; do not assume a seed password is the current Admin password. Run `npm run release:fl07` for read-only login and inventory preflight.
+2. Review `content/simulation-packs/fl07-candidate.json`, the stored B27 Lesson/Outcome binding and the actual immutable release snapshot. With authorization to prepare the candidate, run `npm run release:fl07 -- --apply`. This uses Admin APIs to create/reuse the private draft and validated tuple; it does not publish the Lab.
+3. Review the exact 64-character digest and the owner evidence (`curriculumMapping`, `sourceReferences`, `scientificGoldenCases`, `rubric`, `safetyAssessment`, `rightsAssessment`). Keep unverified curriculum, science, apparatus and safety values labeled as Technical Assumptions. Do not claim independent source, legal or physical-device review unless separately evidenced.
+4. Only after explicit owner approval of that exact digest, set `FL07_EXPECTED_DIGEST` and `FL07_OWNER_EVIDENCE_PATH`, then run `npm run release:fl07 -- --publish`. The script reuses the same candidate, revalidates the snapshot hash, model/config/pack/activity and Lesson/Outcome binding, submits the evidence through the authenticated Admin API, and verifies `ACTIVE` plus a matching `OWNER_SIGNOFF` receipt. It also compares other Labs' release/visibility inventory before and after. `--publish` is an authorized signoff-and-activation operation, not a technical check.
+5. Independently read back Lab status/scope/clearance, release ID/version/status/digest and exact-digest review from Supabase using SELECT-only SQL. Confirm the authenticated student `GET /labs` catalog contains FL-07. This API check does not prove hosted FE/API deployment; verify the actual hosted UI separately after compatible code is deployed. Do not create a scored production LabRun merely to satisfy this release check; use isolated PostgreSQL for run/persistence E2E.
 
 ## 1. Keep the three operations separate
 
@@ -59,7 +69,7 @@ Before scheduling the approved deployment pipeline, record a release ticket/chec
 - Target environment and accountable operator; exact BE and FE commit SHAs; CI/build evidence; compatible FE renderer and BE model registry for the intended tuple.
 - Migration IDs and compatibility/order assessment (or explicit none). Prefer additive/backward-compatible rollout when old and new app instances or assignments can overlap; destructive cleanup is a separately reviewed later step.
 - Current active LabRelease/version/digest and active assignment impact. An active release is immutable; make a successor for content or tuple changes.
-- Exact candidate digest from the target's Admin API; intended Lesson/Outcome binding readback; current required reviewer kinds; developer and agent check notes; and any independently completed review evidence. New drafts require `DEV_APPROVAL`.
+- Exact candidate digest from the target's Admin API; intended Lesson/Outcome binding readback; the snapshot's required reviewer kind and matching evidence. New drafts normally use `DEV_APPROVAL`; FL-06 and FL-07 are explicit `OWNER_SIGNOFF_V1` exceptions in the current service. Record developer/agent checks where applicable and do not imply independent review without evidence.
 - Isolated evidence for launch pinning, server recomputation, persistence/replay, authorization, idempotency, duplicate submission, F5/draft recovery, and quarantine as applicable. Never seed synthetic review receipts into production.
 - Accessibility, representative-device/performance, safety/rights and monitoring status. Explicitly record open items; do not relabel phase acceptance as passed because a release is active.
 
@@ -80,9 +90,9 @@ The current API is under `AdminLabsController` with class-level `@Roles("ADMIN")
 
 1. Read the release list for the Lab in the intended environment. Create a draft via `POST /admin/labs/:id/releases`; the service snapshots the validated active tuple, bindings and review policy. Save the returned version and 64-character digest.
 2. Review the snapshot and bindings against the handoff. Ensure the FE renderer and BE evaluator for this exact model are already deployed. Compare the intended digest exactly; do not rely on “latest” or a Lab title.
-3. New drafts normally snapshot `reviewPolicy: "DEV_APPROVAL_V1"` and `requiredReviewKinds: ["DEV_APPROVAL"]`. FL-06 (`lever-equilibrium`) is the owner-decided exception: its new drafts snapshot `OWNER_SIGNOFF_V1` and require the exact-digest owner evidence (`curriculumMapping`, `sourceReferences`, `scientificGoldenCases`, `rubric`, `safetyAssessment`, `rightsAssessment`). In the Admin release screen, review the exact digest and submit the evidence for that snapshot policy. `POST /admin/labs/:id/releases/:releaseId/publish` records the authenticated ADMIN approval and activates atomically. Older snapshots retain their recorded policy and receipts.
+3. New drafts normally snapshot `reviewPolicy: "DEV_APPROVAL_V1"` and `requiredReviewKinds: ["DEV_APPROVAL"]`. FL-06 (`lever-equilibrium`) and FL-07 (`thermal-energy`) are the current owner-signoff exceptions in `lab-release.service.ts`; their drafts snapshot `OWNER_SIGNOFF_V1` and require the exact-digest evidence (`curriculumMapping`, `sourceReferences`, `scientificGoldenCases`, `rubric`, `safetyAssessment`, `rightsAssessment`). In the Admin screen or the FL-07 release script, review the exact digest and submit evidence for that snapshot policy. The authenticated ADMIN endpoint records the review and activates atomically. Older snapshots retain their recorded policy and receipts.
 4. Existing delegated review types (`CURRICULUM`, `SUBJECT`, `MODEL`, `SAFETY`, `RIGHTS`, `RANGE`) only gate activation when they are in that release snapshot's required kinds. Do not assume adding a review receipt manually changes the snapshot policy. Older releases preserve their own policy.
-5. The lab-specific scripts `scripts/release-fl10-mass-conservation.mjs` and `scripts/release-em-induction.mjs` use the Admin API rather than direct DB writes. FL-10 is list-only by default and requires explicit draft/publish flags, exact expected digest and evidence for publication. FL-25 has a migration precondition and an opt-in publish flag. They are examples, not a generic production deploy pipeline; verify API target and authorization before any later use.
+5. The lab-specific scripts `scripts/release-fl07-thermal.mjs`, `scripts/release-fl10-mass-conservation.mjs` and `scripts/release-em-induction.mjs` use the Admin API rather than direct DB writes. FL-07 requires the reviewed `FL07_EXPECTED_DIGEST` and `FL07_OWNER_EVIDENCE_PATH` for `--publish`, then checks the exact source binding, approval and activation. FL-10 is list-only by default and requires explicit draft/publish flags, exact expected digest and evidence for publication. FL-25 has a migration precondition and an opt-in publish flag. These scripts are not a generic production deploy pipeline; verify API target and authorization before any later use.
 
 ## 6. Post-activation verification and recovery
 
@@ -90,7 +100,7 @@ Record a read-only target readback of Lab ID/status/scope/releaseCleared, active
 
 Activation supersedes the previous active release; it does not rewrite its snapshot. The activation endpoint can reactivate a `SUPERSEDED` version after its review policy and digest checks, so a deliberate rollback must identify the exact old release and assess assignment/history implications. Quarantine is a containment action: it revokes evaluation for the pinned pack, can quarantine the dependent active release and clear `releaseCleared`; it is not equivalent to rollback. Preserve audit/history and follow the incident owner’s recovery decision.
 
-## 7. Current completed-release baseline (read-only check, 2026-11-01)
+## 7. Current completed-release baseline (read-only check, 2026-11-03)
 
 | Lab | Active release | Scope/clearance | Current review requirement | Limits |
 |---|---:|---|---|---|
@@ -100,9 +110,10 @@ Activation supersedes the previous active release; it does not rewrite its snaps
 | Mass Conservation / FL-10 (K2) | v1 | `SHARED_LIBRARY` / true | `OWNER_SIGNOFF` | One activity only; does not complete broader mol/stoichiometry portfolio |
 | Gene Protein / FL-27 | v1 | `SHARED_LIBRARY` / true | `OWNER_SIGNOFF` | Fresh Supabase readback; independent subject/device acceptance is a separate claim |
 | Lever Equilibrium / FL-06 (K5) | v1 | `SHARED_LIBRARY` / true | `OWNER_SIGNOFF` | Digest `fff052879326482b47f5eeb59cc01852ccf11df228e8f3b4f3117b8b082f99bd`; Technical Assumption B18/B19; full receipt linked above |
+| Thermal Energy / FL-07 (K4) | v1 | `SHARED_LIBRARY` / true | `OWNER_SIGNOFF` | Release `cmw0ik9c8000klw0shlremnhw`; digest `abf54034d30b61bdda2cbc522af34e02f1518b8c903140e8f3bd3dfd9b231fa0`; one B27 outcome; technical assumptions remain; hosted FE/API rollout not verified |
 | Chemistry, Eye | none | `CLASS_PRIVATE` / false | n/a | No active shared LabRelease in this readback; prototypes/rows are not shared releases |
 
-These are current database facts, not proof of production FE/API deployment, school-device acceptance, independent review or all curriculum outcomes. Re-query the target before a release decision.
+These are database facts from the dated readback, not proof of production FE/API deployment, school-device acceptance, independent review or all curriculum outcomes. The FL-07 student-catalog check used the local API connected to the target database; it was not a hosted browser check. Re-query the target before a later release decision.
 
 **FL-20 check:** The portfolio documents FL-20 as a proposed KEEP/W4 ecology activity (tolerance curve, population density and age-structure concepts), with source/mapping and model assumptions still requiring review. `gene-protein` is the separate FL-27 release; its ACTIVE status does not count as FL-20 acceptance.
 
@@ -115,7 +126,7 @@ These are current database facts, not proof of production FE/API deployment, sch
 | P3.3 Curriculum/science | Open | Keep source authority, exact Outcome text, mapping and qualified reviewer status explicit |
 | P3.4 Technical pilot | Isolated Circuit pilot passed | Reuse verified attempt/replay/recovery patterns; keep synthetic fixture evidence labelled |
 | P3.5 Compatibility | Technical fixture passed; phase gate still NOT MET | Chemistry pH is regression-only technical fixture; active shared releases do not retroactively satisfy the genuine pilot mapping/model review gate |
-| P3.6 Release/Class Lab | Four shared releases active; acceptance remains open | Reuse release lifecycle and class assignment pinning; confirm target FE/API, accessibility and representative-device evidence |
+| P3.6 Release/Class Lab | Seven shared releases listed in §7; acceptance remains open | Reuse release lifecycle and class assignment pinning; confirm target FE/API, accessibility and representative-device evidence |
 | P3.7 Expansion | Still gated | Do not infer portfolio completion; preserve ≤2 concurrent tracks and close review/QA gates |
 
 Shared code boundaries: `LabSpace` is the product shell; `PhysicalLabEnvironment`/`PhysicsStage` provides room/bench presentation reused across K1/K2/K3. Each kit retains its apparatus, model, state/output, rubric, activity and release identity. Shared environment reuse demonstrates implementation reuse, not scientific equivalence or kit readiness.
@@ -125,7 +136,7 @@ Shared code boundaries: `LabSpace` is the product shell; `PhysicalLabEnvironment
 - Phase gates: [`lab-pipeline-phase-plan.md`](../spec-lab-pipeline/lab-pipeline-phase-plan.md).
 - Pipeline contract and review semantics: [`pipeline.md`](../spec-lab-pipeline/pipeline.md), [`contract-v1.md`](../spec-lab-pipeline/contract-v1.md).
 - Kit/portfolio and component boundaries: [`lab-catalog-and-shared-kits-khtn8-9.md`](../spec-lab-pipeline/lab-catalog-and-shared-kits-khtn8-9.md).
-- Lab behavior/readiness: the relevant FL-03, FL-10, FL-25 and Circuit specifications and implementation evidence listed in `SPEC.md`.
+- Lab behavior/readiness: the relevant FL-03, FL-06, FL-07, FL-10, FL-25 and Circuit specifications and implementation evidence listed in `SPEC.md`; FL-07 operational evidence is in [`fl07-publication-readiness.md`](../../../docs/operations/fl07-publication-readiness.md).
 - Executable release semantics: `src/modules/labs/application/lab-release.service.ts`, `src/modules/labs/interface/admin-labs.controller.ts`, and the guarded migration check `scripts/assert-isolated-db.mjs`.
 
 Update this runbook whenever release policy, migration/deploy pipeline, tuple contract or lifecycle endpoints change. Update date-stamped inventory only after a fresh read-only query. If independent review becomes policy, first change the release snapshot policy and tests; do not document it as a gate before code enforces it.
