@@ -118,7 +118,7 @@ export class AdminAssetsController {
     });
   }
   @Delete("assets/:id")
-  @ApiOperation({ summary: "Delete an asset and its stored versions only when no lesson, step, lab or simulation pack references any version" })
+  @ApiOperation({ summary: "Delete an asset and its stored versions only when no content or ebook cover references any version" })
   async deleteAsset(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
     const b = z
       .object({ reason, confirm: z.literal(true) })
@@ -128,10 +128,10 @@ export class AdminAssetsController {
       const asset = await tx.asset.findUnique({ where: { id }, include: { versions: true } });
       if (!asset) throw notFound("tệp");
       const references = await assetReferences(tx, { versionIds: asset.versions.map((v) => v.id), legacyFileId: asset.legacyFileId });
-      if (references.lessons.length || references.labs.length || references.simPacks.length)
+      if (references.lessons.length || references.labs.length || references.simPacks.length || references.ebookEditions.length)
         throw new ConflictException({
           code: "ASSET_REFERENCED",
-          message: "Tệp đang được bài học, phòng thực hành hoặc gói mô phỏng tham chiếu; không thể xóa",
+          message: "Tệp đang được bài học, phòng thực hành, gói mô phỏng hoặc ảnh bìa ebook tham chiếu; không thể xóa",
           details: references,
         });
       await tx.assetVersion.deleteMany({ where: { assetId: id } });
