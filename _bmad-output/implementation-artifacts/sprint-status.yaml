@@ -155,7 +155,7 @@ development_status:
   fl-20-v11-t2-pond-3d-integration: done
   fl-20-v11-t3-verification: done
   fl-20-v11-t4-owner-visual-review: in-progress
-  # FL-21 food-web — ../specs/spec-fl-21-food-web/; owner accepted all recommendations 2026-11-02; built and verified locally, not released.
+  # FL-21 food-web — ../specs/spec-fl-21-food-web/; owner accepted all recommendations 2026-11-02; release v1 published on the shared environment 2026-11-05.
   fl-21-t0-owner-decisions: done
   fl-21-t1-blueprint: review
   fl-21-t2-food-web-model: done
@@ -165,7 +165,7 @@ development_status:
   fl-21-t6-energy-causes-panel: done
   fl-21-t7-verification: done
   fl-21-t8-device-qa: in-progress
-  fl-21-t9-release: in-progress
+  fl-21-t9-release: done
   fl-21-v11-t1-3d-meadow-scene: review
   # Teacher AI increment (TAI) — plan ../planning-artifacts/increment-tai-teacher-ai.md; all blocked on gate G-1 (TAI-T0).
   epic-tai-01-authoring: backlog
@@ -221,7 +221,7 @@ fl21_tracking:
   status: in-progress
   decisions: 'owner 2026-11-02: "đồng ý theo khuyến nghị" (D-1…D-7 as recommended).'
   verification: 'Local only (throwaway PostgreSQL 55432, stopped afterwards; shared Supabase untouched). BE: 66 test files / 472 tests passed (CI-like isolated URL), incl. 17 food-web golden, activity tests and food-web.integration (persist, replay, idempotency, tuple pinning); lint, build, check:layers ok; route manifest identical to main. FE: lint + build ok; food-web-lab.spec 2/2 (mock: keyboard chain, F5 restore, broken-link display, review-after-check, payload, result drawer on top, phone); FL-20 and FL-25 specs pass. Real stack (Vite → API → isolated DB) at 1440/390/1280 dark: launch rendererKey food-web, submit 201 scored 6/7 with unmetCriteria prediction:HUNT (deliberate), no page errors, no horizontal scroll. Sloplint 0 FAIL (WARN 29 waived, F7 answered).'
-  rehearsal: 'Isolated nexalab_fl21_release 2026-11-02 (curriculum stand-ins with the shared Bài 44 lesson id, topic KHTN8-L44 and outcomes): migration 20261102120000_fl21_food_web_lab applied; scripts/release-food-web.mjs created activity, config, pack food-web-k8 and release v1, published under main''s new DEV_APPROVAL_V1 policy (evidence developerCheck + agentCheck) → v1 ACTIVE, DEV_APPROVAL:APPROVE, Lab published SHARED_LIBRARY releaseCleared; rerun idempotent; student library card shown and launch FOUNDATIONAL_RELEASE. Shared-environment publish not done.'
+  rehearsal: 'Isolated nexalab_fl21_release 2026-11-02 (curriculum stand-ins with the shared Bài 44 lesson id, topic KHTN8-L44 and outcomes): migration 20261102120000_fl21_food_web_lab applied; scripts/release-food-web.mjs created activity, config, pack food-web-k8 and release v1, published under main''s new DEV_APPROVAL_V1 policy (evidence developerCheck + agentCheck) → v1 ACTIVE, DEV_APPROVAL:APPROVE, Lab published SHARED_LIBRARY releaseCleared; rerun idempotent; student library card shown and launch FOUNDATIONAL_RELEASE. Shared-environment publish done 2026-11-05: migration 20261102120000_fl21_food_web_lab applied to Supabase by the owner, API :4000 restarted on feat/fl-21-food-web, release v1 ACTIVE digest b06b1da88a9dc549975b452df140625afbee983f61a7a7a959494dac199bfda7; nguyenan.8a library shows food-web published SHARED_LIBRARY releaseCleared.'
   release_notes:
     - 'Pack golden expectedOutputs accept scalars only; the energy golden checks setup (values are covered by the model golden tests).'
     - 'main (93681ce) requires DEV_APPROVAL evidence { developerCheck, agentCheck } for every Lab except FL-06; the script records the detailed review notes and sends that strict shape.'
