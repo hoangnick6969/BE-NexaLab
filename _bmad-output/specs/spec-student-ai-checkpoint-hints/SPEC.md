@@ -86,6 +86,17 @@ Labs the observation already shows the answer before submitting. Two more moment
   after-submit ladder at level 3.
 - Catalog version `checkpoint-hints@2` (adds the reflections; level 1–4 text unchanged from @1).
 
+## Step 2 — station Labs (after-submit only)
+
+FL-03 density, FL-27 gene to protein, FL-16 eye optics and FL-05 buoyancy get after-submit hints from
+`station-hint-catalogs.ts` (part of `checkpoint-hints@3`). Their evaluators already return
+`assessment.unmetCriteria`; a catalog `keyOf` groups raw entries into hint keys (density and gene by
+criterion, keeping the concept questions apart; FL-16 `phase1` and the first phase-2 reason in the order
+distance, focus, relaxedFar, glasses), and `answerOf` picks the evidence part each key depends on, so a
+key escalates only when that part changed. No in-run hints (`inRun` only on predict-observe catalogs).
+The FE shows the after-submit panel for renderers `density-bench`, `gene-expression`,
+`eye-anatomy-optics`, `buoyancy-bench`.
+
 ## Student UX
 
 While working, a "Gợi ý" toggle in the Lab Space action dock opens a popover above the dock (the stage stays

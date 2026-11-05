@@ -3,17 +3,18 @@ import { z } from "zod";
 import { CIRCUIT_BULB_RUBRIC } from "./evaluators/circuit-bulb-checkpoints.evaluator";
 import { ECOLOGY_TOLERANCE_RUBRIC, EM_INDUCTION_RUBRIC, FOOD_WEB_RUBRIC, checkpointActivityForRubric } from "./checkpoint-activities";
 import { canonical } from "./lab-run";
+import { STATION_HINT_CATALOGS } from "./station-hint-catalogs";
 
 /**
  * SAI-01A rules-only hints for checkpoint Foundational Labs
  * (_bmad-output/specs/spec-student-ai-checkpoint-hints). Text and misconception rules are versioned:
  * change a template or a detector → bump the version, never edit a released one silently.
  */
-export const CHECKPOINT_HINT_RULES = "checkpoint-hints@2";
+export const CHECKPOINT_HINT_RULES = "checkpoint-hints@3";
 export const CHECKPOINT_MISCONCEPTION_RULES = "checkpoint-misconceptions@1";
 
-type Pair = readonly [a: string, b: string];
-type Observation = { id: string; prediction: unknown; predictionCorrect: boolean; scientificObservation?: any };
+export type Pair = readonly [a: string, b: string];
+export type Observation = { id: string; prediction: unknown; predictionCorrect: boolean; scientificObservation?: any };
 
 export type CriterionHints = {
   /** Student-facing name of the checkpoint the hint is about. */
@@ -32,11 +33,20 @@ export type CriterionHints = {
   forbidden: readonly RegExp[];
 };
 
-type Catalog = { order: readonly string[]; criteria: Record<string, CriterionHints> };
+export type Catalog = {
+  order: readonly string[];
+  criteria: Record<string, CriterionHints>;
+  /** Maps a raw unmetCriteria entry to a catalog key (station Labs group several entries); default identity. */
+  keyOf?: (unmet: string) => string | null;
+  /** The learner's answer that a criterion depends on, for "did the answer change" (BR-06); default checkpoint/explanation. */
+  answerOf?: (evidence: any, criterion: string) => unknown;
+  /** In-run moments A and B: only predict-observe checkpoint activities. */
+  inRun?: boolean;
+};
 
 const ANSWER_LETTER = /(?:[đĐ]áp án|[lL]ựa chọn|[pP]hương án|[cC]họn)\s+[ABC](?![\p{L}\p{N}])/u;
 
-const explanation = (observed: string): CriterionHints => ({
+export const explanation = (observed: string): CriterionHints => ({
   label: "Lời giải thích",
   levels: [
     [
@@ -63,6 +73,7 @@ const predictionOf = (observation: Observation) => observation.prediction;
 
 /** FL-21 food web, activity food-web-checkpoints v1 (W1, illustrative web). */
 const FOOD_WEB: Catalog = {
+  inRun: true,
   order: ["prediction:ROLES", "prediction:CHAIN", "prediction:ENERGY", "prediction:HUNT", "prediction:DEFOREST", "prediction:CAUSES", "explanation"],
   criteria: {
     "prediction:ROLES": {
@@ -315,6 +326,7 @@ const FOOD_WEB: Catalog = {
 
 /** FL-20 ecology tolerance, activity ecology-tolerance-checkpoints v1 (cá rô phi, illustrative data). */
 const ECOLOGY: Catalog = {
+  inRun: true,
   order: ["prediction:T_INSIDE", "prediction:T_ABOVE", "prediction:LIMITS", "prediction:IMPORT", "prediction:DENSITY", "prediction:AGE", "explanation"],
   criteria: {
     "prediction:T_INSIDE": {
@@ -507,6 +519,7 @@ const ECOLOGY: Catalog = {
 
 /** FL-01 circuit bulb, activity circuit-bulb-checkpoints v1. */
 const CIRCUIT_BULB: Catalog = {
+  inRun: true,
   order: ["prediction:CLOSED", "prediction:OPEN", "explanation"],
   criteria: {
     "prediction:CLOSED": {
@@ -577,6 +590,7 @@ const CIRCUIT_BULB: Catalog = {
 
 /** FL-25 electromagnetic induction, activity em-induction-checkpoints v1. */
 const EM_INDUCTION: Catalog = {
+  inRun: true,
   order: ["prediction:STILL", "prediction:PUSH", "prediction:PULL", "prediction:ROTATE", "explanation"],
   criteria: {
     "prediction:STILL": {
@@ -700,6 +714,7 @@ const EM_INDUCTION: Catalog = {
 };
 
 export const CHECKPOINT_HINT_CATALOGS: Readonly<Record<string, Catalog>> = {
+  ...STATION_HINT_CATALOGS,
   [FOOD_WEB_RUBRIC]: FOOD_WEB,
   [ECOLOGY_TOLERANCE_RUBRIC]: ECOLOGY,
   [CIRCUIT_BULB_RUBRIC]: CIRCUIT_BULB,
@@ -707,6 +722,8 @@ export const CHECKPOINT_HINT_CATALOGS: Readonly<Record<string, Catalog>> = {
 };
 
 export const hasCheckpointHints = (rubricRef: string | null | undefined) => Boolean(rubricRef && CHECKPOINT_HINT_CATALOGS[rubricRef]);
+/** In-run hints (moments A and B) exist only for predict-observe checkpoint activities. */
+export const hasRunHints = (rubricRef: string | null | undefined) => Boolean(rubricRef && CHECKPOINT_HINT_CATALOGS[rubricRef]?.inRun);
 
 export type PreviousCheckpointHint = { criterion: string; level: number; variant: "a" | "b"; answerDigest: string };
 
@@ -745,10 +762,11 @@ export function planCheckpointHint(input: { rubricRef: string; evidence: unknown
   const catalog = CHECKPOINT_HINT_CATALOGS[input.rubricRef];
   if (!catalog) throw new Error(`No checkpoint hint catalog for ${input.rubricRef}`);
   const unmet: string[] = Array.isArray(input.result?.assessment?.unmetCriteria) ? input.result.assessment.unmetCriteria : [];
-  const criterion = catalog.order.find((item) => unmet.includes(item));
+  const keys = new Set(unmet.map((item) => (catalog.keyOf ? catalog.keyOf(item) : item)).filter((key): key is string => Boolean(key)));
+  const criterion = catalog.order.find((item) => keys.has(item));
   if (!criterion) return null;
   const hints = catalog.criteria[criterion];
-  const answerDigest = digest(answerFor(input.evidence, criterion));
+  const answerDigest = digest(catalog.answerOf ? catalog.answerOf(input.evidence, criterion) : answerFor(input.evidence, criterion));
   const last = [...input.previous].reverse().find((item) => item.criterion === criterion);
   let level: number;
   let variant: "a" | "b";
@@ -761,8 +779,9 @@ export function planCheckpointHint(input: { rubricRef: string; evidence: unknown
     [level, variant, escalated] = [last.level, otherVariant, false];
     repeatReason = last.answerDigest === answerDigest ? "SAME_ANSWER" : "TOP_LEVEL";
   } else [level, variant, escalated] = [last.level + 1, "a", true];
-  const checkpointId = criterion === "explanation" ? null : criterion.slice("prediction:".length);
-  const observation = checkpointId ? (input.result?.observations ?? []).find((item: any) => item?.id === checkpointId) : null;
+  const checkpointId = criterion.startsWith("prediction:") ? criterion.slice("prediction:".length) : null;
+  const observations = Array.isArray(input.result?.observations) ? input.result.observations : [];
+  const observation = checkpointId ? observations.find((item: any) => item?.id === checkpointId) : null;
   const misconception = observation && hints.detect ? hints.detect(observation) : null;
   const tailored = misconception && level <= 2 && variant === "a" ? hints.misconceptions?.[misconception]?.[level - 1] : undefined;
   return {

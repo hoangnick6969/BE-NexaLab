@@ -1,10 +1,17 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
-  CHECKPOINT_HINT_CATALOGS, CHECKPOINT_HINT_RULES, catalogTexts, evaluateOneCheckpoint, planCheckpointHint, planRunHint,
+  CHECKPOINT_HINT_CATALOGS, CHECKPOINT_HINT_RULES, catalogTexts, evaluateOneCheckpoint, hasRunHints, planCheckpointHint, planRunHint,
   type PreviousCheckpointHint, type PreviousRunHint,
 } from "./checkpoint-hint-rules";
 import { CIRCUIT_BULB_RUBRIC } from "./evaluators/circuit-bulb-checkpoints.evaluator";
+import { densityStationsEvaluator } from "./evaluators/density-stations.evaluator";
+import { eyeOpticsEvaluator } from "./evaluators/eye-anatomy-optics.evaluator";
+import { geneProteinStationsEvaluator } from "./evaluators/gene-protein-stations.evaluator";
+import { buoyancyLabEvaluator } from "./evaluators/buoyancy-lab.evaluator";
+
+const DENSITY_RUBRIC = densityStationsEvaluator.rubricRef, EYE_OPTICS_RUBRIC = eyeOpticsEvaluator.rubricRef;
+const GENE_RUBRIC = geneProteinStationsEvaluator.rubricRef, BUOYANCY_RUBRIC = buoyancyLabEvaluator.rubricRef;
 import { ECOLOGY_TOLERANCE_RUBRIC, FOOD_WEB_RUBRIC, evaluateFoodWebActivity } from "./checkpoint-activities";
 
 const foodWeb = () => [
@@ -36,13 +43,13 @@ describe("SAI-01A checkpoint hint catalogs", () => {
 
   it.each(Object.entries(CHECKPOINT_HINT_CATALOGS))("%s: the hint order covers exactly the catalog criteria", (_rubricRef, catalog) => {
     expect([...catalog.order].sort()).toEqual(Object.keys(catalog.criteria).sort());
-    expect(catalog.order.at(-1)).toBe("explanation");
+    if (catalog.inRun) expect(catalog.order.at(-1)).toBe("explanation");
   });
 
   it("pins the template text to its rule version (bump CHECKPOINT_HINT_RULES when wording changes)", () => {
     const texts = Object.keys(CHECKPOINT_HINT_CATALOGS).sort().flatMap((rubricRef) => catalogTexts(rubricRef).map((item) => `${rubricRef}|${item.criterion}|${item.text}`));
     const digest = createHash("sha256").update(texts.join("\n")).digest("hex");
-    expect({ version: CHECKPOINT_HINT_RULES, digest }).toEqual({ version: "checkpoint-hints@2", digest: PINNED_DIGEST });
+    expect({ version: CHECKPOINT_HINT_RULES, digest }).toEqual({ version: "checkpoint-hints@3", digest: PINNED_DIGEST });
   });
 });
 
@@ -93,6 +100,40 @@ describe("SAI-01A in-run hints", () => {
     expect(() => evaluateOneCheckpoint(FOOD_WEB_RUBRIC, { id: "HUNT", state: { setup: "remove", webId: "W1", speciesId: "dai-bang" }, prediction: "INCREASE" })).toThrow();
     expect(() => evaluateOneCheckpoint(FOOD_WEB_RUBRIC, { id: "HUNT", state: { setup: "remove", webId: "W1", speciesId: "ran" }, prediction: "MAYBE" })).toThrow();
     expect(() => evaluateOneCheckpoint(FOOD_WEB_RUBRIC, { id: "NOPE", state: {}, prediction: null })).toThrow();
+  });
+});
+
+describe("SAI-01A station Labs (step 2)", () => {
+  const station = (rubricRef: string, unmetCriteria: string[], evidence: unknown = {}, previous: PreviousCheckpointHint[] = []) =>
+    planCheckpointHint({ rubricRef, evidence, result: { assessment: { unmetCriteria } }, previous });
+
+  it("groups density stations by criterion and keeps the concept questions apart", () => {
+    expect(station(DENSITY_RUBRIC, ["calculation:pebble", "cylinder:water", "concept:irregular"])).toMatchObject({ criterion: "cylinder", checkpointId: null, level: 1 });
+    expect(station(DENSITY_RUBRIC, ["concept:irregular", "concept:explore"])).toMatchObject({ criterion: "concept:explore" });
+  });
+
+  it("maps FL-16 phase-2 reasons to one key in a fixed order", () => {
+    expect(station(EYE_OPTICS_RUBRIC, ["phase2:myopia-far:glasses+focus"])).toMatchObject({ criterion: "phase2:focus" });
+    expect(station(EYE_OPTICS_RUBRIC, ["phase2:myopia-far:glasses", "phase1:cornea"])).toMatchObject({ criterion: "phase1" });
+  });
+
+  it("escalates a station only when that station's answer changed", () => {
+    const evidence = { block: { trials: [{ aMm: 1 }] }, water: { volumeMl: 50 }, pebble: { v1Ml: 50, v2Ml: 60 } };
+    const first = station(DENSITY_RUBRIC, ["cylinder:pebble"], evidence)!;
+    const keep = { criterion: first.criterion, level: first.level, variant: first.variant, answerDigest: first.answerDigest };
+    const otherStationChanged = { ...evidence, block: { trials: [{ aMm: 2 }] } };
+    expect(station(DENSITY_RUBRIC, ["cylinder:pebble"], otherStationChanged, [keep])).toMatchObject({ level: 1, repeatReason: "SAME_ANSWER" });
+    expect(station(DENSITY_RUBRIC, ["cylinder:pebble"], { ...evidence, pebble: { v1Ml: 50, v2Ml: 62 } }, [keep])).toMatchObject({ level: 2, escalated: true });
+  });
+
+  it.each([[GENE_RUBRIC, ["translation:combinations"], "translation"], [BUOYANCY_RUBRIC, ["force"], "force"], [GENE_RUBRIC, ["concept:flow"], "concept:flow"]] as const)(
+    "%s %j → %s", (rubricRef, unmet, criterion) => {
+      expect(station(rubricRef, [...unmet])).toMatchObject({ criterion, level: 1 });
+    });
+
+  it("offers no in-run hints for station Labs", () => {
+    for (const rubricRef of [DENSITY_RUBRIC, GENE_RUBRIC, EYE_OPTICS_RUBRIC, BUOYANCY_RUBRIC]) expect(hasRunHints(rubricRef)).toBe(false);
+    expect(hasRunHints(FOOD_WEB_RUBRIC)).toBe(true);
   });
 });
 
@@ -170,4 +211,4 @@ describe("SAI-01A planner", () => {
   });
 });
 
-const PINNED_DIGEST = "6489b9b79cb070767a786f0cbd45e60042b1a36d52ee2816af058cdf9d003129";
+const PINNED_DIGEST = "f2d7de37de39d2cbceebf2ff65b1d590262c6103846de4571d7b170901d56469";

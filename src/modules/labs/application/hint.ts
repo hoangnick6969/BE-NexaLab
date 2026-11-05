@@ -3,7 +3,7 @@ import { applicableAssignmentWhere } from "../../classes/application/class-acces
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
 import { buildContext } from "./tutor";
 import {
-  CheckpointHintInputError, evaluateOneCheckpoint, hasCheckpointHints, planCheckpointHint, planRunHint,
+  CheckpointHintInputError, evaluateOneCheckpoint, hasCheckpointHints, hasRunHints, planCheckpointHint, planRunHint,
   type PreviousCheckpointHint, type PreviousRunHint, type RunHintMoment,
 } from "./checkpoint-hint-rules";
 
@@ -214,7 +214,7 @@ async function hintableRun(db: any, actor: Actor, runId: string) {
   if (run.revokedAt) throw new ConflictException({ code: "RUN_REVOKED", message: "Lượt làm này đã bị thu hồi" });
   if (run.expiresAt && run.expiresAt < new Date()) throw new ConflictException({ code: "RUN_EXPIRED", message: "Lượt làm này đã hết hạn" });
   const rubricRef = (run.execution as any)?.rubricRef;
-  if (!hasCheckpointHints(rubricRef)) throw new ConflictException({ code: "HINT_UNAVAILABLE", message: "Bài này chưa có gợi ý trong lúc làm" });
+  if (!hasRunHints(rubricRef)) throw new ConflictException({ code: "HINT_UNAVAILABLE", message: "Bài này chưa có gợi ý trong lúc làm" });
   return { run, rubricRef: rubricRef as string };
 }
 
