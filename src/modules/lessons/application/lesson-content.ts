@@ -328,8 +328,8 @@ export function attribution(lesson: { review?: unknown; synthetic?: boolean; sco
 export const isStructureChange = (before: Parameters<typeof structureFingerprint>[0], after: Parameters<typeof structureFingerprint>[0]) =>
   structureFingerprint(before) !== structureFingerprint(after);
 
-/** Asset IDs referenced by `asset:<uuid>` materials. */
-export const assetIds = (materials: Array<{ url: string }>) =>
+/** IDs in legacy `asset:<uuid>` materials (pre-CF files, no longer served). */
+export const legacyAssetIds = (materials: Array<{ url: string }>) =>
   materials.map((item) => item.url.match(/^asset:([0-9a-f-]{36})$/)?.[1]).filter((value): value is string => Boolean(value));
 
 /** Immutable asset version IDs pinned by `assetv:<versionId>` materials (CF-T2). */

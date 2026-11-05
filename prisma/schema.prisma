@@ -120,6 +120,8 @@ model Session {
   /// Existing rows predate the choice and were 7-day persistent sessions.
   remember  Boolean  @default(true)
   expiresAt DateTime
+
+  @@index([userId])
 }
 
 model ParentLink {
@@ -173,8 +175,6 @@ model Classroom {
   teacher           User            @relation(fields: [teacherId], references: [id])
   name              String
   grade             Int             @default(8)
-  /// Legacy Increment A code; no longer accepted for joining (B1-T3).
-  joinCode          String?         @unique
   status            ClassroomStatus @default(ACTIVE)
   archivedAt        DateTime?
   joinCodeEnabled   Boolean         @default(true)
@@ -307,6 +307,7 @@ model EbookAnnotation {
   updatedAt           DateTime            @updatedAt
 
   @@index([userId, subjectId, documentFingerprint, createdAt], map: "ebook_annotation_owner_version_idx")
+  @@index([subjectId])
 }
 
 model Lesson {
@@ -364,6 +365,10 @@ model Lesson {
 
   @@index([scope, status, grade])
   @@index([authorId, status])
+  @@index([subjectId])
+  @@index([packVersionId])
+  @@index([curriculumTopicCode])
+  @@index([curriculumChapterCode, curriculumOrder])
 }
 
 /// Grade 8–9 KHTN outcome map (Content Foundation). `synthetic` rows are dev fixtures and never count as released coverage.
@@ -457,6 +462,7 @@ model StepProgress {
   @@unique([studentId, assignmentId, stepId])
   @@index([studentId, stepId])
   @@index([assignmentId, studentId])
+  @@index([stepId])
 }
 
 model QuizAttempt {
@@ -498,6 +504,7 @@ model BasicExerciseAttempt {
   @@unique([studentId, idempotencyKey])
   @@index([studentId, lessonId, stepId, createdAt])
   @@index([lessonId, stepId, passed])
+  @@index([stepId])
 }
 
 model Lab {
@@ -519,6 +526,8 @@ model Lab {
   assets             Json         @default("[]")
   challenges         Challenge[]
   releases           LabRelease[]
+
+  @@index([subjectId])
 }
 
 /// Immutable public-release candidate; approval receipts bind to `digest` of the full snapshot.
@@ -602,6 +611,7 @@ model FoundationalCourseLesson {
 
   @@id([courseVersionId, lessonId])
   @@unique([courseVersionId, officialOrder])
+  @@index([lessonId])
 }
 
 model EbookEdition {
@@ -646,6 +656,8 @@ model Challenge {
   constraints Json
   difficulty  String    @default("intermediate")
   attempts    Attempt[]
+
+  @@index([labId])
 }
 
 model Assignment {
@@ -736,6 +748,7 @@ model AssignmentSubmission {
 
   @@index([assignmentId, studentId, submittedAt])
   @@index([studentId, submittedAt])
+  @@index([deadlineRevisionId])
 }
 
 /// Owning teacher's decision on one late submission (I3 / 3.3): REJECT_ZERO, or
@@ -750,6 +763,8 @@ model LateDecision {
   deadlineRevisionId String?
   deadlineRevision   AssignmentDeadlineRevision? @relation(fields: [deadlineRevisionId], references: [id])
   createdAt          DateTime                    @default(now())
+
+  @@index([deadlineRevisionId])
 }
 
 model TeacherGateOverride {
@@ -765,6 +780,7 @@ model TeacherGateOverride {
 
   @@unique([studentId, assignmentId, stepId])
   @@index([assignmentId, studentId, revokedAt])
+  @@index([stepId])
 }
 
 /// Emergency block for new runs and submissions using a pack version.
@@ -780,7 +796,7 @@ model LabPackRevocation {
 
 /// Server-created, immutable launch tuple. Revocation never deletes historical evidence.
 model LabRun {
-  id               String    @id @default(cuid())
+  id               String        @id @default(cuid())
   studentId        String
   labId            String
   challengeId      String
@@ -788,7 +804,7 @@ model LabRun {
   context          String
   execution        Json
   executionDigest  String
-  createdAt        DateTime  @default(now())
+  createdAt        DateTime      @default(now())
   expiresAt        DateTime?
   revokedAt        DateTime?
   revokedById      String?
@@ -841,6 +857,8 @@ model Attempt {
   @@index([studentId, challengeId, createdAt])
   @@index([studentId, lessonStepId, createdAt])
   @@index([studentId, createdAt, id])
+  @@index([labRunId])
+  @@index([challengeId])
 }
 
 model HintLog {
@@ -878,28 +896,8 @@ model SavedExperiment {
   simulationResult Json
   note             String
   createdAt        DateTime @default(now())
-}
 
-model AssetFile {
-  id               String    @id
-  ownerId          String
-  name             String
-  mime             String
-  size             Int
-  /// Full SHA-256 of the stored bytes; null only for files uploaded before C2.
-  sha256           String?
-  /// TEACHER_PRIVATE | SHARED_LIBRARY
-  scope            String    @default("TEACHER_PRIVATE")
-  /// READY | QUARANTINED. A quarantined file is served to admins only.
-  status           String    @default("READY")
-  source           String?
-  license          String?
-  quarantinedAt    DateTime?
-  quarantineReason String?
-  createdAt        DateTime  @default(now())
-
-  @@index([ownerId])
-  @@index([status, scope])
+  @@index([studentId])
 }
 
 /// Immutable simulation configuration for one lab (C2-T3). Activating a version
@@ -988,8 +986,6 @@ model Asset {
   attribution      String?
   quarantinedAt    DateTime?
   quarantineReason String?
-  /// Set when imported from the pre-CF local AssetFile table.
-  legacyFileId     String?        @unique
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @default(now()) @updatedAt
   versions         AssetVersion[]
@@ -1000,19 +996,19 @@ model Asset {
 
 /// Immutable stored object. Content and published lessons pin a READY version; replacement creates a new version and key.
 model AssetVersion {
-  id             String    @id @default(cuid())
+  id             String         @id @default(cuid())
   assetId        String
-  asset          Asset     @relation(fields: [assetId], references: [id])
+  asset          Asset          @relation(fields: [assetId], references: [id])
   version        Int
   /// PENDING | READY | FAILED | QUARANTINED
-  status         String    @default("PENDING")
+  status         String         @default("PENDING")
   /// r2 | local
   storage        String
   bucket         String
   /// Upload target; removed after finalize.
   stagingKey     String?
   /// Released object key; set only once READY and never rewritten.
-  objectKey      String?   @unique
+  objectKey      String?        @unique
   fileName       String
   mime           String
   declaredBytes  Int
@@ -1023,13 +1019,13 @@ model AssetVersion {
   expectedSha256 String?
   etag           String?
   uploadId       String?
-  multipart      Boolean   @default(false)
+  multipart      Boolean        @default(false)
   validation     Json?
   failureReason  String?
   /// Pending uploads not finalized by then are aborted and cleaned up.
   expiresAt      DateTime?
   createdById    String
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime       @default(now())
   readyAt        DateTime?
   ebookCovers    EbookEdition[]
 

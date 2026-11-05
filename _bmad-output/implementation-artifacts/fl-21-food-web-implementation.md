@@ -124,3 +124,13 @@ Owner: "Các đường nối giữa các con vật vẫn chưa rõ cảm giác t
 - FL-20 `ecology-tolerance.webp` (29 KB): the production `PondView3D` at 28 °C with the school swimming. Committed on `feat/fl-20-k8-ecostage` as `c9b6fde` and merged into `feat/fl-21-food-web`; not pushed yet.
 - FL-21 `food-web.webp` (27 KB): the production `FoodWebView3D` meadow with every arrow and the energy chain lit, labels hidden so the card is language-neutral. It ships with the uncommitted v1.1 3D work.
 - 2026-11-04: owner approved; FE committed as `f3acc7c` and pushed with BE on `feat/fl-21-food-web`; FL-20 pushed `c9b6fde`. `fl-21-v11-t1-3d-meadow-scene` moved to review (PR by the owner).
+
+## Session 2026-11-05 — shared-environment publish (T9)
+
+The owner asked to publish FL-21, overriding the "no shared-database writes" rule for this release.
+
+- The owner ran `npx prisma migrate deploy` on Supabase. It applied `20261102120000_fl21_food_web_lab` only. The DB also has `20261103090000_ebook_edition_cover_asset_version` from main, which this branch doesn't have yet.
+- API :4000 had been running since 2026-11-02, before the FL-21 code, so `MODEL_REGISTRY` had no `food-web@1.0.0`. It was restarted on `feat/fl-21-food-web`.
+- `FL21_PUBLISH=true node scripts/release-food-web.mjs`: activity `food-web-checkpoints` v1, configuration v1 and pack `food-web-k8` v1 were created and activated. Release v1 is ACTIVE, digest `b06b1da8…bfda7`, under DEV_APPROVAL_V1.
+- Student `nguyenan.8a`: `/api/labs` lists `food-web` as published, `SHARED_LIBRARY`, releaseCleared.
+- Still open: T8 device QA, and the review of the T1 blueprint and v1.1 3D meadow. The shared API now runs a branch that isn't merged into main yet.

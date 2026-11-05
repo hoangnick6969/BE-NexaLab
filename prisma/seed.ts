@@ -446,7 +446,6 @@ async function main() {
       teacherId: "teacher",
       name: "Khoa học tự nhiên 8A",
       grade: 8,
-      joinCode: "NEXA8A",
     },
     update: {},
   });
@@ -456,14 +455,12 @@ async function main() {
       teacherId: "teacher-owner",
       name: "Pilot Science 8A",
       grade: 8,
-      joinCode: "PILOT8A",
     },
     {
       id: "class-pilot-b",
       teacherId: "teacher-outsider",
       name: "Pilot Science 8B",
       grade: 8,
-      joinCode: "PILOT8B",
     },
   ])
     await db.classroom.upsert({
@@ -474,7 +471,6 @@ async function main() {
             teacherId: classroom.teacherId,
             name: classroom.name,
             grade: classroom.grade,
-            joinCode: classroom.joinCode,
           }
         : {},
     });
