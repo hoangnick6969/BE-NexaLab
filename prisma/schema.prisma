@@ -661,33 +661,34 @@ model Challenge {
 }
 
 model Assignment {
-  id                 String                       @id @default(cuid())
-  classId            String
-  classroom          Classroom                    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  contentId          String
-  contentType        String
-  title              String
-  dueDate            DateTime?
+  id                   String                       @id @default(cuid())
+  classId              String
+  classroom            Classroom                    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  contentId            String
+  contentType          String
+  title                String
+  dueDate              DateTime?
   /// Deprecated mirror of the target snapshot; AssignmentTarget is authoritative.
-  studentIds         Json                         @default("[]")
+  studentIds           Json                         @default("[]")
   /// CLASS (approved members at creation) or SUBSET (selected approved members).
-  audience           String                       @default("CLASS")
+  audience             String                       @default("CLASS")
   /// sha256 of the sorted target student IDs, used by the active-duplicate rule.
-  targetHash         String?
+  targetHash           String?
   /// Immutable content version at assignment time (lesson structure or lab model/config hash).
-  contentVersion     String?
+  contentVersion       String?
   /// Null for legacy assignments; never backfilled from current active versions.
-  labExecution       Json?
-  labExecutionDigest String?
-  status             String                       @default("ACTIVE")
-  createdById        String?
-  archivedAt         DateTime?
-  createdAt          DateTime                     @default(now())
-  updatedAt          DateTime                     @updatedAt
-  targets            AssignmentTarget[]
-  deadlineRevisions  AssignmentDeadlineRevision[]
-  submissions        AssignmentSubmission[]
-  stepProgress       StepProgress[]
+  labExecution         Json?
+  labExecutionDigest   String?
+  status               String                       @default("ACTIVE")
+  createdById          String?
+  archivedAt           DateTime?
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  targets              AssignmentTarget[]
+  deadlineRevisions    AssignmentDeadlineRevision[]
+  submissions          AssignmentSubmission[]
+  stepProgress         StepProgress[]
+  insightDisagreements HintInsightDisagreement[]
 
   @@index([classId, status, dueDate])
   @@index([contentType, contentId, status])
@@ -1269,4 +1270,23 @@ model Notification {
 
   @@unique([recipientId, dedupKey])
   @@index([recipientId, readAt, createdAt])
+}
+
+/// SAI-02A (UC-AI-07): the class teacher disagrees with a misconception hypothesis on one step of a Lab
+/// assignment. Feedback on the rule only: it never changes a verdict, a hint or what students see.
+model HintInsightDisagreement {
+  id            String     @id @default(cuid())
+  assignmentId  String
+  assignment    Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  teacherId     String
+  rubricRef     String
+  criterion     String
+  misconception String
+  /// Misconception rule version the teacher disagreed with (e.g. checkpoint-misconceptions@1).
+  ruleVersion   String
+  note          String?
+  createdAt     DateTime   @default(now())
+
+  @@unique([assignmentId, rubricRef, criterion, misconception])
+  @@index([teacherId])
 }

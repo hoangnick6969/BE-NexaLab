@@ -6,6 +6,7 @@ import { StudentAccessService } from "../../progress/application/student-access.
 import { FOOD_WEB_ACTIVITY_KEY, FOOD_WEB_RUBRIC } from "../application/checkpoint-activities";
 import { MODEL_REGISTRY } from "../application/sim-packs";
 import { ParentsController } from "../../parents/interface/parents.controller";
+import { ClassProgressController } from "../../reports/interface/class-progress.controller";
 import { LabsController } from "./labs.controller";
 
 // SAI-01A checkpoint hints on the FL-21 food-web activity: synthetic records in the isolated database only.
@@ -203,6 +204,37 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       expect(summary.labs[0].reflections).toBeGreaterThan(0);
       expect(JSON.stringify(summary)).not.toMatch(/content|criterion|misconception|FW_|Khi mất rắn/);
       await expect(parents.helpSeeking({ user: { sub: stranger.id, role: "PARENT" } }, student.id)).rejects.toMatchObject({ response: { code: "PARENT_LINK_REQUIRED" } });
+
+      // SAI-02A: the class teacher sees where the class is stuck, from the latest attempt, with no names.
+      const reports = new ClassProgressController(p as any);
+      const teacherReq = { user: { sub: teacher.id, role: "TEACHER" } };
+      const latest = await p.attempt.findFirstOrThrow({ where: { studentId: student.id, assignmentId: assignment.id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+      expect(latest.id).toBe(deforestWrong.id);
+      const insight: any = await reports.hintInsight(classroom.id, assignment.id, teacherReq);
+      expect(insight).toMatchObject({ assignmentId: assignment.id, ruleVersion: "hint-insights@1", totals: { targeted: 1, submitted: 1, passed: 0, notPassed: 1, notStarted: 0 } });
+      const steps = insight.rubrics[0].steps;
+      const deforest = steps.find((step: any) => step.criterion === "prediction:DEFOREST");
+      expect(deforest).toMatchObject({ studentsUnmet: 1, evidence: [deforestWrong.id], misconceptions: [{ id: "FW_ARROW_REVERSED", students: 1, evidence: [deforestWrong.id], disagreement: null }] });
+      expect(deforest.hints.byLevel[3]).toBe(1);
+      expect(steps.find((step: any) => step.criterion === "prediction:HUNT")).toMatchObject({ studentsUnmet: 0 });
+      expect(steps.find((step: any) => step.criterion === "prediction:HUNT").hints.total).toBeGreaterThan(3);
+      expect(JSON.stringify(insight)).not.toContain(student.id);
+      expect(JSON.stringify(insight)).not.toContain("Fixture student");
+      // UC-AI-07: disagree, see it, withdraw it. Nothing a student sees changes.
+      const key = { rubricRef: FOOD_WEB_RUBRIC, criterion: "prediction:DEFOREST", misconception: "FW_ARROW_REVERSED" };
+      expect(await reports.disagree(classroom.id, assignment.id, teacherReq, { ...key, note: "Em vẽ đúng mũi tên trên giấy" }))
+        .toMatchObject({ ...key, ruleVersion: "checkpoint-misconceptions@1", note: "Em vẽ đúng mũi tên trên giấy" });
+      expect(await reports.disagree(classroom.id, assignment.id, teacherReq, key)).toMatchObject({ note: null });
+      expect(await p.hintInsightDisagreement.count({ where: { assignmentId: assignment.id } })).toBe(1);
+      const marked: any = await reports.hintInsight(classroom.id, assignment.id, teacherReq);
+      expect(marked.rubrics[0].steps.find((step: any) => step.criterion === "prediction:DEFOREST").misconceptions[0].disagreement).toMatchObject({ note: null });
+      await expect(reports.disagree(classroom.id, assignment.id, teacherReq, { ...key, misconception: "NOT_A_RULE" })).rejects.toMatchObject({ response: { code: "INSIGHT_KEY_INVALID" } });
+      expect(await reports.withdrawDisagreement(classroom.id, assignment.id, teacherReq, key)).toEqual({ withdrawn: true });
+      expect(await reports.withdrawDisagreement(classroom.id, assignment.id, teacherReq, key)).toEqual({ withdrawn: false });
+      // Another teacher cannot read or mark this class.
+      const other = await p.user.create({ data: { email: `teacher2-${suffix}@example.test`, fullName: "Fixture teacher 2", passwordHash: "fixture", role: "TEACHER" } });
+      await expect(reports.hintInsight(classroom.id, assignment.id, { user: { sub: other.id, role: "TEACHER" } })).rejects.toBeTruthy();
+      await expect(reports.disagree(classroom.id, assignment.id, { user: { sub: other.id, role: "TEACHER" } }, key)).rejects.toBeTruthy();
     } finally {
       MODEL_REGISTRY[modelRef] = original;
     }

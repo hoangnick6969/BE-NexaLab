@@ -31,7 +31,7 @@ Delegate one ticket per task, as a vertical BE/FE/API/schema slice. Keep NestJS/
 | Epic | Spec folder | Delivers | Depends on | Readiness gate |
 | --- | --- | --- | --- | --- |
 | SAI-01 Lab hint tutor | `../specs/spec-student-ai-tutor/` | Versioned 4-level hints, real-retry escalation, provider guard, cache, budget, full HintLog | Existing labs tutor | SG-1 (rules path); SG-1 + SG-2 (provider in production) |
-| SAI-02 Teacher hint insights | roadmap only | Class summary, trace, disagreement (UC-AI-05 to 07) | SAI-01, TAI-04 alignment | SG-1, SG-3 |
+| SAI-02 Teacher hint insights | `../specs/spec-student-ai-teacher-insight/` (SAI-02A descriptive part); threshold rule in TAI-04 | Class summary, trace, disagreement (UC-AI-05 to 07) | SAI-01, TAI-04 alignment | SG-1, SG-3 |
 | SAI-03 Lesson and quiz hints | roadmap only | Hints outside labs, never revealing keys | SAI-01 | SG-1 |
 | SAI-04 Socratic free-text tutor | roadmap only | Typed questions with curriculum lock (UC-AI-08) | SAI-01 | SG-1, SG-2, SG-4 |
 | SAI-05 Parent help-seeking summary | `../specs/spec-student-ai-checkpoint-hints/` (section SAI-05) | Hint counts by level (BR-11) | SAI-01A | SG-1 (rules part, D1) |
@@ -61,3 +61,7 @@ explanation and SAI-05 parent summary, then SAI-02 teacher insight.
 2026-11-05 (later): B2 post-verdict explanation (`verdict-explanations@1`) and SAI-05 parent help-seeking
 summary shipped on `research/student-ai`, both rules-only and read-only, specified in the SAI-01A SPEC (step 4
 and SAI-05 section). Next: SAI-02 teacher insight.
+
+2026-11-05 (later): SAI-02A shipped on `research/student-ai` (owner: "Phần mô tả trước"): class "where stuck"
+summary with misconception hypotheses and teacher disagreement (migration `20261107090000_hint_insight_disagreement`).
+`HIGH_HINT_DEPENDENCE` waits for G-5 / SG-3. Next: SAI-03 / B5.

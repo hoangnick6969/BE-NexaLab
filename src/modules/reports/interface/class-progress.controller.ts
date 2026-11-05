@@ -1,10 +1,14 @@
-import { Controller, Get, Inject, NotFoundException, Param, Req } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Inject, NotFoundException, Param, Put, Query, Req } from "@nestjs/common";
+import { z } from "zod";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../../common/decorators";
 import { ownedClass } from "../../classes/application/class-access";
 import { Db } from "../../../db/db";
 import { username } from "../../../common/validation";
 import { misconceptions } from "../../labs/application/tutor";
+import { CHECKPOINT_HINT_CATALOGS, CHECKPOINT_MISCONCEPTION_RULES } from "../../labs/application/checkpoint-hint-rules";
+import { MISCONCEPTION_LABELS } from "../../labs/application/misconception-labels";
+import { buildHintInsight } from "../application/hint-insight";
 import { deriveLesson } from "../../progress/application/progress";
 import { TEST_CONTENT_TYPE } from "../../classes/application/assignment-test-contract";
 import { testStates } from "../../classes/application/assignment-test-state";
@@ -96,5 +100,103 @@ export class ClassProgressController {
         s.attempts.filter((a) => a.challengeId === "circuit_001"),
       ),
     }));
+  }
+  /** The owning teacher's active or archived Lab assignment with its current, still-enrolled targets. */
+  private async labAssignment(classId: string, assignmentId: string, user: any) {
+    await ownedClass(this.db, classId, user);
+    const assignment = await this.db.assignment.findFirst({
+      where: { id: assignmentId, classId, contentType: "lab", status: { in: ["ACTIVE", "ARCHIVED"] } },
+      include: { targets: { where: { student: { enrollments: { some: { classId, status: "approved" } } } }, select: { studentId: true } } },
+    });
+    if (!assignment) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài giao" });
+    return { assignment, studentIds: assignment.targets.map((target) => target.studentId) };
+  }
+  /** SAI-02A: where the class is stuck on a Lab assignment. Counts and evidence IDs only, no names, no ranking. */
+  @Roles("TEACHER") @Get("classes/:classId/assignments/:assignmentId/hint-insight") async hintInsight(
+    @Param("classId") classId: string,
+    @Param("assignmentId") assignmentId: string,
+    @Req() req: any,
+  ) {
+    const { studentIds } = await this.labAssignment(classId, assignmentId, req.user);
+    const [attempts, hints, disagreements] = await Promise.all([
+      this.db.attempt.findMany({
+        where: { assignmentId, studentId: { in: studentIds } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: { id: true, studentId: true, verdict: true, simulationResult: true, labRun: { select: { execution: true } } },
+      }),
+      this.db.hintLog.findMany({
+        where: { OR: [
+          { attempt: { assignmentId, studentId: { in: studentIds } } },
+          { attemptId: null, labRun: { assignmentId, studentId: { in: studentIds } } },
+        ] },
+        select: { level: true, contextSnapshot: true, attempt: { select: { studentId: true } }, labRun: { select: { studentId: true } } },
+      }),
+      this.db.hintInsightDisagreement.findMany({ where: { assignmentId } }),
+    ]);
+    const latest = new Map<string, (typeof attempts)[number]>();
+    for (const attempt of attempts) if (!latest.has(attempt.studentId)) latest.set(attempt.studentId, attempt);
+    return {
+      assignmentId,
+      ...buildHintInsight({
+        targeted: studentIds.length,
+        latest: [...latest.values()].map((attempt) => ({
+          attemptId: attempt.id, studentId: attempt.studentId, verdict: attempt.verdict,
+          rubricRef: String((attempt.labRun?.execution as any)?.rubricRef ?? ""), result: attempt.simulationResult,
+        })),
+        hints: hints.map((hint) => {
+          const snapshot = (hint.contextSnapshot ?? {}) as any;
+          return {
+            studentId: hint.attempt?.studentId ?? hint.labRun?.studentId ?? "",
+            rubricRef: typeof snapshot.rubricRef === "string" ? snapshot.rubricRef : "",
+            criterion: typeof snapshot.criterion === "string" ? snapshot.criterion : null,
+            level: hint.level,
+          };
+        }),
+        disagreements: disagreements.map((row) => ({
+          rubricRef: row.rubricRef, criterion: row.criterion, misconception: row.misconception, note: row.note, at: row.createdAt.toISOString(),
+        })),
+      }),
+    };
+  }
+  private disagreementKey(input: unknown, withNote: boolean) {
+    const key = z.object({
+      rubricRef: z.string().min(1).max(120),
+      criterion: z.string().min(1).max(60),
+      misconception: z.string().min(1).max(60),
+      ...(withNote ? { note: z.string().trim().max(500).optional() } : {}),
+    }).strict().parse(input) as { rubricRef: string; criterion: string; misconception: string; note?: string };
+    const catalog = CHECKPOINT_HINT_CATALOGS[key.rubricRef];
+    if (!catalog || !catalog.order.includes(key.criterion) || !MISCONCEPTION_LABELS[key.misconception])
+      throw new BadRequestException({ code: "INSIGHT_KEY_INVALID", message: "Không có giả thuyết này trong bảng phân tích" });
+    return key;
+  }
+  /** SAI-02A (UC-AI-07): the teacher disagrees with a misconception hypothesis. Rule feedback only; changes nothing students see. */
+  @Roles("TEACHER") @Put("classes/:classId/assignments/:assignmentId/hint-insight/disagreements") async disagree(
+    @Param("classId") classId: string,
+    @Param("assignmentId") assignmentId: string,
+    @Req() req: any,
+    @Body() body: unknown,
+  ) {
+    const key = this.disagreementKey(body, true);
+    await this.labAssignment(classId, assignmentId, req.user);
+    const where = { assignmentId_rubricRef_criterion_misconception: { assignmentId, rubricRef: key.rubricRef, criterion: key.criterion, misconception: key.misconception } };
+    const note = key.note ? key.note : null;
+    const row = await this.db.hintInsightDisagreement.upsert({
+      where,
+      create: { assignmentId, teacherId: req.user.sub, rubricRef: key.rubricRef, criterion: key.criterion, misconception: key.misconception, ruleVersion: CHECKPOINT_MISCONCEPTION_RULES, note },
+      update: { teacherId: req.user.sub, note },
+    });
+    return { rubricRef: row.rubricRef, criterion: row.criterion, misconception: row.misconception, ruleVersion: row.ruleVersion, note: row.note, at: row.createdAt.toISOString() };
+  }
+  @Roles("TEACHER") @Delete("classes/:classId/assignments/:assignmentId/hint-insight/disagreements") async withdrawDisagreement(
+    @Param("classId") classId: string,
+    @Param("assignmentId") assignmentId: string,
+    @Req() req: any,
+    @Query() query: unknown,
+  ) {
+    const key = this.disagreementKey(query, false);
+    await this.labAssignment(classId, assignmentId, req.user);
+    const result = await this.db.hintInsightDisagreement.deleteMany({ where: { assignmentId, ...key } });
+    return { withdrawn: result.count > 0 };
   }
 }

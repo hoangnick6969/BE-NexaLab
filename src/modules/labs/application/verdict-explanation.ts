@@ -1,4 +1,4 @@
-import { CHECKPOINT_HINT_CATALOGS, CHECKPOINT_HINT_RULES } from "./checkpoint-hint-rules";
+import { CHECKPOINT_HINT_CATALOGS, CHECKPOINT_HINT_RULES, unmetHintKeys } from "./checkpoint-hint-rules";
 
 /**
  * B2 — post-verdict explanation (spec-student-ai-checkpoint-hints, step 4).
@@ -24,11 +24,8 @@ export function explainVerdict(input: { rubricRef: string; verdict: string; resu
   const catalog = CHECKPOINT_HINT_CATALOGS[input.rubricRef];
   if (!catalog) return null;
   const passed = input.verdict === "passed";
-  const raw: string[] = catalog.unmetOf ? catalog.unmetOf(input.result)
-    : Array.isArray(input.result?.assessment?.unmetCriteria) ? input.result.assessment.unmetCriteria : [];
   // A passed verdict is official (FR-22): nothing is shown as unmet even if the result lists leftovers.
-  const unmet = passed ? new Set<string>()
-    : new Set(raw.map((item) => (catalog.keyOf ? catalog.keyOf(item) : item)).filter((key): key is string => Boolean(key)));
+  const unmet = passed ? new Set<string>() : unmetHintKeys(input.rubricRef, input.result);
   const items: VerdictExplanationItem[] = catalog.order.map((criterion) => {
     const hints = catalog.criteria[criterion];
     const met = !unmet.has(criterion);

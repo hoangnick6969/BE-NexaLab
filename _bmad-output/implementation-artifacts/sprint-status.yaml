@@ -227,6 +227,10 @@ development_status:
   sai-01a-t8-b2-post-verdict-explanation: review
   epic-sai-05-parent-help-seeking: review
   sai-05-t1-help-seeking-summary-api-and-parent-panel: review
+  epic-sai-02a-teacher-insight: review
+  sai-02a-t1-class-stuck-summary-and-hypotheses: review
+  sai-02a-t2-teacher-disagreement-uc-ai-07: review
+  sai-02-t3-high-hint-dependence: backlog # waits for G-5 / SG-3, shared with tai-04-t1
   epic-sai-01-lab-hint-tutor: backlog
   sai-01-t0-activate-fr22-scope: backlog
   sai-01-t1-versioned-rules-escalation-eligibility: backlog
@@ -376,6 +380,7 @@ student_ai_tracking:
   scope: 'Student AI advisory hints (FR-22): SAI-01 hardens the existing labs rules tutor into versioned 4-level hints with real-retry escalation, provider payload allowlist and guard, kill switch, cache, budget and full HintLog. SAI-02..06 are roadmap only.'
   specs:
     sai-01a: ../specs/spec-student-ai-checkpoint-hints/SPEC.md
+    sai-02a: ../specs/spec-student-ai-teacher-insight/SPEC.md
     sai-01: ../specs/spec-student-ai-tutor/SPEC.md
     roadmap: ../specs/spec-student-ai-tutor/student-ai-roadmap.md
   gates:

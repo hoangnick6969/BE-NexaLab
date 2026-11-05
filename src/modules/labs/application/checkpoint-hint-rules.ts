@@ -760,6 +760,24 @@ export function answerFor(evidence: any, criterion: string) {
   return { id, state: checkpoint?.state ?? null, prediction: checkpoint?.prediction ?? null };
 }
 
+/** Catalog keys the evaluator result leaves unmet (raw criteria grouped by `keyOf`). */
+export function unmetHintKeys(rubricRef: string, result: any): Set<string> {
+  const catalog = CHECKPOINT_HINT_CATALOGS[rubricRef];
+  if (!catalog) return new Set();
+  const unmet: string[] = catalog.unmetOf ? catalog.unmetOf(result)
+    : Array.isArray(result?.assessment?.unmetCriteria) ? result.assessment.unmetCriteria : [];
+  return new Set(unmet.map((item) => (catalog.keyOf ? catalog.keyOf(item) : item)).filter((key): key is string => Boolean(key)));
+}
+
+/** B8 misconception id for one unmet checkpoint of a stored result, or null. Teacher-facing only (BR-09). */
+export function detectMisconception(rubricRef: string, criterion: string, result: any): string | null {
+  const hints = CHECKPOINT_HINT_CATALOGS[rubricRef]?.criteria[criterion];
+  if (!hints?.detect || !criterion.startsWith("prediction:")) return null;
+  const id = criterion.slice("prediction:".length);
+  const observation = (Array.isArray(result?.observations) ? result.observations : []).find((item: any) => item?.id === id);
+  return observation ? hints.detect(observation) : null;
+}
+
 /**
  * Pure SAI-01A planner. `previous` lists earlier checkpoint hints on the same challenge, oldest first.
  * Returns null when every criterion is met (nothing to hint).
@@ -767,9 +785,7 @@ export function answerFor(evidence: any, criterion: string) {
 export function planCheckpointHint(input: { rubricRef: string; evidence: unknown; result: any; previous: readonly PreviousCheckpointHint[] }): CheckpointHintPlan | null {
   const catalog = CHECKPOINT_HINT_CATALOGS[input.rubricRef];
   if (!catalog) throw new Error(`No checkpoint hint catalog for ${input.rubricRef}`);
-  const unmet: string[] = catalog.unmetOf ? catalog.unmetOf(input.result)
-    : Array.isArray(input.result?.assessment?.unmetCriteria) ? input.result.assessment.unmetCriteria : [];
-  const keys = new Set(unmet.map((item) => (catalog.keyOf ? catalog.keyOf(item) : item)).filter((key): key is string => Boolean(key)));
+  const keys = unmetHintKeys(input.rubricRef, input.result);
   const criterion = catalog.order.find((item) => keys.has(item));
   if (!criterion) return null;
   const hints = catalog.criteria[criterion];
