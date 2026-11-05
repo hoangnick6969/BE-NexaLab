@@ -73,6 +73,8 @@ model User {
   passwordHash               String
   fullName                   String
   role                       Role
+  /// SAI-03A lesson question hints (attempt- and run-less HintLog rows).
+  lessonHints                HintLog[]                  @relation("lessonHintStudent")
   grade                      Int                        @default(8)
   studentLevel               String                     @default("beginner")
   status                     String                     @default("active")
@@ -437,6 +439,7 @@ model LessonStep {
   updatedAt             DateTime               @updatedAt
   progress              StepProgress[]
   basicExerciseAttempts BasicExerciseAttempt[]
+  hints                 HintLog[]
 
   @@unique([lessonId, position])
   @@index([lessonId, type])
@@ -864,21 +867,28 @@ model Attempt {
 }
 
 model HintLog {
-  id              String   @id @default(cuid())
+  id              String      @id @default(cuid())
   /// Null for an in-run hint asked before the run was submitted (SAI-01A moments A and B).
   attemptId       String?
-  attempt         Attempt? @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attempt         Attempt?    @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   /// The LabRun the hint belongs to; set for every checkpoint hint.
   labRunId        String?
-  labRun          LabRun?  @relation(fields: [labRunId], references: [id], onDelete: Cascade)
+  labRun          LabRun?     @relation(fields: [labRunId], references: [id], onDelete: Cascade)
+  /// SAI-03A: a hint on one question of a lesson quiz step; set together with studentId.
+  lessonStepId    String?
+  lessonStep      LessonStep? @relation(fields: [lessonStepId], references: [id], onDelete: Cascade)
+  studentId       String?
+  student         User?       @relation("lessonHintStudent", fields: [studentId], references: [id], onDelete: Cascade)
   level           Int
   content         String
   contextSnapshot Json
-  triggeredBy     String   @default("student")
-  createdAt       DateTime @default(now())
+  triggeredBy     String      @default("student")
+  createdAt       DateTime    @default(now())
 
   @@unique([attemptId, level])
   @@index([labRunId, createdAt])
+  @@index([studentId, lessonStepId, createdAt])
+  @@index([lessonStepId])
 }
 
 model Progress {

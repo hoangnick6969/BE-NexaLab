@@ -231,6 +231,10 @@ development_status:
   sai-02a-t1-class-stuck-summary-and-hypotheses: review
   sai-02a-t2-teacher-disagreement-uc-ai-07: review
   sai-02-t3-high-hint-dependence: backlog # waits for G-5 / SG-3, shared with tai-04-t1
+  epic-sai-03a-lesson-quiz-hints: review
+  sai-03a-t1-answer-blind-question-hint-rules: review
+  sai-03a-t2-quiz-hint-api-and-panel: review
+  sai-03-t3-basic-exercise-hints: backlog
   epic-sai-01-lab-hint-tutor: backlog
   sai-01-t0-activate-fr22-scope: backlog
   sai-01-t1-versioned-rules-escalation-eligibility: backlog
@@ -381,6 +385,7 @@ student_ai_tracking:
   specs:
     sai-01a: ../specs/spec-student-ai-checkpoint-hints/SPEC.md
     sai-02a: ../specs/spec-student-ai-teacher-insight/SPEC.md
+    sai-03a: ../specs/spec-student-ai-lesson-hints/SPEC.md
     sai-01: ../specs/spec-student-ai-tutor/SPEC.md
     roadmap: ../specs/spec-student-ai-tutor/student-ai-roadmap.md
   gates:
