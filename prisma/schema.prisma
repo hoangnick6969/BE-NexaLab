@@ -810,6 +810,7 @@ model LabRun {
   revokedById      String?
   revocationReason String?
   attempts         Attempt[]
+  hints            HintLog[]
   events           LabRunEvent[]
 
   @@index([studentId, createdAt])
@@ -863,8 +864,12 @@ model Attempt {
 
 model HintLog {
   id              String   @id @default(cuid())
-  attemptId       String
-  attempt         Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  /// Null for an in-run hint asked before the run was submitted (SAI-01A moments A and B).
+  attemptId       String?
+  attempt         Attempt? @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  /// The LabRun the hint belongs to; set for every checkpoint hint.
+  labRunId        String?
+  labRun          LabRun?  @relation(fields: [labRunId], references: [id], onDelete: Cascade)
   level           Int
   content         String
   contextSnapshot Json
@@ -872,6 +877,7 @@ model HintLog {
   createdAt       DateTime @default(now())
 
   @@unique([attemptId, level])
+  @@index([labRunId, createdAt])
 }
 
 model Progress {
