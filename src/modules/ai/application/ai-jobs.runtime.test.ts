@@ -129,6 +129,7 @@ function makeDb() {
       },
     },
     classroom: table([]),
+    classResource: table([]),
     curriculumOutcome: table([]),
     lessonRows: [] as Row[],
     lessonStepRows: [] as Row[],
@@ -168,7 +169,10 @@ class ScriptedProvider implements AiProvider {
 
 const OWNER = { sub: "teacher-owner", role: "TEACHER" };
 const OUTSIDER = { sub: "teacher-outsider", role: "TEACHER" };
-const okText = (n = 2) => JSON.stringify({ items: Array.from({ length: n }, (_, i) => ({ type: "SINGLE_CHOICE", prompt: `Q${i}`, sourceRefs: ["P1"] })) });
+const okText = (n = 2) => JSON.stringify({ items: Array.from({ length: n }, (_, i) => ({
+  type: "SINGLE_CHOICE", prompt: `Cường độ dòng điện câu số ${"ABCDEFGHIJ"[i]} được đo bằng gì`, options: ["Ampe kế", "Vôn kế", "Nhiệt kế"], correctOption: 0,
+  explanation: "Ampe kế đo cường độ dòng điện.", difficulty: "STANDARD", outcomeCodes: [], sourceRefs: ["P1"],
+})) });
 const body = (patch: Row = {}) => ({ purpose: "GENERATE_RESOURCE", targetKind: "TEST", lessonId: "lesson-circuit", itemCount: 2, ...patch });
 const req = (user = OWNER, key: string | null = `key-${++seq}-abcdef`) => ({ user, headers: key === null ? {} : { "idempotency-key": key } });
 const config = (env: Row = {}) => parseAiConfig({ AI_PROVIDER: "fake", AI_PROVIDER_MIN_INTERVAL_MS: "0", ...env } as any);
@@ -309,6 +313,24 @@ describe("runner state machine", () => {
     const view = await service.get("class-a", created.id, req());
     expect(view).toMatchObject({ status: "SUCCEEDED", validCount: 2, droppedCount: 0 });
     expect(store.auditLog.rows.map((a: Row) => a.action)).toEqual(["ai_job.create", "ai_job.complete"]);
+  });
+
+  it("flags duplicates of the class corpus, keeps them, and stores dropped reasons", async () => {
+    store.classResource.rows.push(
+      { classId: "class-a", kind: "TEST", status: "PUBLISHED", content: { questions: [{ prompt: "cường độ dòng điện câu số A được đo bằng gì?" }] } },
+      { classId: "class-a", kind: "TEST", status: "ARCHIVED", content: { questions: [{ prompt: "Cường độ dòng điện câu số B được đo bằng gì" }] } },
+    );
+    const created = await create({ itemCount: 2 });
+    const items = JSON.parse(okText(3)).items;
+    items[1].prompt = "Cường độ dòng điện câu số B được đo bằng gì";
+    items[2].sourceRefs = ["P99"];
+    provider.queue.push(async () => ({ text: JSON.stringify({ items }), inputTokens: 1, outputTokens: 1 }));
+    await runner.runOnce();
+    const view = await service.get("class-a", created.id, req());
+    expect(view).toMatchObject({ status: "SUCCEEDED", validCount: 2, droppedCount: 1 });
+    expect(view.items![0].flags).toContain("EXACT_DUPLICATE");
+    expect(view.items![1].flags).not.toContain("EXACT_DUPLICATE");
+    expect(job(created.id).droppedItems).toEqual([{ position: 2, reasonCodes: ["GROUNDING_REF_INVALID"] }]);
   });
 
   it("retries a schema failure once, then fails OUTPUT_SCHEMA_INVALID with tokens summed", async () => {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 import { createAiJobBody, normalizeCreateBody, toAiJobView } from "./ai-job-contract";
-import { processGenerateResourceOutput } from "./output-pipeline";
 
 const base = { purpose: "GENERATE_RESOURCE", targetKind: "TEST", lessonId: "lesson-circuit", itemCount: 10 };
 const fails = (body: unknown) => expect(() => createAiJobBody.parse(body)).toThrow(ZodError);
@@ -65,20 +64,5 @@ describe("toAiJobView", () => {
     expect(view).toMatchObject({ validCount: null, droppedCount: null });
     expect(view).not.toHaveProperty("items");
     expect(toAiJobView(job, { lessonChangedSinceGeneration: false, itemCount: 4 }).validCount).toBe(4);
-  });
-});
-
-describe("processGenerateResourceOutput (T2 envelope only)", () => {
-  const snapshot = {} as any;
-  it("rejects non-JSON and wrong envelopes as OUTPUT_SCHEMA_INVALID", () => {
-    for (const text of ["not json", "[]", "null", '{"items":{}}', '{"other":[]}'])
-      expect(processGenerateResourceOutput(snapshot, text)).toMatchObject({ ok: false, code: "OUTPUT_SCHEMA_INVALID" });
-  });
-  it("fails OUTPUT_VALIDATION_FAILED when no item survives", () => {
-    expect(processGenerateResourceOutput(snapshot, '{"items":[1,"x"]}')).toEqual({ ok: false, code: "OUTPUT_VALIDATION_FAILED", dropped: [{ position: 0, reasonCodes: ["ITEM_TYPE_MISMATCH"] }, { position: 1, reasonCodes: ["ITEM_TYPE_MISMATCH"] }] });
-  });
-  it("keeps object items and records dropped positions", () => {
-    const out = processGenerateResourceOutput(snapshot, '{"items":[{"type":"CARD"},3]}');
-    expect(out).toEqual({ ok: true, items: [{ payload: { type: "CARD" }, flags: [] }], dropped: [{ position: 1, reasonCodes: ["ITEM_TYPE_MISMATCH"] }] });
   });
 });

@@ -10,6 +10,7 @@ import {
   RESOURCE_ITEMS_JSON_SCHEMA,
   type InputSnapshotV1,
 } from "./generate-resource-prompt";
+import { loadDuplicateCorpus } from "./duplicate-corpus";
 import { processGenerateResourceOutput, type DroppedItem, type ProcessedItem } from "./output-pipeline";
 
 export const RUNNER_TIMINGS = { pollMs: 2_000, sweepMs: 30_000, leaseMs: 90_000, providerTimeoutMs: 60_000 } as const;
@@ -123,7 +124,13 @@ export class AiJobRunner implements OnModuleInit, OnModuleDestroy {
       return this.fail(claimed, code, null, [], now());
     }
 
-    const output = processGenerateResourceOutput(snapshot, text);
+    let corpus: string[];
+    try {
+      corpus = await loadDuplicateCorpus(this.db, job.classId);
+    } catch {
+      return this.fail(claimed, "INTERNAL_ERROR", usage, [], now());
+    }
+    const output = processGenerateResourceOutput(snapshot, text, corpus);
     if (!output.ok) return this.fail(claimed, output.code, usage, output.dropped, now());
     return this.succeed(claimed, output.items, output.dropped, usage, now());
   }

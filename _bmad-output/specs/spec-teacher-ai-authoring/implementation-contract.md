@@ -165,9 +165,13 @@ Create body. From TAI-T2 the schema is a Zod discriminated union on `purpose`, e
   materializedResourceId: string | null;
   createdAt: string; completedAt: string | null;
   items?: Array<{ id: string; position: number; payload: object; flags: string[];
-                  decision: null | { decision: string; editedPayload: object | null; reasonCode: string | null; at: string } }>;
+                  duplicateOf: Array<{ resourceId: string; resourceTitle: string; match: "EXACT" | "NEAR"; similarity: number }>;
+                  decision: null | { decision: string; editedPayload: object | null; reasonCode: string | null; at: string;
+                                     flags: string[] /* VW flags recomputed for EDITED, [] otherwise */ } }>;
 }
 ```
+
+`duplicateOf` (detail route only) is computed on read, never stored: `AiJobItem.flags` stays the `string[]` of warning codes and the Prisma schema does not change. For an item whose flags contain `EXACT_DUPLICATE` or `NEAR_DUPLICATE`, the server compares its prompt (or card front) with the class's current non-archived resources (same corpus as VW-01/VW-02) and returns up to 3 matched resources, one entry per resource, highest `similarity` first (`EXACT` = 1, `NEAR` = trigram Jaccard ≥ 0.85, rounded to 2 decimals). The list is empty for items without those flags and when the flag came only from another item of the same batch or the matched resource has since been archived. Owner-only, inside the owner's own class, so it never exposes other teachers' content.
 
 Clients poll `GET …/:jobId` every 2 s while `PENDING`/`RUNNING` and stop after 120 s with a recoverable "still processing" state.
 
