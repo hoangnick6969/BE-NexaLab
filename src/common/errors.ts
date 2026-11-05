@@ -117,13 +117,24 @@ export function toErrorBody(error: any): ApiErrorBody {
 
 export class Errors implements ExceptionFilter {
   catch(error: any, host: ArgumentsHost) {
-    const response = host.switchToHttp().getResponse();
+    const http = host.switchToHttp();
+    const response = http.getResponse();
+    const request = http.getRequest();
     const body = toErrorBody(error);
-    // Class name and Prisma code only: enough to diagnose, never the message (it can carry user data).
+    const diagnostic = {
+      method: request?.method,
+      route: request?.route?.path ?? request?.url?.split("?")[0],
+      error: error?.constructor?.name ?? "unknown",
+      code: error?.code,
+      model: error?.meta?.modelName,
+      column: error?.meta?.column,
+      field: error?.meta?.field_name,
+      clientVersion: error?.clientVersion,
+    };
     if (body.statusCode === 500)
-      console.error("NexaLab internal server error", error?.constructor?.name ?? "unknown", error?.code ?? "");
+      console.error("NexaLab internal server error", diagnostic);
     if (body.statusCode === 503)
-      console.error("NexaLab dependency failure", error?.constructor?.name ?? "unknown", error?.code ?? "");
+      console.error("NexaLab dependency failure", diagnostic);
     response.status(body.statusCode).json(body);
   }
 }

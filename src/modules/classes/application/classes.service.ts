@@ -39,7 +39,15 @@ export class ClassesService {
       const studentId = req.user.sub;
       const rows = await this.db.enrollment.findMany({
         where: { studentId, status: { in: ["approved", "pending"] } },
-        include: { classroom: true },
+        include: {
+          classroom: {
+            include: {
+              teacher: {
+                select: { id: true, fullName: true, username: true },
+              },
+            },
+          },
+        },
         orderBy: { joinedAt: "desc" },
       });
       const assignments = await this.db.assignment.findMany({
@@ -59,6 +67,13 @@ export class ClassesService {
         grade: e.classroom.grade,
         status: e.classroom.status,
         enrollmentStatus: e.status,
+        teacher: (e.classroom as any).teacher
+          ? {
+              id: (e.classroom as any).teacher.id,
+              fullName: (e.classroom as any).teacher.fullName,
+              username: (e.classroom as any).teacher.username,
+            }
+          : null,
         assignments: assignments.filter((a) => a.classId === e.classId).map((a) => ({ ...a, overdue: isOverdue(a.dueDate, now) })),
       }));
     }
