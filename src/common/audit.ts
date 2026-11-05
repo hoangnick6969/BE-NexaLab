@@ -91,6 +91,17 @@ export const AUDIT_FIELDS = new Set([
   "decision",
   "submissionId",
   "acceptedCount",
+  // Teacher AI (TAI-01). Never instruction text, prompt or provider output.
+  "purpose",
+  "targetKind",
+  "promptVersion",
+  "model",
+  "failureCode",
+  "validCount",
+  "droppedCount",
+  "inputTokens",
+  "outputTokens",
+  "fromStatus",
 ]);
 
 const credentialLike = [

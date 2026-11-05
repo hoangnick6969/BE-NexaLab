@@ -8,6 +8,7 @@ import { ownedClass } from "./class-access";
 import { classArchived, lock } from "./class-common";
 import { normalizeResourceContent, parseResourceCsv, practiceKind, resourceKindSchema, studentResource, labResourceContentSchema, verifyClassLabSnapshot } from "./class-resource-contract";
 import { buildLabResource, validateResourceAttachment } from "./class-lab-resource";
+import { assertClassLesson } from "./class-lesson";
 import { notify } from "../../notifications/application/notify";
 
 const additionalAnswersSchema = z.object({
@@ -298,10 +299,9 @@ export class ClassResourcesService {
     if (enrollment?.status !== "approved") throw this.denied();
   }
 
-  private async assertLesson(classId: string, lessonId: string | null, teacherId: string) {
+  private async assertLesson(_classId: string, lessonId: string | null, teacherId: string) {
     if (!lessonId) return;
-    const lesson = await this.db.lesson.findFirst({ where: { id: lessonId, OR: [{ scope: "SHARED_LIBRARY", status: "published" }, { authorId: teacherId }] }, select: { id: true } });
-    if (!lesson) throw new BadRequestException({ code: "LESSON_NOT_AVAILABLE", message: "Bài học liên kết không khả dụng" });
+    await assertClassLesson(this.db, lessonId, teacherId);
   }
 
   private async prepareContent(kind: z.infer<typeof kindSchema>, raw: unknown, ownerId: string): Promise<any> {

@@ -1339,3 +1339,92 @@ model HintInsightDisagreement {
   @@unique([assignmentId, rubricRef, criterion, misconception])
   @@index([teacherId])
 }
+
+// ---------------------------------------------------------------------------
+// Teacher AI job runtime (TAI-01, spec-teacher-ai-authoring). Shared by every Teacher AI purpose; later specs only add
+// expand-only nullable columns. AI output never writes ClassResource directly: items become a DRAFT only through an
+// owner materialization (TAI-T4).
+enum AiJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum AiItemDecisionKind {
+  ACCEPTED
+  EDITED
+  REJECTED
+}
+
+model AiJob {
+  id                     String            @id @default(cuid())
+  classId                String
+  actorId                String
+  /// "GENERATE_RESOURCE" in TAI-01; quota is counted per actor and purpose.
+  purpose                String
+  targetKind             ClassResourceKind
+  lessonId               String
+  /// Normalized request body (instruction included). Written once at creation.
+  request                Json
+  /// Passages and outcome statements actually sent. Written once at creation.
+  inputSnapshot          Json
+  /// sha256 of stableStringify(inputSnapshot).
+  inputDigest            String
+  promptVersion          String
+  outputSchemaVersion    String
+  /// "gemini" | "fake"
+  provider               String
+  model                  String
+  status                 AiJobStatus       @default(PENDING)
+  failureCode            String?
+  attemptCount           Int               @default(0)
+  leaseUntil             DateTime?
+  inputTokens            Int?
+  outputTokens           Int?
+  /// [{ position, reasonCodes[] }]
+  droppedItems           Json              @default("[]")
+  materializedResourceId String?           @unique
+  createdAt              DateTime          @default(now())
+  startedAt              DateTime?
+  completedAt            DateTime?
+  cancelledAt            DateTime?
+  items                  AiJobItem[]
+
+  @@index([actorId, purpose, createdAt])
+  @@index([status, leaseUntil])
+  @@index([classId, createdAt])
+}
+
+/// Immutable validated item, written in the transaction that moves its job to SUCCEEDED.
+model AiJobItem {
+  id        String           @id @default(cuid())
+  jobId     String
+  job       AiJob            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  position  Int
+  /// Item per the output schema, sourceRefs included.
+  payload   Json
+  /// Warning codes (validation-rules.md).
+  flags     Json             @default("[]")
+  createdAt DateTime         @default(now())
+  decisions AiItemDecision[]
+
+  @@unique([jobId, position])
+}
+
+/// Append-only; the latest row per item is the current decision.
+model AiItemDecision {
+  id            String             @id @default(cuid())
+  itemId        String
+  item          AiJobItem          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  actorId       String
+  decision      AiItemDecisionKind
+  /// Required for EDITED, forbidden otherwise.
+  editedPayload Json?
+  /// Required for REJECTED.
+  reasonCode    String?
+  createdAt     DateTime           @default(now())
+
+  @@index([itemId, createdAt])
+}
