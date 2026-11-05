@@ -133,7 +133,7 @@ All routes use `@Roles("TEACHER")`, the class must be owned by the caller (`owne
 | `GET /classes/:id/ai-jobs` | Owner's jobs for this class, newest first, cursor-paginated (`limit` ≤ 50). Items omitted. |
 | `GET /classes/:id/ai-jobs/:jobId` | `AiJobView` including items, current decisions, flags, `droppedItems` summary and `lessonChangedSinceGeneration`. |
 | `POST /classes/:id/ai-jobs/:jobId/cancel` | Allowed from `PENDING` or `RUNNING`, transitions to `CANCELLED`. A result arriving later is discarded. From any other status returns 409 `AI_JOB_NOT_CANCELLABLE`. Idempotent. |
-| `POST /classes/:id/ai-jobs/:jobId/items/:itemId/decisions` | Job must be `SUCCEEDED` and not materialized. Body `{ decision, editedPayload?, reasonCode? }`. Appends a decision. `EDITED` payload is re-validated with the structural rules; `ACCEPTED` on an `EXACT_DUPLICATE` item returns 409 `AI_ITEM_DUPLICATE_REQUIRES_EDIT`. |
+| `POST /classes/:id/ai-jobs/:jobId/items/:itemId/decisions` | Job must be `SUCCEEDED` and not materialized. Body `{ decision, editedPayload?, reasonCode? }`. Appends a decision. `EDITED` payload is re-validated with the structural rules. Exact and near duplicate flags are warnings; they do not block `ACCEPTED` or materialization. |
 | `POST /classes/:id/ai-jobs/:jobId/materialize` | `Idempotency-Key` required. Body `{ title }`. Requires every item decided and ≥1 `ACCEPTED`/`EDITED`. In one transaction: maps items to the target kind, calls `normalizeResourceContent`, creates the `ClassResource` DRAFT with `lessonId` = job lesson, sets `materializedResourceId`, writes audit. Returns **201** with the resource. A second materialize with a different key returns 409 `AI_JOB_ALREADY_MATERIALIZED`. |
 | `GET /me/ai-quota` | `{ dailyLimit, usedLast24h, activeJobs, concurrencyLimit, resetsAt }` computed from `AiJob` rows. |
 
@@ -184,7 +184,6 @@ Messages are Vietnamese, following the existing envelope.
 | 409 | `IDEMPOTENCY_KEY_REUSED` | Existing helper behavior |
 | 409 | `AI_JOB_NOT_CANCELLABLE` | Cancel from terminal status |
 | 409 | `AI_JOB_NOT_REVIEWABLE` | Decision or materialize on a job that is not `SUCCEEDED` |
-| 409 | `AI_ITEM_DUPLICATE_REQUIRES_EDIT` | `ACCEPTED` on `EXACT_DUPLICATE` |
 | 409 | `AI_REVIEW_INCOMPLETE` | Materialize with undecided items or zero accepted |
 | 409 | `AI_JOB_ALREADY_MATERIALIZED` | Second materialization |
 | 429 | `AI_QUOTA_EXCEEDED` | Daily or concurrency limit; body includes `resetsAt` |
@@ -204,4 +203,4 @@ Job `failureCode` values (job status, not HTTP): `PROVIDER_UNAVAILABLE`, `PROVID
 
 ## Frontend contract
 
-`FE-NexaLab/src/features/classes/` gains a Teacher AI panel inside the owned Class Space resources view: generate form → job status (loading, still processing, failed with retry-as-new-request, cancelled) → review list with per-item flags, accept/edit/reject, progress "x/y decided" → materialize dialog (title) → navigate to the existing draft editor. Exact-duplicate items show the matched resource title and disable Accept. A lesson change after generation shows a non-blocking warning. Quota is shown before submit.
+`FE-NexaLab/src/features/classes/` gains a Teacher AI panel inside the owned Class Space resources view: generate form → job status (loading, still processing, failed with retry-as-new-request, cancelled) → review list with per-item flags, accept/edit/reject, progress "x/y decided" → materialize dialog (title) → navigate to the existing draft editor. Exact/near duplicate items show the matched resource title and a warning; Accept remains available. A lesson change after generation shows a non-blocking warning. Quota is shown before submit.

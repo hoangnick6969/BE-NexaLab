@@ -21,18 +21,18 @@
 
 ## TAI-T3 — Output parsing and validation pipeline
 
-- `resource-items@1` Zod schema and pure `validateItems` implementing VR-01..VR-10 and VW-01..VW-06, plus the duplicate corpus loader.
+- `resource-items@1` Zod schema and pure `validateItems` implementing structural drop rules and VW-01..VW-07 warnings, plus the duplicate corpus loader.
 - **Accept when:** fixture suite in `validation-rules.md` passes, including the 0.84/0.85 trigram boundary and the diacritic-distinct case; zero valid items yields `FAILED OUTPUT_VALIDATION_FAILED`; partial validity stores `droppedItems` reasons.
 
 ## TAI-T4 — Item decisions and materialization
 
-- Decision route (append-only, latest wins), EDITED re-validation, EXACT_DUPLICATE guard; materialize route mapping to `normalizeResourceContent`, DRAFT creation, `materializedResourceId`, and audit, in one transaction.
+- Decision route (append-only, latest wins), EDITED re-validation, exact/near duplicate warnings without an acceptance guard; materialize route mapping to `normalizeResourceContent`, DRAFT creation, `materializedResourceId`, and audit, in one transaction.
 - **Accept when:** materialize with undecided items returns 409; second materialize returns 409 (same key replays); created resource is DRAFT, passes the existing publish/revise/assign flow unchanged, and students cannot see it before publish; TEST answer key reaches the resource, STUDY_QUIZ drops it; `ClassResource` rows created without AI are byte-for-byte unaffected.
 
 ## TAI-T5 — Teacher AI workspace (FE)
 
 - Teacher AI panel in owned Class Space resources: generate form with quota, status polling, failure/cancel states, review list with flags and per-item decisions, materialize dialog, stale-lesson warning, then navigation to the existing draft editor.
-- **Accept when:** Playwright journey covers happy path, provider failure (fake), duplicate-blocked accept, and reload mid-review (decisions persist); no student route renders AI data.
+- **Accept when:** Playwright journey covers happy path, provider failure (fake), duplicate-warning acceptance, and reload mid-review (decisions persist); no student route renders AI data.
 
 ## TAI-T6 — Golden evaluation and end-to-end proof
 

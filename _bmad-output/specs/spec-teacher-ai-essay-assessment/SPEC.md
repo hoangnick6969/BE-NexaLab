@@ -6,6 +6,7 @@ companions:
   - assessment-validation-and-evaluation.md
   - tickets.md
   - ../spec-teacher-ai-authoring/job-runtime-and-failure-modes.md
+  - ../spec-teacher-ai-authoring/provider-and-data-flow.md
   - ../spec-teacher-ai-authoring/teacher-ai-roadmap.md
   - ../spec-open-learning-catalog/class-space-assignment-contract.md
 sources:
@@ -25,7 +26,7 @@ Today Class Space can only test recall through server-scored single-choice tests
 - **CAP-1 — Written task authoring:** the owning teacher creates, publishes and revises a `WRITTEN_TASK` resource with 1–5 prompts, each carrying a rubric (criteria, max points, anchors). **Success:** invalid rubrics are rejected with field-level errors, and published versions are immutable like other `ClassResource` kinds.
 - **CAP-2 — Assign and submit:** the teacher assigns a published written task. Students submit text answers under the existing target snapshot, due date, late reason, `REJECT_ZERO` and deadline-revision rules. **Success:** written submissions follow every I3 lifecycle rule, and TEST assignments and their history are byte-for-byte unchanged.
 - **CAP-3 — Teacher rubric grading:** the owning teacher grades each criterion, producing an append-only grade decision. **Success:** students see only the latest teacher grade and feedback. Ungraded work shows "awaiting grade". Late-pending work cannot be graded, and rejected-late work stays zero.
-- **CAP-4 — AI rubric suggestion:** the teacher requests suggestions for gradeable submissions. **Success:** only PII-redacted, consented text reaches the provider. Each criterion suggestion is either verified (bounded points and verbatim evidence) or invalidated with a reason. Suspected prompt injection suppresses the suggestion.
+- **CAP-4 — AI rubric suggestion:** the teacher requests suggestions for gradeable, AI-eligible submissions. **Success:** only minimized/redacted text eligible under the approved legal and provider policy reaches the provider (consent is required where that approved path requires it). Each criterion suggestion is either verified (bounded points and verbatim evidence) or invalidated with a reason. Suspected prompt injection suppresses the suggestion.
 - **CAP-5 — Shadow evaluation:** in shadow mode suggestions are stored but hidden from grading. **Success:** an evaluation report computes agreement with the lecturer's blind grades for a pinned prompt version and decides the release gate.
 - **CAP-6 — Assisted grading:** in assist mode the teacher accepts, edits or rejects a suggestion, which becomes a grade decision. **Success:** every final score has a teacher actor and audit. AI never writes, finalizes or publishes a grade.
 
@@ -34,9 +35,10 @@ Today Class Space can only test recall through server-scored single-choice tests
 - TEST semantics do not change. Written work uses a new kind `WRITTEN_TASK` and assignment `contentType = "written"`, and reuses `AssignmentSubmission`, `AssignmentDeadlineRevision` and `LateDecision`.
 - `AssignmentSubmission` gains `gradingMode` (`AUTO` | `TEACHER`). `score` and `correctCount` become nullable, and a database check keeps them non-null for `AUTO`. All existing rows are backfilled `AUTO`.
 - The official score is the latest `WrittenGradeDecision` from the owning teacher. AI suggestions, shadow data and evaluation reports never enter student, parent, rollup or notification read models.
-- AI tickets (TAI2-T4..T7) are blocked until TAI2-T0 records all of the following: a paid provider tier whose terms exclude using API data to improve products (the Gemini free tier is forbidden), the legal basis under NFR-07 / Decree 13/2023/NĐ-CP, a PRD amendment for written tasks, and TAI-01 shipped.
-- The default legal mechanism is a per-student `ParentConsent` with purpose `ai-assessment` that has not been withdrawn. A submission without it is manual-only (`NO_CONSENT`).
+- AI tickets (TAI2-T4..T7) are blocked until TAI2-T0 records all of the following: a provider whose terms permit use in NexaLab's under-18 context and whose data-use/DPA terms are approved; the legal basis, age-specific notices/consents and cross-border handling under current law; a PRD amendment for written tasks; and TAI-01 shipped. The free Gemini tier is not acceptable for student text, and paid tier alone does not establish under-18 eligibility.
+- Existing `ParentConsent` may support an approved consent-based policy, but it is not by itself proof of a sufficient legal basis for every student or use. Determine age verification, the required child/representative participation, exceptions and whether school authority applies with counsel before defining eligibility. Keep unapproved submissions manual-only; revise the proposed `NO_CONSENT` skip reason if the approved legal path is not per-student consent.
 - Provider input is the prompt, the rubric and the redacted response only. Student id, name, username, email, phone and class name never leave the server.
+- Redaction of known identifiers is not a guarantee against indirect identification or sensitive details in free text. Provider payload, retention, deletion and cross-border transfer require a documented review; do not enable AI suggestions until that review is complete.
 - Model output is never silently corrected. Out-of-range points or unverifiable evidence invalidate that criterion suggestion.
 - The assessment runs on the TAI-01 job runtime (purpose `ASSESS_SUBMISSION`) with its own daily limit. There is no second runner.
 
@@ -51,7 +53,7 @@ Today Class Space can only test recall through server-scored single-choice tests
 
 ## Success signal
 
-On `class-pilot-a` the owner teacher publishes a two-prompt written task with a rubric and assigns it. `student.active` submits on time, and a second student submits late with a reason. The teacher grades the on-time submission manually. Then, with assist mode on, the teacher requests a suggestion, edits one criterion and saves. The student sees only the teacher's grade. An injection-laden response is suppressed, and a non-consented student is manual-only. In shadow mode, ≥ 100 responses graded blind by the supervising lecturer meet the evaluation thresholds before assist mode is enabled.
+On `class-pilot-a` the owner teacher publishes a two-prompt written task with a rubric and assigns it. `student.active` submits on time, and a second student submits late with a reason. The teacher grades the on-time submission manually. Then, with assist mode on, the teacher requests a suggestion, edits one criterion and saves. The student sees only the teacher's grade. An injection-laden response is suppressed, and a submission ineligible under the approved legal/provider policy stays manual-only. In shadow mode, ≥ 100 responses graded blind by the supervising lecturer meet the evaluation thresholds before assist mode is enabled.
 
 ## Implementation gate
 
@@ -66,5 +68,6 @@ On `class-pilot-a` the owner teacher publishes a two-prompt written task with a 
 ## Open Questions
 
 - Does a `WRITTEN_TASK` need a pass threshold for the subject rollup, or does any teacher grade count as achieved?
-- Which paid provider/tier and which legal basis (parental consent or school agreement) does the product owner approve?
+- Which provider explicitly permits this use in a service directed to or likely to be accessed by under-18s, and what data-use/DPA terms apply?
+- What legal basis and age-specific consent/notice path applies to each student, and how will cross-border transfer and retention/deletion be handled? Do not assume the only choices are parental consent or school agreement.
 - May AI draft the student-facing feedback text? In the current spec, rationale is teacher-only and feedback is written by the teacher.
