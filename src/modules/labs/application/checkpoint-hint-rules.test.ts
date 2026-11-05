@@ -49,7 +49,7 @@ describe("SAI-01A checkpoint hint catalogs", () => {
   it("pins the template text to its rule version (bump CHECKPOINT_HINT_RULES when wording changes)", () => {
     const texts = Object.keys(CHECKPOINT_HINT_CATALOGS).sort().flatMap((rubricRef) => catalogTexts(rubricRef).map((item) => `${rubricRef}|${item.criterion}|${item.text}`));
     const digest = createHash("sha256").update(texts.join("\n")).digest("hex");
-    expect({ version: CHECKPOINT_HINT_RULES, digest }).toEqual({ version: "checkpoint-hints@3", digest: PINNED_DIGEST });
+    expect({ version: CHECKPOINT_HINT_RULES, digest }).toEqual({ version: "checkpoint-hints@4", digest: PINNED_DIGEST });
   });
 });
 
@@ -137,6 +137,36 @@ describe("SAI-01A station Labs (step 2)", () => {
   });
 });
 
+describe("SAI-01A event Labs (step 3)", () => {
+  const plan = (rubricRef: string, result: unknown, evidence: unknown, previous: PreviousCheckpointHint[] = []) =>
+    planCheckpointHint({ rubricRef, evidence, result, previous });
+  const keep = (hint: any): PreviousCheckpointHint => ({ criterion: hint.criterion, level: hint.level, variant: hint.variant, answerDigest: hint.answerDigest });
+
+  it("reads FL-06 and FL-07 criteria maps and FL-10 assessment criteria", () => {
+    expect(plan("lever-investigation@1.0.0", { criteria: { rotation: true, moment: false, prediction: false } }, { events: [] })).toMatchObject({ criterion: "moment", level: 1 });
+    expect(plan("thermal-energy-investigation@1.0.0", { criteria: { R1: true, R2: true, R5: false } }, { events: [] })).toMatchObject({ criterion: "R5" });
+    expect(plan("mass-conservation-poea@1.0.0", { assessment: { criteria: { C1: true, C3: false, C6: false } } }, { labState: {}, events: [] })).toMatchObject({ criterion: "C3" });
+    expect(plan("lever-investigation@1.0.0", { criteria: { rotation: true, moment: true } }, { events: [] })).toBeNull();
+  });
+
+  it("escalates an event criterion only when its own events changed", () => {
+    const result = { criteria: { moment: false } };
+    const measured = (recordedForceMilliNewtons: number) => ({ events: [
+      { type: "PREDICTED_ROTATION", predictions: [] }, { type: "MEASURED_MOMENT", recordedForceMilliNewtons },
+    ] });
+    const first = plan("lever-investigation@1.0.0", result, measured(100))!;
+    const otherEventChanged = { events: [{ type: "PREDICTED_ROTATION", predictions: [1] }, { type: "MEASURED_MOMENT", recordedForceMilliNewtons: 100 }] };
+    expect(plan("lever-investigation@1.0.0", result, otherEventChanged, [keep(first)])).toMatchObject({ level: 1, repeatReason: "SAME_ANSWER" });
+    expect(plan("lever-investigation@1.0.0", result, measured(200), [keep(first)])).toMatchObject({ level: 2, escalated: true });
+  });
+
+  it("uses FL-10 labState answers alongside its events", () => {
+    const result = { assessment: { criteria: { C5: false } } };
+    const first = plan("mass-conservation-poea@1.0.0", result, { labState: { calculation: "30-and-35" }, events: [] })!;
+    expect(plan("mass-conservation-poea@1.0.0", result, { labState: { calculation: "35-and-30" }, events: [] }, [keep(first)])).toMatchObject({ level: 2 });
+  });
+});
+
 describe("SAI-01A planner", () => {
   it("targets the first unmet checkpoint before the explanation", () => {
     const hint = plan(answer({ HUNT: { prediction: "DECREASE" } }, "B"))!;
@@ -211,4 +241,4 @@ describe("SAI-01A planner", () => {
   });
 });
 
-const PINNED_DIGEST = "f2d7de37de39d2cbceebf2ff65b1d590262c6103846de4571d7b170901d56469";
+const PINNED_DIGEST = "c4117bbb01020d599202ffb164590765e00bf583d9eb8ea2f7494b9eb8ec69df";

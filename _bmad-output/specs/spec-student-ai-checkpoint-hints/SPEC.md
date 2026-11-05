@@ -97,6 +97,14 @@ key escalates only when that part changed. No in-run hints (`inRun` only on pred
 The FE shows the after-submit panel for renderers `density-bench`, `gene-expression`,
 `eye-anatomy-optics`, `buoyancy-bench`.
 
+## Step 3 — event-scored Labs (after-submit only)
+
+FL-06 lever, FL-07 thermal energy and FL-10 mass conservation (`event-hint-catalogs.ts`,
+`checkpoint-hints@4`). `unmetOf` reads their criteria maps (FL-06 rotation…application, FL-07 R2–R6,
+FL-10 C1–C6); `withEvents` makes the API pass `{ labState, events }` (the run's LabRunEvent rows) so
+`answerOf` compares the events behind each criterion. The FE floats a collapsible "Gợi ý từng bước"
+panel beside their own layouts after a not-passed submission.
+
 ## Student UX
 
 While working, a "Gợi ý" toggle in the Lab Space action dock opens a popover above the dock (the stage stays

@@ -3,7 +3,7 @@ import { applicableAssignmentWhere } from "../../classes/application/class-acces
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
 import { buildContext } from "./tutor";
 import {
-  CheckpointHintInputError, evaluateOneCheckpoint, hasCheckpointHints, hasRunHints, planCheckpointHint, planRunHint,
+  CHECKPOINT_HINT_CATALOGS, CheckpointHintInputError, evaluateOneCheckpoint, hasCheckpointHints, hasRunHints, planCheckpointHint, planRunHint,
   type PreviousCheckpointHint, type PreviousRunHint, type RunHintMoment,
 } from "./checkpoint-hint-rules";
 
@@ -166,7 +166,11 @@ async function requestCheckpointHint(db: any, actor: Actor, attempt: any, rubric
           (snapshot.kind === CHECKPOINT_HINT_KIND || (snapshot.kind === RUN_HINT_KIND && snapshot.moment === "BEFORE_PREDICTION")))
         .map(({ id, snapshot }: any) => snapshot.kind === CHECKPOINT_HINT_KIND ? snapshot
           : { criterion: snapshot.criterion, level: snapshot.level, variant: snapshot.variant, answerDigest: "run:" + id });
-      const plan = planCheckpointHint({ rubricRef, evidence: attempt.labState, result: attempt.simulationResult, previous });
+      // Event-scored Labs (FL-06/07/10) keep the learner's answers in the run's server events.
+      const evidence = CHECKPOINT_HINT_CATALOGS[rubricRef].withEvents && attempt.labRunId
+        ? { labState: attempt.labState, events: (await tx.labRunEvent.findMany({ where: { runId: attempt.labRunId }, orderBy: { sequence: "asc" } })).map((row: any) => row.event) }
+        : attempt.labState;
+      const plan = planCheckpointHint({ rubricRef, evidence, result: attempt.simulationResult, previous });
       if (!plan) throw new ConflictException({ code: "HINT_NOT_NEEDED", message: "Không còn tiêu chí nào cần gợi ý" });
       const hint = await tx.hintLog.create({
         data: {

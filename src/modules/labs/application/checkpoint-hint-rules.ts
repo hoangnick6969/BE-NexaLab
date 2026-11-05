@@ -4,13 +4,14 @@ import { CIRCUIT_BULB_RUBRIC } from "./evaluators/circuit-bulb-checkpoints.evalu
 import { ECOLOGY_TOLERANCE_RUBRIC, EM_INDUCTION_RUBRIC, FOOD_WEB_RUBRIC, checkpointActivityForRubric } from "./checkpoint-activities";
 import { canonical } from "./lab-run";
 import { STATION_HINT_CATALOGS } from "./station-hint-catalogs";
+import { EVENT_HINT_CATALOGS } from "./event-hint-catalogs";
 
 /**
  * SAI-01A rules-only hints for checkpoint Foundational Labs
  * (_bmad-output/specs/spec-student-ai-checkpoint-hints). Text and misconception rules are versioned:
  * change a template or a detector → bump the version, never edit a released one silently.
  */
-export const CHECKPOINT_HINT_RULES = "checkpoint-hints@3";
+export const CHECKPOINT_HINT_RULES = "checkpoint-hints@4";
 export const CHECKPOINT_MISCONCEPTION_RULES = "checkpoint-misconceptions@1";
 
 export type Pair = readonly [a: string, b: string];
@@ -42,6 +43,10 @@ export type Catalog = {
   answerOf?: (evidence: any, criterion: string) => unknown;
   /** In-run moments A and B: only predict-observe checkpoint activities. */
   inRun?: boolean;
+  /** Unmet criteria from a result without `assessment.unmetCriteria` (FL-06/07/10 criteria maps). */
+  unmetOf?: (result: any) => string[];
+  /** answerOf receives `{ labState, events }`: the run's server events hold the learner's answers. */
+  withEvents?: boolean;
 };
 
 const ANSWER_LETTER = /(?:[đĐ]áp án|[lL]ựa chọn|[pP]hương án|[cC]họn)\s+[ABC](?![\p{L}\p{N}])/u;
@@ -715,6 +720,7 @@ const EM_INDUCTION: Catalog = {
 
 export const CHECKPOINT_HINT_CATALOGS: Readonly<Record<string, Catalog>> = {
   ...STATION_HINT_CATALOGS,
+  ...EVENT_HINT_CATALOGS,
   [FOOD_WEB_RUBRIC]: FOOD_WEB,
   [ECOLOGY_TOLERANCE_RUBRIC]: ECOLOGY,
   [CIRCUIT_BULB_RUBRIC]: CIRCUIT_BULB,
@@ -761,7 +767,8 @@ export function answerFor(evidence: any, criterion: string) {
 export function planCheckpointHint(input: { rubricRef: string; evidence: unknown; result: any; previous: readonly PreviousCheckpointHint[] }): CheckpointHintPlan | null {
   const catalog = CHECKPOINT_HINT_CATALOGS[input.rubricRef];
   if (!catalog) throw new Error(`No checkpoint hint catalog for ${input.rubricRef}`);
-  const unmet: string[] = Array.isArray(input.result?.assessment?.unmetCriteria) ? input.result.assessment.unmetCriteria : [];
+  const unmet: string[] = catalog.unmetOf ? catalog.unmetOf(input.result)
+    : Array.isArray(input.result?.assessment?.unmetCriteria) ? input.result.assessment.unmetCriteria : [];
   const keys = new Set(unmet.map((item) => (catalog.keyOf ? catalog.keyOf(item) : item)).filter((key): key is string => Boolean(key)));
   const criterion = catalog.order.find((item) => keys.has(item));
   if (!criterion) return null;

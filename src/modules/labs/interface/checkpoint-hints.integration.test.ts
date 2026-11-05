@@ -86,7 +86,7 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       expect(w1.verdict).toBe("needs_practice");
       const before = await p.attempt.findUniqueOrThrow({ where: { id: w1.id } });
       const h1: any = await labs.hint(w1.id, req);
-      expect(h1).toMatchObject({ level: 1, criterion: "prediction:HUNT", checkpointId: "HUNT", label: "Khi mất rắn", escalated: false, repeatReason: null, provider: "rules", ruleVersion: "checkpoint-hints@3" });
+      expect(h1).toMatchObject({ level: 1, criterion: "prediction:HUNT", checkpointId: "HUNT", label: "Khi mất rắn", escalated: false, repeatReason: null, provider: "rules", ruleVersion: "checkpoint-hints@4" });
       expect(h1.contextSnapshot).toBeUndefined();
       expect(JSON.stringify(h1)).not.toContain("FW_");
       const stored = await p.hintLog.findUniqueOrThrow({ where: { id: h1.id } });
