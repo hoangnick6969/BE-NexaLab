@@ -1,5 +1,5 @@
 import { digest } from "../../labs/application/lab-run";
-import { reviewedBindingsMatch } from "../../labs/application/lab-release-bindings";
+import { reviewedBindingsMatch, reviewedBindingsMatchMany } from "../../labs/application/lab-release-bindings";
 import { Controller, Get, Inject, Param, Req } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../../common/decorators";
@@ -118,19 +118,40 @@ export class CatalogController {
       // Lesson-variant challenges belong to their lesson pathway, not the public lab list.
       include: { challenges: { where: { NOT: { id: { contains: "_v-" } } } } },
     });
-    const visible = await Promise.all(labs.map(async (lab) => {
-      const release = await this.db.labRelease.findFirst({ where: { labId: lab.id, status: "ACTIVE" } });
+    // Batched: one query for all active releases and one for release counts, instead of 2 per Lab.
+    const labIds = labs.map((lab) => lab.id);
+    const [activeReleases, releaseCounts] = await Promise.all([
+      this.db.labRelease.findMany({ where: { labId: { in: labIds }, status: "ACTIVE" } }),
+      this.db.labRelease.groupBy({ by: ["labId"], where: { labId: { in: labIds } }, _count: { _all: true } }),
+    ]);
+    const releaseOf = new Map(activeReleases.map((release) => [release.labId, release]));
+    const hasReleases = new Set(releaseCounts.filter((row) => row._count._all > 0).map((row) => row.labId));
+    const boundLessonIds = [...new Set(activeReleases.flatMap((release) =>
+      ((release.snapshot as any).lessonBindings ?? []).map((binding: any) => binding.lessonId as string)))];
+    const [checks, lessons] = await Promise.all([
+      (async () => {
+        const intact = labs.map((lab) => releaseOf.get(lab.id)).filter((release) => !!release && digest(release.snapshot) === release.digest);
+        const matches = await reviewedBindingsMatchMany(this.db, intact.map((release) => ({ labId: release!.labId, snapshot: release!.snapshot })));
+        const ok = new Set(intact.filter((_, i) => matches[i]).map((release) => release!.labId));
+        return labs.map((lab) => ok.has(lab.id));
+      })(),
+      boundLessonIds.length
+        ? this.db.lesson.findMany({
+          where: { id: { in: boundLessonIds }, status: "published", scope: "SHARED_LIBRARY", synthetic: false },
+          select: { id: true, title: true, curriculumTopicCode: true },
+        })
+        : Promise.resolve([]),
+    ]);
+    const lessonById = new Map(lessons.map((lesson) => [lesson.id, lesson]));
+    const visible = labs.map((lab, index) => {
+      const release = releaseOf.get(lab.id);
       // Preserve legacy catalog behavior for Labs without a release lifecycle record.
-      if (!release) return req.user.role !== "STUDENT" || await this.db.labRelease.count({ where: { labId: lab.id } }) === 0 ? lab : null;
-      if (digest(release.snapshot) !== release.digest || !await reviewedBindingsMatch(this.db, lab.id, release.snapshot))
-        return req.user.role === "STUDENT" ? null : lab;
-      const lessonIds = ((release.snapshot as any).lessonBindings ?? []).map((binding: any) => binding.lessonId);
-      const lessonLinks = await this.db.lesson.findMany({
-        where: { id: { in: lessonIds }, status: "published", scope: "SHARED_LIBRARY", synthetic: false },
-        select: { id: true, title: true, curriculumTopicCode: true },
-      });
+      if (!release) return req.user.role !== "STUDENT" || !hasReleases.has(lab.id) ? lab : null;
+      if (!checks[index]) return req.user.role === "STUDENT" ? null : lab;
+      const lessonIds: string[] = ((release.snapshot as any).lessonBindings ?? []).map((binding: any) => binding.lessonId);
+      const lessonLinks = [...new Set(lessonIds)].map((id) => lessonById.get(id)).filter((lesson) => lesson !== undefined);
       return { ...lab, lessonLinks: lessonLinks.map((lesson) => ({ lessonId: lesson.id, title: lesson.title, topicCode: lesson.curriculumTopicCode })) };
-    }));
+    });
     return visible.filter((lab) => lab !== null);
   }
 }
