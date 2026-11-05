@@ -30,25 +30,21 @@ try {
   const statuses = await db.$queryRaw`SELECT status, count(*)::int AS n FROM "Lesson" GROUP BY status`;
   const unknown = statuses.filter((s) => !["draft", "published", "archived", ...(c2 ? ["quarantined"] : [])].includes(s.status));
   if (unknown.length) problems.push(`unexpected lesson statuses: ${unknown.map((s) => `${s.status}=${s.n}`).join(", ")}`);
-  const assets = await db.$queryRaw`SELECT count(*)::int AS n FROM "AssetFile"`;
   const report = {
     database: host,
     c2Applied: c2,
     activeAdmins: admins[0].n,
     lessonStatuses: Object.fromEntries(statuses.map((s) => [s.status, s.n])),
-    assets: assets[0].n,
   };
   if (c2) {
-    const [versions, withoutChecksum, pinned] = await Promise.all([
+    const [versions, pinned] = await Promise.all([
       db.$queryRaw`SELECT status, count(*)::int AS n FROM "SimulationConfigVersion" GROUP BY status`,
-      db.$queryRaw`SELECT count(*)::int AS n FROM "AssetFile" WHERE sha256 IS NULL`,
       db.$queryRaw`SELECT count(*)::int AS n FROM "Attempt" WHERE "configVersionId" IS NOT NULL`,
     ]);
     const active = await db.$queryRaw`SELECT "labId", count(*)::int AS n FROM "SimulationConfigVersion" WHERE status = 'active' GROUP BY "labId" HAVING count(*) > 1`;
     if (active.length) problems.push(`more than one active configuration version for: ${active.map((a) => a.labId).join(", ")}`);
     Object.assign(report, {
       simulationVersions: Object.fromEntries(versions.map((v) => [v.status, v.n])),
-      legacyAssetsWithoutChecksum: withoutChecksum[0].n,
       attemptsPinnedToVersion: pinned[0].n,
     });
   }
@@ -56,11 +52,7 @@ try {
   const cf = ["20261016090000_cf_asset_versions", "20261016100000_cf_sources_packs_releases", "20261016110000_cf_simulation_packs"];
   report.contentFoundation = Object.fromEntries(cf.map((m) => [m, applied.includes(m)]));
   if (applied.includes(cf[0])) {
-    const [legacy, pending] = await Promise.all([
-      db.$queryRaw`SELECT count(*)::int AS n FROM "AssetFile" f WHERE NOT EXISTS (SELECT 1 FROM "Asset" a WHERE a."legacyFileId" = f.id)`,
-      db.$queryRaw`SELECT count(*)::int AS n FROM "AssetVersion" WHERE status IN ('PENDING','VALIDATING')`,
-    ]);
-    report.legacyFilesToMigrate = legacy[0].n;
+    const pending = await db.$queryRaw`SELECT count(*)::int AS n FROM "AssetVersion" WHERE status IN ('PENDING','VALIDATING')`;
     report.pendingUploads = pending[0].n;
   }
   if (applied.includes(cf[2])) {

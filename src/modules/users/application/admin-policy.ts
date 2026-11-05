@@ -58,7 +58,7 @@ export async function deletionBlockers(db: any, userId: string): Promise<Deletio
     db.teacherGateOverride.count({ where: { OR: [{ studentId: userId }, { actorId: userId }, { revokedById: userId }] } }),
     db.classroom.count({ where: { teacherId: userId } }),
     db.lesson.count({ where: { authorId: userId } }),
-    Promise.all([db.assetFile.count({ where: { ownerId: userId } }), db.asset.count({ where: { ownerId: userId } })]).then(([a, b]: number[]) => a + b),
+    db.asset.count({ where: { ownerId: userId } }),
     // The account's own lifecycle rows (user.create, user.update, …) are about the
     // account itself, not evidence it produced; every other actor/target row counts.
     db.auditLog.count({

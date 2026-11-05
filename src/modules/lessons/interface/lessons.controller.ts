@@ -8,7 +8,7 @@ import { Db } from "../../../db/db";
 import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { text } from "../../../common/validation";
 import { materializeLegacySteps } from "../application/pathway";
-import { CHALLENGE_PARAMETERS, DOMAINS, RELEASE_REVIEW_KINDS, RELEASE_REVIEW_LABELS, assetIds, attribution, challengeObjective, challengeParamErrors, domainSchema, isStructureChange, materialVersionIds, publishBlockers, variantChallengeId } from "../application/lesson-content";
+import { CHALLENGE_PARAMETERS, DOMAINS, RELEASE_REVIEW_KINDS, RELEASE_REVIEW_LABELS, legacyAssetIds, attribution, challengeObjective, challengeParamErrors, domainSchema, isStructureChange, materialVersionIds, publishBlockers, variantChallengeId } from "../application/lesson-content";
 import { lessonSchema, publishedSteps } from "./lesson-schema";
 
 @ApiTags("NexaLab")
@@ -33,30 +33,12 @@ export class LessonsController {
           message: "Phòng lab tham chiếu chưa được xuất bản",
         });
     }
-    const referenced = assetIds(lesson.materials);
-    if (referenced.length) {
-      const assets = await this.db.assetFile.findMany({
-        where: { id: { in: referenced } },
-        select: { id: true, ownerId: true, scope: true, status: true },
+    // The pre-CF `asset:<uuid>` file table is gone; such a reference can no longer resolve.
+    if (legacyAssetIds(lesson.materials).length)
+      throw new BadRequestException({
+        code: "INVALID_LESSON_PATHWAY",
+        message: "Tài nguyên bài học không tồn tại hoặc không thuộc quyền sử dụng",
       });
-      if (assets.some((asset) => asset.status === "QUARANTINED"))
-        throw new BadRequestException({ code: "ASSET_QUARANTINED", message: "Bài học tham chiếu tệp đang bị cách ly" });
-      // A clone intentionally reuses the asset references of its source (D7).
-      const inherited = new Set<string>();
-      if (clonedFromId) {
-        const source = await this.db.lesson.findUnique({ where: { id: clonedFromId }, select: { materials: true } });
-        for (const id of assetIds((source?.materials as any[]) ?? [])) inherited.add(id);
-      }
-      if (
-        assets.length !== new Set(referenced).size ||
-        (actor.role !== "ADMIN" &&
-          assets.some((asset) => asset.ownerId !== actor.sub && asset.scope !== "SHARED_LIBRARY" && !inherited.has(asset.id)))
-      )
-        throw new BadRequestException({
-          code: "INVALID_LESSON_PATHWAY",
-          message: "Tài nguyên bài học không tồn tại hoặc không thuộc quyền sử dụng",
-        });
-    }
     // CF-T2: published content pins READY immutable versions of active assets.
     const pinned = materialVersionIds(lesson.materials);
     if (pinned.length) {

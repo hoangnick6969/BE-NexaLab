@@ -1611,7 +1611,6 @@ try {
       },
     },
   });
-  await db.assetFile.deleteMany({ where: { ownerId: { in: createdUsers } } });
   await removeUploadedAssets(db, { ownerId: { in: createdUsers } });
   await db.user.deleteMany({ where: { id: { in: createdUsers } } });
   // Variant challenges outlive their lesson rows until the attempts (cascaded with users) are gone.
