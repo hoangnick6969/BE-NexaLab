@@ -7,7 +7,7 @@ import { applicableAssignmentWhere, assignmentQueueOrder } from "../../classes/a
 import { Db } from "../../../db/db";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { text } from "../../../common/validation";
-import { checkRunPrediction, requestHint, requestRunHint } from "../application/hint";
+import { checkRunPrediction, explainAttempt, requestHint, requestRunHint } from "../application/hint";
 import { explain } from "../infrastructure/llm";
 import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
@@ -679,6 +679,11 @@ export class LabsController {
       prediction: z.unknown().refine((value) => value === undefined || JSON.stringify(value).length <= 2000).optional(),
     }).strict().parse(body);
     return requestRunHint(this.db, req.user, runId, request);
+  }
+  /** B2: rules-only explanation of an attempt's verdict, from its stored evaluator result. No write. */
+  @Roles("STUDENT") @Get("attempts/:id/explanation") explanation(@Param("id") id: string, @Req() req: any) {
+    this.limiter.rate("explanation:" + req.user.sub, 60);
+    return explainAttempt(this.db, req.user, id);
   }
   @Roles("STUDENT") @Post("attempts/:id/hint") async hint(
     @Param("id") id: string,

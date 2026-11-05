@@ -5,6 +5,7 @@ import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { FOOD_WEB_ACTIVITY_KEY, FOOD_WEB_RUBRIC } from "../application/checkpoint-activities";
 import { MODEL_REGISTRY } from "../application/sim-packs";
+import { ParentsController } from "../../parents/interface/parents.controller";
 import { LabsController } from "./labs.controller";
 
 // SAI-01A checkpoint hints on the FL-21 food-web activity: synthetic records in the isolated database only.
@@ -170,6 +171,38 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       expect(await labs.hint(deforestWrong.id, req)).toMatchObject({ criterion: "prediction:DEFOREST", level: 3, escalated: true });
       // Lesson/progress projections still ignore in-run rows (no attempt).
       expect((await p.progress.findFirst({ where: { studentId: student.id, contentId: labId } }))?.lastHintLevel).toBe(3);
+
+      // B2: the verdict explanation reads the stored result only; unmet steps carry no wording, nothing is written.
+      const hintRows = await p.hintLog.count();
+      const why: any = await labs.explanation(w1.id, req);
+      expect(why).toMatchObject({ attemptId: w1.id, verdict: "not_passed", provider: "rules", ruleVersion: "verdict-explanations@1" });
+      expect(why.items.filter((item: any) => !item.met)).toEqual([
+        { criterion: "prediction:HUNT", label: "Khi mất rắn", met: false, why: null },
+        { criterion: "explanation", label: "Lời giải thích", met: false, why: null },
+      ]);
+      expect(JSON.stringify(why)).not.toMatch(/INCREASE|FW_/);
+      const whyPassed: any = await labs.explanation(passed.id, req);
+      expect(whyPassed.verdict).toBe("passed");
+      expect(whyPassed.items.every((item: any) => item.met && item.why)).toBe(true);
+      expect(await p.hintLog.count()).toBe(hintRows);
+      expect(await p.attempt.findUniqueOrThrow({ where: { id: w1.id } })).toEqual(before);
+      await expect(labs.explanation(w1.id, { user: { sub: outsider.id, sid: session.id, role: "STUDENT" } })).rejects.toMatchObject({ status: 404 });
+
+      // SAI-05: a linked parent sees counts by level for this Lab (after-submit and in-run), never content.
+      const parent = await p.user.create({ data: { email: `parent-${suffix}@example.test`, fullName: "Fixture parent", passwordHash: "fixture", role: "PARENT" } });
+      const stranger = await p.user.create({ data: { email: `stranger-${suffix}@example.test`, fullName: "Fixture stranger", passwordHash: "fixture", role: "PARENT" } });
+      await p.parentLink.create({ data: { parentId: parent.id, studentId: student.id, status: "approved" } });
+      const parents = new ParentsController(p as any, new StudentAccessService(p as any), new RequestRateLimiter());
+      const summary: any = await parents.helpSeeking({ user: { sub: parent.id, role: "PARENT" } }, student.id);
+      const levels = await p.hintLog.groupBy({ by: ["level"], where: { OR: [{ attempt: { studentId: student.id } }, { labRun: { studentId: student.id } }] }, _count: true });
+      const count = (level: number) => levels.find((row) => row.level === level)?._count ?? 0;
+      expect(summary.labs).toEqual([{
+        labId, labTitle: "Private food-web fixture", total: levels.reduce((sum, row) => sum + row._count, 0),
+        byLevel: { 1: count(1), 2: count(2), 3: count(3), 4: count(4) }, reflections: count(0), lastAt: expect.any(String),
+      }]);
+      expect(summary.labs[0].reflections).toBeGreaterThan(0);
+      expect(JSON.stringify(summary)).not.toMatch(/content|criterion|misconception|FW_|Khi mất rắn/);
+      await expect(parents.helpSeeking({ user: { sub: stranger.id, role: "PARENT" } }, student.id)).rejects.toMatchObject({ response: { code: "PARENT_LINK_REQUIRED" } });
     } finally {
       MODEL_REGISTRY[modelRef] = original;
     }

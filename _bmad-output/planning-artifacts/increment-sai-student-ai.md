@@ -34,7 +34,7 @@ Delegate one ticket per task, as a vertical BE/FE/API/schema slice. Keep NestJS/
 | SAI-02 Teacher hint insights | roadmap only | Class summary, trace, disagreement (UC-AI-05 to 07) | SAI-01, TAI-04 alignment | SG-1, SG-3 |
 | SAI-03 Lesson and quiz hints | roadmap only | Hints outside labs, never revealing keys | SAI-01 | SG-1 |
 | SAI-04 Socratic free-text tutor | roadmap only | Typed questions with curriculum lock (UC-AI-08) | SAI-01 | SG-1, SG-2, SG-4 |
-| SAI-05 Parent help-seeking summary | roadmap only | Hint counts by level (BR-11) | SAI-01 | SG-1 |
+| SAI-05 Parent help-seeking summary | `../specs/spec-student-ai-checkpoint-hints/` (section SAI-05) | Hint counts by level (BR-11) | SAI-01A | SG-1 (rules part, D1) |
 | SAI-06 Personalised wording | roadmap only | Variant choice from level and misconceptions | SAI-02 | SG-2, SG-3 |
 
 ## Readiness gates
@@ -57,3 +57,7 @@ FL-20, FL-21, FL-25), see `../specs/spec-student-ai-checkpoint-hints/SPEC.md`. O
 D1 FR-22 activated for rules-only hints (SG-1 rules part; SG-2 still gates any provider), D2 passed attempt →
 `409 HINT_NOT_NEEDED`, D3 checkpoint Labs before the legacy-lab SAI-01. Next in the idea order: B2 post-verdict
 explanation and SAI-05 parent summary, then SAI-02 teacher insight.
+
+2026-11-05 (later): B2 post-verdict explanation (`verdict-explanations@1`) and SAI-05 parent help-seeking
+summary shipped on `research/student-ai`, both rules-only and read-only, specified in the SAI-01A SPEC (step 4
+and SAI-05 section). Next: SAI-02 teacher insight.

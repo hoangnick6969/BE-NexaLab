@@ -2,7 +2,7 @@
 id: SPEC-student-ai-checkpoint-hints
 status: in-progress
 slice: SAI-01A (first Student AI slice; precedes SAI-01 legacy-lab hints in ../spec-student-ai-tutor)
-ideas: B1 checkpoint hints + B8 checkpoint misconception rules (student-ai idea list, 2026-11-05)
+ideas: B1 checkpoint hints + B8 checkpoint misconception rules; B2 post-verdict explanation; SAI-05 parent help-seeking summary (student-ai idea list, 2026-11-05)
 companions:
   - ../spec-student-ai-tutor/SPEC.md
   - ../spec-student-ai-tutor/student-ai-roadmap.md
@@ -105,6 +105,34 @@ FL-10 C1–C6); `withEvents` makes the API pass `{ labState, events }` (the run'
 `answerOf` compares the events behind each criterion. The FE floats a collapsible "Gợi ý từng bước"
 panel beside their own layouts after a not-passed submission.
 
+## Step 4 — B2 post-verdict explanation (owner 2026-11-05: "làm tiếp B2 và SAI-05")
+
+`GET /api/attempts/:id/explanation` (student, own attempt; other → 404; rate key `explanation:` 60). For an
+attempt whose pinned rubric has a hint catalog it returns `{ attemptId, verdict: "passed"|"not_passed", summary,
+items: [{ criterion, label, met, why }], ruleVersion: "verdict-explanations@1", hintRules, provider: "rules" }`;
+other rubrics → `409 EXPLANATION_UNAVAILABLE`. Built by `verdict-explanation.ts` from the stored evaluator result
+only (same `unmetOf` / `unmetCriteria` + `keyOf` as the hint planner), one item per catalog key in order:
+
+- A met step's `why` is the catalog's level-4 wording (variant a): the method or principle, already covered by the
+  leak test. An unmet step has `why: null` and shows only its name, so a not-passed learner who can retry is not
+  handed the answer. A passed verdict lists every step as met (FR-22: the verdict is official).
+- Not passed with no catalog key unmet → one extra `other` item ("Yêu cầu chung của bài") instead of "all met".
+- Read-only: no `HintLog`, no projection, attempt row unchanged (integration test).
+
+FE: a "Vì sao em đạt? / Vì sao em chưa đạt?" toggle (`VerdictExplanationPanel`) under the guided result of
+checkpoint and station Labs, and at the top of the floating panel of event Labs (now shown for passed runs too,
+with the hint panel only when not passed). Fetched only when opened.
+
+## SAI-05 — parent help-seeking summary (BR-11)
+
+`GET /api/children/:studentId/help-seeking` (parent; `readableStudent` → `403 PARENT_LINK_REQUIRED` unless an
+approved, unrevoked link) returns `{ labs: [{ labId, labTitle, total, byLevel: {1..4}, reflections, lastAt }] }`,
+newest Lab first. It counts every `HintLog` of the child: after-submit rows via `attempt.studentId` (Lab from the
+challenge) and in-run rows (`attemptId = null`) via `labRun.studentId`. Level-0 moment-B reflections are counted
+apart. No content, criterion, label, misconception or conversation leaves the server (integration test checks the
+JSON). FE: "Con đã xin gợi ý bao nhiêu lần" cards on the parent progress page (`HelpSeekingPanel`), one card per
+Lab with wrapping level rows; the link-scope note now says hint text is never shown, only counts.
+
 ## Student UX
 
 While working, a "Gợi ý" toggle in the Lab Space action dock opens a popover above the dock (the stage stays
@@ -117,10 +145,7 @@ the answer did not change. `HINT_NOT_NEEDED` is never reachable from the panel (
 ## Non-goals
 
 - Any LLM call (SG-2), cache or provider budget.
-- Evidence-envelope Labs (FL-03 density, FL-05 buoyancy, FL-16 eye optics, FL-27 gene) and event-based
-  Labs (FL-06, FL-07, FL-10); they get their own catalogs later.
-- Teacher insight (SAI-02), parent summary (SAI-05).
-- A migration: the slice stores its fields in the existing `HintLog.contextSnapshot` JSON.
+- Teacher insight (SAI-02).
 
 ## Success signal
 

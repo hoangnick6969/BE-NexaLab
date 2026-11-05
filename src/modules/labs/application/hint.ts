@@ -6,6 +6,7 @@ import {
   CHECKPOINT_HINT_CATALOGS, CheckpointHintInputError, evaluateOneCheckpoint, hasCheckpointHints, hasRunHints, planCheckpointHint, planRunHint,
   type PreviousCheckpointHint, type PreviousRunHint, type RunHintMoment,
 } from "./checkpoint-hint-rules";
+import { explainVerdict } from "./verdict-explanation";
 
 type Provider = (context: any) => Promise<{ content: string; provider: string }>;
 type Actor = { sub: string; sid: string };
@@ -296,4 +297,23 @@ export async function requestRunHint(db: any, actor: Actor, runId: string, reque
     },
     { timeout: 20000 },
   );
+}
+
+/**
+ * B2: why the attempt passed or not, from the stored evaluator result only. Read-only (FR-22): no HintLog,
+ * no projection. 404 for another student's attempt; 409 EXPLANATION_UNAVAILABLE for Labs without a catalog.
+ */
+export async function explainAttempt(db: any, actor: Actor, attemptId: string) {
+  const attempt = await db.attempt.findFirst({
+    where: { id: attemptId, studentId: actor.sub },
+    select: { id: true, verdict: true, simulationResult: true, labRun: { select: { execution: true } } },
+  });
+  if (!attempt) throw new NotFoundException();
+  const rubricRef = (attempt.labRun?.execution as any)?.rubricRef;
+  const explanation = hasCheckpointHints(rubricRef)
+    ? explainVerdict({ rubricRef, verdict: attempt.verdict, result: attempt.simulationResult })
+    : null;
+  if (!explanation)
+    throw new ConflictException({ code: "EXPLANATION_UNAVAILABLE", message: "Bài này chưa có phần giải thích kết quả" });
+  return { attemptId: attempt.id, ...explanation };
 }
