@@ -11,18 +11,15 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
-  StreamableFile,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiTags, ApiBearerAuth, ApiConsumes } from "@nestjs/swagger";
-import { createReadStream } from "node:fs";
-import { extname, resolve } from "node:path";
+import { extname } from "node:path";
 import { Db } from "../../../db/db";
 import { Roles } from "../../../common/decorators";
 import { mediaTypes } from "../application/media";
 import { canReadVersion, finalizeVersion, startVersion } from "../application/asset-versions";
 import { objectKeys, readTtl, storage } from "../../storage/infrastructure/storage";
-const root = resolve(process.env.UPLOAD_DIR ?? "uploads");
 /** Form uploads are for small files; larger media uses the presigned /assets/uploads flow. */
 const FORM_LIMIT = 20 * 1024 * 1024;
 
@@ -64,7 +61,7 @@ export class FilesController {
     return { id: ready.id, assetId: asset.id, url: "assetv:" + ready.id, type: type.kind, title: fileName, sha256: ready.sha256 };
   }
 
-  /** Legacy `asset:<uuid>` files are served from disk; versions redirect to a short-lived signed URL. */
+  /** An asset version redirects to a short-lived signed URL. */
   @Get(":id") async get(@Param("id") id: string, @Req() req: any, @Res({ passthrough: true }) res: any) {
     if (/^[a-z0-9]{20,40}$/.test(id)) {
       const version = await this.db.assetVersion.findUnique({ where: { id }, include: { asset: true } });
@@ -77,24 +74,6 @@ export class FilesController {
       );
       return;
     }
-    if (!/^[0-9a-f-]{36}$/.test(id)) throw new NotFoundException();
-    const file = await this.db.assetFile.findUnique({ where: { id } });
-    if (!file) throw new NotFoundException();
-    // A quarantined file is withheld from everyone but admins, wherever it is referenced (C2-T5).
-    if (file.status === "QUARANTINED" && req.user.role !== "ADMIN")
-      throw new ForbiddenException({ code: "ASSET_QUARANTINED", message: "Tệp đang bị cách ly" });
-    const sharedForStaff = file.scope === "SHARED_LIBRARY" && ["TEACHER", "ADMIN"].includes(req.user.role);
-    if (file.ownerId !== req.user.sub && req.user.role !== "ADMIN" && !sharedForStaff) {
-      const lesson = await this.db.lesson.findFirst({
-        where: { status: "published", materials: { array_contains: [{ url: "asset:" + id }] } },
-      });
-      const lab = await this.db.lab.findFirst({ where: { status: "published", assets: { array_contains: [{ url: "asset:" + id }] } } });
-      if (!lesson && !lab) throw new ForbiddenException("Tệp chưa được xuất bản");
-    }
-    return new StreamableFile(createReadStream(resolve(root, id)), {
-      type: file.mime,
-      length: file.size,
-      disposition: `inline; filename*=UTF-8''${encodeURIComponent(file.name)}`,
-    });
+    throw new NotFoundException();
   }
 }

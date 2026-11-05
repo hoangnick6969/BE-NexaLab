@@ -65,7 +65,7 @@ export class AdminAssetsController {
             createdAt: v.createdAt,
             readyAt: v.readyAt,
           })),
-          references: await assetReferences(this.db, { versionIds: versions.map((v) => v.id), legacyFileId: asset.legacyFileId }),
+          references: await assetReferences(this.db, { versionIds: versions.map((v) => v.id) }),
         })),
       ),
       nextCursor: result.nextCursor,
@@ -127,7 +127,7 @@ export class AdminAssetsController {
     const deleted = await this.db.$transaction(async (tx) => {
       const asset = await tx.asset.findUnique({ where: { id }, include: { versions: true } });
       if (!asset) throw notFound("tệp");
-      const references = await assetReferences(tx, { versionIds: asset.versions.map((v) => v.id), legacyFileId: asset.legacyFileId });
+      const references = await assetReferences(tx, { versionIds: asset.versions.map((v) => v.id) });
       if (references.lessons.length || references.labs.length || references.simPacks.length || references.ebookEditions.length)
         throw new ConflictException({
           code: "ASSET_REFERENCED",

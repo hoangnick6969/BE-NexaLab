@@ -105,7 +105,7 @@ npm run dev
 | `http://127.0.0.1:4100/api/docs` | Swagger |
 | `http://localhost:8025` | Mailpit khi chạy bằng Compose |
 
-Seed tạo học sinh `nguyenan.8a` và các tài khoản người lớn `teacher@nexalab.local`, `parent@nexalab.local`, `admin@nexalab.local`, dùng mật khẩu từ `SEED_PASSWORD`. Mã lớp mẫu: `NEXA8A`. Chạy lại seed không ghi đè mật khẩu của tài khoản đã tồn tại.
+Seed tạo học sinh `nguyenan.8a` và các tài khoản người lớn `teacher@nexalab.local`, `parent@nexalab.local`, `admin@nexalab.local`, dùng mật khẩu từ `SEED_PASSWORD`. Lớp mẫu `demo-class` chưa có mã tham gia; giáo viên tạo mã trong trang chi tiết lớp. Chạy lại seed không ghi đè mật khẩu của tài khoản đã tồn tại.
 
 ## Mô hình xác thực
 

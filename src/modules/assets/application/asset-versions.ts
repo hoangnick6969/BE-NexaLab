@@ -204,8 +204,8 @@ export async function canReadVersion(db: any, user: { sub: string; role: string 
 }
 
 /** Lessons, steps and labs whose JSON references any version of the asset (or a given version), and simulation packs using a version as their visual. */
-export async function assetReferences(db: any, ids: { versionIds: string[]; legacyFileId?: string | null }) {
-  const needles = [...ids.versionIds.map((id) => `%assetv:${id}%`), ...(ids.legacyFileId ? [`%asset:${ids.legacyFileId}%`] : [])];
+export async function assetReferences(db: any, ids: { versionIds: string[] }) {
+  const needles = ids.versionIds.map((id) => `%assetv:${id}%`);
   if (!needles.length) return { lessons: [], labs: [], simPacks: [], ebookEditions: [] };
   const lessons: any[] = [];
   const labs: any[] = [];

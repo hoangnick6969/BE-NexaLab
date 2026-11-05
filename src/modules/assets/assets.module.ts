@@ -3,7 +3,7 @@ import { AssetsController } from "./interface/assets.controller";
 import { FilesController } from "./interface/files.controller";
 import { AdminAssetsController } from "./interface/admin-assets.controller";
 
-/** Versioned media assets: uploads, finalize/read grants, legacy files, and admin asset operations. */
+/** Versioned media assets: uploads, finalize/read grants and admin asset operations. */
 @Module({
   controllers: [AssetsController, FilesController, AdminAssetsController],
 })
