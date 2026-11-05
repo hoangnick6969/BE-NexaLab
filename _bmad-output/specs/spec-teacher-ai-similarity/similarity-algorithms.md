@@ -23,6 +23,7 @@ Per prompt, for each current submission's response:
 1. **Normalize:** NFC, lowercase `vi-VN`, keep diacritics, replace punctuation with spaces, collapse whitespace.
 2. **Tokenize:** split on whitespace and keep the char offsets of every token in the original text.
 3. **Exclude tokens** (mark them as non-eligible but keep their offsets):
+   - Tokens inside KaTeX delimiters, matched on the original text before normalization: block `\$\$[\s\S]+?\$\$` first, then inline `\$[^$\n]+?\$`. An unpaired `$` stays ordinary text (`FORMULA`).
    - Tokens covered by any word 5-gram that also occurs in the normalized prompt text (`PROMPT_TEXT`).
    - Formula-like tokens: those containing `=`, digits mixed with letters (`h2o`, `u=i.r`, `cuso4`), or unit-only tokens (`v`, `a`, `ω`, `mol`, `g`, `ml`, `°c`) (`FORMULA`).
    - Tokens covered by a 5-gram occurring in the prompt's `commonPhrases` (`COMMON_PHRASE`).

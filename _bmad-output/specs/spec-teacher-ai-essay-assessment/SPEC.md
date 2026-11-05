@@ -4,6 +4,7 @@ status: draft-blocked-on-tai2-t0-provider-and-legal-gate
 companions:
   - implementation-contract.md
   - assessment-validation-and-evaluation.md
+  - prompt-spec.md
   - tickets.md
   - ../spec-teacher-ai-authoring/job-runtime-and-failure-modes.md
   - ../spec-teacher-ai-authoring/provider-and-data-flow.md
@@ -37,7 +38,7 @@ Today Class Space can only test recall through server-scored single-choice tests
 - The official score is the latest `WrittenGradeDecision` from the owning teacher. AI suggestions, shadow data and evaluation reports never enter student, parent, rollup or notification read models.
 - AI tickets (TAI2-T4..T7) are blocked until TAI2-T0 records all of the following: a provider whose terms permit use in NexaLab's under-18 context and whose data-use/DPA terms are approved; the legal basis, age-specific notices/consents and cross-border handling under current law; a PRD amendment for written tasks; and TAI-01 shipped. The free Gemini tier is not acceptable for student text, and paid tier alone does not establish under-18 eligibility.
 - Existing `ParentConsent` may support an approved consent-based policy, but it is not by itself proof of a sufficient legal basis for every student or use. Determine age verification, the required child/representative participation, exceptions and whether school authority applies with counsel before defining eligibility. Keep unapproved submissions manual-only; revise the proposed `NO_CONSENT` skip reason if the approved legal path is not per-student consent.
-- Provider input is the prompt, the rubric and the redacted response only. Student id, name, username, email, phone and class name never leave the server.
+- Provider input is exactly the `AssessPromptPayload` in `prompt-spec.md`: the lesson title (as `topic`), each prompt's text, its optional teacher-only `referenceAnswer`, the rubric criteria with anchors, and the redacted response. TAI-03 similarity results are never sent. Student id, name, username, email, phone, enrollment and class name never leave the server. `referenceAnswer` is teacher-authored content and is never shown to students or parents.
 - Redaction of known identifiers is not a guarantee against indirect identification or sensitive details in free text. Provider payload, retention, deletion and cross-border transfer require a documented review; do not enable AI suggestions until that review is complete.
 - Model output is never silently corrected. Out-of-range points or unverifiable evidence invalidate that criterion suggestion.
 - The assessment runs on the TAI-01 job runtime (purpose `ASSESS_SUBMISSION`) with its own daily limit. There is no second runner.

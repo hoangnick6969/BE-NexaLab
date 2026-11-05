@@ -27,6 +27,8 @@ For each rubric criterion of the snapshot's resource version:
 | VA-04 | `suggestedPoints > 0` requires ≥ 1 verified quote | `EVIDENCE_MISSING` |
 | VA-05 | Quote does not consist only of a redaction token or of the prompt text itself | quote dropped |
 
+Before VA rules, `KX-01` (`prompt-spec.md`) rejects an attempt whose `rationale` or `uncertainty` contains a control character, which is how an unescaped LaTeX command (`\frac` → form feed) shows up after `JSON.parse`. It counts as `OUTPUT_SCHEMA_INVALID`. The server never rewrites backslashes before parsing.
+
 A failed criterion stores `{ valid: false, reasonCode }` with `suggestedPoints` set to null. It is never clamped or guessed. Suggestion status is `VALID` when all criteria are valid, `PARTIAL` when at least one is valid, and `SUPPRESSED` when none are valid or the injection detector matched. Schema parse failure follows the TAI-01 retry rule (`OUTPUT_SCHEMA_INVALID`).
 
 `ACCEPTED_AI` is allowed only for `VALID` suggestions. `PARTIAL` suggestions can only be `EDITED_AI` or `REJECTED_AI`.

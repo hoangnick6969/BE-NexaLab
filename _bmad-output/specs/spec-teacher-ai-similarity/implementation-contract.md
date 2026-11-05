@@ -77,7 +77,7 @@ model SimilarityMatchReview {
 
 ## HTTP contract
 
-Teacher-owner only (`ownedClass`). Missing or unauthorized resources return the same 404. Students and parents have no route. Every mutation requires `Idempotency-Key`.
+Teacher-owner only (`ownedClass`): a missing or not-owned class returns the same 403 `CLASS_ACCESS_DENIED`; a missing or foreign assignment, run or match inside an owned class returns 404. Students and parents have no route. Every mutation requires `Idempotency-Key`.
 
 | Operation | Contract |
 | --- | --- |
@@ -94,7 +94,8 @@ Teacher-owner only (`ownedClass`). Missing or unauthorized resources return the 
 | HTTP | Code | When |
 | --- | --- | --- |
 | 400 | `VALIDATION_FAILED` | Body shape |
-| 404 | `NOT_FOUND` | Missing or not-owned class, assignment, run, match |
+| 403 | `CLASS_ACCESS_DENIED` | Missing or not-owned class (existing `ownedClass`) |
+| 404 | `NOT_FOUND` | Missing assignment, run or match inside an owned class |
 | 409 | `NOT_A_WRITTEN_ASSIGNMENT` | Run on lesson/lab/test assignment |
 | 409 | `SIMILARITY_INPUT_TOO_SMALL` | Fewer than 2 current submissions |
 | 413 | `SIMILARITY_INPUT_TOO_LARGE` | More than 200 current submissions |

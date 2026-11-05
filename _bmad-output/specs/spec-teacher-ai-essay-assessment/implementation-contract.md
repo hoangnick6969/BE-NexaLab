@@ -71,6 +71,7 @@ type WrittenTaskContent = {
     id: string;                  // server-generated
     prompt: string;              // 1–2000 chars
     maxChars: number;            // 100–5000
+    referenceAnswer?: string;    // 0–2000; teacher-only; sent to the provider as grading guidance
     commonPhrases?: string[];    // 0–20, each 1–200; teacher-only; excluded by TAI-03 similarity
     criteria: Array<{
       code: string;              // /^[A-Z][A-Z0-9_]{1,31}$/, unique within prompt
@@ -82,7 +83,16 @@ type WrittenTaskContent = {
 };
 ```
 
-The student view (`studentResource`) strips `anchors` and `commonPhrases`. CSV import does not support `WRITTEN_TASK` (`IMPORT_KIND_UNSUPPORTED`).
+Teacher-only fields are `anchors`, `referenceAnswer` and `commonPhrases`. Every student- or parent-facing projection builds written content with one allowlist helper, `studentWrittenTaskContent(content)` in `classes/application`, returning only `{ prompts: [{ id, prompt, maxChars, criteria: [{ code, description, maxPoints }] }] }`. Stripping by denylist is not allowed, because `studentResource` currently returns non-TEST content unchanged. The helper is the only source for:
+
+- `studentResource("WRITTEN_TASK", …)` (class resource reads by members).
+- The student assignment detail and submit response in `learning.controller.ts` (the written counterpart of `studentTestContent`).
+- The student `AWAITING_GRADE` / `GRADED` view, which shows score and teacher feedback against the graded resource version.
+- Parent views, which return status only and no content.
+
+A contract test serializes every student and parent response for a written assignment and asserts that the keys `referenceAnswer`, `anchors` and `commonPhrases` appear nowhere in the body.
+
+CSV import does not support `WRITTEN_TASK` (`IMPORT_KIND_UNSUPPORTED`).
 
 ## Student answer contract
 
@@ -108,7 +118,7 @@ Gradeable means `ON_TIME` or `ACCEPTED_BY_EXTENSION`. The latest submission rema
 
 ## HTTP contract
 
-All teacher routes require owner (`ownedClass`) and return the same 404 for missing or unauthorized rows. Every mutation requires `Idempotency-Key`.
+All teacher routes require owner (`ownedClass`): a missing or not-owned class returns the same 403 `CLASS_ACCESS_DENIED`; a missing or foreign row inside an owned class (assignment, submission, job, suggestion) returns 404. Every mutation requires `Idempotency-Key`.
 
 | Operation | Contract |
 | --- | --- |
@@ -141,7 +151,7 @@ type AssessmentSuggestionV1 = {
 };
 ```
 
-Mapping and verification rules are in `assessment-validation-and-evaluation.md`.
+Mapping and verification rules are in `assessment-validation-and-evaluation.md`. The prompt (`assess-submission@1`), provider JSON Schema and KaTeX/backslash rule `KX-01` are in `prompt-spec.md`.
 
 ## Error codes
 

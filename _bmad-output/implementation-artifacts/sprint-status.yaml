@@ -167,10 +167,10 @@ development_status:
   fl-21-t8-device-qa: in-progress
   fl-21-t9-release: done
   fl-21-v11-t1-3d-meadow-scene: review
-  # Teacher AI increment (TAI) — plan ../planning-artifacts/increment-tai-teacher-ai.md; all blocked on gate G-1 (TAI-T0).
-  epic-tai-01-authoring: backlog
-  tai-01-t0-activate-fr21-scope: backlog
-  tai-01-t1-ai-module-provider-prompt-versioning: backlog
+  # Teacher AI increment (TAI) — plan ../planning-artifacts/increment-tai-teacher-ai.md; G-1 closed (TAI-T0). Live provider calls wait for G-6.
+  epic-tai-01-authoring: in-progress
+  tai-01-t0-activate-fr21-scope: done
+  tai-01-t1-ai-module-provider-prompt-versioning: ready-for-dev
   tai-01-t2-job-schema-routes-runner: backlog
   tai-01-t3-output-validation-pipeline: backlog
   tai-01-t4-item-decisions-materialization: backlog
@@ -357,8 +357,8 @@ fl25_tracking:
 
 teacher_ai_tracking:
   plan: ../planning-artifacts/increment-tai-teacher-ai.md
-  status: backlog
-  date: '2026-10-28'
+  status: in-progress
+  date: '2026-11-05'
   scope: 'Teacher AI suggestion layer: TAI-01 grounded authoring + shared AI job runtime, TAI-02 essay rubric assessment, TAI-03 similarity, TAI-04 evidence insights, TAI-05 credits ledger, TAI-06 lab challenge drafting.'
   specs:
     tai-01: ../specs/spec-teacher-ai-authoring/SPEC.md
@@ -368,18 +368,28 @@ teacher_ai_tracking:
     tai-05: ../specs/spec-teacher-ai-credits/SPEC.md
     tai-06: ../specs/spec-teacher-ai-lab-drafting/SPEC.md
   gates:
-    G-1: 'open — PO approves FR-21 activation; PRD §10.17 and spine Deferred amended, AD-17 added (tai-01-t0). Blocks every epic.'
-    G-2: 'open — paid provider tier (Gemini free forbidden), legal basis NFR-07 / Decree 13/2023, parental ai-assessment consent (tai-02-t0). Blocks tai-02-t4..t7 and tai-04-t5.'
+    G-1: 'closed 2026-10-30 (synced to fl05 2026-11-05) — PO approved FR-21 activation; PRD §10.17 and spine Deferred amended, AD-17 added (tai-01-t0).'
+    G-2: 'open — provider explicitly permitted for the under-18 context with approved data-use/DPA terms; legal basis under Law 91/2025/QH15, Decree 356/2025/NĐ-CP, Decree 330/2026/NĐ-CP; age-specific notice/consent where the approved path requires it; minimization/redaction limits; cross-border transfer; retention/deletion (tai-02-t0). Gemini free tier excluded for student text; paid tier alone is not eligibility. Blocks tai-02-t4..t7 and tai-04-t5.'
     G-3: 'open — one month of measured TAI-01 usage and approved prices (tai-05-t0).'
     G-4: 'open — PO accepts TAI-06 v1 scope and reviewer approves CHALLENGE_PARAMETERS ranges Q-C2-04 (tai-06-t0).'
     G-5: 'open — PO approves insights@1 thresholds and SUDDEN_UNAIDED_PASS visibility (TAI-04).'
+    G-6: 'open — provider explicitly permits use inside NexaLab under-18 context (written interpretation if Gemini is retained, otherwise another provider); lesson/instruction input boundaries, licensed-source processing rights, transfer, retention and deletion approved. Blocks every live provider call of TAI-01 (t6 golden evaluation) and TAI-06; T1..T5 run on the fake provider.'
   decided:
-    - 'Pilot provider: Gemini API free tier, model id via GEMINI_MODEL; only non-personal content may be sent (2026-10-28).'
+    - 'Planned adapter: Gemini API via GEMINI_API_KEY / GEMINI_MODEL (2026-10-28 design choice). Not an approved provider or tier: no live call until G-6, and never student data on the free tier.'
+    - 'Duplicates: exact and near duplicates (same class, batch, cross-class, library) are warnings only; teacher keeps, edits or rejects (2026-11-05).'
+    - 'Denial: missing or not-owned class 403 CLASS_ACCESS_DENIED (ownedClass); missing rows inside an owned class 404; inaccessible lesson 400 LESSON_NOT_AVAILABLE via the extracted shared lesson check (2026-11-05).'
+    - 'TAI-01 passages: learningObjective, content (plain text), READING LessonStep config.html by position; other step types excluded (2026-11-05).'
+    - 'AiJob quota counts per actor and purpose; create body is a strict Zod discriminated union on purpose from TAI-T2 (2026-11-05).'
+    - 'TAI-02 provider payload: lesson title, prompt, optional referenceAnswer, rubric with anchors, redacted response; provider chosen at TAI2-T0 (2026-11-05).'
     - 'Golden reviewer: supervising lecturer; TAI-01 thresholds answer-key error <=3%, scientific error <=5%, accept/accept-after-edit >=70% (2026-10-28).'
-  next_ready_when_gate_g1_closes:
-    - tai-01-t1-ai-module-provider-prompt-versioning
-    - 'tai-04-t1-insight-rule-engine-v1 (also needs G-5)'
-  story_notes: {}
+  next_ready:
+    - 'tai-01-t1-ai-module-provider-prompt-versioning (ready-for-dev; fake provider only until G-6)'
+    - 'tai-04-t1-insight-rule-engine-v1 (waits for G-5)'
+  story_notes:
+    tai-01-t0-activate-fr21-scope:
+      status: done
+      date: '2026-11-05'
+      evidence: 'PO approval 2026-10-30 (feat/TeacherAI 8772df6) ported to fl05: PRD FR-11, FR-21, increment B/Future/§4 scope lines and §10 items 16–17 amended (17 notes provider calls wait for G-6/G-2); ARCHITECTURE-SPINE binds FR-21, Teacher AI component row, Deferred bullet replaced, AD-15 cross-reference, AD-17 added and reworded to the G-6/G-2 standard; SPEC status approved; decision recorded in spec-teacher-ai-authoring/.memlog.md. Same session aligned TAI-01..06 specs: 403/400 denial, READING-step passages, per-purpose quota, purpose union body, TAI-02 prompt-spec port, G-6 wording in TAI-06 and increment.'
 
 student_ai_tracking:
   plan: ../planning-artifacts/increment-sai-student-ai.md

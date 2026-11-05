@@ -9,7 +9,7 @@
 ## TAI4-T2 — Evidence loader and insight read routes
 
 - Class-scoped loader for `QUIZ` / `TEST` / `PRACTICAL` evidence (assignment-scoped, approved members only, late-pending and reject-zero excluded). Also the `GET classes/:classId/insights` and per-student routes.
-- **Accept when:** an outsider teacher, student and parent are denied with the B2 404 contract; removed students and free practice are excluded; values reconcile to source rows; p95 is measured on the B2 workload.
+- **Accept when:** an outsider teacher, student and parent are denied with the B2 denial contract (403 for the class or role, 404 for a missing student/fingerprint); removed students and free practice are excluded; values reconcile to source rows; p95 is measured on the B2 workload.
 - **Depends on:** TAI4-T1.
 
 ## TAI4-T3 — Acknowledgements and replay

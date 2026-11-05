@@ -2,7 +2,7 @@
 
 ## Current evidence and required delta
 
-B2 computes support flags on read with the pure `supportFlags()` in `src/modules/reports/application/evidence-support.ts`. It serves them from `GET classes/:classId/assignments/:assignmentId/support` and evidence detail routes in `class-evidence.controller.ts`, applying owner and approved-enrollment checks and returning the same 404 for missing and unauthorized. `labs/application/tutor.ts misconceptions()` is a separate, teacher-report heuristic and stays unchanged. TAI-04 adds `src/modules/reports/application/insights/` (rules, evidence loader, fingerprint), new read routes and an acknowledgement table. No existing table, flag or route changes.
+B2 computes support flags on read with the pure `supportFlags()` in `src/modules/reports/application/evidence-support.ts`. It serves them from `GET classes/:classId/assignments/:assignmentId/support` and evidence detail routes in `class-evidence.controller.ts`, applying owner (`ownedClass`, 403 `CLASS_ACCESS_DENIED` for a missing or not-owned class) and approved-enrollment checks, and returning 404 for missing evidence inside an owned class. `labs/application/tutor.ts misconceptions()` is a separate, teacher-report heuristic and stays unchanged. TAI-04 adds `src/modules/reports/application/insights/` (rules, evidence loader, fingerprint), new read routes and an acknowledgement table. No existing table, flag or route changes.
 
 ## Data contract
 
@@ -33,7 +33,7 @@ model InsightAcknowledgement {
 
 ## HTTP contract
 
-All routes use `@Roles("TEACHER")` and the existing owned-class check. A missing or unowned class, a non-member student or an unknown fingerprint returns 404 `NOT_FOUND`. An archived class returns an empty `insights` list with `classArchived: true`.
+All routes use `@Roles("TEACHER")` and the existing owned-class check. A missing or unowned class returns 403 `CLASS_ACCESS_DENIED` (same body). A non-member student or an unknown fingerprint inside an owned class returns 404 `NOT_FOUND`. An archived class returns an empty `insights` list with `classArchived: true`.
 
 | Operation | Contract |
 | --- | --- |
@@ -50,7 +50,8 @@ All routes use `@Roles("TEACHER")` and the existing owned-class check. A missing
 | --- | --- | --- |
 | 400 | `VALIDATION_FAILED` | Bad `status` or body, or note over 500 chars |
 | 400 | `IDEMPOTENCY_KEY_REQUIRED` | Acknowledgement without key |
-| 404 | `NOT_FOUND` | Class, student or fingerprint not visible to caller |
+| 403 | `CLASS_ACCESS_DENIED` | Missing or not-owned class |
+| 404 | `NOT_FOUND` | Student or fingerprint not visible inside an owned class |
 | 409 | `INSIGHT_STALE` | Fingerprint no longer computed (new evidence changed it) |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | Existing helper |
 

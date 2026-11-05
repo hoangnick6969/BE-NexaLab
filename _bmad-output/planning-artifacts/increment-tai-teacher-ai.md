@@ -51,14 +51,14 @@ flowchart LR
 
 | Gate | Decision required | Owner | Blocks |
 | --- | --- | --- | --- |
-| G-1 | Activate FR-21 as a new increment: amend PRD §10 item 17 and the ARCHITECTURE-SPINE Deferred bullet, add AD-17 (ticket TAI-T0) | Product owner / supervising lecturer | All epics |
+| G-1 | **Closed 2026-10-30** (synced to fl05 2026-11-05): FR-21 activated, PRD §10 item 17 and the ARCHITECTURE-SPINE Deferred bullet amended, AD-17 added (ticket TAI-T0) | Product owner / supervising lecturer | — |
 | G-2 | Provider terms explicitly permit use in NexaLab's under-18 context; data-use/DPA terms, current-law basis, age-specific notices/consents as applicable, redaction limits, cross-border transfer and retention/deletion approved. Review Law 91/2025/QH15, Decree 356/2025/NĐ-CP and Decree 330/2026/NĐ-CP. Gemini free tier is excluded for student text; paid tier alone does not clear age eligibility. | Product owner / legal reviewer | TAI-02 suggestions; TAI-04 explanation rules |
 | G-3 | At least one month of measured TAI-01 token usage to set `PricingVersion` | Product owner | TAI-05 |
 | G-4 | PO accepts TAI-06 v1 as challenge variants on existing labs (no custom Lab builder); a named reviewer approves `CHALLENGE_PARAMETERS` ranges (Q-C2-04) for `circuit`, `chemistry`, `eye` | Product owner / reviewer | TAI-06 |
 | G-5 | PO approves the `insights@1` thresholds and whether `SUDDEN_UNAIDED_PASS` is shown in the pilot | Product owner / supervising lecturer | TAI-04 |
 | G-6 | Provider explicitly permits use inside NexaLab's under-18 context; lesson/instruction data boundaries, licensed-source processing rights, transfer, retention and deletion are approved. If Gemini is retained, record written interpretation of its under-18 terms; otherwise select a permitted provider. | Product owner / legal reviewer / curriculum owner | TAI-01 and TAI-06 provider calls |
 
-Prior design choice (not current provider approval; see `.memlog.md` of TAI-01): Gemini API free tier with model id in `GEMINI_MODEL`. Revalidate against the current under-18 eligibility terms before any integration. The golden reviewer is the supervising lecturer; TAI-01 quota and quality thresholds are specified.
+Prior design choice (not current provider approval; see `.memlog.md` of TAI-01): Gemini API with model id in `GEMINI_MODEL`. No tier is approved until G-6; until then TAI-01 T1–T5 and TAI-06 run only against the fake provider. Revalidate against the current under-18 eligibility terms before any integration. The golden reviewer is the supervising lecturer; TAI-01 quota and quality thresholds are specified.
 
 ## Cross-cutting invariants
 
@@ -66,7 +66,8 @@ Prior design choice (not current provider approval; see `.memlog.md` of TAI-01):
 - Every AI output or derived output pins its input snapshot, prompt version, output-schema version and algorithm/model version, so it can be replayed.
 - No provider call runs inside a database transaction. All AI work runs through the TAI-01 job runtime.
 - The system never draws conclusions about cheating, "true ability" or student ranking. Insights and similarity are evidence for teacher review only.
-- Missing and unauthorized resources return the same 404. Students and parents never see AI suggestions, similarity or insights about other students.
+- A missing or not-owned class returns the same 403 `CLASS_ACCESS_DENIED` as every existing Class Space route (`ownedClass`); missing rows inside an owned class return 404; an inaccessible lesson returns 400 `LESSON_NOT_AVAILABLE`. Students and parents never see AI suggestions, similarity or insights about other students.
+- `AiJob` quota is counted per actor and per `purpose`, and the create body is a `.strict()` discriminated union on `purpose`, from TAI-T2 on.
 - Student data is never sent until the provider is approved for this under-18 product context, the legal basis and age-specific safeguards are documented, and data-use, cross-border, retention and deletion terms are approved. A paid tier by itself is insufficient.
 
 ## Increment order
@@ -108,7 +109,7 @@ As a teacher, I want to request a draft and follow its progress, so that slow AI
 
 **Acceptance Criteria:**
 **Given** an owner teacher of an active class and an accessible lesson, **when** they `POST /classes/:id/ai-jobs` with an `Idempotency-Key`, **then** one `PENDING` job is returned with 202, and replaying the same key and body returns the same job.
-**Given** the outsider teacher, a student, an archived class, a missing key, a reused key with a different body, or a missing provider, **when** they create a job, **then** the API returns 404, 403, 409, 400, 409 or 503 respectively and creates no job.
+**Given** the outsider teacher or an unknown class, a student, an inaccessible lesson, an archived class, a missing key, a reused key with a different body, or a missing provider, **when** they create a job, **then** the API returns 403 `CLASS_ACCESS_DENIED`, 403, 400 `LESSON_NOT_AVAILABLE`, 409, 400, 409 or 503 respectively and creates no job.
 **Given** a teacher with 20 jobs in 24 h or 2 active jobs, **when** they create another (including two concurrent requests at the limit), **then** exactly the over-limit requests return 429 `AI_QUOTA_EXCEEDED`.
 **Given** a running job, **when** the teacher cancels, the lease expires, or a reclaimed run persists late, **then** the state machine in `job-runtime-and-failure-modes.md` holds and items are written at most once.
 
@@ -165,7 +166,7 @@ From TAI-02 on, each epic lists its stories as a table. The acceptance criteria 
 
 | Story | Title | Goal (who / what) | Depends on |
 | --- | --- | --- | --- |
-| TAI2-T0 | Provider, legal and scope gate (documentation and config) | PO approves paid tier, legal basis and parental consent, PRD/AD amendment; `AI_ASSESSMENT_ENABLED`/`AI_ASSESSMENT_MODE` flags | — (blocks T4..T7) |
+| TAI2-T0 | Provider, legal and scope gate (documentation and config) | PO and legal reviewer record gate G-2: provider eligibility for the under-18 context with approved data-use/DPA terms, legal basis under Law 91/2025/QH15, Decree 356/2025/NĐ-CP and Decree 330/2026/NĐ-CP, age-specific notice/consent where the approved path requires it, minimization, cross-border transfer, retention/deletion; PRD/AD amendment; `AI_ASSESSMENT_ENABLED`/`AI_ASSESSMENT_MODE` flags. A paid tier alone is not eligibility | — (blocks T4..T7) |
 | TAI2-T1 | WRITTEN_TASK kind and rubric content contract | Teacher authors a written task with a versioned rubric | TAI-T0 |
 | TAI2-T2 | Assign and submit written tasks | Student submits under existing deadline/late rules | TAI2-T1 |
 | TAI2-T3 | Teacher rubric grading and role views | Teacher grades per criterion; student/parent see status | TAI2-T2 |
