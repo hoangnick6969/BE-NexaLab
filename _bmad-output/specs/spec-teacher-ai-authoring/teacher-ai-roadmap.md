@@ -1,11 +1,12 @@
 # Teacher AI Roadmap (future specs)
 
-TAI-01 is the slice implemented first. Each later entry has its own spec folder (`spec-teacher-ai-essay-assessment`, `spec-teacher-ai-similarity`, `spec-teacher-ai-evidence-insights`, `spec-teacher-ai-credits`, `spec-teacher-ai-lab-drafting`) and is tracked in `../../planning-artifacts/increment-tai-teacher-ai.md`. Each starts only when its preconditions hold. Every entry inherits the TAI-01 runtime (`job-runtime-and-failure-modes.md`) and these invariants:
+TAI-01 is the first **planned** AI slice; it is not implemented in the current codebase. Each later entry has its own spec folder (`spec-teacher-ai-essay-assessment`, `spec-teacher-ai-similarity`, `spec-teacher-ai-evidence-insights`, `spec-teacher-ai-credits`, `spec-teacher-ai-lab-drafting`) and is tracked in `../../planning-artifacts/increment-tai-teacher-ai.md`. Each starts only when its preconditions hold. Every entry inherits the proposed TAI-01 runtime (`job-runtime-and-failure-modes.md`) and these invariants:
 
 - AI output is a suggestion. Official records (published content, score, verdict, progress, teacher decision) change only through an authenticated human action with audit.
 - Every derived output pins its input snapshot, prompt version, output schema version and algorithm/model version, so it can be replayed.
 - No automatic conclusion about cheating, "true ability", ranking or labelling of a student.
-- Student data is sent to a provider only after a documented legal basis (NFR-07, Decree 13/2023/NĐ-CP for minors), PII removal, and a provider tier that does not use API data to improve its products. The TAI-01 Gemini free tier does not qualify.
+- Student data is sent to a provider only after a documented legal basis under current law, age-appropriate safeguards, a reviewed cross-border/data-retention path, and provider terms that permit NexaLab's child-facing context. The TAI-01 Gemini free tier does not qualify for student data; its service eligibility for an application directed to or likely to be accessed by under-18s also needs written review before TAI-01. See `provider-and-data-flow.md` and TAI-02's legal gate. References to Decree 13/2023 are stale after Decree 356/2025 took effect.
+- TAI-01 lesson passages and teacher instructions can still contain personal data even without student-record fields. The input policy and safeguards must be approved before provider submission.
 - No fine-tuning until there is a teacher-labelled dataset, data-use permission, and evidence that prompt + grounding is insufficient.
 
 | Spec | Scope | Preconditions | Hard limits |
@@ -16,4 +17,6 @@ TAI-01 is the slice implemented first. Each later entry has its own spec folder 
 | TAI-05 AI credits | `CreditAccount`, immutable `CreditTransaction` ledger, `PricingVersion`, estimate → reserve → settle → refund keyed by `AiJob.id` | ≥ 1 month of TAI-01 token usage to price operations; payment-provider decision | Idempotent per job; system failure always refunds; raw provider tokens never shown, only credits |
 | TAI-06 Simulation drafting | AI proposes an allowlisted model plus parameters inside validated ranges from `SimulationPackVersion`; teacher previews; golden cases must pass | Lab Builder track out of R&D; AD-14 topic-bound packs | AI never generates simulation code; engine result stays authoritative (AD-7); custom Labs stay class-scoped |
 
-Order: TAI-01 → TAI-02 → TAI-03 → TAI-04. TAI-05 waits for measured usage. TAI-06 waits for Lab Builder.
+Teacher core UX (class/student/resource management and reliable import) can proceed in parallel and is a prerequisite for a usable AI authoring surface. The product direction also requires an estimated cost before a teacher starts and reserve/settle/refund behavior; the current roadmap defers TAI-05 until after a month of TAI-01 usage. Resolve whether TAI-01 may launch as a no-credit internal pilot or whether TAI-05 must move before its teacher-facing launch. No paid launch or provider call is approved by this roadmap.
+
+Order after scope/provider approval: TAI-01 authoring and teacher-core UX; manual written tasks; question duplicate warnings; same-assignment submission similarity; AI rubric assist after legal/provider and blind-evaluation gates; deterministic insights; credits per the sequencing decision; simulation drafting after Lab Builder. Matrix exams, classroom messaging and general Student AI have no implementation spec in this TAI increment and need separate scoped work.

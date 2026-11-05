@@ -33,7 +33,7 @@ TAI-01 only checks duplicates inside one class. Teachers who reuse material acro
 - Part A corpus covers the requesting teacher's own classes plus `SHARED_LIBRARY` lessons that are published and not synthetic. Corpus rows from other owners are never returned, not even as counts.
 - Part B compares only the current submissions of different students, in the same assignment and the same prompt. It never compares across assignments or classes, and never compares a student with their own earlier submissions.
 - Results carry `REVIEW_REQUIRED` evidence, labelled "nội dung tương đồng", and never "gian lận" or "đạo văn". They never feed grades, rollups, B2 support flags, notifications or student/parent read models.
-- Direct authoring and CSV import only warn. The TAI-01 rule stays: a same-class `EXACT_DUPLICATE` blocks unedited AI accept. A cross-class or library exact match is a warning (`EXACT_DUPLICATE_ELSEWHERE`).
+- Direct authoring, CSV import and TAI-01 review only warn. Same-class, cross-class and library exact/near matches never block acceptance; the teacher decides whether to keep, edit or reject the item. Cross-class/library matches use `EXACT_DUPLICATE_ELSEWHERE` / `NEAR_DUPLICATE_ELSEWHERE` and never reveal another teacher's private content.
 - Runs are synchronous and bounded (≤ 200 submissions). Larger inputs are rejected instead of being queued, so no runner is added.
 
 ## Non-goals

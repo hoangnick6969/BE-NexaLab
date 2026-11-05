@@ -36,6 +36,7 @@ Teacher AI operations cost very different amounts. Generating a quiz is cheap. A
 - Prices are versioned per AI purpose. A job pins the `pricingVersionId` used at reserve, and activating a new price affects new jobs only.
 - `AI_CREDITS_ENABLED=false` leaves TAI-01 behavior exactly as specified, with no estimate field required.
 - Prices are set only after at least one month of measured TAI-01 token usage, recorded in a pricing evidence note.
+- The one-month measurement gate is a pricing-calibration rule, not permission to expose a teacher-facing AI operation without a cost estimate. The product direction requires estimate-before-run and a reserve before provider work. Resolve whether an internal TAI-01 pilot may run with credits disabled; if not, move the minimum TAI-05 ledger/estimate/reserve path before TAI-01 launch.
 
 ## Non-goals
 
@@ -51,9 +52,10 @@ With credits enabled, a teacher holding 100 credits confirms a 12-credit estimat
 ## Assumptions
 
 - Credits are whole integers. Fractional costs round up per job after proration.
-- During the Gemini free-tier pilot, provider cost is zero. Credits are an internal budget unit priced from tokens, ready for a paid tier.
+- If a no-charge provider tier is approved for a restricted pilot, provider cost may be zero while credits still act as an internal usage budget. Do not assume this pilot is permitted; provider eligibility is a separate release gate.
 
 ## Open Questions
 
 - What initial grant does each pilot teacher receive, and who in the product team approves grants?
 - Do credits expire or roll over monthly?
+- May TAI-01 run as a restricted, no-credit internal pilot while prices are measured, or must estimate/reserve/refund be implemented before any teacher-facing AI operation? TAI-01 currently excludes credits while this spec waits for a month of usage.
