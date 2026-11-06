@@ -56,7 +56,7 @@ describe("toAiJobView", () => {
       items: [{ id: "i1", position: 0, payload: { a: 1 }, flags: ["NEGATIVE_STEM"], decisions: [{ decision: "REJECTED", editedPayload: null, reasonCode: "WRONG", createdAt: new Date("2026-11-05T00:01:00Z") }] }],
     });
     expect(view).toMatchObject({ requestedCount: 3, validCount: 1, droppedCount: 1, usage: { inputTokens: 5, outputTokens: 7 }, lessonChangedSinceGeneration: true });
-    expect(view.items![0].decision).toEqual({ decision: "REJECTED", editedPayload: null, reasonCode: "WRONG", at: "2026-11-05T00:01:00.000Z" });
+    expect(view.items![0].decision).toEqual({ decision: "REJECTED", editedPayload: null, reasonCode: "WRONG", at: "2026-11-05T00:01:00.000Z", flags: [] });
   });
 
   it("leaves counts null while the job is not validated and omits items on list", () => {

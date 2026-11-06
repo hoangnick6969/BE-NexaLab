@@ -12,7 +12,7 @@ import { AiProviderError, type AiGenerateInput, type AiProvider } from "./ai-pro
  */
 type Row = Record<string, any>;
 let seq = 0;
-const id = (prefix: string) => `${prefix}-${++seq}`;
+const id = (prefix: string) => `${prefix}-${String(++seq).padStart(8, "0")}`;
 
 function matches(row: Row, where: Row = {}): boolean {
   return Object.entries(where).every(([key, cond]) => {
@@ -99,7 +99,7 @@ function withIncludes(row: Row, include: Row) {
   if (include.items) {
     out.items = sortBy(store.aiJobItem.rows.filter((i) => i.jobId === row.id), { position: "asc" }).map((item) => ({
       ...item,
-      decisions: sortBy(store.aiItemDecision.rows.filter((d) => d.itemId === item.id), { createdAt: "desc" }).slice(0, 1),
+      decisions: sortBy(store.aiItemDecision.rows.filter((d) => d.itemId === item.id), [{ createdAt: "desc" }, { id: "desc" }]).slice(0, 1),
     }));
   }
   if (include._count) out._count = { items: store.aiJobItem.rows.filter((i) => i.jobId === row.id).length };
@@ -129,7 +129,7 @@ function makeDb() {
       },
     },
     classroom: table([]),
-    classResource: table([]),
+    classResource: table([], () => ({ status: "DRAFT", version: 1, publishedAt: null, archivedAt: null })),
     curriculumOutcome: table([]),
     lessonRows: [] as Row[],
     lessonStepRows: [] as Row[],
@@ -422,5 +422,118 @@ describe("runner state machine", () => {
     expect(nextStatusAfterFailure("PROVIDER_TIMEOUT", 2)).toBe("FAILED");
     expect(nextStatusAfterFailure("OUTPUT_VALIDATION_FAILED", 1)).toBe("FAILED");
     expect(nextStatusAfterFailure("LESSON_UNAVAILABLE", 1)).toBe("FAILED");
+  });
+});
+
+describe("item decisions and materialization (TAI-T4)", () => {
+  const question = (i: number, patch: Row = {}) => ({
+    type: "SINGLE_CHOICE", prompt: `Câu hỏi số ${"ABCDEFGHIJ"[i]} về dòng điện trong mạch`, options: ["Ampe kế", "Vôn kế", "Nhiệt kế"], correctOption: 0,
+    explanation: "Ampe kế đo cường độ dòng điện.", difficulty: "STANDARD", outcomeCodes: [], sourceRefs: ["P1"], ...patch,
+  });
+  async function succeeded(items: Row[], patch: Row = {}) {
+    const created = await create({ itemCount: items.length, ...patch });
+    provider.queue.push(async () => ({ text: JSON.stringify({ items }), inputTokens: 1, outputTokens: 1 }));
+    await runner.runOnce();
+    const view = await service.get("class-a", created.id, req());
+    expect(view.status).toBe("SUCCEEDED");
+    return view;
+  }
+  const decide = (jobId: string, itemId: string, body: Row, user = OWNER) => service.decide("class-a", jobId, itemId, req(user), body);
+  const materialize = (jobId: string, r = req(), body: Row = { title: "Bài kiểm tra AI" }) => service.materialize("class-a", jobId, r, body);
+
+  it("appends decisions, latest wins, and recomputes flags for an edit", async () => {
+    const view = await succeeded([question(0), question(1)]);
+    const [a, b] = view.items!;
+    await decide(view.id, a.id, { decision: "REJECTED", reasonCode: "WRONG_KEY" });
+    const after = await decide(view.id, a.id, { decision: "ACCEPTED" });
+    expect(after.items![0].decision).toMatchObject({ decision: "ACCEPTED", reasonCode: null, flags: [] });
+    const edited = await decide(view.id, b.id, { decision: "EDITED", editedPayload: question(1, { prompt: "Phát biểu nào sau đây KHÔNG đúng" }) });
+    expect(edited.items![1].decision).toMatchObject({ decision: "EDITED", flags: ["NEGATIVE_STEM"] });
+    expect(store.aiItemDecision.rows).toHaveLength(3);
+    expect(store.auditLog.rows.filter((r: Row) => r.action === "ai_item.decide")).toHaveLength(3);
+  });
+
+  it("rejects invalid decisions with the documented codes", async () => {
+    const view = await succeeded([question(0)]);
+    const itemId = view.items![0].id;
+    await expect(decide(view.id, itemId, { decision: "EDITED", editedPayload: question(0, { correctOption: 5 }) })).rejects.toMatchObject({ status: 400, response: { code: "AI_EDIT_INVALID", details: [{ rule: "VR-03" }] } });
+    await expect(decide(view.id, itemId, { decision: "EDITED", editedPayload: question(0, { options: ["Ampe kế", "ampe kế"] }) })).rejects.toMatchObject({ response: { details: [{ rule: "VR-04" }] } });
+    await expect(decide(view.id, itemId, { decision: "EDITED", editedPayload: { type: "CARD", front: "a", back: "b", sourceRefs: ["P1"] } })).rejects.toMatchObject({ response: { details: [{ rule: "VR-01" }] } });
+    await expect(decide(view.id, itemId, { decision: "EDITED", editedPayload: { prompt: "x" } })).rejects.toMatchObject({ response: { code: "AI_EDIT_INVALID", details: [{ rule: "resource-items@1" }] } });
+    await expect(decide(view.id, itemId, { decision: "EDITED" })).rejects.toBeInstanceOf(ZodError);
+    await expect(decide(view.id, itemId, { decision: "REJECTED" })).rejects.toBeInstanceOf(ZodError);
+    await expect(decide(view.id, itemId, { decision: "ACCEPTED", reasonCode: "X_Y" })).rejects.toBeInstanceOf(ZodError);
+    await expect(decide(view.id, itemId, { decision: "ACCEPTED" }, OUTSIDER)).rejects.toMatchObject({ status: 403, response: { code: "CLASS_ACCESS_DENIED" } });
+    await expect(decide(view.id, "missing-item", { decision: "ACCEPTED" })).rejects.toMatchObject({ status: 404 });
+    const pending = await create();
+    await expect(decide(pending.id, itemId, { decision: "ACCEPTED" })).rejects.toMatchObject({ status: 409, response: { code: "AI_JOB_NOT_REVIEWABLE" } });
+    store.classroom.rows[0].status = "ARCHIVED";
+    await expect(decide(view.id, itemId, { decision: "ACCEPTED" })).rejects.toMatchObject({ status: 409, response: { code: "CLASS_ARCHIVED" } });
+    expect(store.aiItemDecision.rows).toHaveLength(0);
+  });
+
+  it("shows duplicateOf for flagged items and still allows ACCEPTED", async () => {
+    store.classResource.rows.push({ id: "res-old", classId: "class-a", title: "Đề cũ chương 1", kind: "TEST", status: "PUBLISHED", content: { questions: [{ prompt: question(0).prompt }] } });
+    store.classResource.rows.push({ id: "res-archived", classId: "class-a", title: "Đề đã lưu trữ", kind: "TEST", status: "ARCHIVED", content: { questions: [{ prompt: question(0).prompt }] } });
+    const view = await succeeded([question(0), question(1, { prompt: "Một câu hoàn toàn khác về nhiệt độ" })]);
+    expect(view.items![0].flags).toContain("EXACT_DUPLICATE");
+    expect(view.items![0].duplicateOf).toEqual([{ resourceId: "res-old", resourceTitle: "Đề cũ chương 1", match: "EXACT", similarity: 1 }]);
+    expect(view.items![1].duplicateOf).toEqual([]);
+    expect((await decide(view.id, view.items![0].id, { decision: "ACCEPTED" })).items![0].decision?.decision).toBe("ACCEPTED");
+  });
+
+  it("requires every item decided and at least one kept", async () => {
+    const view = await succeeded([question(0), question(1)]);
+    await expect(materialize(view.id)).rejects.toMatchObject({ status: 409, response: { code: "AI_REVIEW_INCOMPLETE" } });
+    await decide(view.id, view.items![0].id, { decision: "REJECTED", reasonCode: "OFF_TOPIC" });
+    await expect(materialize(view.id)).rejects.toMatchObject({ response: { code: "AI_REVIEW_INCOMPLETE" } });
+    await decide(view.id, view.items![1].id, { decision: "REJECTED", reasonCode: "OFF_TOPIC" });
+    await expect(materialize(view.id)).rejects.toMatchObject({ response: { code: "AI_REVIEW_INCOMPLETE" } });
+    await expect(materialize(view.id, req(OWNER, null))).rejects.toMatchObject({ status: 400, response: { code: "IDEMPOTENCY_KEY_REQUIRED" } });
+    await expect(materialize(view.id, req(), { title: "" })).rejects.toBeInstanceOf(ZodError);
+    expect(store.classResource.rows).toHaveLength(0);
+  });
+
+  it("creates one TEST DRAFT with the answer key, edits applied and rejections left out; replays and blocks a second materialization", async () => {
+    const view = await succeeded([question(0), question(1), question(2)]);
+    const [a, b, c] = view.items!;
+    await decide(view.id, a.id, { decision: "ACCEPTED" });
+    await decide(view.id, b.id, { decision: "EDITED", editedPayload: question(1, { prompt: "Câu đã sửa", correctOption: 2 }) });
+    await decide(view.id, c.id, { decision: "REJECTED", reasonCode: "DUPLICATE" });
+    const r = req();
+    const resource = await materialize(view.id, r);
+    expect(resource).toMatchObject({ kind: "TEST", status: "DRAFT", title: "Bài kiểm tra AI", lessonId: "lesson-circuit", classId: "class-a", lessonChangedSinceGeneration: false });
+    expect(resource.content.questions.map((q: Row) => [q.prompt, q.correctOption])).toEqual([[question(0).prompt, 0], ["Câu đã sửa", 2]]);
+    expect(resource.content.questions[0].options[0]).toMatchObject({ text: "Ampe kế" });
+    expect(job(view.id).materializedResourceId).toBe(resource.id);
+    expect(store.auditLog.rows.find((row: Row) => row.action === "ai_job.materialize").after).toMatchObject({ resourceId: resource.id, resourceKind: "TEST", acceptedCount: 1, editedCount: 1, rejectedCount: 1 });
+    expect((await materialize(view.id, r)).id).toBe(resource.id);
+    await expect(materialize(view.id)).rejects.toMatchObject({ status: 409, response: { code: "AI_JOB_ALREADY_MATERIALIZED" } });
+    await expect(decide(view.id, a.id, { decision: "REJECTED", reasonCode: "LATE" })).rejects.toMatchObject({ status: 409, response: { code: "AI_JOB_ALREADY_MATERIALIZED" } });
+    expect(store.classResource.rows).toHaveLength(1);
+    expect((await service.get("class-a", view.id, req())).materializedResourceId).toBe(resource.id);
+  });
+
+  it("drops the answer key for STUDY_QUIZ and maps cards for DECK", async () => {
+    const quiz = await succeeded([question(0)], { targetKind: "STUDY_QUIZ" });
+    await decide(quiz.id, quiz.items![0].id, { decision: "ACCEPTED" });
+    const quizResource = await materialize(quiz.id);
+    expect(quizResource.kind).toBe("STUDY_QUIZ");
+    expect(quizResource.content.questions[0]).not.toHaveProperty("correctOption");
+    const deck = await succeeded([{ type: "CARD", front: "Ampe kế", back: "Đo cường độ dòng điện", sourceRefs: ["P1"] }], { targetKind: "DECK" });
+    await decide(deck.id, deck.items![0].id, { decision: "ACCEPTED" });
+    const deckResource = await materialize(deck.id);
+    expect(deckResource.content.cards).toEqual([expect.objectContaining({ front: "Ampe kế", back: "Đo cường độ dòng điện" })]);
+  });
+
+  it("keeps the draft invisible to students until the existing publish step", async () => {
+    const { ClassResourcesService } = await import("../../classes/application/class-resources.service");
+    store.enrollment = { findUnique: async () => ({ status: "approved" }) };
+    const view = await succeeded([question(0)]);
+    await decide(view.id, view.items![0].id, { decision: "ACCEPTED" });
+    await materialize(view.id);
+    const resources = new ClassResourcesService(store);
+    expect(await resources.list("class-a", { user: { sub: "student-1", role: "STUDENT" } })).toEqual([]);
+    expect(await resources.list("class-a", { user: OWNER })).toHaveLength(1);
   });
 });

@@ -102,6 +102,12 @@ export const AUDIT_FIELDS = new Set([
   "inputTokens",
   "outputTokens",
   "fromStatus",
+  "jobId",
+  "position",
+  "reasonCode",
+  "resourceId",
+  "editedCount",
+  "rejectedCount",
 ]);
 
 const credentialLike = [

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, HttpException, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { z } from "zod";
+import type { DuplicateMatch } from "./duplicate-corpus";
 
 export const AI_PURPOSES = ["GENERATE_RESOURCE"] as const;
 export type AiPurpose = (typeof AI_PURPOSES)[number];
@@ -54,12 +55,44 @@ export const listAiJobsQuery = z.object({
 
 export const quotaQuery = z.object({ purpose: z.enum(AI_PURPOSES).default("GENERATE_RESOURCE") });
 
+/**
+ * Per-item decision. EDITED needs editedPayload (re-validated by structural rules), REJECTED needs reasonCode, and
+ * neither field is allowed otherwise. reasonCode is an UPPER_SNAKE code chosen by the client.
+ */
+export const decisionBody = z
+  .object({
+    decision: z.enum(["ACCEPTED", "EDITED", "REJECTED"]),
+    editedPayload: z.unknown().optional(),
+    reasonCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,47}$/).optional(),
+  })
+  .strict()
+  .superRefine((body, ctx) => {
+    if (body.decision === "EDITED" && body.editedPayload === undefined)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["editedPayload"], message: "Bắt buộc khi sửa" });
+    if (body.decision !== "EDITED" && body.editedPayload !== undefined)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["editedPayload"], message: "Chỉ dùng khi sửa" });
+    if (body.decision === "REJECTED" && !body.reasonCode)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["reasonCode"], message: "Bắt buộc khi bỏ" });
+    if (body.decision !== "REJECTED" && body.reasonCode !== undefined)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["reasonCode"], message: "Chỉ dùng khi bỏ" });
+  });
+
+export const materializeBody = z.object({ title: z.string().trim().min(1).max(160) }).strict();
+
 // Error factories. Messages are Vietnamese, following the existing envelope.
 export const idempotencyKeyRequired = () =>
   new BadRequestException({ code: "IDEMPOTENCY_KEY_REQUIRED", message: "Cần Idempotency-Key cho thao tác này" });
 export const outcomeNotInLesson = () =>
   new BadRequestException({ code: "VALIDATION_FAILED", message: "Mã chuẩn đầu ra không thuộc bài học đã chọn", details: [{ path: "outcomeCodes", message: "not in lesson" }] });
 export const aiJobNotFound = () => new NotFoundException({ code: "NOT_FOUND", message: "Không tìm thấy yêu cầu AI" });
+export const aiJobNotReviewable = () =>
+  new ConflictException({ code: "AI_JOB_NOT_REVIEWABLE", message: "Yêu cầu AI chưa hoàn tất, chưa thể duyệt" });
+export const aiJobAlreadyMaterialized = () =>
+  new ConflictException({ code: "AI_JOB_ALREADY_MATERIALIZED", message: "Bản nháp đã được tạo từ yêu cầu AI này" });
+export const aiReviewIncomplete = () =>
+  new ConflictException({ code: "AI_REVIEW_INCOMPLETE", message: "Cần quyết định mọi mục và giữ ít nhất một mục" });
+export const aiEditInvalid = (rules: string[]) =>
+  new BadRequestException({ code: "AI_EDIT_INVALID", message: "Nội dung đã sửa không hợp lệ", details: rules.map((rule) => ({ rule })) });
 export const aiJobNotCancellable = () =>
   new ConflictException({ code: "AI_JOB_NOT_CANCELLABLE", message: "Yêu cầu AI đã kết thúc, không thể hủy" });
 export const aiProviderNotConfigured = () =>
@@ -76,7 +109,12 @@ type JobRow = {
   inputTokens: number | null; outputTokens: number | null; materializedResourceId: string | null;
   createdAt: Date; completedAt: Date | null;
 };
-type ItemRow = { id: string; position: number; payload: unknown; flags: unknown; decisions?: Array<{ decision: string; editedPayload: unknown; reasonCode: string | null; createdAt: Date }> };
+type ItemRow = {
+  id: string; position: number; payload: unknown; flags: unknown;
+  decisions?: Array<{ decision: string; editedPayload: unknown; reasonCode: string | null; createdAt: Date }>;
+  duplicateOf?: DuplicateMatch[];
+  decisionFlags?: string[];
+};
 
 /** AiJobView (implementation-contract.md). `items` is present only on the detail route. */
 export function toAiJobView(job: JobRow, options: { lessonChangedSinceGeneration: boolean; items?: ItemRow[]; itemCount?: number }) {
@@ -112,8 +150,9 @@ export function toAiJobView(job: JobRow, options: { lessonChangedSinceGeneration
               position: item.position,
               payload: item.payload as object,
               flags: Array.isArray(item.flags) ? (item.flags as string[]) : [],
+              duplicateOf: item.duplicateOf ?? [],
               decision: latest
-                ? { decision: latest.decision, editedPayload: (latest.editedPayload as object | null) ?? null, reasonCode: latest.reasonCode, at: latest.createdAt.toISOString() }
+                ? { decision: latest.decision, editedPayload: (latest.editedPayload as object | null) ?? null, reasonCode: latest.reasonCode, at: latest.createdAt.toISOString(), flags: item.decisionFlags ?? [] }
                 : null,
             };
           }),

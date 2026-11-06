@@ -43,6 +43,23 @@ export class AiJobsController {
   }
 
   @Roles("TEACHER")
+  @Post("classes/:id/ai-jobs/:jobId/items/:itemId/decisions")
+  @HttpCode(200)
+  @ApiOperation({ summary: "Accept, edit or reject one AI item (append-only; latest decision wins)" })
+  decide(@Param("id") classId: string, @Param("jobId") jobId: string, @Param("itemId") itemId: string, @Req() req: any, @Body() body: unknown) {
+    return this.service.decide(classId, jobId, itemId, req, body);
+  }
+
+  @Roles("TEACHER")
+  @Post("classes/:id/ai-jobs/:jobId/materialize")
+  @HttpCode(201)
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiOperation({ summary: "Turn accepted and edited items into one ClassResource DRAFT (once per job)" })
+  materialize(@Param("id") classId: string, @Param("jobId") jobId: string, @Req() req: any, @Body() body: unknown) {
+    return this.service.materialize(classId, jobId, req, body);
+  }
+
+  @Roles("TEACHER")
   @Get("me/ai-quota")
   @ApiOperation({ summary: "Daily and concurrency AI usage for one purpose (default GENERATE_RESOURCE)" })
   quota(@Req() req: any, @Query() query: unknown) {
