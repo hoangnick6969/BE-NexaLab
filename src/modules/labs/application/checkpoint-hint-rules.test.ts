@@ -49,7 +49,7 @@ describe("SAI-01A checkpoint hint catalogs", () => {
   it("pins the template text to its rule version (bump CHECKPOINT_HINT_RULES when wording changes)", () => {
     const texts = Object.keys(CHECKPOINT_HINT_CATALOGS).sort().flatMap((rubricRef) => catalogTexts(rubricRef).map((item) => `${rubricRef}|${item.criterion}|${item.text}`));
     const digest = createHash("sha256").update(texts.join("\n")).digest("hex");
-    expect({ version: CHECKPOINT_HINT_RULES, digest }).toEqual({ version: "checkpoint-hints@5", digest: PINNED_DIGEST });
+    expect({ version: CHECKPOINT_HINT_RULES, digest }).toEqual({ version: "checkpoint-hints@6", digest: PINNED_DIGEST });
   });
 });
 
@@ -252,9 +252,9 @@ describe("SAI-01A planner", () => {
   });
 });
 
-const PINNED_DIGEST = "369c737f89694e157b133e49a50827d6660d5d8430d7f6292154e76e4575bf39";
+const PINNED_DIGEST = "4103ca461d655454e88427d8b4db49cdf9f4c9e659f472ede124bdadfa19ee27";
 
-describe("B8 for station and event Labs (checkpoint-misconceptions@2)", () => {
+describe("B8 for station and event Labs (checkpoint-misconceptions@3)", () => {
   const D = "density-stations@1.0.0";
   // Block 10×20×30 mm, 3,6 g → 0,6 g/cm³; water 50 mL, cup 40 g + 90 g; pebble 13 g, 40 → 45 mL.
   const density = (over: any = {}) => ({
@@ -321,8 +321,46 @@ describe("B8 for station and event Labs (checkpoint-misconceptions@2)", () => {
       rubricRef: "mass-conservation-poea@1.0.0", evidence: { labState: { comparison: "compare.increase" }, events: [] },
       result: { assessment: { criteria: { C1: true, C2: true, C3: false } } }, previous: [],
     })!;
-    expect(plan).toMatchObject({ criterion: "C3", level: 1, misconception: "MC_THINKS_MASS_INCREASES", misconceptionRules: "checkpoint-misconceptions@2" });
+    expect(plan).toMatchObject({ criterion: "C3", level: 1, misconception: "MC_THINKS_MASS_INCREASES", misconceptionRules: "checkpoint-misconceptions@3" });
     expect(plan.content).toBe(CHECKPOINT_HINT_CATALOGS["mass-conservation-poea@1.0.0"].criteria.C3.misconceptions!.MC_THINKS_MASS_INCREASES[0]);
     expect(plan.content).not.toMatch(/MC_/);
+  });
+});
+
+describe("B8 for FL-27 gene and FL-16 eye (checkpoint-misconceptions@3)", async () => {
+  const { geneExpression } = await import("../../../../packages/sim/gene-expression");
+  const G = "gene-protein-stations@1.0.0";
+  const m = (rubricRef: string, criterion: string, evidence: unknown) => detectMisconception(rubricRef, criterion, {}, evidence);
+  const truth = geneExpression({ variantId: "gene-a-silent" }) as any;
+  const gene = (over: any = {}) => ({
+    variantId: "gene-a-silent",
+    replication: { stageOrder: ["UNWIND", "SYNTHESIZE", "COMPLETE"], newStrand: [...truth.replication.newStrand], semiConservative: "A" },
+    transcription: { mrna: [...truth.mrna] },
+    translation: { aminoAcids: [...truth.aminoAcids, null].slice(0, 6), codonCombos: { n1: 4, n2: 16, n3: 64 } },
+    mutation: { mutatedCodon: truth.mutation.codon, mutatedAminoAcid: truth.mutation.aminoAcid, effect: truth.mutation.effect },
+    ...over,
+  });
+
+  it("FL-27 recomputes the expected values from the submitted variant", () => {
+    expect(truth.mutation.effect).toBe("SILENT");
+    expect(m(G, "replication", gene({ replication: { ...gene().replication, newStrand: [...truth.replication.templateSegment] } }))).toBe("GENE_COPIED_PARENT");
+    expect(m(G, "replication", gene({ replication: { ...gene().replication, stageOrder: ["SYNTHESIZE", "UNWIND", "COMPLETE"] } }))).toBe("GENE_STAGE_ORDER");
+    expect(m(G, "transcription", gene({ transcription: { mrna: [...truth.gene.template.replace(/T/g, "U")] } }))).toBe("GENE_COPIED_TEMPLATE_STRAND");
+    expect(m(G, "translation", gene({ translation: { aminoAcids: ["Met", "Phe", "Gly", "Trp", "His", "Gly"], codonCombos: { n1: 4, n2: 16, n3: 64 } } }))).toBe("GENE_READ_PAST_STOP");
+    expect(m(G, "translation", gene({ translation: { ...gene().translation, codonCombos: { n1: 4, n2: 8, n3: 12 } } }))).toBe("GENE_COMBINATIONS_ADDED");
+    expect(m(G, "mutation", gene({ mutation: { ...gene().mutation, effect: "MISSENSE" } }))).toBe("GENE_EVERY_CHANGE_CHANGES_PROTEIN");
+    expect(m(G, "mutation", gene({ mutation: { ...gene().mutation, mutatedCodon: truth.codons[truth.mutation.codonIndex] } }))).toBe("GENE_MUTATION_NOT_APPLIED");
+    expect(m(G, "replication", gene())).toBeNull();
+  });
+
+  it("FL-16 compares the settings with each scenario's ametropia", () => {
+    const E = "eye-anatomy-optics@1.0.0";
+    const attempts = (glasses: Record<string, number>, lens = 16) => ({ phase1: { labels: {} }, phase2: ["normal-near", "myopia-far", "hyperopia-near"].map((scenarioId) => ({ scenarioId, objectDistanceM: null, lensPowerD: lens, glassesPowerD: glasses[scenarioId] ?? 0 })) });
+    expect(m(E, "phase2:glasses", attempts({ "myopia-far": 2 }))).toBe("EYE_MYOPIA_CONVERGING");
+    expect(m(E, "phase2:glasses", attempts({ "myopia-far": -2, "hyperopia-near": -1 }))).toBe("EYE_HYPEROPIA_DIVERGING");
+    expect(m(E, "phase2:glasses", attempts({ "myopia-far": -2, "hyperopia-near": 1, "normal-near": 1 }))).toBe("EYE_GLASSES_FOR_NORMAL");
+    expect(m(E, "phase2:relaxedFar", attempts({ "myopia-far": -2 }, 20))).toBe("EYE_FAR_ACCOMMODATION");
+    expect(m(E, "phase1", { phase1: { labels: { cornea: "Thể thủy tinh", lens: "Giác mạc" } }, phase2: [] })).toBe("EYE_CORNEA_LENS_SWAP");
+    expect(m(E, "phase1", { phase1: { labels: { cornea: "Giác mạc", lens: "Thể thủy tinh" } }, phase2: [] })).toBeNull();
   });
 });

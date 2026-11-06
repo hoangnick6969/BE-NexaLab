@@ -11,8 +11,8 @@ import { EVENT_HINT_CATALOGS } from "./event-hint-catalogs";
  * (_bmad-output/specs/spec-student-ai-checkpoint-hints). Text and misconception rules are versioned:
  * change a template or a detector → bump the version, never edit a released one silently.
  */
-export const CHECKPOINT_HINT_RULES = "checkpoint-hints@5";
-export const CHECKPOINT_MISCONCEPTION_RULES = "checkpoint-misconceptions@2";
+export const CHECKPOINT_HINT_RULES = "checkpoint-hints@6";
+export const CHECKPOINT_MISCONCEPTION_RULES = "checkpoint-misconceptions@3";
 
 export type Pair = readonly [a: string, b: string];
 export type Observation = { id: string; prediction: unknown; predictionCorrect: boolean; scientificObservation?: any };

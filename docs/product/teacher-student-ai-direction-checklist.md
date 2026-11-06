@@ -135,7 +135,7 @@ Hai track có thể chạy song song:
 | --- | --- | --- |
 | Gợi ý từng bước (mức 1–4, chỉ tăng sau khi thật sự làm lại) | 11 Foundational Lab: sau khi nộp; trong lúc làm mức 1–2 | `spec-student-ai-checkpoint-hints` |
 | Giải thích vì sao đạt/chưa đạt (B2) | 11 Foundational Lab | `spec-student-ai-checkpoint-hints` |
-| Nhận diện lỗi hiểu sai (B8) | 9 Lab; chưa có FL-16, FL-27 | `spec-student-ai-checkpoint-hints` |
+| Nhận diện lỗi hiểu sai (B8) | 11 Foundational Lab | `spec-student-ai-checkpoint-hints` |
 | Gợi ý câu hỏi quiz bài học, không đọc đáp án (SAI-03A) | Quiz trong bài học được giao | `spec-student-ai-lesson-hints` |
 | "Nếu… thì sao?" từ mô hình (B3) | 8 Lab | `spec-student-ai-what-if` |
 | Phụ huynh: số lần xin gợi ý theo mức (SAI-05) | Lab | `spec-student-ai-checkpoint-hints` |

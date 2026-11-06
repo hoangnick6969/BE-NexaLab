@@ -3,7 +3,7 @@ import type { Catalog, CriterionHints } from "./checkpoint-hint-rules";
 /**
  * SAI-01A step 3: after-submit hints for event-scored Labs (FL-06 lever, FL-07 thermal energy, FL-10 mass
  * conservation). Their results carry a criteria map instead of unmetCriteria, and the learner's answers
- * live in the run's server events, so `answerOf` reads `{ labState, events }`. Part of checkpoint-hints@5.
+ * live in the run's server events, so `answerOf` reads `{ labState, events }`. Part of checkpoint-hints@6.
  */
 
 const ANSWER_LETTER = /(?:[đĐ]áp án|[lL]ựa chọn|[pP]hương án|[cC]họn)\s+[ABC](?![\p{L}\p{N}])/u;
@@ -153,7 +153,7 @@ const MASS: Catalog = {
 };
 
 // ---------------------------------------------------------------------------------------------
-// B8 for event Labs (checkpoint-misconceptions@2): hypotheses from the learner's own events or answers and the
+// B8 for event Labs (checkpoint-misconceptions@3): hypotheses from the learner's own events or answers and the
 // stored model output. Levels 1–2 wording only; levels 3–4 stay shared.
 
 LEVER.criteria.rotation = {

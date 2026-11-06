@@ -161,8 +161,12 @@ the latest attempts). Never shown to students or parents (BR-09, BR-11). All new
 | FL-07 thermal | R3, R4 / R5 / R6 | final temperature as rise; not proportional; no heat loss in real experiments; energy and heat unrelated |
 | FL-10 mass | C3, C5 / C4 / C6 | mass decreases or increases; new substance heavier; precipitate not weighed; open-system gas; closed-system change |
 
-FL-27 gene and FL-16 eye optics are not covered yet: their slips need the pinned variant's expected values, which
-the stored result does not return.
+| FL-27 gene | replication / transcription / translation / mutation | copied the parent strand; stage order; not semi-conservative; mRNA copied from the template; read past the stop; combinations added; mutation not applied; every change changes the protein; stop taken as an amino acid |
+| FL-16 eye optics | phase1 / phase2:glasses / phase2:relaxedFar | cornea and lens swapped; aqueous and vitreous swapped; converging lens for myopia; diverging lens for hyperopia; glasses for a normal eye; accommodation for a far object |
+
+FL-27 recomputes the expected values with `geneExpression({ variantId })` from the submitted (server-pinned) variant;
+FL-16 compares the settings with each scenario's ametropia. Rule versions after this: `checkpoint-hints@6`,
+`checkpoint-misconceptions@3`. All 11 Foundational Labs now have B8 hypotheses.
 
 ## Student UX
 

@@ -1,7 +1,7 @@
 import { CHECKPOINT_MISCONCEPTION_RULES } from "./checkpoint-hint-rules";
 
 /**
- * SAI-02: teacher-facing names of the B8 misconception ids (checkpoint-misconceptions@2).
+ * SAI-02: teacher-facing names of the B8 misconception ids (checkpoint-misconceptions@3).
  * Hypotheses from one wrong answer, never a diagnosis; never shown to students or parents (BR-09, BR-11).
  */
 export const MISCONCEPTION_LABEL_RULES = CHECKPOINT_MISCONCEPTION_RULES;
@@ -63,6 +63,23 @@ export const MISCONCEPTION_LABELS: Readonly<Record<string, string>> = {
   MC_PRECIPITATE_NOT_WEIGHED: "Cho rằng chất rắn lắng xuống không được cân",
   MC_OPEN_SYSTEM_GAS: "Không tính đến khí thoát ra khỏi cốc hở",
   MC_CLOSED_SYSTEM_CHANGES: "Cho rằng khối lượng trong bình kín thay đổi",
+  // FL-27 gene to protein
+  GENE_COPIED_PARENT: "Chép lại mạch khuôn thay vì bắt cặp bổ sung khi tái bản",
+  GENE_STAGE_ORDER: "Sai thứ tự các giai đoạn tái bản",
+  GENE_NOT_SEMI_CONSERVATIVE: "Không thấy tái bản là bán bảo toàn",
+  GENE_COPIED_TEMPLATE_STRAND: "Chép lại mạch khuôn thay vì bắt cặp bổ sung khi phiên mã",
+  GENE_READ_PAST_STOP: "Dịch mã tiếp sau codon kết thúc",
+  GENE_COMBINATIONS_ADDED: "Cộng thay vì nhân khi đếm tổ hợp bộ mã",
+  GENE_MUTATION_NOT_APPLIED: "Chưa áp dụng đột biến vào codon",
+  GENE_EVERY_CHANGE_CHANGES_PROTEIN: "Cho rằng mọi đột biến đều làm đổi axit amin",
+  GENE_STOP_AS_AMINO_ACID: "Coi codon kết thúc như một axit amin",
+  // FL-16 eye optics
+  EYE_MYOPIA_CONVERGING: "Dùng kính hội tụ cho mắt cận",
+  EYE_HYPEROPIA_DIVERGING: "Dùng kính phân kỳ cho mắt viễn",
+  EYE_GLASSES_FOR_NORMAL: "Đeo kính cho mắt bình thường",
+  EYE_FAR_ACCOMMODATION: "Cho rằng nhìn xa mắt phải điều tiết",
+  EYE_CORNEA_LENS_SWAP: "Nhầm giác mạc với thể thuỷ tinh",
+  EYE_HUMOURS_SWAP: "Nhầm thuỷ dịch với dịch kính",
 };
 
 export const misconceptionLabel = (id: string) => MISCONCEPTION_LABELS[id] ?? id;

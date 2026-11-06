@@ -3,6 +3,8 @@ import { buoyancyLabEvaluator } from "./evaluators/buoyancy-lab.evaluator";
 import { densityStationsEvaluator } from "./evaluators/density-stations.evaluator";
 import { eyeOpticsEvaluator } from "./evaluators/eye-anatomy-optics.evaluator";
 import { geneProteinStationsEvaluator } from "./evaluators/gene-protein-stations.evaluator";
+import { geneExpression, translate } from "../../../../packages/sim/gene-expression";
+import { EYE_OPTICS_SCENARIOS, POWER_STEP_D, RELAXED_LENS_MAX_D, isAcceptedPartName } from "../../../../packages/sim/eye-optics";
 
 /**
  * SAI-01A step 2: after-submit hints for station Labs (FL-03, FL-27, FL-16, FL-05). Same ladder,
@@ -193,7 +195,7 @@ const BUOYANCY: Catalog = {
 };
 
 // ---------------------------------------------------------------------------------------------
-// B8 for station Labs (checkpoint-misconceptions@2): hypotheses read from the learner's own numbers, never
+// B8 for station Labs (checkpoint-misconceptions@3): hypotheses read from the learner's own numbers, never
 // from an expected value the learner has not seen. Levels 1–2 wording only; levels 3–4 stay shared.
 
 /** a ≈ b within 3 % (or 0.005 for tiny values). */
@@ -279,6 +281,155 @@ BUOYANCY.criteria.overflow = {
     BUOY_NOT_FULLY_SUBMERGED: [
       "Vật đã chìm hẳn trong nước khi em đọc lượng nước tràn ra chưa?",
       "Nước tràn ra bằng thể tích phần vật đang chìm; muốn biết thể tích cả vật, vật phải chìm hoàn toàn.",
+    ],
+  },
+};
+
+// FL-27 gene: the expected values are a pure function of the pinned variant id the learner submitted.
+const geneTruth = (e: any) => geneExpression({ variantId: e.variantId }) as any;
+GENE.criteria.replication = {
+  ...GENE.criteria.replication,
+  detectFrom: (e) => {
+    const truth = geneTruth(e);
+    const strand = e.replication.newStrand.join("");
+    if (strand !== truth.replication.newStrand && strand === truth.replication.templateSegment) return "GENE_COPIED_PARENT";
+    if (e.replication.stageOrder.join() !== "UNWIND,SYNTHESIZE,COMPLETE") return "GENE_STAGE_ORDER";
+    if (e.replication.semiConservative !== "A") return "GENE_NOT_SEMI_CONSERVATIVE";
+    return null;
+  },
+  misconceptions: {
+    GENE_COPIED_PARENT: [
+      "Mạch mới em ghép có giống hệt mạch khuôn đối diện không? Mỗi nucleotide trên mạch khuôn bắt cặp với loại nào?",
+      "Mạch mới được tổng hợp theo nguyên tắc bổ sung với mạch khuôn, không phải sao chép y nguyên mạch khuôn.",
+    ],
+    GENE_STAGE_ORDER: [
+      "Hai mạch phải làm gì trước thì enzyme mới có chỗ để lắp nucleotide mới?",
+      "Tái bản cần mở xoắn và tách hai mạch trước, rồi mới tổng hợp mạch mới, cuối cùng mới hoàn tất hai phân tử.",
+    ],
+    GENE_NOT_SEMI_CONSERVATIVE: [
+      "Mỗi phân tử DNA con có còn giữ lại một mạch nào của phân tử mẹ không?",
+      "Mỗi phân tử con gồm một mạch cũ làm khuôn và một mạch mới vừa tổng hợp.",
+    ],
+  },
+};
+GENE.criteria.transcription = {
+  ...GENE.criteria.transcription,
+  detectFrom: (e) => {
+    const truth = geneTruth(e);
+    const mrna = e.transcription.mrna.join("");
+    return mrna !== truth.mrna && mrna === truth.gene.template.replace(/T/g, "U") ? "GENE_COPIED_TEMPLATE_STRAND" : null;
+  },
+  misconceptions: {
+    GENE_COPIED_TEMPLATE_STRAND: [
+      "mRNA của em có phải là bản chép lại các chữ của mạch khuôn không? Trong phiên mã, nucleotide của mạch khuôn bắt cặp với loại nào?",
+      "mRNA được tổng hợp bổ sung với mạch khuôn: mỗi nucleotide của mạch khuôn quyết định nucleotide bắt cặp với nó.",
+    ],
+  },
+};
+GENE.criteria.translation = {
+  ...GENE.criteria.translation,
+  detectFrom: (e) => {
+    const own = translate(e.transcription.mrna);
+    const chosen = e.translation.aminoAcids.filter((value: unknown) => value !== null);
+    // The learner's own chain ends at its first Stop; an amino acid in that slot or after it reads past the stop.
+    const stopAt = own.indexOf("Stop");
+    if (stopAt >= 0 && chosen.length > stopAt && (chosen[stopAt] !== "Stop" || chosen.length > own.length)) return "GENE_READ_PAST_STOP";
+    const combos = e.translation.codonCombos;
+    if (combos.n2 === 8 || combos.n3 === 12) return "GENE_COMBINATIONS_ADDED";
+    return null;
+  },
+  misconceptions: {
+    GENE_READ_PAST_STOP: [
+      "Khi gặp codon kết thúc, ribosome còn gắn thêm axit amin nào nữa không?",
+      "Dịch mã dừng ở codon kết thúc đầu tiên; các codon phía sau không được dịch.",
+    ],
+    GENE_COMBINATIONS_ADDED: [
+      "Với bộ hai nucleotide, mỗi vị trí có bao nhiêu cách chọn, và hai vị trí kết hợp với nhau bằng phép cộng hay phép nhân?",
+      "Mỗi vị trí trong bộ mã chọn độc lập một trong bốn loại nucleotide, nên số tổ hợp tính bằng phép nhân.",
+    ],
+  },
+};
+GENE.criteria.mutation = {
+  ...GENE.criteria.mutation,
+  detectFrom: (e) => {
+    const truth = geneTruth(e);
+    if (e.mutation.mutatedCodon === truth.codons[truth.mutation.codonIndex]) return "GENE_MUTATION_NOT_APPLIED";
+    if (truth.mutation.effect === "SILENT" && e.mutation.effect !== "SILENT") return "GENE_EVERY_CHANGE_CHANGES_PROTEIN";
+    if (truth.mutation.effect === "NONSENSE" && e.mutation.effect === "MISSENSE") return "GENE_STOP_AS_AMINO_ACID";
+    return null;
+  },
+  misconceptions: {
+    GENE_MUTATION_NOT_APPLIED: [
+      "Codon em ghi đã có thay đổi do đột biến chưa, hay vẫn là codon ban đầu?",
+      "Đột biến thay một nucleotide trên gene, nên codon tương ứng trên mRNA cũng thay đổi theo.",
+    ],
+    GENE_EVERY_CHANGE_CHANGES_PROTEIN: [
+      "Có phải mọi thay đổi trong codon đều làm đổi axit amin không? Tra lại bảng mã cho cả codon cũ và codon mới.",
+      "Nhiều codon khác nhau có thể mã hoá cùng một axit amin.",
+    ],
+    GENE_STOP_AS_AMINO_ACID: [
+      "Codon mới mã hoá một axit amin, hay là tín hiệu kết thúc?",
+      "Khi codon mới là codon kết thúc, chuỗi dừng sớm tại đó chứ không chỉ đổi một axit amin.",
+    ],
+  },
+};
+
+// FL-16 eye optics: each scenario names its ametropia; the slips compare the learner's own settings with it.
+const scenarioOf = (id: string) => EYE_OPTICS_SCENARIOS.find((item) => item.id === id);
+EYE.criteria["phase2:glasses"] = {
+  ...EYE.criteria["phase2:glasses"],
+  detectFrom: (e) => {
+    for (const attempt of e.phase2) {
+      const scenario = scenarioOf(attempt.scenarioId);
+      if (scenario?.ametropia === "myopia" && attempt.glassesPowerD >= POWER_STEP_D) return "EYE_MYOPIA_CONVERGING";
+      if (scenario?.ametropia === "hyperopia" && attempt.glassesPowerD <= -POWER_STEP_D) return "EYE_HYPEROPIA_DIVERGING";
+      if (scenario?.ametropia === "none" && Math.abs(attempt.glassesPowerD) > POWER_STEP_D) return "EYE_GLASSES_FOR_NORMAL";
+    }
+    return null;
+  },
+  misconceptions: {
+    EYE_MYOPIA_CONVERGING: [
+      "Mắt cận hội tụ ảnh của vật ở xa trước hay sau võng mạc? Kính cần làm chùm sáng hội tụ thêm hay bớt?",
+      "Mắt cận hội tụ quá mạnh, nên kính phải làm giảm bớt độ hội tụ.",
+    ],
+    EYE_HYPEROPIA_DIVERGING: [
+      "Mắt viễn hội tụ ảnh của vật gần trước hay sau võng mạc? Kính cần làm chùm sáng hội tụ thêm hay bớt?",
+      "Mắt viễn hội tụ chưa đủ mạnh khi nhìn gần, nên kính phải giúp hội tụ thêm.",
+    ],
+    EYE_GLASSES_FOR_NORMAL: [
+      "Mắt bình thường có cần kính để nhìn rõ trong tình huống này không?",
+      "Mắt bình thường tự điều tiết thể thuỷ tinh để nhìn rõ, không cần thêm kính.",
+    ],
+  },
+};
+EYE.criteria["phase2:relaxedFar"] = {
+  ...EYE.criteria["phase2:relaxedFar"],
+  detectFrom: (e) => e.phase2.some((attempt: any) => scenarioOf(attempt.scenarioId)?.objectDistanceM === null && attempt.lensPowerD > RELAXED_LENS_MAX_D)
+    ? "EYE_FAR_ACCOMMODATION" : null,
+  misconceptions: {
+    EYE_FAR_ACCOMMODATION: [
+      "Khi nhìn vật ở rất xa, thể thuỷ tinh cần phồng lên hay ở trạng thái nghỉ?",
+      "Nhìn vật ở xa, mắt không cần điều tiết: thể thuỷ tinh dẹt nhất, cơ mắt nghỉ.",
+    ],
+  },
+};
+EYE.criteria.phase1 = {
+  ...EYE.criteria.phase1,
+  detectFrom: (e) => {
+    const labels = e.phase1.labels ?? {};
+    const swapped = (a: string, b: string) => isAcceptedPartName(b, labels[a] ?? "") && isAcceptedPartName(a, labels[b] ?? "");
+    if (swapped("cornea", "lens")) return "EYE_CORNEA_LENS_SWAP";
+    if (swapped("aqueous", "vitreous")) return "EYE_HUMOURS_SWAP";
+    return null;
+  },
+  misconceptions: {
+    EYE_CORNEA_LENS_SWAP: [
+      "Bộ phận nào nằm ngoài cùng, trong suốt, ánh sáng đi qua đầu tiên? Bộ phận nào nằm sau đồng tử và có thể thay đổi độ phồng?",
+      "Lớp trong suốt phía trước là nơi ánh sáng vào mắt đầu tiên; thấu kính bên trong nằm sau đồng tử và điều tiết được.",
+    ],
+    EYE_HUMOURS_SWAP: [
+      "Chất lỏng nào nằm phía trước thể thuỷ tinh, chất nào nằm phía sau và lấp đầy cầu mắt?",
+      "Hai chất trong suốt của mắt khác nhau ở vị trí: một ở trước thể thuỷ tinh, một ở sau thể thuỷ tinh.",
     ],
   },
 };
