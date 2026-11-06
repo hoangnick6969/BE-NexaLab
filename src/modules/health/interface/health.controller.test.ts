@@ -10,7 +10,7 @@ function toResponse(error: unknown) {
     status(code: number) { output.status = code; return this; },
     json(body: unknown) { output.body = body; return this; },
   };
-  new Errors().catch(error, { switchToHttp: () => ({ getResponse: () => response }) } as any);
+  new Errors().catch(error, { switchToHttp: () => ({ getResponse: () => response, getRequest: () => ({ method: "GET", url: "/api/health?x=1" }) }) } as any);
   return output;
 }
 
