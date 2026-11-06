@@ -94,6 +94,16 @@ A contract test serializes every student and parent response for a written assig
 
 CSV import does not support `WRITTEN_TASK` (`IMPORT_KIND_UNSUPPORTED`).
 
+**TAI2-T1 decisions (2026-11-06):**
+
+- Migration is only `ALTER TYPE "ClassResourceKind" ADD VALUE IF NOT EXISTS 'WRITTEN_TASK'`; `schema.prisma` adds only `WRITTEN_TASK`. The shared dev database also carries `LAB`, `DOCUMENT`, `REPORT_TEMPLATE` and `LINK` from another branch; they are not added here.
+- Members of the class read a published `WRITTEN_TASK` through `studentWrittenTaskContent` (as specified). Submitting before an assignment exists is prevented by `contentType: "written"` in TAI2-T2.
+- `savePractice` rejects `WRITTEN_TASK` like `TEST`; written tasks are not practice.
+- `qdup@1` fingerprints and `duplicateWarnings` exclude `WRITTEN_TASK` explicitly (empty list).
+- Item counts (audit, views, FE) use `content.prompts.length` for `WRITTEN_TASK`.
+- Rubric rules beyond the type above: anchor `points` are multiples of 0.5 within `[0, maxPoints]` and strictly ascending, first 0 and last `maxPoints`; anchor `description` 1–300 chars; `maxChars` is an integer. Violations return `400 RUBRIC_INVALID` with `details: [{ path, message }]`.
+- CSV preview and import return `400 IMPORT_KIND_UNSUPPORTED` for `WRITTEN_TASK`, and the FE import tab does not offer it. Assignments, submissions and the Teacher AI panel are unchanged in T1.
+
 ## Student answer contract
 
 `POST assignments/:id/submissions` branches on `contentType`. Written body:

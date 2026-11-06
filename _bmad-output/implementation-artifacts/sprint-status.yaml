@@ -176,10 +176,10 @@ development_status:
   tai-01-t4-item-decisions-materialization: done
   tai-01-t5-teacher-ai-workspace-fe: done
   tai-01-t6-golden-evaluation-e2e: backlog
-  epic-tai-02-essay-assessment: backlog
+  epic-tai-02-essay-assessment: in-progress
   tai-02-t0-provider-legal-scope-gate: backlog
-  tai-02-t1-written-task-rubric-contract: ready-for-dev
-  tai-02-t2-assign-submit-written-tasks: backlog
+  tai-02-t1-written-task-rubric-contract: done
+  tai-02-t2-assign-submit-written-tasks: ready-for-dev
   tai-02-t3-teacher-rubric-grading-role-views: backlog
   tai-02-t4-assess-submission-job-purpose: backlog
   tai-02-t5-shadow-mode-evaluation-report: backlog
@@ -384,7 +384,7 @@ teacher_ai_tracking:
     - 'Golden reviewer: supervising lecturer; TAI-01 thresholds answer-key error <=3%, scientific error <=5%, accept/accept-after-edit >=70% (2026-10-28).'
   next_ready:
     - 'tai-03-t3-subsim-engine (backlog; waits for TAI2-T2 written submissions)'
-    - 'tai-02-t1-written-task-rubric-contract (ready-for-dev; depends on TAI-T0 done; T1..T3 are manual grading, not blocked by G-2)'
+    - 'tai-02-t2-assign-submit-written-tasks (ready-for-dev)'
     - 'tai-01-t6-golden-evaluation-e2e (backlog; waits for G-6 live provider approval)'
     - 'tai-04-t1-insight-rule-engine-v1 (backlog; waits for G-5 threshold approval)'
   story_notes:
@@ -420,6 +420,10 @@ teacher_ai_tracking:
       status: done
       date: '2026-11-06'
       evidence: 'BE: POST classes/:id/resources/duplicate-check (owner-only via ownedClass, strict body with optional title, read-only, unaudited); duplicateWarnings on create, update-draft and import preview (computed before the write, never blocking; own revise lineage excluded); TAI-01 runner and job detail switched to qdup@1 over the teacher classes plus library with EXACT/NEAR_DUPLICATE and *_ELSEWHERE flags; duplicate-corpus.ts removed. FE (FE-NexaLab): "Câu tương tự đã có" notice with source title and class after create, draft save and import preview; Teacher AI badges and duplicateOf lines for *_ELSEWHERE and library. Tests: 25 in question-fingerprints.test.ts incl. other-class and library copies warn with title, outsider identical question never appears, lineage excluded after revise and rename, import preview warnings, body validation and foreign class 403; runtime tests assert duplicateOf with className and outsider absence. Full vitest 635 passed with the same 4 pre-existing errors/health failures; tsc, check:layers, FE lint and build pass; route manifest adds exactly POST /classes/:id/resources/duplicate-check (208 routes). Browser check 2026-11-06 on the dev database (teacher.owner; class-pilot-a plus a temporary second class): a STUDY_QUIZ draft in class A created 2 QuestionFingerprint rows (class-pilot-a, owner teacher-owner, version 1); a draft in class B with one case/punctuation-only copy and one near copy was saved and showed "Câu tương tự đã có" with Trùng/Gần giống “TAI3 test A” · lớp Pilot Science 8A; CSV import preview in class B warned for the same-class and other-class copies; saving class A draft (also after renaming) warned only about class B, never about itself; light and dark mode readable. Revise was not exercised in the browser because it needs publish, which notifies real class-pilot-a students (covered by unit tests). Teacher AI *_ELSEWHERE badges not shown live (provider off; covered by runtime tests). Test data removed afterwards (2 resources, the temporary class, 4 fingerprints, 3 idempotency records; DB back to 0 fingerprints and 8 idempotency records; audit rows kept). Screenshots outside the repos in acceptance-screenshots/tai3-t2/. PO accepted.'
+    tai-02-t1-written-task-rubric-contract:
+      status: done
+      date: '2026-11-06'
+      evidence: 'ClassResourceKind gains WRITTEN_TASK; migration 20261106120000_tai02_written_task_kind is only ALTER TYPE ... ADD VALUE IF NOT EXISTS (applied to the dev database 2026-11-06 with PO approval; enum now also lists WRITTEN_TASK; the dev database also has LAB, DOCUMENT, REPORT_TEMPLATE, LINK from another branch, left untouched). normalizeResourceContent WRITTEN_TASK branch with 400 RUBRIC_INVALID and details [{ path, message }] (1-5 prompts, prompt <= 2000, integer maxChars 100-5000, referenceAnswer <= 2000, commonPhrases <= 20, 1-6 criteria, code format and uniqueness, maxPoints 1-10 on 0.5 grid, anchors 2-5 strictly ascending 0.5 steps in [0, maxPoints] with first 0 and last maxPoints, anchor description 1-300, strict keys, server-generated ids); studentWrittenTaskContent allowlist wired into studentResource and member list/detail; savePractice rejects WRITTEN_TASK; CSV preview/import 400 IMPORT_KIND_UNSUPPORTED; item counts use prompts; qdup@1 fingerprints and duplicateWarnings exclude it. FE: WRITTEN_TASK in create and filter selects (not in import), rubric editor with live total, RUBRIC_INVALID field list, prompt count, student view from the allowlisted content. Tests: 15 in written-task-contract.test.ts incl. every RUBRIC_INVALID rule, recursive key scan (referenceAnswer, anchors, commonPhrases, gradingNotes) on the helper and on member list/detail, publish immutability and revise to version 2, practice and CSV rejection, draft invisible to members. Full vitest 650 passed with the same 4 pre-existing errors/health failures; tsc, check:layers, FE lint and build pass; route manifest unchanged (208). Browser check 2026-11-06 on class-pilot-a (teacher.owner): "Bài tự luận (chấm theo biểu điểm)" in Tạo trực tiếp and the filter, absent from the CSV tab; rubric editor added prompts, criteria, anchors and referenceAnswer with the live total (2 -> 3 -> 5 -> 7 -> 6.5); a non-ascending anchor list returned RUBRIC_INVALID and the UI listed prompts.0.criteria.0.anchors.2.points with both messages; after fixing, the draft saved as "Bài tự luận · Bản 1 · 2 mục" with no duplicate warnings and 0 QuestionFingerprint rows; light and dark mode readable. The first valid save returned 500 because the running dev server still held the Prisma client generated before WRITTEN_TASK; restarting it fixed this (no code change). Not published (would notify real class-pilot-a students; publish and revise are covered by unit tests). Test data removed afterwards (the draft and 1 idempotency record; DB back to 0 class-pilot-a resources, 8 idempotency records, 0 fingerprints; audit rows kept). Screenshots outside the repos in acceptance-screenshots/tai2-t1/. PO accepted.'
 
 student_ai_tracking:
   plan: ../planning-artifacts/increment-sai-student-ai.md

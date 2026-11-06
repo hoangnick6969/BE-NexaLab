@@ -9,7 +9,7 @@ const cardSchema = z.object({ front: nonEmpty, back: nonEmpty }).strict();
 const questionSchema = z.object({ prompt: nonEmpty, options: optionsSchema, explanation: z.string().trim().max(1000).optional() }).strict();
 const testQuestionSchema = questionSchema.extend({ correctOption: z.number().int().min(0).max(5) });
 
-export const resourceKindSchema = z.enum(["DECK", "STUDY_QUIZ", "TEST", "LAB", "DOCUMENT", "REPORT_TEMPLATE", "LINK"]);
+export const resourceKindSchema = z.enum(["DECK", "STUDY_QUIZ", "TEST", "LAB", "DOCUMENT", "REPORT_TEMPLATE", "LINK", "WRITTEN_TASK"]);
 export type ResourceKind = z.infer<typeof resourceKindSchema>;
 export const practiceKind = (kind: string) => kind === "DECK" || kind === "STUDY_QUIZ";
 const identifier = z.string().trim().min(1).max(100);
@@ -49,7 +49,103 @@ export function verifyClassLabSnapshot(value: unknown) {
   return parsed;
 }
 
+/** Kinds that support CSV import; WRITTEN_TASK is authored in the rubric editor only. */
+export const CSV_IMPORT_KINDS = ["DECK", "STUDY_QUIZ", "TEST"] as const;
+
+const half = (value: number) => Number.isInteger(value * 2);
+const anchorSchema = z.object({ points: z.number(), description: z.string().trim().min(1).max(300) }).strict();
+const criterionSchema = z
+  .object({
+    code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/),
+    description: z.string().trim().min(1).max(500),
+    maxPoints: z.number().min(1).max(10).refine(half, "maxPoints phải là bội số của 0.5"),
+    anchors: z.array(anchorSchema).min(2).max(5),
+  })
+  .strict()
+  .superRefine((criterion, ctx) => {
+    const points = criterion.anchors.map((anchor) => anchor.points);
+    points.forEach((p, i) => {
+      if (!half(p) || p < 0 || p > criterion.maxPoints)
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["anchors", i, "points"], message: "Điểm mốc phải là bội số 0.5 trong [0, maxPoints]" });
+      if (i > 0 && !(p > points[i - 1]))
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["anchors", i, "points"], message: "Điểm mốc phải tăng dần" });
+    });
+    if (points[0] !== 0) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["anchors", 0, "points"], message: "Mốc đầu tiên phải là 0 điểm" });
+    if (points[points.length - 1] !== criterion.maxPoints)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["anchors", points.length - 1, "points"], message: "Mốc cuối phải bằng maxPoints" });
+  });
+const writtenPromptSchema = z
+  .object({
+    prompt: z.string().trim().min(1).max(2000),
+    maxChars: z.number().int().min(100).max(5000),
+    referenceAnswer: z.string().trim().max(2000).optional(),
+    commonPhrases: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+    criteria: z.array(criterionSchema).min(1).max(6),
+  })
+  .strict()
+  .superRefine((prompt, ctx) => {
+    const seen = new Set<string>();
+    prompt.criteria.forEach((criterion, i) => {
+      if (seen.has(criterion.code)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["criteria", i, "code"], message: "Mã tiêu chí bị trùng trong câu hỏi" });
+      seen.add(criterion.code);
+    });
+  });
+const writtenTaskSchema = z.object({ prompts: z.array(writtenPromptSchema).min(1).max(5) }).strict();
+
+/** WRITTEN_TASK branch: violations are 400 RUBRIC_INVALID with field-level details (TAI2-T1). Ids are server-generated. */
+function normalizeWrittenTask(raw: unknown) {
+  const parsed = writtenTaskSchema.safeParse(raw);
+  if (!parsed.success)
+    throw new BadRequestException({
+      code: "RUBRIC_INVALID",
+      message: "Bài tự luận hoặc biểu điểm không hợp lệ",
+      details: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
+    });
+  return {
+    prompts: parsed.data.prompts.map((prompt) => ({
+      id: randomUUID(),
+      prompt: prompt.prompt,
+      maxChars: prompt.maxChars,
+      ...(prompt.referenceAnswer ? { referenceAnswer: prompt.referenceAnswer } : {}),
+      ...(prompt.commonPhrases?.length ? { commonPhrases: prompt.commonPhrases } : {}),
+      criteria: prompt.criteria.map((criterion) => ({
+        code: criterion.code,
+        description: criterion.description,
+        maxPoints: criterion.maxPoints,
+        anchors: criterion.anchors.map((anchor) => ({ points: anchor.points, description: anchor.description })),
+      })),
+    })),
+  };
+}
+
+/**
+ * The only student/parent projection of WRITTEN_TASK content (allowlist): prompt text, answer length and criteria
+ * without anchors. referenceAnswer, anchors, commonPhrases and any other field never leave through it.
+ */
+export function studentWrittenTaskContent(content: any) {
+  return {
+    prompts: (Array.isArray(content?.prompts) ? content.prompts : []).map((prompt: any) => ({
+      id: String(prompt?.id ?? ""),
+      prompt: String(prompt?.prompt ?? ""),
+      maxChars: Number(prompt?.maxChars ?? 0),
+      criteria: (Array.isArray(prompt?.criteria) ? prompt.criteria : []).map((criterion: any) => ({
+        code: String(criterion?.code ?? ""),
+        description: String(criterion?.description ?? ""),
+        maxPoints: Number(criterion?.maxPoints ?? 0),
+      })),
+    })),
+  };
+}
+
+/** Item count for audit and views: prompts for WRITTEN_TASK, cards for DECK, questions otherwise. */
+export function resourceItemCount(kind: string, content: any): number {
+  if (kind === "WRITTEN_TASK") return content?.prompts?.length ?? 0;
+  if (kind === "DECK") return content?.cards?.length ?? 0;
+  return content?.questions?.length ?? 0;
+}
+
 export function normalizeResourceContent(kind: ResourceKind, raw: unknown) {
+  if (kind === "WRITTEN_TASK") return normalizeWrittenTask(raw);
   if (kind === "LAB") return labResourceInputSchema.parse(raw);
   if (kind === "DOCUMENT" || kind === "REPORT_TEMPLATE") return documentResourceContentSchema.parse(raw);
   if (kind === "LINK") return linkResourceContentSchema.parse(raw);
@@ -72,12 +168,14 @@ export function normalizeResourceContent(kind: ResourceKind, raw: unknown) {
 
 /** Remove answer keys before any class member response. */
 export function studentResource(kind: ResourceKind, content: any) {
+  if (kind === "WRITTEN_TASK") return studentWrittenTaskContent(content);
   if (kind !== "TEST") return content;
   return { questions: content.questions.map(({ correctOption: _answer, ...question }: any) => question) };
 }
 
 export function parseResourceCsv(kind: ResourceKind, csv: string) {
-  if (!["DECK", "STUDY_QUIZ", "TEST"].includes(kind)) throw new BadRequestException({ code: "IMPORT_KIND_UNSUPPORTED" });
+  if (!(CSV_IMPORT_KINDS as readonly string[]).includes(kind))
+    throw new BadRequestException({ code: "IMPORT_KIND_UNSUPPORTED", message: "Loại tài nguyên này không hỗ trợ nhập CSV" });
   if (Buffer.byteLength(csv, "utf8") > 1_000_000) throw new BadRequestException({ code: "IMPORT_TOO_LARGE", message: "CSV không được vượt quá 1 MB" });
   const records = parseCsv(csv);
   const headers = kind === "DECK" ? ["front", "back"] : kind === "STUDY_QUIZ"

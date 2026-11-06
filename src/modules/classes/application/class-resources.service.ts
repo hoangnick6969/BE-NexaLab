@@ -6,7 +6,7 @@ import { idempotent, readIdempotencyKey, TX_LIMITS } from "../../../common/idemp
 import { Db } from "../../../db/db";
 import { ownedClass } from "./class-access";
 import { classArchived, lock } from "./class-common";
-import { normalizeResourceContent, parseResourceCsv, practiceKind, ResourceKind, resourceKindSchema, studentResource, labResourceContentSchema, verifyClassLabSnapshot } from "./class-resource-contract";
+import { normalizeResourceContent, parseResourceCsv, practiceKind, resourceItemCount, ResourceKind, resourceKindSchema, studentResource, labResourceContentSchema, verifyClassLabSnapshot } from "./class-resource-contract";
 import { buildLabResource, validateResourceAttachment } from "./class-lab-resource";
 import { assertClassLesson } from "./class-lesson";
 import { notify } from "../../notifications/application/notify";

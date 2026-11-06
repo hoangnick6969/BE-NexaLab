@@ -44,6 +44,8 @@ enum ClassResourceKind {
   DOCUMENT
   REPORT_TEMPLATE
   LINK
+  /// TAI-02 written task with a versioned rubric (graded by the teacher).
+  WRITTEN_TASK
 }
 
 enum ClassResourceStatus {

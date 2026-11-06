@@ -83,6 +83,8 @@ export function qdupFlag(match: QdupMatch, currentClassId: string | null) {
 
 /** Questions (prompt) or cards (front) of a ClassResource content, keyed by their content ids. */
 export function resourceFingerprintItems(kind: string, content: any): FingerprintItem[] {
+  // qdup@1 covers questions and cards only; written-task prompts are never fingerprinted (TAI2-T1).
+  if (kind === "WRITTEN_TASK") return [];
   const rows = kind === "DECK" ? content?.cards ?? [] : content?.questions ?? [];
   return rows.flatMap((row: any) => {
     const text = kind === "DECK" ? row?.front : row?.prompt;
