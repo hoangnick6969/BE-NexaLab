@@ -2,7 +2,7 @@
 
 ## Current evidence and required delta
 
-TAI-01 `validateItems` checks VW-01/VW-02 against the current class only, and computes on the fly. CSV import rejects duplicate rows inside one file (`parseResourceCsv`). Shared-library lessons hold quiz questions in `Lesson.questions` and in `LessonStep` quiz configs (`pathway.ts` `quizConfigSchema`), with `scope = SHARED_LIBRARY` and `synthetic` marking fixtures. After TAI2-T2, written answers are `AssignmentSubmission.answers.responses[]` with `gradingMode = TEACHER`. No similarity storage exists.
+TAI-01 `validateItems` checks VW-01/VW-02 against the current class only, and computes on the fly. CSV import rejects duplicate rows inside one file (`parseResourceCsv`). Shared-library lessons hold quiz questions in `Lesson.questions` and in `LessonStep` quiz configs (`pathway.ts` `quizConfigSchema`), with `scope = SHARED_LIBRARY` and `synthetic` marking fixtures. After TAI2-T2, written answers are `AssignmentSubmission.answers`, an array of `{ promptId, text }` (trimmed, NFC) with `gradingMode = TEACHER`. No similarity storage exists.
 
 **Library question source (decided 2026-11-06):** Part A reads shared-library questions only from `LessonStep` rows of type `QUIZ` and `BASIC_EXERCISE` (their `config.questions[]`), which is what students actually see. `Lesson.questions` is ignored: the QUIZ step is materialized from it (`materializeQuizQuestions`), so reading both would count each question twice. The fingerprint `itemId` is `<stepId>:<questionId>`, because question ids are unique only within one step.
 
