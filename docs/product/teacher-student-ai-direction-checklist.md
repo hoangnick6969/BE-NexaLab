@@ -7,7 +7,9 @@
 
 **Hướng sản phẩm nhất quán với codebase nếu server giữ quyền kiểm tra và quyết định chính thức, AI chỉ đề xuất, giáo viên duyệt.** Có thể phát triển Teacher core UX/import song song với việc chốt spec AI. TAI-01 phụ thuộc luồng Class Resources; provider call phải chờ duyệt scope, điều khoản provider và cách xử lý dữ liệu.
 
-**Teacher AI/Student AI chưa phải tính năng đã có.** TAI-01..06 là draft/backlog. Code hiện có một adapter Anthropic riêng cho gợi ý Lab; chưa có AI job chung, Gemini adapter, credit ledger, bài viết/rubric, phòng trao đổi hay Student AI hội thoại.
+**Teacher AI chưa phải tính năng đã có.** TAI-01..06 là draft/backlog. Code hiện có một adapter Anthropic riêng cho gợi ý Lab; chưa có AI job chung, Gemini adapter, credit ledger, bài viết/rubric hay phòng trao đổi.
+
+**Student AI theo luật (không gọi LLM) đã có trên nhánh `research/student-ai`, chưa merge vào main** (cập nhật 06/11/2026): gợi ý từng bước cho 11 Foundational Lab và quiz bài học, giải thích kết quả, nhận diện lỗi hiểu sai, "Nếu… thì sao?", tóm tắt cho phụ huynh và giáo viên. Student AI hội thoại (SAI-04) vẫn chưa có và chờ cổng SG-2. Xem mục 7.
 
 ## 1. Code hiện tại và spec hiện tại
 
@@ -19,7 +21,8 @@
 | Bài tự luận | Chưa có written task/rubric trong luồng hiện hành | Giáo viên chấm thủ công; AI gợi ý từng tiêu chí và dẫn chứng | Cần kiểu bài/nộp bài chưa chấm; schema hiện tại không khớp |
 | AI runtime/credits | Chưa thấy module/job/ledger chung trong code | TAI-01 đề xuất Gemini + worker; TAI-05 ledger | Đặc tả chưa triển khai; provider và thứ tự credit chưa được duyệt |
 | Similarity/insights | Chưa thấy TAI-03/04 runtime | So bài cùng assignment; tín hiệu theo luật | Đặc tả, không phải kết luận gian lận hay dự đoán điểm |
-| Phòng trao đổi / Student AI / đề ma trận | Chưa có luồng tương ứng trong TAI-01..06 | Giáo viên nhắn; Student AI giới hạn; lập ma trận/mã đề | Cần spec và cổng riêng, không nằm trong increment TAI hiện tại |
+| Student AI | Trên nhánh `research/student-ai`: gợi ý, giải thích, lỗi hiểu sai, "Nếu… thì sao?" theo luật (mục 7) | Student AI hội thoại giới hạn (SAI-04) | Hội thoại chờ SG-2; spec riêng `spec-student-ai-*`, không nằm trong TAI |
+| Phòng trao đổi / đề ma trận | Chưa có luồng tương ứng trong TAI-01..06 | Giáo viên nhắn; lập ma trận/mã đề | Cần spec và cổng riêng, không nằm trong increment TAI hiện tại |
 
 **Bằng chứng code chính:** [class resource contract](../../src/modules/classes/application/class-resource-contract.ts), [resource import](../../src/modules/classes/application/class-resources.service.ts), [assignment schema](../../prisma/schema.prisma), [Lab LLM adapter](../../src/modules/labs/infrastructure/llm.ts). Spec: [TAI roadmap](../../_bmad-output/specs/spec-teacher-ai-authoring/teacher-ai-roadmap.md), [TAI increment](../../_bmad-output/planning-artifacts/increment-tai-teacher-ai.md).
 
@@ -48,7 +51,8 @@ TAI-01 spec đề xuất worker polling DB (2 giây), lease 90 giây, timeout pr
 | Soạn nội dung TAI-01 | Gemini API, `GEMINI_API_KEY` / `GEMINI_MODEL` | Được chọn trong spec trước đây, nhưng chưa có adapter và chưa được duyệt để dùng live. |
 | Chấm tự luận TAI-02 | Chưa chọn | Bị chặn tới khi chọn provider phù hợp và duyệt pháp lý/dữ liệu. |
 | TAI-03/04 | Không cần LLM trong wave đầu | So tương đồng và phân tích theo luật trên server. |
-| Student AI hội thoại | Chưa chọn/chưa có | Cần spec riêng về dữ liệu, phạm vi, an toàn và giới hạn. |
+| Student AI theo luật | Không dùng provider | Trên nhánh `research/student-ai`; mọi câu chữ lấy từ catalog có phiên bản hoặc từ mô hình mô phỏng. |
+| Student AI hội thoại | Chưa chọn/chưa có | SAI-04; cần SG-2 về dữ liệu, phạm vi, an toàn và giới hạn. |
 
 ### Dữ liệu TAI-01 theo thiết kế hiện tại
 
@@ -110,7 +114,8 @@ TAI-01 spec đề xuất worker polling DB (2 giây), lease 90 giây, timeout pr
 - [ ] Lab AI chỉ gợi ý tham số allowlist; server kiểm giới hạn, giáo viên preview/duyệt.
 - [ ] Đề ma trận lấy ngân hàng trước, chỉ sinh bù phần thiếu; lưu mã đề/đáp án riêng.
 - [ ] Phòng trao đổi: giáo viên gửi; AI chỉ soạn nháp.
-- [ ] Student AI: tách quyền/dữ liệu; không trả lời trong bài có điểm; giới hạn theo bài học/attempt của chính học sinh.
+- [x] Student AI theo luật: tách quyền/dữ liệu; chỉ trên bài và lượt làm của chính học sinh; gợi ý không lộ đáp án (leak test); "Nếu… thì sao?" chỉ mở khi đã làm xong hoặc đã đạt (nhánh `research/student-ai`).
+- [ ] Student AI hội thoại: không trả lời trong bài có điểm; chờ SG-2.
 
 ## 6. Thứ tự phát triển khuyến nghị
 
@@ -123,6 +128,20 @@ Hai track có thể chạy song song:
 5. **Similarity:** cảnh báo câu hỏi và so bài trong cùng assignment, giữ hai phạm vi riêng.
 6. **TAI-02 AI grading:** chỉ sau provider/legal review và blind evaluation.
 7. **Question bank/ma trận**, sau đó insights, Lab drafting, Student AI và phòng trao đổi theo spec riêng.
+
+## 7. Student AI theo luật (nhánh `research/student-ai`)
+
+| Phần | Phạm vi | Spec |
+| --- | --- | --- |
+| Gợi ý từng bước (mức 1–4, chỉ tăng sau khi thật sự làm lại) | 11 Foundational Lab: sau khi nộp; trong lúc làm mức 1–2 | `spec-student-ai-checkpoint-hints` |
+| Giải thích vì sao đạt/chưa đạt (B2) | 11 Foundational Lab | `spec-student-ai-checkpoint-hints` |
+| Nhận diện lỗi hiểu sai (B8) | 11 Foundational Lab | `spec-student-ai-checkpoint-hints` |
+| Gợi ý câu hỏi quiz bài học, không đọc đáp án (SAI-03A) | Quiz trong bài học được giao | `spec-student-ai-lesson-hints` |
+| "Nếu… thì sao?" từ mô hình (B3) | 8 Lab | `spec-student-ai-what-if` |
+| Phụ huynh: số lần xin gợi ý theo mức (SAI-05) | Lab | `spec-student-ai-checkpoint-hints` |
+| Giáo viên: "Lớp đang vướng ở đâu", giả thuyết lỗi, không đồng ý (SAI-02A) | Bài Lab được giao | `spec-student-ai-teacher-insight` |
+
+Chưa làm: luật "phụ thuộc gợi ý" (chờ G-5, dùng chung engine với TAI-04), Student AI hội thoại (SAI-04, chờ SG-2), cá nhân hoá câu chữ (SAI-06).
 
 ## Tài liệu cần đối chiếu
 

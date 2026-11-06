@@ -7,7 +7,7 @@ import { applicableAssignmentWhere, assignmentQueueOrder } from "../../classes/a
 import { Db } from "../../../db/db";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { text } from "../../../common/validation";
-import { requestHint } from "../application/hint";
+import { checkRunPrediction, explainAttempt, listRunHintSteps, requestHint, requestRunHint } from "../application/hint";
 import { explain } from "../infrastructure/llm";
 import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
@@ -667,6 +667,46 @@ export class LabsController {
       orderBy: { createdAt: "desc" },
       take: 100,
     });
+  }
+  /** SAI-01A: the steps of this run's Lab that a learner can ask about while working (names only). */
+  @Roles("STUDENT") @Get("lab-runs/:runId/hints/steps") runHintSteps(@Param("runId") runId: string, @Req() req: any) {
+    this.limiter.rate("run-hint-steps:" + req.user.sub, 60);
+    return listRunHintSteps(this.db, req.user, runId);
+  }
+  /** SAI-01A: did the prediction of an observed step differ from the observation? No write. */
+  @Roles("STUDENT") @Post("lab-runs/:runId/hints/check") async runHintCheck(
+    @Param("runId") runId: string,
+    @Req() req: any,
+    @Body() body: unknown,
+  ) {
+    this.limiter.rate("run-hint-check:" + req.user.sub, 60);
+    const request = z.object({
+      criterion: z.string().min(1).max(40),
+      state: z.unknown().refine((value) => value === undefined || JSON.stringify(value).length <= 20000),
+      prediction: z.unknown().refine((value) => value === undefined || JSON.stringify(value).length <= 2000),
+    }).strict().parse(body);
+    return checkRunPrediction(this.db, req.user, runId, request);
+  }
+
+  /** SAI-01A: rules-only hint during a checkpoint LabRun, before predicting (A) or after observing (B). */
+  @Roles("STUDENT") @Post("lab-runs/:runId/hints") async runHint(
+    @Param("runId") runId: string,
+    @Req() req: any,
+    @Body() body: unknown,
+  ) {
+    this.limiter.rate("run-hint:" + req.user.sub, 30);
+    const request = z.object({
+      criterion: z.string().min(1).max(40),
+      moment: z.enum(["BEFORE_PREDICTION", "AFTER_OBSERVATION"]),
+      state: z.unknown().refine((value) => value === undefined || JSON.stringify(value).length <= 20000).optional(),
+      prediction: z.unknown().refine((value) => value === undefined || JSON.stringify(value).length <= 2000).optional(),
+    }).strict().parse(body);
+    return requestRunHint(this.db, req.user, runId, request);
+  }
+  /** B2: rules-only explanation of an attempt's verdict, from its stored evaluator result. No write. */
+  @Roles("STUDENT") @Get("attempts/:id/explanation") explanation(@Param("id") id: string, @Req() req: any) {
+    this.limiter.rate("explanation:" + req.user.sub, 60);
+    return explainAttempt(this.db, req.user, id);
   }
   @Roles("STUDENT") @Post("attempts/:id/hint") async hint(
     @Param("id") id: string,

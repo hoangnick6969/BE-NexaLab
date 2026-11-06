@@ -1,4 +1,5 @@
-import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Put, Query, Req } from "@nestjs/common";
+import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Inject, NotFoundException, Optional, Param, Post, Put, Query, Req } from "@nestjs/common";
+import { z } from "zod";
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { access } from "../../auth/interface/auth";
 import { Roles } from "../../../common/decorators";
@@ -16,12 +17,18 @@ import { lock } from "../../classes/application/class-common";
 import { audit } from "../../../common/audit";
 import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { notify } from "../../notifications/application/notify";
+import { RequestRateLimiter } from "../../../common/request-rate-limiter";
+import { requestLessonQuestionHint } from "../application/lesson-hint";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
 @Controller()
 export class LearningController {
-  constructor(@Inject(Db) private db: Db, @Inject(StudentAccessService) private access: StudentAccessService) {}
+  constructor(
+    @Inject(Db) private db: Db,
+    @Inject(StudentAccessService) private access: StudentAccessService,
+    @Optional() @Inject(RequestRateLimiter) private limiter?: RequestRateLimiter,
+  ) {}
   private async applicableAssignment(id: string, studentId: string) {
     const assignment = await this.db.assignment.findFirst({
       where: { id, ...applicableAssignmentWhere(studentId) },
@@ -219,6 +226,21 @@ export class LearningController {
     if (!step || !["IN_PROGRESS", "COMPLETED"].includes(step.state) || !step.resource)
       throw new NotFoundException("Bài kiểm tra chưa khả dụng");
     return { lessonId, stepId: step.id, questions: (step.resource as any).questions };
+  }
+  /** SAI-03A: rules-only hint on one quiz question; never the answer key, never the student's draft. */
+  @Roles("STUDENT")
+  @Post("lessons/:lessonId/quiz/hints")
+  @ApiOperation({ summary: "Get a rules-only hint for one question of the student's lesson quiz" })
+  async quizHint(
+    @Param("lessonId") lessonId: string,
+    @Body() body: unknown,
+    @Query() rawQuery: unknown,
+    @Req() req: any,
+  ) {
+    this.limiter?.rate("lesson-hint:" + req.user.sub, 30);
+    const assignmentId = parseAssignmentIdQuery(rawQuery);
+    const { questionId } = z.object({ questionId: z.string().min(1).max(80) }).strict().parse(body);
+    return requestLessonQuestionHint(this.db, this.access, { studentId: req.user.sub, lessonId, assignmentId, questionId });
   }
   @Roles("STUDENT")
   @Get("lessons/:lessonId/quiz-attempts")

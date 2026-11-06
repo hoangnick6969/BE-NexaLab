@@ -14,6 +14,7 @@ import { testStates } from "../../classes/application/assignment-test-state";
 import { notify } from "../../notifications/application/notify";
 import { overdueNotice } from "../../notifications/application/time-based-notices";
 import { PARENT_CONSENT_HASH, PARENT_CONSENT_VERSION, parentCode, parentCodeHash } from "../application/parent-codes";
+import { summarizeHelpSeeking } from "../application/help-seeking";
 import { approvePendingLinks, confirmEmailVerification, issueEmailVerification, linkPrerequisites } from "../application/parent-links";
 
 const MINUTE = 60 * 1000;
@@ -140,6 +141,19 @@ export class ParentsController {
       this.db.attempt.findMany({ where: { studentId, OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }] }, orderBy: { createdAt: "desc" }, take: q.limit, select: { id: true, challengeId: true, lessonStepId: true, verdict: true, durationMs: true, createdAt: true } }),
     ]);
     return [...quiz.map((a) => ({ kind: "QUIZ", ...a })), ...practical.map((a) => ({ kind: "PRACTICAL", ...a }))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, q.limit);
+  }
+  /** SAI-05 (BR-11): how often the child asked for hints, by level per Lab. Counts only, no content. */
+  @Roles("PARENT") @Get("children/:studentId/help-seeking") async helpSeeking(@Req() req: any, @Param("studentId") studentId: string) {
+    await this.access.readableStudent(studentId, req);
+    // After-submit hints hang off the attempt; in-run hints (SAI-01A moments A/B) only off the LabRun.
+    const rows = await this.db.hintLog.findMany({
+      where: { OR: [{ attempt: { studentId } }, { attemptId: null, labRun: { studentId } }] },
+      select: { level: true, createdAt: true, attempt: { select: { challenge: { select: { labId: true } } } }, labRun: { select: { labId: true } } },
+    });
+    const hints = rows.map((row) => ({ level: row.level, createdAt: row.createdAt, labId: row.attempt?.challenge.labId ?? row.labRun?.labId ?? null }));
+    const labIds = [...new Set(hints.map((row) => row.labId).filter((id): id is string => Boolean(id)))];
+    const labs = labIds.length ? await this.db.lab.findMany({ where: { id: { in: labIds } }, select: { id: true, title: true } }) : [];
+    return { labs: summarizeHelpSeeking(hints, new Map(labs.map((lab) => [lab.id, lab.title]))) };
   }
   /** Read-only status and deadline for a linked child's assigned test; no answers, scores or actions (I3 / 3.6). */
   private async childTestStates(studentId: string, assignmentId?: string) {
