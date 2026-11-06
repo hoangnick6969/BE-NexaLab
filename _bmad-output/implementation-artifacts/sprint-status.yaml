@@ -235,6 +235,8 @@ development_status:
   sai-03a-t1-answer-blind-question-hint-rules: review
   sai-03a-t2-quiz-hint-api-and-panel: review
   sai-03-t3-basic-exercise-hints: backlog
+  b3-what-if-rules-fl21-fl20: review
+  b3-what-if-more-labs: backlog
   epic-sai-01-lab-hint-tutor: backlog
   sai-01-t0-activate-fr22-scope: backlog
   sai-01-t1-versioned-rules-escalation-eligibility: backlog
@@ -386,6 +388,7 @@ student_ai_tracking:
     sai-01a: ../specs/spec-student-ai-checkpoint-hints/SPEC.md
     sai-02a: ../specs/spec-student-ai-teacher-insight/SPEC.md
     sai-03a: ../specs/spec-student-ai-lesson-hints/SPEC.md
+    b3: ../specs/spec-student-ai-what-if/SPEC.md
     sai-01: ../specs/spec-student-ai-tutor/SPEC.md
     roadmap: ../specs/spec-student-ai-tutor/student-ai-roadmap.md
   gates:

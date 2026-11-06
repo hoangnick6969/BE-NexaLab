@@ -68,3 +68,7 @@ summary with misconception hypotheses and teacher disagreement (migration `20261
 
 2026-11-05 (later): SAI-03A shipped on `research/student-ai`: answer-blind rules hints on lesson quiz questions
 (`lesson-hints@1`, migration `20261107120000_hint_log_lesson_step`). Basic exercises and B5 (needs SG-2) follow.
+
+2026-11-06: B3 rules part shipped on `research/student-ai` (owner: "làm B3 bằng luật trước"): "Nếu… thì sao?" in
+FL-21 and FL-20 free explore, answered from the pinned models (`what-if@1`, FE only), see
+`../specs/spec-student-ai-what-if/SPEC.md`. SAI-04 (typed questions) still waits for SG-2.
