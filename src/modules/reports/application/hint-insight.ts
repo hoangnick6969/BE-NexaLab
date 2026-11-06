@@ -10,7 +10,8 @@ import { misconceptionLabel } from "../../labs/application/misconception-labels"
  */
 export const HINT_INSIGHT_RULES = "hint-insights@1";
 
-export type LatestAttempt = { attemptId: string; studentId: string; verdict: string; rubricRef: string; result: unknown };
+/** `evidence`: labState, or `{ labState, events }` for catalogs read from run events (station/event B8). */
+export type LatestAttempt = { attemptId: string; studentId: string; verdict: string; rubricRef: string; result: unknown; evidence?: unknown };
 export type InsightHint = { studentId: string; rubricRef: string; criterion: string | null; level: number };
 export type InsightDisagreement = { rubricRef: string; criterion: string; misconception: string; note: string | null; at: string };
 
@@ -54,7 +55,7 @@ export function buildHintInsight(input: {
       for (const hint of stepHints) if (hint.level >= 1 && hint.level <= 4) byLevel[hint.level as 1 | 2 | 3 | 4] += 1;
       const groups = new Map<string, string[]>();
       for (const item of stuck) {
-        const id = detectMisconception(rubricRef, criterion, item.result);
+        const id = detectMisconception(rubricRef, criterion, item.result, item.evidence);
         if (id) groups.set(id, [...(groups.get(id) ?? []), item.attemptId]);
       }
       return {

@@ -17,7 +17,7 @@ describe("B2 verdict explanation", () => {
       expect(item.met).toBe(true);
       expect(item.why).toBe(CHECKPOINT_HINT_CATALOGS[FW].criteria[item.criterion].levels[3][0]);
     }
-    expect(out).toMatchObject({ provider: "rules", ruleVersion: "verdict-explanations@1", hintRules: "checkpoint-hints@4" });
+    expect(out).toMatchObject({ provider: "rules", ruleVersion: "verdict-explanations@1", hintRules: "checkpoint-hints@5" });
   });
 
   it("not passed: unmet steps carry only their name, no wording that could hold the answer", () => {

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
-  CHECKPOINT_HINT_CATALOGS, CHECKPOINT_HINT_RULES, catalogTexts, evaluateOneCheckpoint, hasRunHints, planCheckpointHint, planRunHint,
+  CHECKPOINT_HINT_CATALOGS, CHECKPOINT_HINT_RULES, catalogTexts, detectMisconception, evaluateOneCheckpoint, hasRunHints, hasRunReflections, planCheckpointHint, planRunHint, runHintSteps,
   type PreviousCheckpointHint, type PreviousRunHint,
 } from "./checkpoint-hint-rules";
 import { CIRCUIT_BULB_RUBRIC } from "./evaluators/circuit-bulb-checkpoints.evaluator";
@@ -49,7 +49,7 @@ describe("SAI-01A checkpoint hint catalogs", () => {
   it("pins the template text to its rule version (bump CHECKPOINT_HINT_RULES when wording changes)", () => {
     const texts = Object.keys(CHECKPOINT_HINT_CATALOGS).sort().flatMap((rubricRef) => catalogTexts(rubricRef).map((item) => `${rubricRef}|${item.criterion}|${item.text}`));
     const digest = createHash("sha256").update(texts.join("\n")).digest("hex");
-    expect({ version: CHECKPOINT_HINT_RULES, digest }).toEqual({ version: "checkpoint-hints@4", digest: PINNED_DIGEST });
+    expect({ version: CHECKPOINT_HINT_RULES, digest }).toEqual({ version: "checkpoint-hints@5", digest: PINNED_DIGEST });
   });
 });
 
@@ -131,9 +131,20 @@ describe("SAI-01A station Labs (step 2)", () => {
       expect(station(rubricRef, [...unmet])).toMatchObject({ criterion, level: 1 });
     });
 
-  it("offers no in-run hints for station Labs", () => {
-    for (const rubricRef of [DENSITY_RUBRIC, GENE_RUBRIC, EYE_OPTICS_RUBRIC, BUOYANCY_RUBRIC]) expect(hasRunHints(rubricRef)).toBe(false);
-    expect(hasRunHints(FOOD_WEB_RUBRIC)).toBe(true);
+  it("station and event Labs get moment-A hints (levels 1–2) but no reflections", () => {
+    for (const rubricRef of [DENSITY_RUBRIC, GENE_RUBRIC, EYE_OPTICS_RUBRIC, BUOYANCY_RUBRIC,
+      "lever-investigation@1.0.0", "thermal-energy-investigation@1.0.0", "mass-conservation-poea@1.0.0"]) {
+      expect(hasRunHints(rubricRef)).toBe(true);
+      expect(hasRunReflections(rubricRef)).toBe(false);
+      const [first] = runHintSteps(rubricRef);
+      expect(first).toEqual({ criterion: CHECKPOINT_HINT_CATALOGS[rubricRef].order[0], label: CHECKPOINT_HINT_CATALOGS[rubricRef].criteria[first.criterion].label });
+      const a = planRunHint({ rubricRef, criterion: first.criterion, moment: "BEFORE_PREDICTION", previous: [] });
+      expect(a).toMatchObject({ level: 1, checkpointId: null, content: CHECKPOINT_HINT_CATALOGS[rubricRef].criteria[first.criterion].levels[0][0] });
+      const b = planRunHint({ rubricRef, criterion: first.criterion, moment: "BEFORE_PREDICTION", previous: [{ criterion: first.criterion, moment: "BEFORE_PREDICTION", level: 2, variant: "a" }] });
+      expect(b).toMatchObject({ level: 2, variant: "b", repeatReason: "TOP_LEVEL" });
+      expect(() => planRunHint({ rubricRef, criterion: first.criterion, moment: "AFTER_OBSERVATION", previous: [] })).toThrow();
+    }
+    expect(hasRunReflections(FOOD_WEB_RUBRIC)).toBe(true);
   });
 });
 
@@ -241,4 +252,77 @@ describe("SAI-01A planner", () => {
   });
 });
 
-const PINNED_DIGEST = "c4117bbb01020d599202ffb164590765e00bf583d9eb8ea2f7494b9eb8ec69df";
+const PINNED_DIGEST = "369c737f89694e157b133e49a50827d6660d5d8430d7f6292154e76e4575bf39";
+
+describe("B8 for station and event Labs (checkpoint-misconceptions@2)", () => {
+  const D = "density-stations@1.0.0";
+  // Block 10×20×30 mm, 3,6 g → 0,6 g/cm³; water 50 mL, cup 40 g + 90 g; pebble 13 g, 40 → 45 mL.
+  const density = (over: any = {}) => ({
+    explore: { masses: [], conclusion: "A" },
+    block: { specimenId: "b", trials: [{ aMm: 10, bMm: 20, cMm: 30, massG: 3.6 }], density: { value: 0.6, unit: "g/cm3" } },
+    water: { pouredMl: 50, volumeMl: 50, m1G: 40, m2G: 90, density: { value: 1, unit: "g/cm3" } },
+    pebble: { specimenId: "p", initialMl: 40, massG: 13, v1Ml: 40, v2Ml: 45, density: { value: 2.6, unit: "g/cm3" } },
+    units: { woodKgm3: 600, irregularReason: "A" },
+    ...over,
+  });
+  const m = (rubricRef: string, criterion: string, evidence: unknown, result: unknown = {}) => detectMisconception(rubricRef, criterion, result, evidence);
+
+  it("FL-03 reads the learner's own numbers", () => {
+    expect(m(D, "calculation", density({ pebble: { ...density().pebble, density: { value: 5 / 13, unit: "g/cm3" } } }))).toBe("DENS_DIVIDED_WRONG_WAY");
+    expect(m(D, "calculation", density({ water: { ...density().water, density: { value: 1.8, unit: "g/cm3" } } }))).toBe("DENS_CUP_MASS_INCLUDED");
+    expect(m(D, "calculation", density({ pebble: { ...density().pebble, density: { value: 13 / 45, unit: "g/cm3" } } }))).toBe("DENS_LEVEL_NOT_DIFFERENCE");
+    expect(m(D, "calculation", density({ block: { ...density().block, density: { value: 0.9, unit: "g/cm3" } } }))).toBeNull();
+    expect(m(D, "unitConversion", density({ units: { woodKgm3: 60, irregularReason: "A" } }))).toBe("DENS_UNIT_FACTOR");
+    expect(m(D, "unitConversion", density({ units: { woodKgm3: 6000, irregularReason: "A" } }))).toBeNull();
+    // Malformed evidence never throws.
+    expect(m(D, "calculation", { block: null })).toBeNull();
+  });
+
+  it("FL-05 compares with the stored model output", () => {
+    const B = "buoyancy-archimedes@1.0.0";
+    const result = { expected: { weightN: 2.7, buoyantForceN: 1, springForceN: 1.7, overflowM3: 100e-6 } };
+    expect(m(B, "force", { measuredBuoyantForceN: 2.7, submergedVolumeMl: 100 }, result)).toBe("BUOY_WEIGHT_AS_BUOYANT");
+    expect(m(B, "force", { measuredBuoyantForceN: 1.7, submergedVolumeMl: 100 }, result)).toBe("BUOY_READING_IN_WATER");
+    expect(m(B, "overflow", { measuredBuoyantForceN: 1, submergedVolumeMl: 60 }, result)).toBe("BUOY_NOT_FULLY_SUBMERGED");
+  });
+
+  it("FL-06 reads the run events", () => {
+    const L = "lever-investigation@1.0.0";
+    const events = (...list: any[]) => ({ labState: {}, events: list });
+    const observations = [{ displayState: "TILT_LEFT" }, { displayState: "LEVEL" }, { displayState: "TILT_RIGHT" }];
+    const predicted = (...p: string[]) => ({ type: "PREDICTED_ROTATION", predictions: p.map((prediction) => ({ positionMillimetres: 0, prediction })) });
+    expect(m(L, "rotation", events(predicted("LEVEL", "LEVEL", "LEVEL")), { observations })).toBe("LEVER_ARM_IGNORED");
+    expect(m(L, "rotation", events(predicted("TILT_RIGHT", "LEVEL", "TILT_RIGHT")), { observations })).toBe("LEVER_TILT_REVERSED");
+    const measured = (force: number, arm: number, moment: number) => ({ type: "MEASURED_MOMENT", recordedForceMilliNewtons: force, recordedArmMillimetres: arm, recordedMomentMilliNewtonMillimetres: moment });
+    expect(m(L, "moment", events(measured(1000, 100, 1100)))).toBe("LEVER_MOMENT_ADDED");
+    expect(m(L, "moment", events(measured(1000, -100, 100000)))).toBe("LEVER_SIGNED_ARM");
+    const applied = { type: "APPLIED_LEVER_CASE", forceAdvantage: "GAIN", changesForceDirection: true };
+    expect(m(L, "application", events(applied), { application: { forceAdvantage: "NO_GAIN", changesForceDirection: true } })).toBe("LEVER_ALWAYS_GAIN");
+    expect(m(L, "application", events({ ...applied, forceAdvantage: "NO_GAIN" }), { application: { forceAdvantage: "NO_GAIN", changesForceDirection: false } })).toBe("LEVER_DIRECTION_RULE");
+  });
+
+  it("FL-07 and FL-10", () => {
+    const T = "thermal-energy-investigation@1.0.0";
+    const observations = [{ riseMilliCelsius: 2000, thermometerReadingMilliCelsius: 27000 }, { riseMilliCelsius: 4000, thermometerReadingMilliCelsius: 29000 }];
+    const ev = (...list: any[]) => ({ labState: {}, events: list });
+    expect(m(T, "R3", ev({ type: "RECORDED_FIRST_MEASUREMENT", riseMilliCelsius: 27000 }), { observations })).toBe("TH_FINAL_AS_RISE");
+    expect(m(T, "R5", ev({ type: "EXPLAINED_ENERGY_BOUNDARY", ratioChoice: "more_than_double", boundaryChoice: "equal_ideal_only" }), { observations })).toBe("TH_NOT_PROPORTIONAL");
+    expect(m(T, "R6", ev({ type: "EXPLAINED_ENERGY_BOUNDARY", ratioChoice: "double", boundaryChoice: "always_equal" }), { observations })).toBe("TH_NO_HEAT_LOSS");
+    const M = "mass-conservation-poea@1.0.0";
+    const st = (labState: any) => ({ labState, events: [] });
+    expect(m(M, "C3", st({ comparison: "compare.decrease" }))).toBe("MC_THINKS_MASS_DECREASES");
+    expect(m(M, "C4", st({ explanationAttempts: ["explain.rearrange", "explain.solid_not_weighed"] }))).toBe("MC_PRECIPITATE_NOT_WEIGHED");
+    expect(m(M, "C5", st({ calculation: "34-and-35" }))).toBe("MC_THINKS_MASS_INCREASES");
+    expect(m(M, "C6", st({ applicationV1: "same", applicationV2: "same" }))).toBe("MC_OPEN_SYSTEM_GAS");
+  });
+
+  it("the planner words levels 1–2 for the hypothesis and stores it; the student never sees the id", () => {
+    const plan = planCheckpointHint({
+      rubricRef: "mass-conservation-poea@1.0.0", evidence: { labState: { comparison: "compare.increase" }, events: [] },
+      result: { assessment: { criteria: { C1: true, C2: true, C3: false } } }, previous: [],
+    })!;
+    expect(plan).toMatchObject({ criterion: "C3", level: 1, misconception: "MC_THINKS_MASS_INCREASES", misconceptionRules: "checkpoint-misconceptions@2" });
+    expect(plan.content).toBe(CHECKPOINT_HINT_CATALOGS["mass-conservation-poea@1.0.0"].criteria.C3.misconceptions!.MC_THINKS_MASS_INCREASES[0]);
+    expect(plan.content).not.toMatch(/MC_/);
+  });
+});

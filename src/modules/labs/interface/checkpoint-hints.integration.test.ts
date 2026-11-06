@@ -88,7 +88,7 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       expect(w1.verdict).toBe("needs_practice");
       const before = await p.attempt.findUniqueOrThrow({ where: { id: w1.id } });
       const h1: any = await labs.hint(w1.id, req);
-      expect(h1).toMatchObject({ level: 1, criterion: "prediction:HUNT", checkpointId: "HUNT", label: "Khi mất rắn", escalated: false, repeatReason: null, provider: "rules", ruleVersion: "checkpoint-hints@4" });
+      expect(h1).toMatchObject({ level: 1, criterion: "prediction:HUNT", checkpointId: "HUNT", label: "Khi mất rắn", escalated: false, repeatReason: null, provider: "rules", ruleVersion: "checkpoint-hints@5" });
       expect(h1.contextSnapshot).toBeUndefined();
       expect(JSON.stringify(h1)).not.toContain("FW_");
       const stored = await p.hintLog.findUniqueOrThrow({ where: { id: h1.id } });
@@ -142,6 +142,13 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       // A never reads the draft: a wrong draft gets the same generic wording as no draft.
       expect(a2.content).toBe((await p.hintLog.findUniqueOrThrow({ where: { id: a2.id } })).content);
       expect(JSON.stringify((await p.hintLog.findUniqueOrThrow({ where: { id: a2.id } })).contextSnapshot)).not.toContain("INCREASE");
+
+      // The step list for the hint picker: names only, catalog order, reflections available on this Lab.
+      const pickable: any = await labs.runHintSteps(run2.runId, req);
+      expect(pickable).toMatchObject({ reflections: true, maxLevel: 2 });
+      expect(pickable.steps.map((step: any) => step.criterion)).toEqual(["prediction:ROLES", "prediction:CHAIN", "prediction:ENERGY", "prediction:HUNT", "prediction:DEFOREST", "prediction:CAUSES", "explanation"]);
+      expect(pickable.steps[3]).toEqual({ criterion: "prediction:HUNT", label: "Khi mất rắn" });
+      await expect(labs.runHintSteps(run2.runId, { user: { sub: outsider.id, sid: session.id, role: "STUDENT" } })).rejects.toMatchObject({ status: 404 });
 
       // The check endpoint tells the UI whether to offer "Vì sao…", without writing anything.
       const rowsBefore = await p.hintLog.count({ where: { labRunId: run2.runId } });
@@ -223,7 +230,7 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       // UC-AI-07: disagree, see it, withdraw it. Nothing a student sees changes.
       const key = { rubricRef: FOOD_WEB_RUBRIC, criterion: "prediction:DEFOREST", misconception: "FW_ARROW_REVERSED" };
       expect(await reports.disagree(classroom.id, assignment.id, teacherReq, { ...key, note: "Em vẽ đúng mũi tên trên giấy" }))
-        .toMatchObject({ ...key, ruleVersion: "checkpoint-misconceptions@1", note: "Em vẽ đúng mũi tên trên giấy" });
+        .toMatchObject({ ...key, ruleVersion: "checkpoint-misconceptions@2", note: "Em vẽ đúng mũi tên trên giấy" });
       expect(await reports.disagree(classroom.id, assignment.id, teacherReq, key)).toMatchObject({ note: null });
       expect(await p.hintInsightDisagreement.count({ where: { assignmentId: assignment.id } })).toBe(1);
       const marked: any = await reports.hintInsight(classroom.id, assignment.id, teacherReq);

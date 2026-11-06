@@ -192,6 +192,97 @@ const BUOYANCY: Catalog = {
   },
 };
 
+// ---------------------------------------------------------------------------------------------
+// B8 for station Labs (checkpoint-misconceptions@2): hypotheses read from the learner's own numbers, never
+// from an expected value the learner has not seen. Levels 1–2 wording only; levels 3–4 stay shared.
+
+/** a ≈ b within 3 % (or 0.005 for tiny values). */
+const near = (a: number, b: number) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= Math.max(0.03 * Math.abs(b), 0.005);
+const avg = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+const gcm3 = (entry: any) => entry?.value * ({ "g/cm3": 1, "g/ml": 1, "kg/m3": 0.001 } as Record<string, number>)[entry?.unit];
+
+DENSITY.criteria.calculation = {
+  ...DENSITY.criteria.calculation,
+  detectFrom: (e) => {
+    const blockMass = avg(e.block.trials.map((t: any) => t.massG));
+    const blockVolume = avg(e.block.trials.map((t: any) => (t.aMm * t.bMm * t.cMm) / 1000));
+    const water = { mass: e.water.m2G - e.water.m1G, volume: e.water.volumeMl };
+    const pebble = { mass: e.pebble.massG, volume: e.pebble.v2Ml - e.pebble.v1Ml };
+    const given = { block: gcm3(e.block.density), water: gcm3(e.water.density), pebble: gcm3(e.pebble.density) };
+    // A station counts only when its value is wrong by the textbook method and matches the slip (m/V = 1 for water).
+    const slip = (value: number, right: number, wrong: number) => !near(value, right) && near(value, wrong);
+    if (slip(given.block, blockMass / blockVolume, blockVolume / blockMass) || slip(given.water, water.mass / water.volume, water.volume / water.mass) ||
+        slip(given.pebble, pebble.mass / pebble.volume, pebble.volume / pebble.mass))
+      return "DENS_DIVIDED_WRONG_WAY";
+    if (slip(given.water, water.mass / water.volume, e.water.m2G / e.water.volumeMl)) return "DENS_CUP_MASS_INCLUDED";
+    if (slip(given.pebble, pebble.mass / pebble.volume, e.pebble.massG / e.pebble.v2Ml)) return "DENS_LEVEL_NOT_DIFFERENCE";
+    return null;
+  },
+  misconceptions: {
+    DENS_DIVIDED_WRONG_WAY: [
+      "Khi chia, em đặt khối lượng ở trên hay thể tích ở trên? Vật cùng thể tích mà nặng hơn thì kết quả của em lớn lên hay nhỏ đi?",
+      "Khối lượng riêng là khối lượng của một đơn vị thể tích: khối lượng nằm ở tử số, thể tích nằm ở mẫu số.",
+    ],
+    DENS_CUP_MASS_INCLUDED: [
+      "Khối lượng em dùng cho nước có còn tính cả cái cốc không?",
+      "Khối lượng nước là hiệu giữa số cân cốc có nước và số cân cốc rỗng; cái cốc không phải là nước.",
+    ],
+    DENS_LEVEL_NOT_DIFFERENCE: [
+      "Thể tích viên sỏi là mực nước sau khi thả, hay là phần nước dâng lên thêm?",
+      "Thể tích vật chìm bằng phần nước dâng lên: lấy mực nước sau khi thả trừ mực nước trước khi thả.",
+    ],
+  },
+};
+
+DENSITY.criteria.unitConversion = {
+  ...DENSITY.criteria.unitConversion,
+  detectFrom: (e) => {
+    const own = avg(e.block.trials.map((t: any) => t.massG)) / avg(e.block.trials.map((t: any) => (t.aMm * t.bMm * t.cMm) / 1000));
+    return !near(e.units.woodKgm3, own * 1000) && [1, 10, 100, 0.001].some((factor) => near(e.units.woodKgm3, own * factor)) ? "DENS_UNIT_FACTOR" : null;
+  },
+  misconceptions: {
+    DENS_UNIT_FACTOR: [
+      "Một mét khối chứa bao nhiêu xăngtimét khối, và một kilôgam bằng bao nhiêu gam? Hệ số em dùng có tính cả hai điều đó không?",
+      "Đổi g/cm³ sang kg/m³ phải đổi cả tử số lẫn mẫu số; nếu chỉ đổi một phần, hệ số sẽ sai.",
+    ],
+  },
+};
+
+BUOYANCY.criteria.force = {
+  ...BUOYANCY.criteria.force,
+  detectFrom: (e, result) => {
+    const expected = result?.expected ?? {};
+    const close = (a: number, b: number) => Number.isFinite(b) && Math.abs(a - b) <= Math.max(0.02, 0.03 * Math.abs(b));
+    if (close(e.measuredBuoyantForceN, expected.weightN)) return "BUOY_WEIGHT_AS_BUOYANT";
+    if (close(e.measuredBuoyantForceN, expected.springForceN)) return "BUOY_READING_IN_WATER";
+    return null;
+  },
+  misconceptions: {
+    BUOY_WEIGHT_AS_BUOYANT: [
+      "Số em ghi là lực đẩy của nước, hay là trọng lượng của vật khi treo ngoài không khí?",
+      "Lực đẩy của nước là phần lực kế chỉ giảm đi khi vật chìm trong nước, không phải trọng lượng của vật.",
+    ],
+    BUOY_READING_IN_WATER: [
+      "Số chỉ lực kế khi vật ở trong nước là lực đẩy, hay là phần lực còn lại sau khi nước đã đẩy lên?",
+      "Lực đẩy bằng hiệu giữa số chỉ lực kế ngoài không khí và số chỉ khi vật chìm trong nước.",
+    ],
+  },
+};
+
+BUOYANCY.criteria.overflow = {
+  ...BUOYANCY.criteria.overflow,
+  detectFrom: (e, result) => {
+    const fullMl = Number(result?.expected?.overflowM3) * 1e6;
+    return Number.isFinite(fullMl) && e.submergedVolumeMl < 0.9 * fullMl ? "BUOY_NOT_FULLY_SUBMERGED" : null;
+  },
+  misconceptions: {
+    BUOY_NOT_FULLY_SUBMERGED: [
+      "Vật đã chìm hẳn trong nước khi em đọc lượng nước tràn ra chưa?",
+      "Nước tràn ra bằng thể tích phần vật đang chìm; muốn biết thể tích cả vật, vật phải chìm hoàn toàn.",
+    ],
+  },
+};
+
 export const STATION_HINT_CATALOGS: Readonly<Record<string, Catalog>> = {
   [densityStationsEvaluator.rubricRef]: DENSITY,
   [geneProteinStationsEvaluator.rubricRef]: GENE,

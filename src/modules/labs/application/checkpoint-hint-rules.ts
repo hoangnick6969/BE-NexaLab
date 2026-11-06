@@ -11,8 +11,8 @@ import { EVENT_HINT_CATALOGS } from "./event-hint-catalogs";
  * (_bmad-output/specs/spec-student-ai-checkpoint-hints). Text and misconception rules are versioned:
  * change a template or a detector → bump the version, never edit a released one silently.
  */
-export const CHECKPOINT_HINT_RULES = "checkpoint-hints@4";
-export const CHECKPOINT_MISCONCEPTION_RULES = "checkpoint-misconceptions@1";
+export const CHECKPOINT_HINT_RULES = "checkpoint-hints@5";
+export const CHECKPOINT_MISCONCEPTION_RULES = "checkpoint-misconceptions@2";
 
 export type Pair = readonly [a: string, b: string];
 export type Observation = { id: string; prediction: unknown; predictionCorrect: boolean; scientificObservation?: any };
@@ -30,6 +30,11 @@ export type CriterionHints = {
   misconceptions?: Record<string, readonly [level1: string, level2: string]>;
   /** B8: maps a wrong answer to a misconception id; never shown to the student. */
   detect?: (observation: Observation) => string | null;
+  /**
+   * B8 for station and event Labs (no per-step observation): reads the learner's own evidence (labState, or
+   * `{ labState, events }` for `withEvents` catalogs) and the stored evaluator result. Called only for an unmet step.
+   */
+  detectFrom?: (evidence: any, result: any) => string | null;
   /** Phrases that would reveal the expected answer; no template may contain them. */
   forbidden: readonly RegExp[];
 };
@@ -41,7 +46,10 @@ export type Catalog = {
   keyOf?: (unmet: string) => string | null;
   /** The learner's answer that a criterion depends on, for "did the answer change" (BR-06); default checkpoint/explanation. */
   answerOf?: (evidence: any, criterion: string) => unknown;
-  /** In-run moments A and B: only predict-observe checkpoint activities. */
+  /**
+   * Moment B (reflection after an observation, scored by the activity evaluator): predict-observe checkpoint
+   * activities only. Moment A (levels 1–2 before answering a step) is open to every catalog.
+   */
   inRun?: boolean;
   /** Unmet criteria from a result without `assessment.unmetCriteria` (FL-06/07/10 criteria maps). */
   unmetOf?: (result: any) => string[];
@@ -729,7 +737,15 @@ export const CHECKPOINT_HINT_CATALOGS: Readonly<Record<string, Catalog>> = {
 
 export const hasCheckpointHints = (rubricRef: string | null | undefined) => Boolean(rubricRef && CHECKPOINT_HINT_CATALOGS[rubricRef]);
 /** In-run hints (moments A and B) exist only for predict-observe checkpoint activities. */
-export const hasRunHints = (rubricRef: string | null | undefined) => Boolean(rubricRef && CHECKPOINT_HINT_CATALOGS[rubricRef]?.inRun);
+/** Moment A (levels 1–2 while working) is available for every catalog Lab. */
+export const hasRunHints = (rubricRef: string | null | undefined) => Boolean(rubricRef && CHECKPOINT_HINT_CATALOGS[rubricRef]);
+/** Moment B needs the predict-observe evaluator, so only checkpoint activities have it. */
+export const hasRunReflections = (rubricRef: string | null | undefined) => Boolean(rubricRef && CHECKPOINT_HINT_CATALOGS[rubricRef]?.inRun);
+/** Steps a learner can ask about while working, in catalog order, with their student-facing names. */
+export const runHintSteps = (rubricRef: string) => {
+  const catalog = CHECKPOINT_HINT_CATALOGS[rubricRef];
+  return catalog ? catalog.order.map((criterion) => ({ criterion, label: catalog.criteria[criterion].label })) : [];
+};
 
 export type PreviousCheckpointHint = { criterion: string; level: number; variant: "a" | "b"; answerDigest: string };
 
@@ -769,9 +785,16 @@ export function unmetHintKeys(rubricRef: string, result: any): Set<string> {
   return new Set(unmet.map((item) => (catalog.keyOf ? catalog.keyOf(item) : item)).filter((key): key is string => Boolean(key)));
 }
 
-/** B8 misconception id for one unmet checkpoint of a stored result, or null. Teacher-facing only (BR-09). */
-export function detectMisconception(rubricRef: string, criterion: string, result: any): string | null {
+/** A detector never breaks a hint or a report: malformed or legacy evidence just means "no hypothesis". */
+function safeDetect(hints: CriterionHints, evidence: unknown, result: unknown): string | null {
+  if (!hints.detectFrom) return null;
+  try { return hints.detectFrom(evidence, result); } catch { return null; }
+}
+
+/** B8 misconception id for one unmet step of a stored attempt, or null. Teacher-facing only (BR-09). */
+export function detectMisconception(rubricRef: string, criterion: string, result: any, evidence?: unknown): string | null {
   const hints = CHECKPOINT_HINT_CATALOGS[rubricRef]?.criteria[criterion];
+  if (hints?.detectFrom) return safeDetect(hints, evidence, result);
   if (!hints?.detect || !criterion.startsWith("prediction:")) return null;
   const id = criterion.slice("prediction:".length);
   const observation = (Array.isArray(result?.observations) ? result.observations : []).find((item: any) => item?.id === id);
@@ -805,7 +828,7 @@ export function planCheckpointHint(input: { rubricRef: string; evidence: unknown
   const checkpointId = criterion.startsWith("prediction:") ? criterion.slice("prediction:".length) : null;
   const observations = Array.isArray(input.result?.observations) ? input.result.observations : [];
   const observation = checkpointId ? observations.find((item: any) => item?.id === checkpointId) : null;
-  const misconception = observation && hints.detect ? hints.detect(observation) : null;
+  const misconception = observation && hints.detect ? hints.detect(observation) : safeDetect(hints, input.evidence, input.result);
   const tailored = misconception && level <= 2 && variant === "a" ? hints.misconceptions?.[misconception]?.[level - 1] : undefined;
   return {
     criterion,
@@ -874,7 +897,7 @@ export function planRunHint(input: {
   if (!catalog) throw new Error(`No checkpoint hint catalog for ${input.rubricRef}`);
   const hints = catalog.criteria[input.criterion];
   if (!hints) throw new CheckpointHintInputError("UNKNOWN_CHECKPOINT");
-  const checkpointId = input.criterion === "explanation" ? null : input.criterion.slice("prediction:".length);
+  const checkpointId = input.criterion.startsWith("prediction:") ? input.criterion.slice("prediction:".length) : null;
   const last = [...input.previous].reverse().find((item) => item.criterion === input.criterion && item.moment === input.moment);
   const base = { criterion: input.criterion, checkpointId, label: hints.label, moment: input.moment, ruleVersion: CHECKPOINT_HINT_RULES, misconceptionRules: CHECKPOINT_MISCONCEPTION_RULES };
   if (input.moment === "BEFORE_PREDICTION") {

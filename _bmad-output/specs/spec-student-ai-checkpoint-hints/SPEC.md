@@ -133,6 +133,37 @@ apart. No content, criterion, label, misconception or conversation leaves the se
 JSON). FE: "Con đã xin gợi ý bao nhiêu lần" cards on the parent progress page (`HelpSeekingPanel`), one card per
 Lab with wrapping level rows; the link-scope note now says hint text is never shown, only counts.
 
+## Step 5 — in-run hints for station and event Labs (owner 2026-11-06: "làm theo thứ tự đề xuất")
+
+Moment A (levels 1–2 while working) is now open to every catalog Lab: FL-03, FL-05, FL-16, FL-27 (station) and
+FL-06, FL-07, FL-10 (event). Their state differs per Lab, so instead of guessing the current step the learner picks it:
+`GET /api/lab-runs/:runId/hints/steps` (own run, rate key `run-hint-steps:` 60) → `{ steps: [{ criterion, label }],
+reflections, maxLevel: 2 }` in catalog order, names only. `POST /lab-runs/:runId/hints` with `moment:
+"BEFORE_PREDICTION"` works as for checkpoint Labs (same 24-hint run limit, same after-submit continuation). Moment B
+and `/hints/check` stay checkpoint-only (`hasRunReflections`; others → `400 INVALID_CHECKPOINT`). No state or draft is
+sent. FE `StepPickerHint`: in the action dock for station renderers; for event Labs a "Gợi ý" pill fixed at the
+bottom left while the run is open (the after-submit panel replaces it once submitted).
+
+## Step 6 — B8 misconceptions for station and event Labs (`checkpoint-misconceptions@2`, `checkpoint-hints@5`)
+
+A criterion may carry `detectFrom(evidence, result)`: it reads the learner's own evidence (labState, or `{ labState,
+events }` for event Labs) and the stored evaluator result, and is called only for an unmet step. A detector that
+throws counts as "no hypothesis". Hypotheses tailor levels 1–2 (variant a), are stored in the hint snapshot and
+appear as teacher hypotheses in SAI-02A (the class report now loads labState and, for event Labs, the run events of
+the latest attempts). Never shown to students or parents (BR-09, BR-11). All new wording passes the leak test.
+
+| Lab | Step | Hypotheses |
+| --- | --- | --- |
+| FL-03 density | calculation | divided V by m; cup mass counted as water; final level used as volume (only when the value is wrong by the textbook method and matches the slip) |
+| FL-03 density | unitConversion | factor 1, 10, 100 or 0.001 instead of the right one |
+| FL-05 buoyancy | force / overflow | weight taken as buoyant force; in-water reading taken as buoyant force; object not fully submerged |
+| FL-06 lever | rotation / moment / application | arm ignored (LEVEL predicted); tilt reversed; F + d instead of F × d; signed arm; every lever gains force; direction rule |
+| FL-07 thermal | R3, R4 / R5 / R6 | final temperature as rise; not proportional; no heat loss in real experiments; energy and heat unrelated |
+| FL-10 mass | C3, C5 / C4 / C6 | mass decreases or increases; new substance heavier; precipitate not weighed; open-system gas; closed-system change |
+
+FL-27 gene and FL-16 eye optics are not covered yet: their slips need the pinned variant's expected values, which
+the stored result does not return.
+
 ## Student UX
 
 While working, a "Gợi ý" toggle in the Lab Space action dock opens a popover above the dock (the stage stays

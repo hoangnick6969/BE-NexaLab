@@ -1,7 +1,7 @@
 import { CHECKPOINT_MISCONCEPTION_RULES } from "./checkpoint-hint-rules";
 
 /**
- * SAI-02: teacher-facing names of the B8 misconception ids (checkpoint-misconceptions@1).
+ * SAI-02: teacher-facing names of the B8 misconception ids (checkpoint-misconceptions@2).
  * Hypotheses from one wrong answer, never a diagnosis; never shown to students or parents (BR-09, BR-11).
  */
 export const MISCONCEPTION_LABEL_RULES = CHECKPOINT_MISCONCEPTION_RULES;
@@ -35,6 +35,34 @@ export const MISCONCEPTION_LABELS: Readonly<Record<string, string>> = {
   EM_MAGNET_PRESENCE: "Cho rằng chỉ cần có nam châm (đứng yên) là có dòng điện cảm ứng",
   EM_DIRECTION_FIXED: "Cho rằng chiều dòng điện cảm ứng không đổi",
   EM_ROTATE_ONE_WAY: "Cho rằng quay nam châm chỉ tạo dòng điện một chiều",
+  // FL-03 density
+  DENS_DIVIDED_WRONG_WAY: "Lấy thể tích chia khối lượng khi tính khối lượng riêng",
+  DENS_CUP_MASS_INCLUDED: "Tính cả khối lượng cốc vào khối lượng nước",
+  DENS_LEVEL_NOT_DIFFERENCE: "Dùng mực nước sau khi thả làm thể tích vật, không lấy phần nước dâng lên",
+  DENS_UNIT_FACTOR: "Đổi g/cm³ sang kg/m³ sai hệ số",
+  // FL-05 buoyancy
+  BUOY_WEIGHT_AS_BUOYANT: "Lấy trọng lượng của vật làm lực đẩy Ác-si-mét",
+  BUOY_READING_IN_WATER: "Lấy số chỉ lực kế khi vật trong nước làm lực đẩy",
+  BUOY_NOT_FULLY_SUBMERGED: "Đo nước tràn khi vật chưa chìm hoàn toàn",
+  // FL-06 lever
+  LEVER_ARM_IGNORED: "Bỏ qua cánh tay đòn khi dự đoán chiều quay",
+  LEVER_TILT_REVERSED: "Dự đoán ngược chiều quay của đòn bẩy",
+  LEVER_MOMENT_ADDED: "Cộng lực với cánh tay đòn thay vì nhân",
+  LEVER_SIGNED_ARM: "Lấy vị trí có dấu âm làm cánh tay đòn",
+  LEVER_ALWAYS_GAIN: "Cho rằng đòn bẩy nào cũng lợi về lực",
+  LEVER_DIRECTION_RULE: "Nhầm điều kiện đòn bẩy đổi hướng lực",
+  // FL-07 thermal energy
+  TH_FINAL_AS_RISE: "Ghi nhiệt độ cuối vào chỗ độ tăng nhiệt độ",
+  TH_NOT_PROPORTIONAL: "Không thấy độ tăng nhiệt độ tỉ lệ với năng lượng cung cấp",
+  TH_NO_HEAT_LOSS: "Cho rằng thí nghiệm thật không có hao phí nhiệt",
+  TH_ENERGY_HEAT_UNRELATED: "Cho rằng nhiệt lượng không liên quan tới điện năng cung cấp",
+  // FL-10 mass conservation
+  MC_THINKS_MASS_DECREASES: "Cho rằng khối lượng giảm sau phản ứng",
+  MC_THINKS_MASS_INCREASES: "Cho rằng khối lượng tăng sau phản ứng",
+  MC_NEW_SUBSTANCE_HEAVIER: "Cho rằng chất mới tạo thành làm khối lượng tăng",
+  MC_PRECIPITATE_NOT_WEIGHED: "Cho rằng chất rắn lắng xuống không được cân",
+  MC_OPEN_SYSTEM_GAS: "Không tính đến khí thoát ra khỏi cốc hở",
+  MC_CLOSED_SYSTEM_CHANGES: "Cho rằng khối lượng trong bình kín thay đổi",
 };
 
 export const misconceptionLabel = (id: string) => MISCONCEPTION_LABELS[id] ?? id;

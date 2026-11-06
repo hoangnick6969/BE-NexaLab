@@ -3,7 +3,7 @@ import { applicableAssignmentWhere } from "../../classes/application/class-acces
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
 import { buildContext } from "./tutor";
 import {
-  CHECKPOINT_HINT_CATALOGS, CheckpointHintInputError, evaluateOneCheckpoint, hasCheckpointHints, hasRunHints, planCheckpointHint, planRunHint,
+  CHECKPOINT_HINT_CATALOGS, CheckpointHintInputError, evaluateOneCheckpoint, hasCheckpointHints, hasRunHints, hasRunReflections, planCheckpointHint, planRunHint, runHintSteps,
   type PreviousCheckpointHint, type PreviousRunHint, type RunHintMoment,
 } from "./checkpoint-hint-rules";
 import { explainVerdict } from "./verdict-explanation";
@@ -225,6 +225,8 @@ async function hintableRun(db: any, actor: Actor, runId: string) {
 
 /** Scores the observed checkpoint with the activity evaluator; 400 when the input is not valid for it. */
 function observedCheckpoint(rubricRef: string, request: { criterion: string; state?: unknown; prediction?: unknown }) {
+  if (!hasRunReflections(rubricRef))
+    throw new BadRequestException({ code: "INVALID_CHECKPOINT", message: "Bài này không có suy ngẫm sau quan sát" });
   const checkpointId = request.criterion.startsWith("prediction:") ? request.criterion.slice("prediction:".length) : null;
   if (!checkpointId) throw new BadRequestException({ code: "INVALID_CHECKPOINT", message: "Bước này không có kết quả quan sát" });
   try {
@@ -242,6 +244,12 @@ export async function checkRunPrediction(db: any, actor: Actor, runId: string, r
   const { rubricRef } = await hintableRun(db, actor, runId);
   const observation = observedCheckpoint(rubricRef, request);
   return { criterion: request.criterion, mismatch: !observation?.predictionCorrect };
+}
+
+/** Steps of the run's Lab a learner can ask a moment-A hint about (labels only, no hint text). */
+export async function listRunHintSteps(db: any, actor: Actor, runId: string) {
+  const { rubricRef } = await hintableRun(db, actor, runId);
+  return { steps: runHintSteps(rubricRef), reflections: hasRunReflections(rubricRef), maxLevel: 2 };
 }
 
 export async function requestRunHint(db: any, actor: Actor, runId: string, request: RunHintRequest) {

@@ -35,7 +35,7 @@ describe("SAI-02A hint insight", () => {
       disagreements: [{ rubricRef: FW, criterion: "prediction:HUNT", misconception: "FW_ALL_DECREASE", note: "Em hiểu đúng, chọn nhầm", at: "2026-11-05T00:00:00.000Z" }],
     });
     expect(out.totals).toEqual({ targeted: 4, submitted: 3, passed: 1, notPassed: 2, notStarted: 1 });
-    expect(out).toMatchObject({ ruleVersion: "hint-insights@1", hintRules: "checkpoint-hints@4", misconceptionRules: "checkpoint-misconceptions@1", provider: "rules" });
+    expect(out).toMatchObject({ ruleVersion: "hint-insights@1", hintRules: "checkpoint-hints@5", misconceptionRules: "checkpoint-misconceptions@2", provider: "rules" });
     const steps = out.rubrics[0].steps;
     expect(steps.map((step) => step.criterion)).toEqual(CHECKPOINT_HINT_CATALOGS[FW].order);
     const hunt = steps.find((step) => step.criterion === "prediction:HUNT")!;

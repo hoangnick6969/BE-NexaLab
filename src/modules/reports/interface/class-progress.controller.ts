@@ -122,7 +122,7 @@ export class ClassProgressController {
       this.db.attempt.findMany({
         where: { assignmentId, studentId: { in: studentIds } },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        select: { id: true, studentId: true, verdict: true, simulationResult: true, labRun: { select: { execution: true } } },
+        select: { id: true, studentId: true, verdict: true, simulationResult: true, labState: true, labRunId: true, labRun: { select: { execution: true } } },
       }),
       this.db.hintLog.findMany({
         where: { OR: [
@@ -135,6 +135,13 @@ export class ClassProgressController {
     ]);
     const latest = new Map<string, (typeof attempts)[number]>();
     for (const attempt of attempts) if (!latest.has(attempt.studentId)) latest.set(attempt.studentId, attempt);
+    // Event Labs keep the learner's answers in run events; load them for the latest attempts only (B8 hypotheses).
+    const eventRuns = [...latest.values()].filter((attempt) => attempt.labRunId && CHECKPOINT_HINT_CATALOGS[String((attempt.labRun?.execution as any)?.rubricRef)]?.withEvents)
+      .map((attempt) => attempt.labRunId!);
+    const events = eventRuns.length
+      ? await this.db.labRunEvent.findMany({ where: { runId: { in: eventRuns } }, orderBy: [{ runId: "asc" }, { sequence: "asc" }], select: { runId: true, event: true } })
+      : [];
+    const eventsOf = (runId: string | null) => events.filter((row) => row.runId === runId).map((row) => row.event);
     return {
       assignmentId,
       ...buildHintInsight({
@@ -142,6 +149,8 @@ export class ClassProgressController {
         latest: [...latest.values()].map((attempt) => ({
           attemptId: attempt.id, studentId: attempt.studentId, verdict: attempt.verdict,
           rubricRef: String((attempt.labRun?.execution as any)?.rubricRef ?? ""), result: attempt.simulationResult,
+          evidence: CHECKPOINT_HINT_CATALOGS[String((attempt.labRun?.execution as any)?.rubricRef)]?.withEvents
+            ? { labState: attempt.labState, events: eventsOf(attempt.labRunId) } : attempt.labState,
         })),
         hints: hints.map((hint) => {
           const snapshot = (hint.contextSnapshot ?? {}) as any;

@@ -3,7 +3,7 @@ import type { Catalog, CriterionHints } from "./checkpoint-hint-rules";
 /**
  * SAI-01A step 3: after-submit hints for event-scored Labs (FL-06 lever, FL-07 thermal energy, FL-10 mass
  * conservation). Their results carry a criteria map instead of unmetCriteria, and the learner's answers
- * live in the run's server events, so `answerOf` reads `{ labState, events }`. Part of checkpoint-hints@4.
+ * live in the run's server events, so `answerOf` reads `{ labState, events }`. Part of checkpoint-hints@5.
  */
 
 const ANSWER_LETTER = /(?:[đĐ]áp án|[lL]ựa chọn|[pP]hương án|[cC]họn)\s+[ABC](?![\p{L}\p{N}])/u;
@@ -149,6 +149,188 @@ const MASS: Catalog = {
       ["Với mỗi tình huống, xác định có chất nào rời khỏi hệ trên cân không, rồi suy ra số chỉ cân.", "Xét riêng từng tình huống: bình có nắp hay không, và có khí sinh ra hay không."],
       ["Tổng khối lượng các chất luôn bảo toàn, nhưng cân chỉ đo phần còn lại trên cân. Áp dụng điều này cho từng tình huống.", "Trả lời từng tình huống bằng hai câu hỏi: có chất thoát ra không, và cân còn đo được gì."],
     ], [/(hở|thoát ra)[^.]{0,30}giảm/i]),
+  },
+};
+
+// ---------------------------------------------------------------------------------------------
+// B8 for event Labs (checkpoint-misconceptions@2): hypotheses from the learner's own events or answers and the
+// stored model output. Levels 1–2 wording only; levels 3–4 stay shared.
+
+LEVER.criteria.rotation = {
+  ...LEVER.criteria.rotation,
+  detectFrom: (evidence, result) => {
+    const predicted = eventsOf(evidence, "PREDICTED_ROTATION")[0]?.predictions ?? [];
+    const actual = (result?.observations ?? []).map((item: any) => item?.displayState);
+    if (predicted.some((item: any, i: number) => item?.prediction === "LEVEL" && actual[i] && actual[i] !== "LEVEL")) return "LEVER_ARM_IGNORED";
+    if (predicted.some((item: any, i: number) => actual[i] && actual[i] !== "LEVEL" && item?.prediction !== "LEVEL" && item?.prediction !== actual[i])) return "LEVER_TILT_REVERSED";
+    return null;
+  },
+  misconceptions: {
+    LEVER_ARM_IGNORED: [
+      "Hai bên treo quả nặng như nhau nhưng ở khoảng cách khác nhau tới điểm tựa thì thanh có còn nằm ngang không?",
+      "Tác dụng làm quay của một lực phụ thuộc cả độ lớn của lực và khoảng cách từ điểm treo tới điểm tựa.",
+    ],
+    LEVER_TILT_REVERSED: [
+      "Phía có tác dụng làm quay mạnh hơn thì đầu thanh bên đó đi lên hay đi xuống?",
+      "Thanh quay theo phía có moment lực lớn hơn: đầu thanh ở phía đó bị kéo xuống.",
+    ],
+  },
+};
+
+LEVER.criteria.moment = {
+  ...LEVER.criteria.moment,
+  detectFrom: (evidence) => {
+    const measured = eventsOf(evidence, "MEASURED_MOMENT")[0];
+    if (!measured) return null;
+    if (measured.recordedMomentMilliNewtonMillimetres === measured.recordedForceMilliNewtons + Math.abs(measured.recordedArmMillimetres)) return "LEVER_MOMENT_ADDED";
+    if (measured.recordedArmMillimetres < 0) return "LEVER_SIGNED_ARM";
+    return null;
+  },
+  misconceptions: {
+    LEVER_MOMENT_ADDED: [
+      "Moment lực được tính bằng tổng hay bằng tích của lực và cánh tay đòn?",
+      "Moment lực bằng lực nhân với cánh tay đòn, vì thế đơn vị của nó là niutơn nhân mét.",
+    ],
+    LEVER_SIGNED_ARM: [
+      "Cánh tay đòn là một khoảng cách. Một khoảng cách có thể là số âm không?",
+      "Cánh tay đòn là khoảng cách từ điểm tựa tới điểm đặt lực, luôn dương; dấu trên thước chỉ cho biết vật treo ở bên nào.",
+    ],
+  },
+};
+
+LEVER.criteria.application = {
+  ...LEVER.criteria.application,
+  detectFrom: (evidence, result) => {
+    const applied = eventsOf(evidence, "APPLIED_LEVER_CASE")[0];
+    const actual = result?.application;
+    if (!applied || !actual) return null;
+    if (applied.forceAdvantage === "GAIN" && actual.forceAdvantage !== "GAIN") return "LEVER_ALWAYS_GAIN";
+    if (applied.changesForceDirection !== actual.changesForceDirection) return "LEVER_DIRECTION_RULE";
+    return null;
+  },
+  misconceptions: {
+    LEVER_ALWAYS_GAIN: [
+      "Có phải đòn bẩy nào cũng giúp lợi về lực? Cánh tay đòn của lực em tác dụng dài hơn hay ngắn hơn cánh tay đòn của vật?",
+      "Đòn bẩy chỉ lợi về lực khi cánh tay đòn của lực tác dụng dài hơn cánh tay đòn của vật cần nâng.",
+    ],
+    LEVER_DIRECTION_RULE: [
+      "Điểm tựa nằm ở đâu so với vật và chỗ em đặt lực?",
+      "Hướng của lực tác dụng so với hướng vật chuyển động phụ thuộc vào vị trí điểm tựa so với vật và điểm đặt lực.",
+    ],
+  },
+};
+
+const finalAsRise = (event: any, observation: any) =>
+  event && observation && event.riseMilliCelsius !== observation.riseMilliCelsius && event.riseMilliCelsius === observation.thermometerReadingMilliCelsius;
+const riseHints = {
+  TH_FINAL_AS_RISE: [
+    "Độ tăng nhiệt độ là nhiệt độ em đọc trên nhiệt kế, hay là phần chênh so với lúc bắt đầu đun?",
+    "Độ tăng nhiệt độ bằng nhiệt độ lúc đo trừ đi nhiệt độ ban đầu của nước.",
+  ] as const,
+};
+THERMAL.criteria.R3 = {
+  ...THERMAL.criteria.R3,
+  detectFrom: (evidence, result) => finalAsRise(eventsOf(evidence, "RECORDED_FIRST_MEASUREMENT")[0], result?.observations?.[0]) ? "TH_FINAL_AS_RISE" : null,
+  misconceptions: riseHints,
+};
+THERMAL.criteria.R4 = {
+  ...THERMAL.criteria.R4,
+  detectFrom: (evidence, result) => finalAsRise(eventsOf(evidence, "RECORDED_SECOND_MEASUREMENT")[0], result?.observations?.[1]) ? "TH_FINAL_AS_RISE" : null,
+  misconceptions: riseHints,
+};
+THERMAL.criteria.R5 = {
+  ...THERMAL.criteria.R5,
+  detectFrom: (evidence, result) => {
+    const [a, b] = result?.observations ?? [];
+    const choice = eventsOf(evidence, "EXPLAINED_ENERGY_BOUNDARY")[0]?.ratioChoice;
+    return a && b && b.riseMilliCelsius === 2 * a.riseMilliCelsius && choice && choice !== "double" ? "TH_NOT_PROPORTIONAL" : null;
+  },
+  misconceptions: {
+    TH_NOT_PROPORTIONAL: [
+      "Lần đo thứ hai đun lâu hơn lần đầu bao nhiêu lần, và năng lượng joulemeter ghi được thay đổi theo thế nào?",
+      "So hai lần đo: tỉ số năng lượng giữa hai lần và tỉ số độ tăng nhiệt độ giữa hai lần có liên hệ gì với nhau?",
+    ],
+  },
+};
+THERMAL.criteria.R6 = {
+  ...THERMAL.criteria.R6,
+  detectFrom: (evidence) => {
+    const choice = eventsOf(evidence, "EXPLAINED_ENERGY_BOUNDARY")[0]?.boundaryChoice;
+    return choice === "always_equal" ? "TH_NO_HEAT_LOSS" : choice === "unrelated" ? "TH_ENERGY_HEAT_UNRELATED" : null;
+  },
+  misconceptions: {
+    TH_NO_HEAT_LOSS: [
+      "Trong một thí nghiệm thật, có phần nhiệt nào truyền ra cốc, nắp và không khí xung quanh không?",
+      "Hãy nghĩ về hao phí nhiệt: nếu một phần nhiệt đi ra ngoài thì phép so sánh hai đại lượng thay đổi thế nào?",
+    ],
+    TH_ENERGY_HEAT_UNRELATED: [
+      "Khi số chỉ joulemeter tăng lên, nhiệt độ của nước thay đổi ra sao?",
+      "Điện năng qua dây đun chuyển thành nhiệt làm nước nóng lên, nên hai đại lượng này gắn với nhau.",
+    ],
+  },
+};
+
+const MASS_DIRECTION = {
+  MC_THINKS_MASS_DECREASES: [
+    "Em đang dựa vào hai số trên màn hình cân, hay dựa vào việc có chất mới xuất hiện?",
+    "Hãy đặt hai số cân trước và sau phản ứng cạnh nhau rồi so trực tiếp, không suy ra từ hiện tượng.",
+  ],
+  MC_THINKS_MASS_INCREASES: [
+    "Em đang dựa vào hai số trên màn hình cân, hay dựa vào việc có chất mới xuất hiện?",
+    "Hãy đặt hai số cân trước và sau phản ứng cạnh nhau rồi so trực tiếp, không suy ra từ hiện tượng.",
+  ],
+} as const;
+const stateOf = (evidence: any) => evidence?.labState ?? {};
+MASS.criteria.C3 = {
+  ...MASS.criteria.C3,
+  detectFrom: (evidence) => ({ "compare.decrease": "MC_THINKS_MASS_DECREASES", "compare.increase": "MC_THINKS_MASS_INCREASES" } as Record<string, string>)[stateOf(evidence).comparison] ?? null,
+  misconceptions: MASS_DIRECTION,
+};
+MASS.criteria.C4 = {
+  ...MASS.criteria.C4,
+  detectFrom: (evidence) => ({ "explain.new_substance_heavier": "MC_NEW_SUBSTANCE_HEAVIER", "explain.solid_not_weighed": "MC_PRECIPITATE_NOT_WEIGHED" } as Record<string, string>)[stateOf(evidence).explanationAttempts?.at?.(-1)] ?? null,
+  misconceptions: {
+    MC_NEW_SUBSTANCE_HEAVIER: [
+      "Khi chất mới tạo thành, có nguyên tử nào được thêm vào từ bên ngoài cốc không?",
+      "Hãy đếm nguyên tử từng loại trước và sau phản ứng: có loại nào xuất hiện thêm hay biến mất không?",
+    ],
+    MC_PRECIPITATE_NOT_WEIGHED: [
+      "Chất rắn lắng xuống đáy cốc có rời khỏi đĩa cân không?",
+      "Cân tính mọi thứ đang nằm trên đĩa, kể cả chất ở đáy cốc; chỉ chất rời khỏi cân mới không được tính.",
+    ],
+  },
+};
+MASS.criteria.C5 = {
+  ...MASS.criteria.C5,
+  detectFrom: (evidence) => ({ "35-and-34": "MC_THINKS_MASS_DECREASES", "34-and-35": "MC_THINKS_MASS_INCREASES" } as Record<string, string>)[stateOf(evidence).calculation] ?? null,
+  misconceptions: {
+    MC_THINKS_MASS_DECREASES: [
+      "Em đã cộng đủ cả hai chất ở mỗi phía của phương trình chưa?",
+      "Cộng riêng khối lượng hai chất tham gia và hai chất tạo thành, rồi so hai tổng với nhau.",
+    ],
+    MC_THINKS_MASS_INCREASES: [
+      "Em đã cộng đủ cả hai chất ở mỗi phía của phương trình chưa?",
+      "Cộng riêng khối lượng hai chất tham gia và hai chất tạo thành, rồi so hai tổng với nhau.",
+    ],
+  },
+};
+MASS.criteria.C6 = {
+  ...MASS.criteria.C6,
+  detectFrom: (evidence) => {
+    const state = stateOf(evidence);
+    if (state.applicationV1 && state.applicationV1 !== "decrease") return "MC_OPEN_SYSTEM_GAS";
+    if (state.applicationV2 && state.applicationV2 !== "same") return "MC_CLOSED_SYSTEM_CHANGES";
+    return null;
+  },
+  misconceptions: {
+    MC_OPEN_SYSTEM_GAS: [
+      "Khí bay ra khỏi cốc hở có còn nằm trên đĩa cân không?",
+      "Số chỉ của cân gồm những chất đang nằm trên đĩa cân. Khí đã bay đi thì sao?",
+    ],
+    MC_CLOSED_SYSTEM_CHANGES: [
+      "Trong bình kín, có chất nào rời khỏi đĩa cân không?",
+      "Hãy xét xem chất nào còn nằm trên đĩa cân khi cả bình kín đặt trên cân, rồi suy ra số chỉ.",
+    ],
   },
 };
 
