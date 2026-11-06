@@ -239,7 +239,7 @@ development_status:
   sai-03a-t2-quiz-hint-api-and-panel: review
   sai-03-t3-basic-exercise-hints: backlog
   b3-what-if-rules-fl21-fl20: review
-  b3-what-if-more-labs: backlog
+  b3-what-if-more-labs: review # what-if@2: FL-25, FL-03, FL-05, FL-27, FL-06, FL-07
   epic-sai-01-lab-hint-tutor: backlog
   sai-01-t0-activate-fr22-scope: backlog
   sai-01-t1-versioned-rules-escalation-eligibility: backlog

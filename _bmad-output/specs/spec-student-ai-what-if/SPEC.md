@@ -1,7 +1,7 @@
 ---
 id: SPEC-student-ai-what-if
 status: review
-slice: B3 rules part ("Nếu… thì sao?" on the Lab scene); free-text questions stay with SAI-04 (SG-2)
+slice: B3 rules part (what-if@1 FL-21/FL-20; what-if@2 six more Labs) ("Nếu… thì sao?" on the Lab scene); free-text questions stay with SAI-04 (SG-2)
 ideas: B3 (student-ai idea list; owner 2026-11-06: "làm B3 bằng luật trước")
 companions:
   - ../spec-student-ai-checkpoint-hints/SPEC.md
@@ -37,9 +37,29 @@ itself, with a short "why" built from the model's data.
 - **CAP-3 — Versioned rules.** `what-if@1` in `FE-NexaLab/src/features/labs/biology/ecology/what-if.ts`, pure, VI
   and EN. Uses only `@nexalab/sim` exports; no thresholds or data copied into the FE.
 
+## what-if@2 — six more Labs (owner 2026-11-06: "làm tiếp bước 3")
+
+`FE-NexaLab/src/features/labs/runtime/what-if-labs.ts` + `LabWhatIf`. Answers come from each Lab's model in
+`@nexalab/sim`; where the model needs an object the Lab pins at run time (FL-05), a labelled example object is used
+with the model's own formula.
+
+| Lab | Where | Questions |
+| --- | --- | --- |
+| FL-25 em-induction | free explore (after every checkpoint) | S pole pushed in / pulled out (direction vs N), open circuit, magnet still inside, turning anticlockwise |
+| FL-03 density | after a passed attempt | iron block twice as big, aluminium of the same size, 80 mL instead of 40 mL of water |
+| FL-05 buoyancy | after a passed attempt | half submerged, salt water, twice as heavy with the same volume (example object) |
+| FL-27 gene | after a passed attempt | UGG→UGA (nonsense), UUC→UUU (silent), GGA→GAA (missense) from the standard code |
+| FL-06 lever | after a passed attempt (floating panel) | three weight layouts: balanced, right down, left down, with N·m moments |
+| FL-07 thermal | after a passed attempt (floating panel) | heating 25 s and 75 s, compared with 50 s |
+
+- **D3:** Labs without a free explore show what-ifs only after a **passed** attempt: several answers would otherwise
+  let a not-passed learner infer a graded answer (for example the N-pole direction from the S-pole one).
+- Not offered: FL-01 (the model has only the two graded states), FL-10 (one fixed reaction, no other scenario),
+  FL-16 (eye-optics model not in the FE sim package).
+
 ## Non-goals
 
-- Typed what-if questions, other Labs (FL-01, FL-25, station and event Labs), any LLM call.
+- Typed what-if questions, FL-01, FL-10, FL-16, any LLM call.
 - Second-order effects (the model is first-order by design).
 
 ## Success signal
