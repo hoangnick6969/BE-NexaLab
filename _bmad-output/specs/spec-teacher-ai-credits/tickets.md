@@ -5,6 +5,7 @@
 - After at least one month of TAI-01 in use, export per-purpose token distributions (p50, p90 and max input/output per item). Propose `PricingVersion` values and record them in `_bmad-output/implementation-artifacts/tai-05-pricing-evidence.md`. Record the initial grant and expiry decisions in `.memlog.md`.
 - **Accept when:** the evidence note cites the date range and job count; the product owner approves prices, the initial grant and the expiry policy.
 - **Depends on:** TAI-T6 (TAI-01 golden evaluation and journey) plus one month of usage.
+- **Sequencing decision still open:** the one-month sample can calibrate prices, but TAI-01's no-credit launch conflicts with the product requirement to show an estimate and reserve before each operation. The product owner must explicitly allow an internal pilot without credits or move the minimum ledger path before teacher-facing launch.
 
 ## TAI5-T1 — Ledger schema and posting primitives
 

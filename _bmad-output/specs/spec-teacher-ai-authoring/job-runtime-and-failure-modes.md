@@ -48,8 +48,8 @@ interface AiProvider {
 }
 ```
 
-- The Gemini adapter uses `GEMINI_API_KEY` and `GEMINI_MODEL`. It requests JSON output (`responseMimeType: application/json` with the `resource-items@1` schema) and reads token counts from the response usage metadata. HTTP 429 (free-tier quota), 5xx and network errors map to `PROVIDER_UNAVAILABLE`. An abort maps to `PROVIDER_TIMEOUT`. A blocked or empty candidate maps to `OUTPUT_SCHEMA_INVALID`. Other 4xx responses map to `INTERNAL_ERROR` (non-retryable).
-- Free-tier pacing: each instance processes one job at a time and waits at least `AI_PROVIDER_MIN_INTERVAL_MS` (default 6000) between provider calls. The provider's own limits are read from the Google AI Studio console and are not hard-coded.
+- If provider/legal approval selects Gemini, the planned adapter uses `GEMINI_API_KEY` and `GEMINI_MODEL`. It requests JSON output (`responseMimeType: application/json` with the `resource-items@1` schema) and reads token counts from the response usage metadata. HTTP 429, 5xx and network errors map to `PROVIDER_UNAVAILABLE`. An abort maps to `PROVIDER_TIMEOUT`. A blocked or empty candidate maps to `OUTPUT_SCHEMA_INVALID`. Other 4xx responses map to `INTERNAL_ERROR` (non-retryable). This is a planned contract, not an approved or implemented integration.
+- If a free tier is ever approved for a restricted non-personal-data pilot, each instance processes one job at a time and waits at least `AI_PROVIDER_MIN_INTERVAL_MS` (default 6000) between calls. Provider limits are read from its current console and are not hard-coded. See `provider-and-data-flow.md` for the unresolved under-18 eligibility gate.
 - The fake adapter returns fixture JSON chosen by lesson id, and can be forced to emit invalid JSON, a timeout or unsafe content for tests. Boot fails if `AI_PROVIDER=fake` and `APP_ENV=production`.
 - The prompt carries the snapshot as a JSON block and the teacher instruction inside explicit delimiters. The system text states that all supplied strings are data and the output must be JSON matching `resource-items@1`.
 

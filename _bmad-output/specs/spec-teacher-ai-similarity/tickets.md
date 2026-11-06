@@ -11,7 +11,7 @@ Part A (T1–T2) can ship right after TAI-01. Part B (T3–T5) waits for TAI2-T2
 ## TAI3-T2 — Cross-class duplicate warnings
 
 - `duplicate-check` route, `duplicateWarnings` on create, update and import preview, TAI-01 corpus switch with `*_ELSEWHERE` flags, and FE warnings and badges.
-- **Accept when:** a copy from the teacher's other class and a library copy both warn with source title; `teacher.outsider`'s identical item never appears in matches or counts; direct authoring is never blocked; the TAI-01 same-class `EXACT_DUPLICATE` accept guard still returns 409.
+- **Accept when:** a copy from the teacher's other class and a library copy both warn with source title; `teacher.outsider`'s identical item never appears in matches or counts; direct authoring and TAI-01 review are never blocked by duplicate warnings.
 - **Depends on:** TAI3-T1, TAI-T4.
 
 ## TAI3-T3 — `subsim@1` similarity engine

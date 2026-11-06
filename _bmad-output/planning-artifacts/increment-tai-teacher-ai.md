@@ -27,12 +27,12 @@ Delegate one ticket per task. Use `$bmad-build` and implement only that ticket a
 
 | Epic | Spec folder | Delivers | Depends on | Readiness gate |
 | --- | --- | --- | --- | --- |
-| TAI-01 Authoring | `../specs/spec-teacher-ai-authoring/` | AI job runtime; grounded DECK/STUDY_QUIZ/TEST drafts; per-item review; duplicate warnings; quota | I2 Class Space resources | G-1 |
+| TAI-01 Authoring | `../specs/spec-teacher-ai-authoring/` | AI job runtime; grounded DECK/STUDY_QUIZ/TEST drafts; per-item review; duplicate warnings; quota | I2 Class Space resources | G-1, G-6 |
 | TAI-02 Essay assessment | `../specs/spec-teacher-ai-essay-assessment/` | Written-task resource, rubric, AI criterion suggestions, teacher final score | TAI-01, I3 | G-1, G-2 |
 | TAI-03 Similarity | `../specs/spec-teacher-ai-similarity/` | Cross-class question duplicates; in-assignment submission similarity | TAI-01 (part a), TAI-02 (part b) | G-1 |
 | TAI-04 Evidence insights | `../specs/spec-teacher-ai-evidence-insights/` | Versioned rule-based consistency insights on top of B2 signals | B2; TAI-02/03 for some rules | G-1, G-5 |
 | TAI-05 AI credits | `../specs/spec-teacher-ai-credits/` | Credit ledger, pricing versions, reserve/settle/refund per job | TAI-01 | G-1, G-3 |
-| TAI-06 Lab drafting | `../specs/spec-teacher-ai-lab-drafting/` | AI-proposed challenge variant (allowlisted lab + in-range parameters) on a draft lesson, checked by the engine | TAI-01 | G-1, G-4 |
+| TAI-06 Lab drafting | `../specs/spec-teacher-ai-lab-drafting/` | AI-proposed challenge variant (allowlisted lab + in-range parameters) on a draft lesson, checked by the engine | TAI-01 | G-1, G-4, G-6 |
 
 ```mermaid
 flowchart LR
@@ -52,12 +52,13 @@ flowchart LR
 | Gate | Decision required | Owner | Blocks |
 | --- | --- | --- | --- |
 | G-1 | Activate FR-21 as a new increment: amend PRD §10 item 17 and the ARCHITECTURE-SPINE Deferred bullet, add AD-17 (ticket TAI-T0) | Product owner / supervising lecturer | All epics |
-| G-2 | Provider tier that does not use API data to improve products (the Gemini free tier is excluded); legal basis for sending minors' text (NFR-07, Decree 13/2023/NĐ-CP); PII stripping approved | Product owner | TAI-02 suggestions; TAI-04 explanation rules |
+| G-2 | Provider terms explicitly permit use in NexaLab's under-18 context; data-use/DPA terms, current-law basis, age-specific notices/consents as applicable, redaction limits, cross-border transfer and retention/deletion approved. Review Law 91/2025/QH15, Decree 356/2025/NĐ-CP and Decree 330/2026/NĐ-CP. Gemini free tier is excluded for student text; paid tier alone does not clear age eligibility. | Product owner / legal reviewer | TAI-02 suggestions; TAI-04 explanation rules |
 | G-3 | At least one month of measured TAI-01 token usage to set `PricingVersion` | Product owner | TAI-05 |
 | G-4 | PO accepts TAI-06 v1 as challenge variants on existing labs (no custom Lab builder); a named reviewer approves `CHALLENGE_PARAMETERS` ranges (Q-C2-04) for `circuit`, `chemistry`, `eye` | Product owner / reviewer | TAI-06 |
 | G-5 | PO approves the `insights@1` thresholds and whether `SUDDEN_UNAIDED_PASS` is shown in the pilot | Product owner / supervising lecturer | TAI-04 |
+| G-6 | Provider explicitly permits use inside NexaLab's under-18 context; lesson/instruction data boundaries, licensed-source processing rights, transfer, retention and deletion are approved. If Gemini is retained, record written interpretation of its under-18 terms; otherwise select a permitted provider. | Product owner / legal reviewer / curriculum owner | TAI-01 and TAI-06 provider calls |
 
-Decided (see `.memlog.md` of TAI-01): the pilot provider is the Gemini API free tier, with the model id set in `GEMINI_MODEL`; the golden reviewer is the supervising lecturer; TAI-01 quota and quality thresholds are fixed.
+Prior design choice (not current provider approval; see `.memlog.md` of TAI-01): Gemini API free tier with model id in `GEMINI_MODEL`. Revalidate against the current under-18 eligibility terms before any integration. The golden reviewer is the supervising lecturer; TAI-01 quota and quality thresholds are specified.
 
 ## Cross-cutting invariants
 
@@ -66,7 +67,7 @@ Decided (see `.memlog.md` of TAI-01): the pilot provider is the Gemini API free 
 - No provider call runs inside a database transaction. All AI work runs through the TAI-01 job runtime.
 - The system never draws conclusions about cheating, "true ability" or student ranking. Insights and similarity are evidence for teacher review only.
 - Missing and unauthorized resources return the same 404. Students and parents never see AI suggestions, similarity or insights about other students.
-- Student data is never sent to a provider tier that may use it for training.
+- Student data is never sent until the provider is approved for this under-18 product context, the legal basis and age-specific safeguards are documented, and data-use, cross-border, retention and deletion terms are approved. A paid tier by itself is insufficient.
 
 ## Increment order
 
@@ -129,7 +130,7 @@ As a teacher, I want to accept, edit or reject each item and turn the accepted o
 **Implements:** CAP-4, CAP-5. **Dependencies:** TAI-T3.
 
 **Acceptance Criteria:**
-**Given** a succeeded job, **when** the teacher accepts an `EXACT_DUPLICATE` item unedited, **then** the API returns 409 `AI_ITEM_DUPLICATE_REQUIRES_EDIT`.
+**Given** a succeeded job with exact or near duplicate flags, **when** the teacher reviews the items, **then** warnings and source references are visible and the teacher can accept, edit or reject each item.
 **Given** undecided items or zero accepted items, **when** the teacher materializes, **then** the API returns 409 `AI_REVIEW_INCOMPLETE`.
 **Given** all items decided, **when** the teacher materializes, **then** one `ClassResource` DRAFT is created through `normalizeResourceContent`, linked by `materializedResourceId`, and invisible to students until published. A second materialization returns 409, and the same key replays.
 **And** TEST keeps the answer key, STUDY_QUIZ drops it, and non-AI resources are unaffected.
@@ -141,7 +142,7 @@ As a teacher, I want one panel to generate, review and materialize AI drafts, so
 **Implements:** CAP-1..CAP-6 (UI). **Dependencies:** TAI-T2 and TAI-T4 API contract frozen.
 
 **Acceptance Criteria:**
-**Given** the owned Class Space resources view, **when** the teacher generates, waits, reviews and materializes, **then** quota, loading, still-processing, failed, cancelled, duplicate-blocked and stale-lesson states render, and decisions persist across reload.
+**Given** the owned Class Space resources view, **when** the teacher generates, waits, reviews and materializes, **then** quota, loading, still-processing, failed, cancelled, duplicate-warning and stale-lesson states render, and decisions persist across reload.
 **And** no student or parent route renders AI data.
 
 ### Story TAI-T6: Golden evaluation and end-to-end proof
@@ -168,7 +169,7 @@ From TAI-02 on, each epic lists its stories as a table. The acceptance criteria 
 | TAI2-T1 | WRITTEN_TASK kind and rubric content contract | Teacher authors a written task with a versioned rubric | TAI-T0 |
 | TAI2-T2 | Assign and submit written tasks | Student submits under existing deadline/late rules | TAI2-T1 |
 | TAI2-T3 | Teacher rubric grading and role views | Teacher grades per criterion; student/parent see status | TAI2-T2 |
-| TAI2-T4 | ASSESS_SUBMISSION job purpose | Redacted, consented submission becomes a verified AI suggestion | TAI2-T0, TAI2-T3, TAI-01 done |
+| TAI2-T4 | ASSESS_SUBMISSION job purpose | Policy-eligible, minimized submission becomes a verified AI suggestion; consent is enforced where required by the approved legal path | TAI2-T0, TAI2-T3, TAI-01 done |
 | TAI2-T5 | Shadow mode and evaluation report | Lecturer compares hidden AI suggestions with blind grades on ≥ 100 responses | TAI2-T4 |
 | TAI2-T6 | Assisted grading | Teacher accepts, edits or rejects suggestions; AI never writes the grade | TAI2-T5 pass |
 | TAI2-T7 | End-to-end journey and negatives | Real journey plus outsider, injection, non-consent and outage probes | TAI2-T6 |

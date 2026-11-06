@@ -13,7 +13,7 @@ Both functions are pure and versioned. Changing any constant or step requires a 
 
 | Match | Same class | Other own class / library |
 | --- | --- | --- |
-| EXACT | `EXACT_DUPLICATE` (TAI-01: blocks unedited AI accept; warns in authoring) | `EXACT_DUPLICATE_ELSEWHERE` (warn) |
+| EXACT | `EXACT_DUPLICATE` (warning; teacher decides) | `EXACT_DUPLICATE_ELSEWHERE` (warning; teacher decides) |
 | NEAR | `NEAR_DUPLICATE` | `NEAR_DUPLICATE_ELSEWHERE` |
 
 ## `subsim@1` — submission similarity (Part B)

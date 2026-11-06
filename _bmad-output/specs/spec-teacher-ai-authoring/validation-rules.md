@@ -18,19 +18,19 @@ Validation is a pure function `validateItems(snapshot, targetKind, parsedOutput,
 | VR-06 | `sourceRefs` non-empty and every id exists in `snapshot.passages` | `GROUNDING_REF_INVALID` |
 | VR-07 | `outcomeCodes` ⊆ snapshot outcome codes | `OUTCOME_INVALID` |
 | VR-08 | Safety: no instruction for real-world hazardous procedures (mains electricity, mixing/tasting chemicals, self-made devices, medical advice), reusing and extending the pattern list in `labs/infrastructure/llm.ts` | `SAFETY_REJECTED` |
-| VR-09 | Item is not an exact duplicate of an earlier item in the same batch | `BATCH_DUPLICATE` |
 | VR-10 | Items beyond the requested `itemCount` | `OVER_COUNT` |
 
 ## Warning flags (item kept, shown to teacher)
 
 | Id | Rule | Flag |
 | --- | --- | --- |
-| VW-01 | `normalize(prompt)` (or `front`) equals an existing class question/card | `EXACT_DUPLICATE` (blocks unedited Accept) |
+| VW-01 | `normalize(prompt)` (or `front`) equals an existing class question/card | `EXACT_DUPLICATE` warning; teacher may accept, edit or reject |
 | VW-02 | Character-trigram Jaccard ≥ 0.85 with an existing class item or another batch item | `NEAR_DUPLICATE` |
 | VW-03 | Prompt or any option contains a digit together with a unit or operator (`[0-9]` and (`=`, `%`, a unit token such as `V`, `A`, `Ω`, `g`, `mol`, `°C`, `km/h`)) | `NUMERIC_REVIEW` |
 | VW-04 | `correctOption` is the longest option and is at least 1.5× the mean length of the others | `ANSWER_LENGTH_CUE` |
 | VW-05 | Prompt contains a negation (`không`, `sai`, `KHÔNG đúng`) | `NEGATIVE_STEM` |
 | VW-06 | Requested difficulty differs from item difficulty | `DIFFICULTY_MISMATCH` |
+| VW-07 | Exact or near duplicate of an earlier item in the same batch | `BATCH_DUPLICATE` |
 
 `EDITED` payloads re-run VR-02..VR-05 and VR-08 (returning `AI_EDIT_INVALID` on failure) and recompute VW flags. A duplicate check against the original item is not applied to its own edit.
 

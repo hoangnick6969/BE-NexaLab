@@ -118,11 +118,11 @@ All teacher routes require owner (`ownedClass`) and return the same 404 for miss
 | `GET classes/:id/assignments/:aid/written-status` | Recipients with current submission, status, latest grade, and (assist mode only) latest suggestion summary. |
 | `GET classes/:id/assignments/:aid/submissions/:sid` | Full responses, rubric with anchors, grade history, suggestions (assist mode only). |
 | `POST classes/:id/assignments/:aid/submissions/:sid/grades` | Body `{ kind, criterionPoints, feedback?, basedOnSuggestionId? }`. Submission must be gradeable and current. Every criterion of the graded resource version gets points in `[0, maxPoints]` on the half-point grid. `*_AI` kinds require a suggestion of this submission in assist mode; `ACCEPTED_AI` must equal the suggestion's valid points exactly. |
-| `POST classes/:id/assignments/:aid/ai-assessments` | Body `{ submissionIds: string[] }` (1–50). Creates one `ASSESS_SUBMISSION` job per eligible submission (gradeable, current, consented, AI mode not `off`). Returns `{ created: AiJobView[], skipped: [{ submissionId, reason }] }`. Idempotent per key. |
+| `POST classes/:id/assignments/:aid/ai-assessments` | Body `{ submissionIds: string[] }` (1–50). Creates one `ASSESS_SUBMISSION` job per eligible submission (gradeable, current, eligible under the approved legal/provider policy, consented where that policy requires consent, AI mode not `off`). Returns `{ created: AiJobView[], skipped: [{ submissionId, reason }] }`. Idempotent per key. |
 | `GET classes/:id/ai-jobs/:jobId` | TAI-01 route; for this purpose returns the suggestion (hidden fields in shadow mode, see below). |
 | `GET /admin/ai-assessment/evaluation?promptVersion=` | Admin-only shadow report: count, MAE (10-point), within-±1 rate, per-criterion agreement, evidence verification rate. |
 
-Skip reasons: `NOT_GRADEABLE`, `NOT_CURRENT`, `NO_CONSENT`, `AI_MODE_OFF`, `ALREADY_SUGGESTED` (same submission and prompt version).
+Skip reasons: `NOT_GRADEABLE`, `NOT_CURRENT`, `AI_POLICY_INELIGIBLE`, `CONSENT_REQUIRED` (only when the approved legal path requires it), `AI_MODE_OFF`, `ALREADY_SUGGESTED` (same submission and prompt version). Final eligibility rules and reason codes are blocked on TAI2-T0; `ParentConsent` must not be treated as a universal legal-basis switch.
 
 In shadow mode, teacher routes never return suggestion content or existence. The evaluation report is the only reader.
 
