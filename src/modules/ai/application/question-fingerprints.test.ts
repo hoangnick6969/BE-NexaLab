@@ -310,3 +310,70 @@ describe("backfill", () => {
     expect(fingerprints().filter((f) => f.sourceKind === "CLASS_RESOURCE").map((f) => f.sourceId)).toEqual(["res-ok"]);
   });
 });
+
+describe("TAI3-T2 cross-class duplicate warnings", () => {
+  const service = () => new ClassResourcesService(db);
+  const body = (title: string, prompt: string, kind = "TEST") => ({
+    kind, title, lessonId: "lesson-lib",
+    content: kind === "DECK" ? { cards: [{ front: prompt, back: "x" }] } : { questions: [{ prompt, options: ["A", "B"], ...(kind === "TEST" ? { correctOption: 0 } : {}) }] },
+  });
+  const classReq = (classId: string) => service().create(classId, req(), body("Đề gốc", "Dòng điện là gì?"));
+
+  it("warns with source title for a copy in the teacher's other class and in the library, never blocks", async () => {
+    await syncLibraryLessonFingerprints(db, "lesson-lib");
+    await classReq("class-b");
+    const created: any = await service().create("class-a", req(), body("Đề mới", "  dòng điện LÀ GÌ "));
+    expect(db.classResource.rows.map((r: Row) => r.id)).toContain(created.id);
+    expect(created.duplicateWarnings).toHaveLength(1);
+    const flags = created.duplicateWarnings[0].matches.map((m: any) => [m.flag, m.source.title, m.source.className ?? null]);
+    expect(flags).toEqual(expect.arrayContaining([["EXACT_DUPLICATE_ELSEWHERE", "Đề gốc", "B"], ["EXACT_DUPLICATE_ELSEWHERE", "Mạch điện", null]]));
+  });
+
+  it("never returns teacher.outsider's identical question, not even as a count", async () => {
+    db.classResource.rows.push({ id: "res-x", title: "Đề người khác", classId: "class-x", kind: "TEST", status: "PUBLISHED", version: 1, content: { questions: [{ id: "q", prompt: "Câu riêng của lớp X" }] } });
+    await syncClassResourceFingerprints(db, "res-x");
+    const result: any = await service().duplicateCheck("class-a", req(), { kind: "TEST", items: [{ text: "Câu riêng của lớp X" }] });
+    expect(result).toEqual({ algorithm: "qdup@1", warnings: [] });
+  });
+
+  it("duplicate-check flags same-class and near matches, and excludes the revise lineage when a title is given", async () => {
+    const original: any = await classReq("class-a");
+    await service().publish("class-a", original.id, req());
+    await service().revise("class-a", original.id, req());
+    const withoutLineage: any = await service().duplicateCheck("class-a", req(), { kind: "TEST", items: [{ text: "Dòng điện là gì?" }, { text: "Hoàn toàn khác" }] });
+    expect(withoutLineage.warnings).toHaveLength(1);
+    expect(withoutLineage.warnings[0]).toMatchObject({ index: 0 });
+    expect(withoutLineage.warnings[0].matches.map((m: any) => m.flag)).toEqual(["EXACT_DUPLICATE", "EXACT_DUPLICATE"]);
+    const lineage: any = await service().duplicateCheck("class-a", req(), { kind: "TEST", title: "Đề gốc", items: [{ text: "Dòng điện là gì?" }] });
+    expect(lineage.warnings).toEqual([]);
+    const long = "Cường độ dòng điện chạy qua một dây dẫn tỉ lệ thuận với hiệu điện thế đặt vào hai đầu dây dẫn đó";
+    await service().create("class-a", req(), body("Đề dài", long));
+    const near: any = await service().duplicateCheck("class-a", req(), { kind: "TEST", items: [{ text: long.replace(/đó$/, "này") }] });
+    expect(near.warnings[0]?.matches[0]).toMatchObject({ level: "NEAR", flag: "NEAR_DUPLICATE", source: { title: "Đề dài" } });
+    expect(near.warnings[0].matches[0].score).toBeGreaterThanOrEqual(0.85);
+  });
+
+  it("a draft edited after revise does not warn about its own previous version, even when renamed", async () => {
+    const original: any = await classReq("class-a");
+    await service().publish("class-a", original.id, req());
+    const draft: any = await service().revise("class-a", original.id, req());
+    const same: any = await service().updateDraft("class-a", draft.id, req(), body("Đề gốc", "Dòng điện là gì?"));
+    expect(same.duplicateWarnings).toEqual([]);
+    const renamed: any = await service().updateDraft("class-a", draft.id, req(), body("Đề gốc (bản 2)", "Dòng điện là gì?"));
+    expect(renamed.duplicateWarnings).toEqual([]);
+  });
+
+  it("import preview returns warnings and still validates", async () => {
+    await classReq("class-b");
+    const csv = "prompt,optionA,optionB,optionC,optionD,correctOption,explanation\r\nDòng điện là gì?,A,B,,,A,\r\n";
+    const preview: any = await service().previewImport("class-a", req(), { kind: "TEST", filename: "de.csv", csv });
+    expect(preview.valid).toBe(true);
+    expect(preview.duplicateWarnings[0].matches[0]).toMatchObject({ flag: "EXACT_DUPLICATE_ELSEWHERE", source: { title: "Đề gốc", className: "B" } });
+  });
+
+  it("validates the duplicate-check body and denies a foreign class", async () => {
+    await expect(service().duplicateCheck("class-a", req(), { kind: "TEST", items: [] })).rejects.toThrow();
+    await expect(service().duplicateCheck("class-a", req(), { kind: "TEST", items: [{ text: "a" }], extra: 1 })).rejects.toThrow();
+    await expect(service().duplicateCheck("class-x", req(), { kind: "TEST", items: [{ text: "a" }] })).rejects.toMatchObject({ status: 403 });
+  });
+});

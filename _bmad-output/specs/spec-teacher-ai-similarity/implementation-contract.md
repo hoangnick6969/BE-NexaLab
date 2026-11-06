@@ -87,7 +87,7 @@ Teacher-owner only (`ownedClass`): a missing or not-owned class returns the same
 
 | Operation | Contract |
 | --- | --- |
-| `POST classes/:id/resources/duplicate-check` | Body `{ kind: "DECK"\|"STUDY_QUIZ"\|"TEST", items: [{ text }] }` (1–100). Returns `[{ index, matches: [...] }]` per `qdup@1`. Read-only. |
+| `POST classes/:id/resources/duplicate-check` | Body `{ kind: "DECK"\|"STUDY_QUIZ"\|"TEST", items: [{ text }] (1–100), title? }`; `title` excludes the resource's own revise lineage (same class, kind and title). Returns 200 `{ algorithm: "qdup@1", warnings: [{ index, matches: [{ level, score, flag, source: { kind, resourceId\|lessonId, title, classId?, className?, itemId } }] }], code?: "CORPUS_TRUNCATED" }`, only items with matches. Read-only, unaudited. |
 | `POST classes/:id/resources`, `PUT …/:resourceId`, `POST …/import/preview` | Unchanged behavior; responses gain `duplicateWarnings` (same shape). Never blocks. |
 | TAI-01 `validateItems` | Duplicate corpus loader switches to `QuestionFingerprint` scoped to the actor plus the library. Same-class and new flags `EXACT_DUPLICATE`, `NEAR_DUPLICATE`, `EXACT_DUPLICATE_ELSEWHERE`, `NEAR_DUPLICATE_ELSEWHERE` are warnings only; none block a teacher decision. |
 | `POST classes/:id/assignments/:aid/similarity-runs` | Written assignment only, ≥ 2 current submissions, ≤ 200. Computes synchronously. If the same `inputDigest` and algorithm already exist, it returns that run (200) and no new run is created; otherwise it returns 201. |

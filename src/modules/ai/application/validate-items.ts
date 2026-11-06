@@ -15,6 +15,8 @@ export type DropReason =
 export type WarningFlag =
   | "EXACT_DUPLICATE"
   | "NEAR_DUPLICATE"
+  | "EXACT_DUPLICATE_ELSEWHERE"
+  | "NEAR_DUPLICATE_ELSEWHERE"
   | "NUMERIC_REVIEW"
   | "ANSWER_LENGTH_CUE"
   | "NEGATIVE_STEM"
@@ -22,7 +24,8 @@ export type WarningFlag =
   | "BATCH_DUPLICATE";
 
 /** Existing class question prompts and card fronts (non-archived resources), read outside the write transaction. */
-export type DuplicateCorpus = string[];
+/** Plain texts (class-only VW-01/VW-02), or since TAI3-T2 a qdup@1 flagger over the teacher's classes and the library. */
+export type DuplicateCorpus = string[] | ((text: string) => string[]);
 
 export type ValidatedItem = { position: number; payload: ResourceItem; flags: WarningFlag[] };
 export type DroppedItem = { position: number; reasonCodes: DropReason[] };
@@ -115,7 +118,7 @@ export function corpusFlags(item: ResourceItem, corpus: { exact: Set<string>; gr
   return flags;
 }
 
-export function prepareCorpus(corpus: DuplicateCorpus) {
+export function prepareCorpus(corpus: string[]) {
   const normalized = corpus.map(normalizeText).filter(Boolean);
   return { exact: new Set(normalized), grams: normalized.map(trigrams) };
 }
@@ -136,11 +139,13 @@ export function validateItems(snapshot: InputSnapshotV1, items: ResourceItem[], 
     else survivors.push({ position, payload });
   });
 
-  const corpus = prepareCorpus(duplicateCorpus);
+  const flagger = typeof duplicateCorpus === "function" ? duplicateCorpus : null;
+  const corpus = prepareCorpus(flagger ? [] : (duplicateCorpus as string[]));
   const keys = survivors.map((survivor) => normalizeText(keyText(survivor.payload)));
   const grams = keys.map(trigrams);
   const validated: ValidatedItem[] = survivors.map((survivor, index) => {
-    const flags = new Set<WarningFlag>([...corpusFlags(survivor.payload, corpus), ...contentFlags(survivor.payload, snapshot.constraints.difficulty)]);
+    const corpusHits = flagger ? (flagger(keyText(survivor.payload)) as WarningFlag[]) : corpusFlags(survivor.payload, corpus);
+    const flags = new Set<WarningFlag>([...corpusHits, ...contentFlags(survivor.payload, snapshot.constraints.difficulty)]);
     for (let other = 0; other < survivors.length; other++) {
       if (other === index) continue;
       const exact = keys[other] === keys[index];
@@ -153,4 +158,4 @@ export function validateItems(snapshot: InputSnapshotV1, items: ResourceItem[], 
   return { items: validated, dropped };
 }
 
-const ORDER: WarningFlag[] = ["EXACT_DUPLICATE", "NEAR_DUPLICATE", "BATCH_DUPLICATE", "NUMERIC_REVIEW", "ANSWER_LENGTH_CUE", "NEGATIVE_STEM", "DIFFICULTY_MISMATCH"];
+const ORDER: WarningFlag[] = ["EXACT_DUPLICATE", "NEAR_DUPLICATE", "EXACT_DUPLICATE_ELSEWHERE", "NEAR_DUPLICATE_ELSEWHERE", "BATCH_DUPLICATE", "NUMERIC_REVIEW", "ANSWER_LENGTH_CUE", "NEGATIVE_STEM", "DIFFICULTY_MISMATCH"];

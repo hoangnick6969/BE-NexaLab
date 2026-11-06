@@ -10,7 +10,7 @@ import {
   RESOURCE_ITEMS_JSON_SCHEMA,
   type InputSnapshotV1,
 } from "./generate-resource-prompt";
-import { loadDuplicateCorpus } from "./duplicate-corpus";
+import { loadQdupCorpus, qdupFlagger } from "./question-fingerprints";
 import { processGenerateResourceOutput, type DroppedItem, type ProcessedItem } from "./output-pipeline";
 
 export const RUNNER_TIMINGS = { pollMs: 2_000, sweepMs: 30_000, leaseMs: 90_000, providerTimeoutMs: 60_000 } as const;
@@ -124,9 +124,11 @@ export class AiJobRunner implements OnModuleInit, OnModuleDestroy {
       return this.fail(claimed, code, null, [], now());
     }
 
-    let corpus: string[];
+    let corpus: (text: string) => string[];
     try {
-      corpus = await loadDuplicateCorpus(this.db, job.classId);
+      // qdup@1 over the requesting teacher's classes and the shared library (TAI3-T2); warnings only.
+      const loaded = await loadQdupCorpus(this.db, job.actorId);
+      corpus = qdupFlagger(loaded.corpus, job.classId, loaded.truncated);
     } catch {
       return this.fail(claimed, "INTERNAL_ERROR", usage, [], now());
     }

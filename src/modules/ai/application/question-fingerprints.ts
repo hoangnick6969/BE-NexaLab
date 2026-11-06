@@ -23,11 +23,14 @@ export type QdupCorpusRow = {
   normalizedText: string;
   normalizedHash: string;
   title: string;
+  /** ClassResource kind (DECK | STUDY_QUIZ | TEST); null for library rows. Used to exclude a revise lineage. */
+  resourceKind?: string | null;
+  className?: string | null;
 };
 export type QdupMatch = {
   level: "EXACT" | "NEAR";
   score: number;
-  source: { kind: FingerprintSourceKind; resourceId?: string; lessonId?: string; title: string; classId?: string; itemId: string };
+  source: { kind: FingerprintSourceKind; resourceId?: string; lessonId?: string; title: string; classId?: string; className?: string; itemId: string };
 };
 
 /** normalize from TAI-01 validation-rules.md (diacritics kept). */
@@ -61,6 +64,7 @@ export function qdupMatch(text: string, corpus: QdupCorpusRow[], options: { exac
         ...(row.sourceKind === "CLASS_RESOURCE" ? { resourceId: row.sourceId } : { lessonId: row.sourceId }),
         title: row.title,
         ...(row.classId ? { classId: row.classId } : {}),
+        ...(row.className ? { className: row.className } : {}),
         itemId: row.itemId,
       },
       order: `${row.sourceKind}:${row.sourceId}:${row.itemId}`,
@@ -202,13 +206,52 @@ export async function loadQdupCorpus(db: any, teacherId: string, exactHashes?: s
   });
   const resourceIds = [...new Set(rows.filter((r: any) => r.sourceKind === "CLASS_RESOURCE").map((r: any) => r.sourceId))];
   const lessonIds = [...new Set(rows.filter((r: any) => r.sourceKind === "LIBRARY_LESSON").map((r: any) => r.sourceId))];
-  const [resources, lessons] = await Promise.all([
-    resourceIds.length ? db.classResource.findMany({ where: { id: { in: resourceIds } }, select: { id: true, title: true } }) : [],
+  const classIds = [...new Set(rows.map((r: any) => r.classId).filter(Boolean))];
+  const [resources, lessons, classes] = await Promise.all([
+    resourceIds.length ? db.classResource.findMany({ where: { id: { in: resourceIds } }, select: { id: true, title: true, kind: true } }) : [],
     lessonIds.length ? db.lesson.findMany({ where: { id: { in: lessonIds } }, select: { id: true, title: true } }) : [],
+    // Only the requesting teacher's classes can appear here (corpus scope above).
+    classIds.length ? db.classroom.findMany({ where: { id: { in: classIds }, teacherId }, select: { id: true, name: true } }) : [],
   ]);
-  const titles = new Map<string, string>([...resources, ...lessons].map((row: any) => [row.id, row.title]));
-  const corpus: QdupCorpusRow[] = rows.map((row: any) => ({ ...row, title: titles.get(row.sourceId) ?? "" }));
+  const meta = new Map<string, { title: string; kind?: string }>([...resources, ...lessons].map((row: any) => [row.id, { title: row.title, kind: row.kind }]));
+  const classNames = new Map<string, string>(classes.map((row: any) => [row.id, row.name]));
+  const corpus: QdupCorpusRow[] = rows.map((row: any) => ({
+    ...row,
+    title: meta.get(row.sourceId)?.title ?? "",
+    resourceKind: row.sourceKind === "CLASS_RESOURCE" ? (meta.get(row.sourceId)?.kind ?? null) : null,
+    className: row.classId ? (classNames.get(row.classId) ?? null) : null,
+  }));
   return { corpus, truncated };
+}
+
+export type QdupWarning = { index: number; matches: Array<QdupMatch & { flag: string }> };
+
+/**
+ * TAI3-T2 duplicate check for a list of texts (prompts or card fronts) in one class. Read-only and never blocking.
+ * `lineage` excludes the item's own version chain: after revise, the published source and its new draft both keep
+ * fingerprints, so rows of resources in the same class with the same kind and title are ignored.
+ */
+export async function checkQuestionDuplicates(
+  db: any,
+  input: { teacherId: string; classId: string; texts: string[]; lineage?: { kind: string; title: string } | null },
+) {
+  const hashes = input.texts.map((text) => qdupHash(qdupNormalize(text)));
+  const { corpus: all, truncated } = await loadQdupCorpus(db, input.teacherId, hashes);
+  const lineage = input.lineage;
+  const corpus = lineage
+    ? all.filter((row) => !(row.sourceKind === "CLASS_RESOURCE" && row.classId === input.classId && row.resourceKind === lineage.kind && row.title === lineage.title))
+    : all;
+  const warnings: QdupWarning[] = [];
+  input.texts.forEach((text, index) => {
+    const matches = qdupMatch(text, corpus, { exactOnly: truncated }).map((match) => ({ ...match, flag: qdupFlag(match, input.classId) }));
+    if (matches.length) warnings.push({ index, matches });
+  });
+  return { warnings, truncated };
+}
+
+/** Flags for one text against a loaded corpus (TAI-01 VW-01/VW-02 switched to qdup@1 in TAI3-T2). */
+export function qdupFlagger(corpus: QdupCorpusRow[], classId: string, truncated = false) {
+  return (text: string) => [...new Set(qdupMatch(text, corpus, { exactOnly: truncated }).map((match) => qdupFlag(match, classId)))];
 }
 
 /**

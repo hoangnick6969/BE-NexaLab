@@ -1,8 +1,19 @@
 import { BadRequestException, ConflictException, HttpException, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { z } from "zod";
-import type { DuplicateMatch } from "./duplicate-corpus";
 
 export const AI_PURPOSES = ["GENERATE_RESOURCE"] as const;
+
+/** duplicateOf entry on the job detail view (computed on read from qdup@1; never stored). */
+export type DuplicateMatch = {
+  sourceKind: "CLASS_RESOURCE" | "LIBRARY_LESSON";
+  resourceId?: string;
+  lessonId?: string;
+  resourceTitle: string;
+  className?: string;
+  match: "EXACT" | "NEAR";
+  similarity: number;
+  flag: string;
+};
 export type AiPurpose = (typeof AI_PURPOSES)[number];
 
 export const MAX_QUESTIONS_PER_JOB = 20;

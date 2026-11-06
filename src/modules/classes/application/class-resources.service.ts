@@ -6,11 +6,11 @@ import { idempotent, readIdempotencyKey, TX_LIMITS } from "../../../common/idemp
 import { Db } from "../../../db/db";
 import { ownedClass } from "./class-access";
 import { classArchived, lock } from "./class-common";
-import { normalizeResourceContent, parseResourceCsv, practiceKind, resourceKindSchema, studentResource, labResourceContentSchema, verifyClassLabSnapshot } from "./class-resource-contract";
+import { normalizeResourceContent, parseResourceCsv, practiceKind, ResourceKind, resourceKindSchema, studentResource, labResourceContentSchema, verifyClassLabSnapshot } from "./class-resource-contract";
 import { buildLabResource, validateResourceAttachment } from "./class-lab-resource";
 import { assertClassLesson } from "./class-lesson";
 import { notify } from "../../notifications/application/notify";
-import { syncClassResourceFingerprints } from "../../ai/application/question-fingerprints";
+import { checkQuestionDuplicates, resourceFingerprintItems, syncClassResourceFingerprints } from "../../ai/application/question-fingerprints";
 
 const additionalAnswersSchema = z.object({
   assignmentId: z.string().trim().min(1).max(100).optional(),
@@ -22,6 +22,12 @@ const kindSchema = resourceKindSchema;
 const csvKindSchema = z.enum(["DECK", "STUDY_QUIZ", "TEST"]);
 const titleSchema = z.string().trim().min(1).max(160);
 const bodySchema = z.object({ kind: kindSchema, title: titleSchema, lessonId: z.string().min(1), content: z.unknown() }).strict();
+/** TAI3-T2 duplicate-check body; `title` optionally excludes the resource's own revise lineage. */
+const duplicateCheckSchema = z.object({
+  kind: kindSchema,
+  items: z.array(z.object({ text: z.string().trim().min(1).max(500) }).strict()).min(1).max(100),
+  title: titleSchema.optional(),
+}).strict();
 const resourceSelect = { id: true, classId: true, kind: true, title: true, lessonId: true, version: true, status: true, content: true, createdAt: true, publishedAt: true, archivedAt: true } as const;
 
 /** Use cases behind ClassResourcesController (moved from the controller unchanged; repository ports are the next step). */
@@ -63,12 +69,14 @@ export class ClassResourcesService {
     if (c.status !== "ACTIVE") throw classArchived();
     const content = await this.prepareContent(b.kind, b.content, req.user.sub);
     await this.assertLesson(classId, b.lessonId, req.user.sub);
+    // Read-only qdup@1 warnings, computed before the write; they never block (TAI3-T2).
+    const duplicateWarnings = await this.duplicateWarnings(classId, req.user.sub, b.kind, content, b.title);
     const ctx = { actorId: req.user.sub, key: readIdempotencyKey(req), scope: `POST classes/${classId}/resources`, payload: { ...b, content } };
     return idempotent(this.db, ctx, async (tx) => {
       const created = await tx.classResource.create({ data: { classId, kind: b.kind, title: b.title, lessonId: b.lessonId, content, createdById: req.user.sub }, select: resourceSelect });
       await syncClassResourceFingerprints(tx, created.id);
       await audit(tx, { actor: req.user, action: "class_resource.create", targetType: "ClassResource", targetId: created.id, after: { classId, resourceKind: b.kind, resourceVersion: 1, itemCount: this.itemCount(created) } });
-      return created;
+      return { ...created, duplicateWarnings };
     });
   }
 
@@ -81,13 +89,14 @@ export class ClassResourcesService {
     if (existing.status !== "DRAFT") throw new ConflictException({ code: "RESOURCE_VERSION_IMMUTABLE", message: "Bản đã xuất bản không sửa trực tiếp; hãy tạo bản nháp mới" });
     const content = await this.prepareContent(b.kind, b.content, req.user.sub);
     await this.assertLesson(classId, b.lessonId, req.user.sub);
+    const duplicateWarnings = await this.duplicateWarnings(classId, req.user.sub, b.kind, content, b.title, existing.title);
     return this.db.$transaction(async (tx) => {
       const changed = await tx.classResource.updateMany({ where: { id: resourceId, classId, status: "DRAFT" }, data: { kind: b.kind, title: b.title, lessonId: b.lessonId, content } });
       if (!changed.count) throw new ConflictException({ code: "RESOURCE_VERSION_IMMUTABLE", message: "Bản đã xuất bản hoặc lưu trữ không thể sửa" });
       const updated = await tx.classResource.findUnique({ where: { id: resourceId }, select: resourceSelect });
       await syncClassResourceFingerprints(tx, resourceId);
       await audit(tx, { actor: req.user, action: "class_resource.update_draft", targetType: "ClassResource", targetId: resourceId, before: { resourceKind: existing.kind, resourceVersion: existing.version }, after: { resourceKind: b.kind, resourceVersion: existing.version, itemCount: this.itemCount(updated) } });
-      return updated;
+      return { ...updated, duplicateWarnings };
     });
   }
 
@@ -168,7 +177,8 @@ export class ClassResourcesService {
     if (c.status !== "ACTIVE") throw classArchived();
     if (!b.filename.toLowerCase().endsWith(".csv")) throw new BadRequestException({ code: "IMPORT_FORMAT_UNSUPPORTED", message: "Increment này chỉ hỗ trợ CSV UTF-8" });
     const result = parseResourceCsv(b.kind, b.csv);
-    return { valid: result.errors.length === 0, itemCount: result.data ? this.itemCount({ kind: b.kind, content: result.data }) : 0, errors: result.errors, draft: null };
+    const duplicateWarnings = result.data ? await this.duplicateWarnings(classId, req.user.sub, b.kind, result.data) : [];
+    return { valid: result.errors.length === 0, itemCount: result.data ? this.itemCount({ kind: b.kind, content: result.data }) : 0, errors: result.errors, draft: null, duplicateWarnings };
   }
 
   async importCsv(classId: string, req: any, body: unknown) {
@@ -316,6 +326,31 @@ export class ClassResourcesService {
     const content = normalizeResourceContent(kind, raw);
     if (kind === "DOCUMENT" || kind === "REPORT_TEMPLATE") await validateResourceAttachment(this.db, content, ownerId);
     return content;
+  }
+
+  /** POST classes/:id/resources/duplicate-check (TAI3-T2): read-only, unaudited, never blocks. */
+  async duplicateCheck(classId: string, req: any, body: unknown) {
+    const b = duplicateCheckSchema.parse(body);
+    await ownedClass(this.db, classId, req.user);
+    const { warnings, truncated } = await checkQuestionDuplicates(this.db, {
+      teacherId: req.user.sub,
+      classId,
+      texts: b.items.map((item) => item.text),
+      lineage: b.title ? { kind: b.kind, title: b.title } : null,
+    });
+    return { algorithm: "qdup@1", warnings, ...(truncated ? { code: "CORPUS_TRUNCATED" } : {}) };
+  }
+
+  /** Warnings for normalized content; the resource's own lineage (same kind and title, plus its previous title) is excluded. */
+  private async duplicateWarnings(classId: string, teacherId: string, kind: ResourceKind, content: unknown, title?: string, previousTitle?: string) {
+    const texts = resourceFingerprintItems(kind, content).map((item) => item.text);
+    if (!texts.length) return [];
+    const { warnings } = await checkQuestionDuplicates(this.db, { teacherId, classId, texts, lineage: title ? { kind, title } : null });
+    if (!previousTitle || previousTitle === title) return warnings;
+    // A renamed draft still ignores rows of its own previous title in this class.
+    const ownPrevious = (m: { source: { kind: string; classId?: string; title: string } }) =>
+      m.source.kind === "CLASS_RESOURCE" && m.source.classId === classId && m.source.title === previousTitle;
+    return warnings.map((w) => ({ ...w, matches: w.matches.filter((m) => !ownPrevious(m)) })).filter((w) => w.matches.length > 0);
   }
 
   private itemCount(resource: any) { return resource.kind === "DECK" ? resource.content.cards.length : ["TEST", "STUDY_QUIZ"].includes(resource.kind) ? resource.content.questions.length : 1; }

@@ -27,15 +27,15 @@ import {
   quotaQuery,
   toAiJobView,
   type AiPurpose,
+  type DuplicateMatch,
   type NormalizedAiRequest,
 } from "./ai-job-contract";
 import { AI_CONFIG, AI_PROVIDER, type AiProvider } from "./ai-provider";
 import { GENERATE_RESOURCE_PROMPT_VERSION, RESOURCE_ITEMS_SCHEMA_VERSION } from "./generate-resource-prompt";
 import { lessonOutcomeCodes, type LessonSource } from "./input-snapshot";
-import { findDuplicateResources, loadCorpusEntries } from "./duplicate-corpus";
-import { syncClassResourceFingerprints } from "./question-fingerprints";
+import { checkQuestionDuplicates, loadQdupCorpus, qdupFlagger, syncClassResourceFingerprints } from "./question-fingerprints";
 import { resourceItemSchema, type ResourceItem } from "./resource-items";
-import { contentFlags, corpusFlags, prepareCorpus, structuralDropReasons, type DropReason } from "./validate-items";
+import { contentFlags, structuralDropReasons, type DropReason } from "./validate-items";
 import { buildSnapshotFor, lessonChangedSince, loadLessonSource } from "./lesson-source";
 
 const DAY_MS = 24 * 3600_000;
@@ -46,7 +46,28 @@ const RULE_ID: Partial<Record<DropReason, string>> = {
   OPTION_PATTERN_FORBIDDEN: "VR-05", SAFETY_REJECTED: "VR-08",
 };
 const keyText = (item: ResourceItem) => (item.type === "CARD" ? item.front : item.prompt);
-const DUPLICATE_FLAGS = new Set(["EXACT_DUPLICATE", "NEAR_DUPLICATE"]);
+const DUPLICATE_FLAGS = new Set(["EXACT_DUPLICATE", "NEAR_DUPLICATE", "EXACT_DUPLICATE_ELSEWHERE", "NEAR_DUPLICATE_ELSEWHERE"]);
+
+/** qdup@1 matches -> the view's duplicateOf: one entry per source, best first, similarity rounded to 2 decimals. */
+function toDuplicateMatches(matches: Array<{ level: "EXACT" | "NEAR"; score: number; flag: string; source: any }>): DuplicateMatch[] {
+  const seen = new Set<string>();
+  const out: DuplicateMatch[] = [];
+  for (const match of matches) {
+    const sourceId = match.source.resourceId ?? match.source.lessonId;
+    if (seen.has(sourceId)) continue;
+    seen.add(sourceId);
+    out.push({
+      sourceKind: match.source.kind,
+      ...(match.source.resourceId ? { resourceId: match.source.resourceId } : { lessonId: match.source.lessonId }),
+      resourceTitle: match.source.title,
+      ...(match.source.className ? { className: match.source.className } : {}),
+      match: match.level,
+      similarity: Math.round(match.score * 100) / 100,
+      flag: match.flag,
+    });
+  }
+  return out;
+}
 
 /** Accepted/edited items -> the existing content contract's input for the job's target kind (validation-rules.md, "Mapping"). */
 export function mapItemsToContent(kind: ResourceKind, items: ResourceItem[]) {
@@ -172,16 +193,22 @@ export class AiJobsService {
     const items: any[] = job.items ?? [];
     const flagged = (item: any) => Array.isArray(item.flags) && item.flags.some((flag: string) => DUPLICATE_FLAGS.has(flag));
     if (!items.some((item) => flagged(item) || item.decisions?.[0]?.decision === "EDITED")) return items;
-    const entries = await loadCorpusEntries(this.db, job.classId);
-    const corpus = prepareCorpus(entries.map((entry) => entry.text));
+    const { corpus, truncated } = await loadQdupCorpus(this.db, job.actorId);
+    const flagger = qdupFlagger(corpus, job.classId, truncated);
     const difficulty = (job.request as NormalizedAiRequest)?.difficulty ?? null;
-    return items.map((item) => {
+    const flaggedItems = items.filter(flagged);
+    const parsedTexts = flaggedItems.map((item) => {
       const parsed = resourceItemSchema.safeParse(item.payload);
-      const duplicateOf = parsed.success && flagged(item) ? findDuplicateResources(keyText(parsed.data), entries) : [];
+      return parsed.success ? keyText(parsed.data) : "";
+    });
+    const { warnings } = await checkQuestionDuplicates(this.db, { teacherId: job.actorId, classId: job.classId, texts: parsedTexts });
+    const byItem = new Map<string, DuplicateMatch[]>();
+    for (const warning of warnings) byItem.set(flaggedItems[warning.index].id, toDuplicateMatches(warning.matches));
+    return items.map((item) => {
       const latest = item.decisions?.[0];
       const edited = latest?.decision === "EDITED" ? resourceItemSchema.safeParse(latest.editedPayload) : null;
-      const decisionFlags = edited?.success ? [...corpusFlags(edited.data, corpus), ...contentFlags(edited.data, difficulty)] : [];
-      return { ...item, duplicateOf, decisionFlags };
+      const decisionFlags = edited?.success ? [...flagger(keyText(edited.data)), ...contentFlags(edited.data, difficulty)] : [];
+      return { ...item, duplicateOf: byItem.get(item.id) ?? [], decisionFlags };
     });
   }
 

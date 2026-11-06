@@ -4,6 +4,7 @@ import { parseAiConfig } from "./ai-config";
 import { AiJobRunner, MAX_ATTEMPTS, nextStatusAfterFailure, RUNNER_TIMINGS } from "./ai-job-runner";
 import { AiJobsService } from "./ai-jobs.service";
 import { AiProviderError, type AiGenerateInput, type AiProvider } from "./ai-provider";
+import { syncClassResourceFingerprints } from "./question-fingerprints";
 
 /**
  * In-memory stand-in for the Prisma calls the AI module makes, so the job state machine, quota and denial rules are
@@ -324,9 +325,10 @@ describe("runner state machine", () => {
 
   it("flags duplicates of the class corpus, keeps them, and stores dropped reasons", async () => {
     store.classResource.rows.push(
-      { classId: "class-a", kind: "TEST", status: "PUBLISHED", content: { questions: [{ prompt: "cường độ dòng điện câu số A được đo bằng gì?" }] } },
-      { classId: "class-a", kind: "TEST", status: "ARCHIVED", content: { questions: [{ prompt: "Cường độ dòng điện câu số B được đo bằng gì" }] } },
+      { id: "res-pub", title: "Đề cũ", classId: "class-a", kind: "TEST", status: "PUBLISHED", version: 1, content: { questions: [{ id: "q", prompt: "cường độ dòng điện câu số A được đo bằng gì?" }] } },
+      { id: "res-arch", title: "Đề lưu trữ", classId: "class-a", kind: "TEST", status: "ARCHIVED", version: 1, content: { questions: [{ id: "q", prompt: "Cường độ dòng điện câu số B được đo bằng gì" }] } },
     );
+    for (const id of ["res-pub", "res-arch"]) await syncClassResourceFingerprints(store, id);
     const created = await create({ itemCount: 2 });
     const items = JSON.parse(okText(3)).items;
     items[1].prompt = "Cường độ dòng điện câu số B được đo bằng gì";
@@ -480,11 +482,21 @@ describe("item decisions and materialization (TAI-T4)", () => {
   });
 
   it("shows duplicateOf for flagged items and still allows ACCEPTED", async () => {
-    store.classResource.rows.push({ id: "res-old", classId: "class-a", title: "Đề cũ chương 1", kind: "TEST", status: "PUBLISHED", content: { questions: [{ prompt: question(0).prompt }] } });
-    store.classResource.rows.push({ id: "res-archived", classId: "class-a", title: "Đề đã lưu trữ", kind: "TEST", status: "ARCHIVED", content: { questions: [{ prompt: question(0).prompt }] } });
+    store.classResource.rows.push({ id: "res-old", classId: "class-a", title: "Đề cũ chương 1", kind: "TEST", status: "PUBLISHED", version: 1, content: { questions: [{ id: "q", prompt: question(0).prompt }] } });
+    store.classResource.rows.push({ id: "res-archived", classId: "class-a", title: "Đề đã lưu trữ", kind: "TEST", status: "ARCHIVED", version: 1, content: { questions: [{ id: "q", prompt: question(0).prompt }] } });
+    store.classroom.rows.push({ id: "class-other", teacherId: OWNER.sub, status: "ACTIVE", name: "Lớp 8B" });
+    store.classResource.rows.push({ id: "res-other", classId: "class-other", title: "Đề lớp 8B", kind: "TEST", status: "PUBLISHED", version: 1, content: { questions: [{ id: "q", prompt: question(0).prompt }] } });
+    store.classroom.rows.push({ id: "class-outsider", teacherId: OUTSIDER.sub, status: "ACTIVE", name: "Lớp ngoài" });
+    store.classResource.rows.push({ id: "res-outsider", classId: "class-outsider", title: "Đề người khác", kind: "TEST", status: "PUBLISHED", version: 1, content: { questions: [{ id: "q", prompt: question(0).prompt }] } });
+    for (const id of ["res-old", "res-archived", "res-other", "res-outsider"]) await syncClassResourceFingerprints(store, id);
     const view = await succeeded([question(0), question(1, { prompt: "Một câu hoàn toàn khác về nhiệt độ" })]);
-    expect(view.items![0].flags).toContain("EXACT_DUPLICATE");
-    expect(view.items![0].duplicateOf).toEqual([{ resourceId: "res-old", resourceTitle: "Đề cũ chương 1", match: "EXACT", similarity: 1 }]);
+    expect(view.items![0].flags).toEqual(expect.arrayContaining(["EXACT_DUPLICATE", "EXACT_DUPLICATE_ELSEWHERE"]));
+    expect(view.items![0].duplicateOf).toEqual([
+      { sourceKind: "CLASS_RESOURCE", resourceId: "res-old", resourceTitle: "Đề cũ chương 1", match: "EXACT", similarity: 1, flag: "EXACT_DUPLICATE" },
+      { sourceKind: "CLASS_RESOURCE", resourceId: "res-other", resourceTitle: "Đề lớp 8B", className: "Lớp 8B", match: "EXACT", similarity: 1, flag: "EXACT_DUPLICATE_ELSEWHERE" },
+    ]);
+    // Another teacher's identical question never appears.
+    expect(JSON.stringify(view)).not.toContain("Đề người khác");
     expect(view.items![1].duplicateOf).toEqual([]);
     expect((await decide(view.id, view.items![0].id, { decision: "ACCEPTED" })).items![0].decision?.decision).toBe("ACCEPTED");
   });
