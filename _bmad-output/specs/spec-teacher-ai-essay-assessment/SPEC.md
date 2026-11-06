@@ -68,7 +68,7 @@ On `class-pilot-a` the owner teacher publishes a two-prompt written task with a 
 
 ## Open Questions
 
-- Does a `WRITTEN_TASK` need a pass threshold for the subject rollup, or does any teacher grade count as achieved?
+- Does a `WRITTEN_TASK` need a pass threshold for the subject rollup, or does any teacher grade count as achieved? **Resolved 2026-11-06:** no hard threshold yet; a teacher-graded written task (GRADED) counts as passed on progress and evidence, rejected zero work never does.
 - Which provider explicitly permits this use in a service directed to or likely to be accessed by under-18s, and what data-use/DPA terms apply?
 - What legal basis and age-specific consent/notice path applies to each student, and how will cross-border transfer and retention/deletion be handled? Do not assume the only choices are parental consent or school agreement.
-- May AI draft the student-facing feedback text? In the current spec, rationale is teacher-only and feedback is written by the teacher.
+- May AI draft the student-facing feedback text? In the current spec, rationale is teacher-only and feedback is written by the teacher. **Resolved 2026-11-06:** no; feedback is written by the teacher by hand (at most 2000 characters).

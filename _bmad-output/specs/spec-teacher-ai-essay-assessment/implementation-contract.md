@@ -205,3 +205,15 @@ Mapping and verification rules are in `assessment-validation-and-evaluation.md`.
 - **Teacher:** a rubric editor in the resource editor (prompts, criteria, anchors, live max-points total). A written-status board per assignment. A grading sheet: response text beside the rubric with anchors, grade history, and in assist mode a suggestion panel with highlighted evidence quotes, invalidated criteria shown as "AI không đưa ra gợi ý hợp lệ", and accept / edit / reject actions. A "Gợi ý AI" bulk request with skipped reasons.
 - **Student:** a written answer form with a per-prompt character counter, the late-reason form, and status `AWAITING_GRADE` / `GRADED` with teacher feedback only.
 - **Parent:** existing read-only status, with no responses or feedback.
+
+**TAI2-T3 decisions (2026-11-06):**
+
+- pass threshold: no hard threshold yet; a written task with a teacher grade (GRADED) counts as passed on the progress and evidence views, while REJECTED (zero) work never does.
+- student view: total score 0-100, each criterion's code, description and points awarded against its maximum, and the teacher's comment. Anchors, referenceAnswer, commonPhrases and internal grading notes are never returned.
+- score conversion: score = Math.round(total / max * 100), Int, as in the contract; criterion points are stored in the decision row.
+- regrade: WrittenGradeDecision is append-only; the student sees only the latest decision of the current submission; the teacher sees the full decision history. A resubmission returns the status to AWAITING_GRADE.
+- grading archived work: allowed for existing submissions when the assignment or resource is archived; only an archived class blocks grading with 409 CLASS_ARCHIVED.
+- feedback: written by the teacher by hand, at most 2000 characters after trim and NFC; no AI drafting.
+- parent view: status only (AWAITING_GRADE, GRADED and the other existing written statuses); no score, criterion points, comment or response text.
+- migration: WrittenGradeDecision is a new table (append-only, index on submissionId and createdAt); the full WrittenGradeKind enum (MANUAL, ACCEPTED_AI, EDITED_AI, REJECTED_AI) is declared now; T3 writes MANUAL only.
+- TAI2-T3 error code added: 400 GRADE_FEEDBACK_INVALID when the teacher comment exceeds 2000 characters after trim and NFC. Routes added: GET classes/:id/assignments/:aid/written-status, GET classes/:id/assignments/:aid/submissions/:sid, POST classes/:id/assignments/:aid/submissions/:sid/grades (owner only).

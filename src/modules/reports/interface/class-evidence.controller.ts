@@ -60,7 +60,7 @@ export class ClassEvidenceController {
           now,
           dueDate: dueAt,
           // A written submission awaiting the teacher grade counts as submitted (TAI2-T2).
-          completed: state?.status === "SUBMITTED" || state?.status === "AWAITING_GRADE",
+          completed: state?.status === "SUBMITTED" || state?.status === "AWAITING_GRADE" || state?.status === "GRADED",
           assignmentCreatedAt: assignment.createdAt,
           progressAt: (state?.history ?? []).map((row) => row.submittedAt),
           quizzes: [],

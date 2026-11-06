@@ -1,6 +1,9 @@
 import { studentTestState } from "./assignment-test-contract";
 import { studentWrittenState, WRITTEN_CONTENT_TYPE } from "./assignment-written-contract";
 
+/** Columns of a grade decision that the written views may read (no actor, no suggestion fields). */
+export const writtenGradeSelect = { id: true, kind: true, score: true, totalPoints: true, maxPoints: true, criterionPoints: true, feedback: true, resourceVersion: true, createdAt: true } as const;
+
 const submissionSelect = {
   id: true,
   assignmentId: true,
@@ -71,13 +74,18 @@ export async function deadlineStates(
   assignments: Array<{ id: string; dueDate: Date | null; contentType: string }>,
   studentIds: string[],
   now = new Date(),
-  options: { withResponses?: boolean } = {},
+  options: { withResponses?: boolean; withGrade?: boolean } = {},
 ) {
   const [deadlines, submissions] = await Promise.all([
     currentDeadlines(db, assignments),
     db.assignmentSubmission.findMany({
       where: { assignmentId: { in: assignments.map((a) => a.id) }, studentId: { in: studentIds } },
-      select: options.withResponses ? { ...submissionSelect, answers: true } : submissionSelect,
+      // TAI2-T3: grades are read newest first; a grade never changes a TEST state (studentTestState ignores it).
+      select: {
+        ...submissionSelect,
+        ...(options.withResponses ? { answers: true } : {}),
+        gradeDecisions: { orderBy: { createdAt: "desc" }, select: writtenGradeSelect },
+      },
     }),
   ]);
   const states = new Map<string, DeadlineState>();
@@ -89,7 +97,9 @@ export async function deadlineStates(
       const input = { dueAt: deadline.dueAt, revision: deadline.revision, submissions: rows, now };
       states.set(
         a.id + ":" + studentId,
-        a.contentType === WRITTEN_CONTENT_TYPE ? studentWrittenState({ ...input, withResponses: options.withResponses }) : studentTestState(input),
+        a.contentType === WRITTEN_CONTENT_TYPE
+          ? studentWrittenState({ ...input, withResponses: options.withResponses, withGrade: options.withGrade })
+          : studentTestState(input),
       );
     }
   }

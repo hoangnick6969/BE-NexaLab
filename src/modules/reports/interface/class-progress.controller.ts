@@ -54,14 +54,16 @@ export class ClassProgressController {
     if (assignment.contentType === TEST_CONTENT_TYPE || assignment.contentType === WRITTEN_CONTENT_TYPE) {
       // Test and written (TAI2-T2) submissions are not Attempt rows; report the server-derived state.
       // A written submission has no score until the teacher grades it (TAI2-T3), so `passed` stays false.
-      const { states, key } = await deadlineStates(this.db, [assignment], studentIds);
+      // TAI2-T3: the teacher board shows the current grade of a graded written task.
+      const { states, key } = await deadlineStates(this.db, [assignment], studentIds, new Date(), { withGrade: true });
       return assignment.targets.map(({ student }) => {
         const state = states.get(key(assignment.id, student.id));
         return {
           student,
           attempts: state?.history.length ?? 0,
           latestVerdict: null,
-          passed: state?.status === "SUBMITTED",
+          // TAI2-T3: a written task counts as passed once it is graded (rejected zero work never does).
+          passed: assignment.contentType === WRITTEN_CONTENT_TYPE ? state?.status === "GRADED" : state?.status === "SUBMITTED",
           testStatus: state?.status ?? null,
           score: state?.current?.score ?? null,
         };

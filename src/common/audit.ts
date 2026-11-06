@@ -58,6 +58,7 @@ export const AUDIT_FIELDS = new Set([
   "releaseReviewsReset",
   "contentVersion",
   "gradingMode",
+  "score",
   "assignmentId",
   "stepId",
   "active",

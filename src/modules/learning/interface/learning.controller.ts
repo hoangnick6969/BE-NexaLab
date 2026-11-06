@@ -13,7 +13,7 @@ import { projectLesson } from "../../progress/application/progress-projection";
 import { parseAssignmentIdQuery } from "./assignment-query";
 import { scoreTest, studentTestContent, TEST_CONTENT_TYPE, testSubmissionSchema } from "../../classes/application/assignment-test-contract";
 import { currentDeadlines, deadlineStates } from "../../classes/application/assignment-test-state";
-import { normalizeWrittenResponses, studentWrittenAssignmentContent, WRITTEN_CONTENT_TYPE, writtenSubmissionSchema } from "../../classes/application/assignment-written-contract";
+import { normalizeWrittenResponses, studentGradeCriteria, studentWrittenAssignmentContent, WRITTEN_CONTENT_TYPE, writtenSubmissionSchema } from "../../classes/application/assignment-written-contract";
 import { lock } from "../../classes/application/class-common";
 import { audit } from "../../../common/audit";
 import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
@@ -782,10 +782,11 @@ export class LearningController {
   private async writtenAssignment(a: any, studentId: string) {
     const [{ test: resource }, { states, key }] = await Promise.all([
       this.testState(a),
-      deadlineStates(this.db, [a], [studentId], new Date(), { withResponses: true }),
+      deadlineStates(this.db, [a], [studentId], new Date(), { withResponses: true, withGrade: true }),
     ]);
     if (!resource) throw new NotFoundException("Nội dung không còn khả dụng");
-    const state = states.get(key(a.id, studentId))!;
+    const state: any = states.get(key(a.id, studentId))!;
+    if (state.current?.grade) state.current.grade = { ...state.current.grade, criteria: studentGradeCriteria((resource as any).content, state.current.grade.criterionPoints) };
     return {
       id: a.id,
       title: a.title,

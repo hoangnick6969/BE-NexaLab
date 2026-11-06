@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { LearningController } from "./learning.controller";
 import { AssignmentsService } from "../../classes/application/assignments.service";
 import { autoScore, submissionView } from "../../classes/application/assignment-test-contract";
-import { normalizeWrittenResponses, responseLength } from "../../classes/application/assignment-written-contract";
+import { assertGradeable, buildWrittenGrade, normalizeFeedback, normalizeWrittenResponses, responseLength } from "../../classes/application/assignment-written-contract";
 import { ClassProgressController } from "../../reports/interface/class-progress.controller";
 import { ClassEvidenceController } from "../../reports/interface/class-evidence.controller";
 import { ParentsController } from "../../parents/interface/parents.controller";
@@ -46,6 +46,7 @@ const REL: Record<string, Record<string, Rel>> = {
     assignment: { kind: "one", table: "assignment", fk: "assignmentId" },
     decision: { kind: "back", table: "lateDecision", fk: "submissionId" },
     deadlineRevision: { kind: "one", table: "assignmentDeadlineRevision", fk: "deadlineRevisionId" },
+    gradeDecisions: { kind: "many", table: "writtenGradeDecision", fk: "submissionId" },
   },
 };
 let seq = 0;
@@ -99,7 +100,7 @@ function hydrate(table: string, row: Row, spec: Row = {}): Row {
     const nested = value === true ? {} : (value as Row);
     const target = related(table, row, key);
     if (rel.kind === "many")
-      out[key] = (target as Row[]).filter((r) => matches(rel.table, r, nested.where)).map((r) => hydrate(rel.table, r, nested));
+      out[key] = sortRows((target as Row[]).filter((r) => matches(rel.table, r, nested.where)), nested.orderBy).map((r) => hydrate(rel.table, r, nested));
     else out[key] = target ? hydrate(rel.table, target as Row, nested) : null;
   }
   return out;
@@ -139,7 +140,7 @@ function table(name: string) {
     async count({ where }: Row = {}) { return t.rows.filter((x) => matches(name, x, where)).length; },
     async create({ data, select, include }: Row) {
       const { targets, ...scalar } = data;
-      const r: Row = { id: `${name}-${++seq}`, createdAt: new Date(), ...(DEFAULTS[name]?.() ?? {}), ...scalar };
+      const r: Row = { id: `${name}-${++seq}`, createdAt: new Date(Date.now() + seq), ...(DEFAULTS[name]?.() ?? {}), ...scalar };
       t.rows.push(r);
       if (targets?.create) for (const target of targets.create) db.assignmentTarget.rows.push({ id: `target-${++seq}`, assignmentId: r.id, ...target });
       return hydrate(name, r, { select, include });
@@ -187,7 +188,7 @@ beforeEach(() => {
   db = {};
   for (const name of [
     "classroom", "enrollment", "user", "classResource", "assignment", "assignmentTarget", "assignmentDeadlineRevision",
-    "assignmentSubmission", "lateDecision", "auditLog", "notification", "idempotencyRecord", "lesson", "lab", "labPackRevocation", "parentLink",
+    "assignmentSubmission", "lateDecision", "writtenGradeDecision", "auditLog", "notification", "idempotencyRecord", "lesson", "lab", "labPackRevocation", "parentLink",
   ])
     db[name] = table(name);
   db.$executeRaw = async () => 0;
@@ -406,7 +407,9 @@ describe("TAI2-T2 read models", () => {
     const id = await assignWritten({ dueDate: due(DAY / 2) });
     const parents = new ParentsController(db, { readableStudent: async () => undefined } as any, {} as any);
     const parentReq = { user: { sub: "parent-1", role: "PARENT" } };
-    expect(await codeOf(parents.childAssignment(parentReq, "s1", id))).toBe("ASSIGNMENT_NOT_FOUND");
+    const parentView: any = await parents.childAssignment(parentReq, "s1", id);
+    expect(parentView).toMatchObject({ assignmentId: id, status: "DUE_SOON" });
+    expect(keysAnywhere(parentView, [...TEACHER_ONLY, "score", "grade", "criterionPoints", "feedback", "responses", "criteria", "decision"])).toEqual([]);
     expireDeadline(id);
     const notices = await parents.overdueNotices(parentReq, "s1");
     expect(notices).toEqual([]);
@@ -422,5 +425,188 @@ describe("TAI2-T2 read models", () => {
     expect(submissionView({ ...base, score: 50, correctCount: 1, gradingMode: "AUTO" })).toMatchObject({ score: 50 });
     expect(() => submissionView({ ...base, score: null, correctCount: null, gradingMode: "TEACHER" })).toThrow(/not server-scored/);
     expect(autoScore({ gradingMode: "AUTO", score: 0, correctCount: 0 })).toEqual({ score: 0, correctCount: 0 });
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// TAI2-T3: manual rubric grading, the written-status board, and the student and parent read models.
+const GRADE_KEYS = ["referenceAnswer", "anchors", "commonPhrases", "gradingNotes"];
+const HIDDEN_FROM_PARENT = ["score", "grade", "criterionPoints", "feedback", "responses", "criteria", "decision", ...GRADE_KEYS];
+const fullGrade = (p1 = 2, p2 = 2, extra: Row = {}) => ({
+  kind: "MANUAL",
+  criterionPoints: [
+    { promptId: "p1", criterionCode: "GIAI_THICH", points: p1 },
+    { promptId: "p2", criterionCode: "GIAI_THICH", points: p2 },
+  ],
+  feedback: "  Làm tốt phần cơ chế.  ",
+  ...extra,
+});
+async function gradeOn(assignmentId: string, submissionId: string, body: Row = fullGrade()) {
+  return service().gradeWritten("class-a", assignmentId, submissionId, req(OWNER), body) as Promise<any>;
+}
+
+describe("TAI2-T3 grade rules", () => {
+  const content = { prompts: [{ id: "p1", criteria: [
+    { code: "A", description: "a", maxPoints: 2, anchors: [{ points: 0, description: "x" }, { points: 2, description: "y" }] },
+    { code: "B", description: "b", maxPoints: 2, anchors: [{ points: 0, description: "x" }, { points: 2, description: "y" }] },
+    { code: "C", description: "c", maxPoints: 3, anchors: [{ points: 0, description: "x" }, { points: 3, description: "y" }] },
+  ] }] };
+  const cp = (points: number[]) => points.map((p, i) => ({ promptId: "p1", criterionCode: ["A", "B", "C"][i], points: p }));
+
+  it("stores every criterion and rounds total over maximum to a 0-100 score (6.5 of 7 is 93)", async () => {
+    const grade = buildWrittenGrade(content, cp([2, 2, 2.5]));
+    expect(grade).toMatchObject({ totalPoints: 6.5, maxPoints: 7, score: 93 });
+    expect(grade.criterionPoints).toHaveLength(3);
+  });
+
+  it("rejects missing, duplicate, unknown, out-of-range and off-grid points with GRADE_POINTS_INVALID details", () => {
+    const bad = [cp([2, 2]), [...cp([2, 2, 2]), { promptId: "p1", criterionCode: "A", points: 1 }], [...cp([2, 2, 2]), { promptId: "p1", criterionCode: "Z", points: 1 }], cp([3, 2, 2]), cp([1.2, 2, 2]), cp([-1, 2, 2])];
+    for (const input of bad) {
+      let error: any = null;
+      try { buildWrittenGrade(content, input); } catch (e) { error = e; }
+      expect(error?.response?.code).toBe("GRADE_POINTS_INVALID");
+      expect(error.response.details.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("normalizes feedback (trim, NFC) and rejects more than 2000 characters", () => {
+    expect(normalizeFeedback("   ")).toBeNull();
+    expect(normalizeFeedback("  Tốt  ")).toBe("Tốt");
+    expect(() => normalizeFeedback("x".repeat(2001))).toThrow(expect.objectContaining({ response: expect.objectContaining({ code: "GRADE_FEEDBACK_INVALID" }) }));
+  });
+
+  it("only a current, on-time or extended submission is gradeable", () => {
+    const row = (patch: Row) => ({ id: "s", timing: "ON_TIME", decision: null, submittedAt: new Date(), ...patch });
+    expect(() => assertGradeable(row({}), [row({})])).not.toThrow();
+    expect(() => assertGradeable(row({ timing: "LATE" }), [row({ timing: "LATE" })])).toThrow(expect.objectContaining({ response: expect.objectContaining({ code: "SUBMISSION_NOT_GRADEABLE" }) }));
+    expect(() => assertGradeable(row({ timing: "LATE", decision: { decision: "REJECT_ZERO", createdAt: new Date() } }), [row({})])).toThrow(expect.objectContaining({ response: expect.objectContaining({ code: "SUBMISSION_NOT_GRADEABLE" }) }));
+    const older = row({ id: "old", submittedAt: new Date(Date.now() - 1000) });
+    expect(() => assertGradeable(older, [older, row({ id: "new" })])).toThrow(expect.objectContaining({ response: expect.objectContaining({ code: "SUBMISSION_NOT_GRADEABLE" }) }));
+  });
+});
+
+describe("TAI2-T3 grading lifecycle", () => {
+  it("grades an on-time submission with an append-only decision and an audit row without feedback", async () => {
+    const id = await assignWritten();
+    const { submission } = await submit(id, answers());
+    const result = await gradeOn(id, submission.id);
+    expect(result).toMatchObject({ status: "GRADED", grade: { score: 100, totalPoints: 4, maxPoints: 4, kind: "MANUAL" } });
+    expect(db.writtenGradeDecision.rows).toEqual([expect.objectContaining({ submissionId: submission.id, actorId: OWNER.sub, resourceVersion: 1, feedback: "Làm tốt phần cơ chế." })]);
+    const audit = db.auditLog.rows.find((a: Row) => a.action === "written_grade.create");
+    expect(audit.after).toMatchObject({ submissionId: submission.id, kind: "MANUAL", score: 100, resourceVersion: 1 });
+    expect(JSON.stringify(audit)).not.toContain("Làm tốt");
+  });
+
+  it("regrading appends a row: the student sees only the newest grade, the teacher sees every grade", async () => {
+    const id = await assignWritten();
+    const { submission } = await submit(id, answers());
+    await gradeOn(id, submission.id);
+    await gradeOn(id, submission.id, fullGrade(1, 2, { feedback: "Sửa lại điểm." }));
+    expect(db.writtenGradeDecision.rows).toHaveLength(2);
+    const student: any = await learning().assignment(id, { user: S1 });
+    expect(student.state.current.grade).toMatchObject({ score: 75, feedback: "Sửa lại điểm." });
+    expect(student.state.current.grade.criteria).toEqual([
+      { promptId: "p1", code: "GIAI_THICH", description: "Giải thích đúng", points: 1, maxPoints: 2 },
+      { promptId: "p2", code: "GIAI_THICH", description: "Giải thích đúng", points: 2, maxPoints: 2 },
+    ]);
+    const teacher: any = await service().writtenSubmission("class-a", id, submission.id, req(OWNER));
+    expect(teacher.grades.map((g: Row) => g.score)).toEqual([75, 100]);
+  });
+
+  it("a resubmission returns the student to AWAITING_GRADE; the old submission can no longer be graded", async () => {
+    const id = await assignWritten();
+    const first = await submit(id, answers("Lần một"));
+    await gradeOn(id, first.submission.id);
+    const second = await submit(id, answers("Lần hai"));
+    const student: any = await learning().assignment(id, { user: S1 });
+    expect(student.state).toMatchObject({ status: "AWAITING_GRADE", current: { id: second.submission.id, grade: null } });
+    expect(await codeOf(gradeOn(id, first.submission.id))).toBe("SUBMISSION_NOT_GRADEABLE");
+    expect(await codeOf(gradeOn(id, second.submission.id))).toBeNull();
+  });
+
+  it("late pending and rejected-zero submissions cannot be graded (409)", async () => {
+    const id = await assignWritten();
+    expireDeadline(id);
+    const late = await submit(id, { ...answers(), lateReason: "Em ốm" });
+    expect(await codeOf(gradeOn(id, late.submission.id))).toBe("SUBMISSION_NOT_GRADEABLE");
+    await service().rejectLate("class-a", id, late.submission.id, req(OWNER), {});
+    expect(await codeOf(gradeOn(id, late.submission.id))).toBe("SUBMISSION_NOT_GRADEABLE");
+  });
+
+  it("an extension makes pending late work gradeable, and a graded late submission counts as passed", async () => {
+    const id = await assignWritten();
+    expireDeadline(id);
+    const late = await submit(id, { ...answers(), lateReason: "Em quên" });
+    await service().reviseDeadline("class-a", id, req(OWNER), { dueAt: due(2 * DAY), expectedRevision: 1 });
+    const result = await gradeOn(id, late.submission.id);
+    expect(result.status).toBe("GRADED");
+  });
+
+  it("archived assignments stay gradeable; an archived class blocks grading with CLASS_ARCHIVED", async () => {
+    const id = await assignWritten();
+    const { submission } = await submit(id, answers());
+    await service().archiveAssignment("class-a", id, req(OWNER), { reason: "Kết thúc chủ đề", confirm: true });
+    expect((await gradeOn(id, submission.id)).status).toBe("GRADED");
+    db.classroom.rows.find((c: Row) => c.id === "class-a").status = "ARCHIVED";
+    expect(await codeOf(gradeOn(id, submission.id, fullGrade(0, 0)))).toBe("CLASS_ARCHIVED");
+  });
+
+  it("outsider teachers are denied and points outside the rubric are rejected before anything is stored", async () => {
+    const id = await assignWritten();
+    const { submission } = await submit(id, answers());
+    expect(await codeOf(service().gradeWritten("class-a", id, submission.id, req(OUTSIDER), fullGrade()))).toBe("CLASS_ACCESS_DENIED");
+    expect(await codeOf(gradeOn(id, submission.id, fullGrade(5, 2)))).toBe("GRADE_POINTS_INVALID");
+    expect(db.writtenGradeDecision.rows).toHaveLength(0);
+  });
+});
+
+describe("TAI2-T3 read models", () => {
+  it("the written-status board lists the score per student; the submission view keeps the rubric anchors for the owner", async () => {
+    const id = await assignWritten();
+    const { submission } = await submit(id, answers());
+    await gradeOn(id, submission.id);
+    const board: any = await service().writtenStatus("class-a", id, req(OWNER));
+    expect(board.students.find((r: Row) => r.student.id === "s1")).toMatchObject({ status: "GRADED", current: { score: 100 } });
+    const list: any[] = await service().classAssignments("class-a", { user: OWNER }, {});
+    expect(list.find((a) => a.id === id).writtenSummary.counts).toMatchObject({ GRADED: 1, NOT_SUBMITTED: 1 });
+    const detail: any = await service().writtenSubmission("class-a", id, submission.id, req(OWNER));
+    expect(detail.rubric.prompts[0].criteria[0].anchors).toHaveLength(2);
+    expect(detail.rubric.prompts[0].referenceAnswer).toBeTruthy();
+  });
+
+  it("the student view after grading shows score, criteria and feedback, and no teacher-only key anywhere", async () => {
+    const id = await assignWritten();
+    const { submission } = await submit(id, answers());
+    await gradeOn(id, submission.id);
+    const detail: any = await learning().assignment(id, { user: S1 });
+    expect(detail.state).toMatchObject({ status: "GRADED", current: { score: 100, grade: { feedback: "Làm tốt phần cơ chế." } } });
+    expect(detail.state.current.grade.criteria[0]).toEqual({ promptId: "p1", code: "GIAI_THICH", description: "Giải thích đúng", points: 2, maxPoints: 2 });
+    expect(keysAnywhere(detail)).toEqual([]);
+    const list: any[] = await learning().assignments({ user: S1 });
+    expect(keysAnywhere(list)).toEqual([]);
+    const history: any = detail.state.history;
+    expect(history.every((row: Row) => row.grade === null)).toBe(true);
+  });
+
+  it("a rejected zero counts as not passed, a graded submission counts as passed on the progress board", async () => {
+    const id = await assignWritten();
+    const { submission } = await submit(id, answers());
+    await gradeOn(id, submission.id);
+    const board: any[] = await new ClassProgressController(db).assignmentProgressBoard("class-a", id, { user: OWNER });
+    expect(board.find((r) => r.student.id === "s1")).toMatchObject({ testStatus: "GRADED", passed: true, score: 100 });
+    expect(board.find((r) => r.student.id === "s2")).toMatchObject({ passed: false });
+  });
+
+  it("the parent view shows status only: no score, criteria, feedback, response or rubric key anywhere", async () => {
+    const id = await assignWritten();
+    const { submission } = await submit(id, answers());
+    await gradeOn(id, submission.id);
+    const parents = new ParentsController(db, { readableStudent: async () => undefined } as any, {} as any);
+    const parentReq = { user: { sub: "parent-1", role: "PARENT" } };
+    const item: any = await parents.childAssignment(parentReq, "s1", id);
+    expect(item).toMatchObject({ assignmentId: id, status: "GRADED" });
+    expect(keysAnywhere(item, HIDDEN_FROM_PARENT)).toEqual([]);
+    expect(JSON.stringify(item)).not.toContain("Làm tốt");
   });
 });

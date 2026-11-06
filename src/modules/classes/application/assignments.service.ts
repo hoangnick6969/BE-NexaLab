@@ -7,8 +7,9 @@ import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { Db } from "../../../db/db";
 import { labVersion, lessonVersion } from "../../lessons/application/lesson-content";
 import { assertTestAssignmentUpdate, deadlineRevisionSchema, latestSubmission, rejectLateSchema, requireTestDueDate, submissionStatus, TEST_CONTENT_TYPE, } from "./assignment-test-contract";
-import { currentDeadlines, deadlineStates } from "./assignment-test-state";
-import { DEADLINE_CONTENT_TYPES, WRITTEN_CONTENT_TYPE } from "./assignment-written-contract";
+import { currentDeadlines, deadlineStates, writtenGradeSelect } from "./assignment-test-state";
+import { assertGradeable, buildWrittenGrade, DEADLINE_CONTENT_TYPES, normalizeFeedback, WRITTEN_CONTENT_TYPE, writtenGradeSchema, writtenSubmissionStatus } from "./assignment-written-contract";
+
 import { notify } from "../../notifications/application/notify";
 import { snapshotAssignmentLab } from "../../labs/application/assignment-lab-execution";
 import { digest as labExecutionDigest } from "../../labs/application/lab-run";
@@ -90,7 +91,7 @@ export class AssignmentsService {
     return rows.map(({ targets, ...a }) => {
       if (a.contentType === WRITTEN_CONTENT_TYPE) {
         // TAI2-T2: written work waits for the teacher grade instead of being scored.
-        const counts = { AWAITING_GRADE: 0, LATE_REVIEW_PENDING: 0, REJECTED: 0, OVERDUE_UNSUBMITTED: 0, NOT_SUBMITTED: 0 };
+        const counts = { AWAITING_GRADE: 0, GRADED: 0, LATE_REVIEW_PENDING: 0, REJECTED: 0, OVERDUE_UNSUBMITTED: 0, NOT_SUBMITTED: 0 };
         let revision = 1;
         for (const t of targets) {
           const state = states.get(key(a.id, t.studentId));
@@ -750,6 +751,125 @@ export class AssignmentsService {
         after: { status: "ARCHIVED" },
       });
       return { assignment: assignmentView(updated), alreadyArchived: false };
+    });
+  }
+
+  // ---------- TAI2-T3 written grading (owner only; an archived assignment or resource stays gradeable) ----------
+  private async ownedWrittenAssignment(db: any, classId: string, assignmentId: string) {
+    const assignment = await db.assignment.findFirst({
+      where: { id: assignmentId, classId, contentType: WRITTEN_CONTENT_TYPE },
+      include: {
+        targets: { include: { student: { select: { id: true, fullName: true, username: true } } } },
+        classroom: { select: { status: true } },
+      },
+    });
+    if (!assignment)
+      throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài tự luận đã giao" });
+    return assignment;
+  }
+
+  /** written-status board: per recipient, the server-derived state and the current grade (teacher only). */
+  async writtenStatus(id: string, assignmentId: string, req: any) {
+    await ownedClass(this.db, id, req.user);
+    const a = await this.ownedWrittenAssignment(this.db, id, assignmentId);
+    const [{ states, key }, revisions] = await Promise.all([
+      deadlineStates(this.db, [a], a.targets.map((t: any) => t.studentId), new Date(), { withGrade: true }),
+      this.db.assignmentDeadlineRevision.findMany({
+        where: { assignmentId },
+        orderBy: { revision: "asc" },
+        select: { revision: true, dueAt: true, note: true, createdAt: true, triggeredBySubmissionId: true },
+      }),
+    ]);
+    return {
+      assignment: assignmentView({ ...a, _count: { targets: a.targets.length } }),
+      deadlines: revisions,
+      permittedDecisions: this.permittedDecisions(a),
+      students: a.targets.map((t: any) => ({ student: t.student, ...states.get(key(a.id, t.studentId))! })),
+    };
+  }
+
+  /** One submission for grading: responses, the rubric of the answered version (with anchors), and every grade (append-only history). */
+  async writtenSubmission(id: string, assignmentId: string, submissionId: string, req: any) {
+    await ownedClass(this.db, id, req.user);
+    const a = await this.ownedWrittenAssignment(this.db, id, assignmentId);
+    const submission = await this.db.assignmentSubmission.findFirst({
+      where: { id: submissionId, assignmentId },
+      include: {
+        gradeDecisions: { orderBy: { createdAt: "desc" }, select: writtenGradeSelect },
+        student: { select: { id: true, fullName: true, username: true } },
+      },
+    });
+    if (!submission)
+      throw new NotFoundException({ code: "SUBMISSION_NOT_FOUND", message: "Không tìm thấy bài nộp" });
+    const resource = await this.db.classResource.findFirst({
+      where: { id: a.contentId, classId: id, kind: "WRITTEN_TASK" },
+      select: { id: true, title: true, version: true, content: true },
+    });
+    if (!resource) throw new NotFoundException("Nội dung không còn khả dụng");
+    const siblings = await this.db.assignmentSubmission.findMany({ where: { assignmentId, studentId: submission.studentId }, select: { id: true, submittedAt: true } });
+    return {
+      submission: {
+        id: submission.id,
+        student: submission.student,
+        timing: submission.timing,
+        lateReason: submission.lateReason,
+        submittedAt: submission.submittedAt,
+        resourceVersion: submission.resourceVersion,
+        status: writtenSubmissionStatus(submission as any),
+        isCurrent: latestSubmission(siblings)?.id === submission.id,
+        responses: Array.isArray(submission.answers) ? submission.answers : [],
+      },
+      rubric: { id: resource.id, title: resource.title, version: resource.version, prompts: (resource.content as any)?.prompts ?? [] },
+      grades: submission.gradeDecisions,
+    };
+  }
+
+  /** Append-only MANUAL grade: validated against the answered rubric; 409 when the submission is not gradeable or not current. */
+  async gradeWritten(id: string, assignmentId: string, submissionId: string, req: any, body: unknown) {
+    const b = writtenGradeSchema.parse(body);
+    const c = await ownedClass(this.db, id, req.user);
+    if (c.status === "ARCHIVED") throw classArchived();
+    const feedback = normalizeFeedback(b.feedback);
+    const ctx = {
+      actorId: req.user.sub,
+      key: readIdempotencyKey(req),
+      scope: "POST classes/:id/assignments/:aid/submissions/:sid/grades:" + submissionId,
+      payload: b,
+    };
+    return idempotent(this.db, ctx, async (tx) => {
+      await lock(tx, "assignment-deadline:" + assignmentId);
+      const a = await this.ownedWrittenAssignment(tx, id, assignmentId);
+      const submission = await tx.assignmentSubmission.findFirst({ where: { id: submissionId, assignmentId }, include: { decision: true } });
+      if (!submission)
+        throw new NotFoundException({ code: "SUBMISSION_NOT_FOUND", message: "Không tìm thấy bài nộp" });
+      const siblings = await tx.assignmentSubmission.findMany({ where: { assignmentId, studentId: submission.studentId }, select: { id: true, submittedAt: true } });
+      assertGradeable(submission as any, siblings);
+      // The assignment pins the resource row it was created from; that row is immutable once published.
+      const resource = await tx.classResource.findFirst({ where: { id: a.contentId, classId: id, kind: "WRITTEN_TASK" }, select: { content: true } });
+      if (!resource) throw new NotFoundException("Nội dung không còn khả dụng");
+      const grade = buildWrittenGrade(resource.content, b.criterionPoints);
+      const row = await tx.writtenGradeDecision.create({
+        data: {
+          submissionId,
+          actorId: req.user.sub,
+          kind: "MANUAL",
+          criterionPoints: grade.criterionPoints,
+          totalPoints: grade.totalPoints,
+          maxPoints: grade.maxPoints,
+          score: grade.score,
+          feedback,
+          resourceVersion: submission.resourceVersion,
+        },
+        select: writtenGradeSelect,
+      });
+      await audit(tx, {
+        actor: req.user,
+        action: "written_grade.create",
+        targetType: "AssignmentSubmission",
+        targetId: submissionId,
+        after: { submissionId, kind: "MANUAL", score: grade.score, resourceVersion: submission.resourceVersion },
+      });
+      return { grade: row, status: "GRADED" };
     });
   }
 }

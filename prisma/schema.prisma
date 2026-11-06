@@ -795,10 +795,41 @@ model AssignmentSubmission {
   lateReason         String?
   submittedAt        DateTime                   @default(now())
   decision           LateDecision?
+  /// TAI-02 (TAI2-T3): append-only teacher grades; the latest row is the current grade.
+  gradeDecisions     WrittenGradeDecision[]
 
   @@index([assignmentId, studentId, submittedAt])
   @@index([studentId, submittedAt])
   @@index([deadlineRevisionId])
+}
+
+/// TAI-02 (TAI2-T3): how a written submission was graded.
+enum WrittenGradeKind {
+  MANUAL
+  ACCEPTED_AI
+  EDITED_AI
+  REJECTED_AI
+}
+
+/// TAI-02 (TAI2-T3): append-only teacher grade for one written submission. Only MANUAL is written in T3.
+model WrittenGradeDecision {
+  id                  String               @id @default(cuid())
+  submissionId        String
+  submission          AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  actorId             String
+  kind                WrittenGradeKind
+  basedOnSuggestionId String?
+  /// [{ promptId, criterionCode, points }]
+  criterionPoints     Json
+  totalPoints         Float
+  maxPoints           Float
+  /// round(totalPoints / maxPoints * 100), the same 0-100 scale as TEST.
+  score               Int
+  feedback            String?
+  resourceVersion     Int
+  createdAt           DateTime             @default(now())
+
+  @@index([submissionId, createdAt])
 }
 
 /// Owning teacher's decision on one late submission (I3 / 3.3): REJECT_ZERO, or
