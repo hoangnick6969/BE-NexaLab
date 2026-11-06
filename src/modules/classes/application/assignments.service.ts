@@ -7,13 +7,14 @@ import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { Db } from "../../../db/db";
 import { labVersion, lessonVersion } from "../../lessons/application/lesson-content";
 import { assertTestAssignmentUpdate, deadlineRevisionSchema, latestSubmission, rejectLateSchema, requireTestDueDate, submissionStatus, TEST_CONTENT_TYPE, } from "./assignment-test-contract";
-import { currentDeadlines, testStates } from "./assignment-test-state";
+import { currentDeadlines, deadlineStates } from "./assignment-test-state";
+import { DEADLINE_CONTENT_TYPES, WRITTEN_CONTENT_TYPE } from "./assignment-written-contract";
 import { notify } from "../../notifications/application/notify";
 import { snapshotAssignmentLab } from "../../labs/application/assignment-lab-execution";
 import { digest as labExecutionDigest } from "../../labs/application/lab-run";
 import { resolveClassLabResource } from "./class-lab-resource";
 
-type ContentType = "lesson" | "lab" | "test";
+type ContentType = "lesson" | "lab" | "test" | "written";
 
 function assignmentView(a: any, now = new Date()) {
   return {
@@ -36,7 +37,7 @@ function assignmentView(a: any, now = new Date()) {
 
 export const assignmentInput = z
   .object({
-    contentType: z.enum(["lesson", "lab", "test"]),
+    contentType: z.enum(["lesson", "lab", "test", "written"]),
     contentId: text,
     labReleaseId: text.optional(),
     labChallengeId: text.optional(),
@@ -83,10 +84,23 @@ export class AssignmentsService {
       include: { _count: { select: { targets: true } }, targets: { select: { studentId: true } } },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     });
-    const tests = rows.filter((a) => a.contentType === TEST_CONTENT_TYPE);
-    const studentIds = [...new Set(tests.flatMap((a) => a.targets.map((t) => t.studentId)))];
-    const { states, key } = await testStates(this.db, tests, studentIds);
+    const deadlined = rows.filter((a) => (DEADLINE_CONTENT_TYPES as readonly string[]).includes(a.contentType));
+    const studentIds = [...new Set(deadlined.flatMap((a) => a.targets.map((t) => t.studentId)))];
+    const { states, key } = await deadlineStates(this.db, deadlined, studentIds);
     return rows.map(({ targets, ...a }) => {
+      if (a.contentType === WRITTEN_CONTENT_TYPE) {
+        // TAI2-T2: written work waits for the teacher grade instead of being scored.
+        const counts = { AWAITING_GRADE: 0, LATE_REVIEW_PENDING: 0, REJECTED: 0, OVERDUE_UNSUBMITTED: 0, NOT_SUBMITTED: 0 };
+        let revision = 1;
+        for (const t of targets) {
+          const state = states.get(key(a.id, t.studentId));
+          if (!state) continue;
+          revision = state.revision;
+          if (state.status in counts) counts[state.status as keyof typeof counts]++;
+          else counts.NOT_SUBMITTED++;
+        }
+        return { ...assignmentView(a), writtenSummary: { revision, extended: revision > 1, counts } };
+      }
       if (a.contentType !== TEST_CONTENT_TYPE) return { ...assignmentView(a), ...(a.contentType === "lab" ? { targetStudentIds: a.audience === "SUBSET" ? targets.map((target) => target.studentId) : [] } : {}) };
       const counts = { SUBMITTED: 0, LATE_REVIEW_PENDING: 0, REJECTED: 0, OVERDUE_UNSUBMITTED: 0, NOT_SUBMITTED: 0 };
       let revision = 1;
@@ -102,9 +116,10 @@ export class AssignmentsService {
   }
 
   // ---------- I3 assigned-test lifecycle ----------
-  private async ownedTestAssignment(db: any, classId: string, assignmentId: string) {
+  /** TAI2-T2: late decisions and deadline revisions apply to test and written assignments alike. */
+  private async ownedTestAssignment(db: any, classId: string, assignmentId: string, contentTypes: readonly string[] = DEADLINE_CONTENT_TYPES) {
     const assignment = await db.assignment.findFirst({
-      where: { id: assignmentId, classId, contentType: TEST_CONTENT_TYPE },
+      where: { id: assignmentId, classId, contentType: { in: [...contentTypes] } },
       include: { targets: { include: { student: { select: { id: true, fullName: true, username: true } } } }, classroom: { select: { status: true } } },
     });
     if (!assignment)
@@ -117,9 +132,9 @@ export class AssignmentsService {
 
   async testStatus(id: string, assignmentId: string, req: any) {
     await ownedClass(this.db, id, req.user);
-    const a = await this.ownedTestAssignment(this.db, id, assignmentId);
+    const a = await this.ownedTestAssignment(this.db, id, assignmentId, [TEST_CONTENT_TYPE]);
     const [{ states, key }, revisions] = await Promise.all([
-      testStates(this.db, [a], a.targets.map((t: any) => t.studentId)),
+      deadlineStates(this.db, [a], a.targets.map((t: any) => t.studentId)),
       this.db.assignmentDeadlineRevision.findMany({
         where: { assignmentId },
         orderBy: { revision: "asc" },
@@ -137,7 +152,7 @@ export class AssignmentsService {
   async lateQueue(id: string, req: any) {
     await ownedClass(this.db, id, req.user);
     const pending = await this.db.assignmentSubmission.findMany({
-      where: { assignment: { classId: id, contentType: TEST_CONTENT_TYPE }, timing: "LATE", decision: null },
+      where: { assignment: { classId: id, contentType: { in: [...DEADLINE_CONTENT_TYPES] } }, timing: "LATE", decision: null },
       select: { id: true, assignmentId: true, studentId: true },
     });
     if (!pending.length) return [];
@@ -145,7 +160,7 @@ export class AssignmentsService {
       where: { id: { in: [...new Set(pending.map((p) => p.assignmentId))] } },
       include: { targets: { include: { student: { select: { id: true, fullName: true, username: true } } } }, classroom: { select: { status: true } } },
     });
-    const { states, key } = await testStates(this.db, assignments, [...new Set(pending.map((p) => p.studentId))]);
+    const { states, key } = await deadlineStates(this.db, assignments, [...new Set(pending.map((p) => p.studentId))]);
     const items: any[] = [];
     for (const a of assignments)
       for (const t of a.targets) {
@@ -156,6 +171,7 @@ export class AssignmentsService {
           assignmentId: a.id,
           assignmentTitle: a.title,
           assignmentStatus: a.status,
+          contentType: a.contentType,
           student: t.student,
           submissionId: state.current.id,
           submittedAt: state.current.submittedAt,
@@ -316,7 +332,7 @@ export class AssignmentsService {
 
   async assignableContent(id: string, req: any) {
     const c = await ownedClass(this.db, id, req.user);
-    const [lessons, labs, tests] = await Promise.all([
+    const [lessons, labs, tests, writtenTasks] = await Promise.all([
       this.db.lesson.findMany({
         where: {
           status: "published",
@@ -356,6 +372,11 @@ export class AssignmentsService {
         select: { id: true, title: true, version: true, lessonId: true, content: true, publishedAt: true },
         orderBy: [{ title: "asc" }, { version: "desc" }],
       }),
+      this.db.classResource.findMany({
+        where: { classId: id, kind: "WRITTEN_TASK", status: "PUBLISHED" },
+        select: { id: true, title: true, version: true, lessonId: true, content: true, publishedAt: true },
+        orderBy: [{ title: "asc" }, { version: "desc" }],
+      }),
     ]);
     const releaseRows = labs.flatMap((lab: any) => {
       const release = lab.releases?.[0];
@@ -389,14 +410,16 @@ export class AssignmentsService {
       lessons,
       labs: eligibleLabs,
       tests: tests.map(({ content, ...test }) => ({ ...test, questionCount: (content as any)?.questions?.length ?? 0 })),
+      // TAI2-T2: the rubric never leaves this route; only the prompt count is listed.
+      writtenTasks: writtenTasks.map(({ content, ...task }) => ({ ...task, promptCount: (content as any)?.prompts?.length ?? 0 })),
     };
   }
 
   private async assignableContentOrThrow(tx: any, classId: string, contentType: ContentType, contentId: string, teacherId: string) {
-    if (contentType === TEST_CONTENT_TYPE) {
-      // Only an explicit assignment makes a shared class test scored (I3 / 3.1).
+    if (contentType === TEST_CONTENT_TYPE || contentType === WRITTEN_CONTENT_TYPE) {
+      // Only an explicit assignment makes a shared class test scored (I3 / 3.1); a written task (TAI2-T2) likewise.
       const test = await tx.classResource.findFirst({
-        where: { id: contentId, classId, kind: "TEST", status: "PUBLISHED" },
+        where: { id: contentId, classId, kind: contentType === TEST_CONTENT_TYPE ? "TEST" : "WRITTEN_TASK", status: "PUBLISHED" },
         select: { id: true, title: true, version: true },
       });
       if (!test)
@@ -514,7 +537,7 @@ export class AssignmentsService {
     if (c.status === "ARCHIVED") throw classArchived();
     const now = new Date();
     const dueDate = this.assertDueDate(b.dueDate, now);
-    if (b.contentType === TEST_CONTENT_TYPE) requireTestDueDate(dueDate);
+    if (b.contentType === TEST_CONTENT_TYPE || b.contentType === WRITTEN_CONTENT_TYPE) requireTestDueDate(dueDate);
     const ctx = {
       actorId: req.user.sub,
       key: readIdempotencyKey(req),
@@ -572,7 +595,7 @@ export class AssignmentsService {
           dedupKey: `assignment:${assignment.id}`,
         })),
       );
-      if (b.contentType === TEST_CONTENT_TYPE)
+      if (b.contentType === TEST_CONTENT_TYPE || b.contentType === WRITTEN_CONTENT_TYPE)
         await tx.assignmentDeadlineRevision.create({
           data: { assignmentId: assignment.id, revision: 1, dueAt: dueDate!, actorId: req.user.sub },
         });
@@ -621,7 +644,7 @@ export class AssignmentsService {
           code: "ASSIGNMENT_ARCHIVED",
           message: "Bài đã lưu trữ; hãy giao bài mới",
         });
-      if (existing.contentType === TEST_CONTENT_TYPE) assertTestAssignmentUpdate(b, existing.dueDate);
+      if (existing.contentType === TEST_CONTENT_TYPE || existing.contentType === WRITTEN_CONTENT_TYPE) assertTestAssignmentUpdate(b, existing.dueDate);
       const dueDate =
         b.dueDate === undefined
           ? existing.dueDate

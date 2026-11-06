@@ -11,7 +11,8 @@ import { MISCONCEPTION_LABELS } from "../../labs/application/misconception-label
 import { buildHintInsight } from "../application/hint-insight";
 import { deriveLesson } from "../../progress/application/progress";
 import { TEST_CONTENT_TYPE } from "../../classes/application/assignment-test-contract";
-import { testStates } from "../../classes/application/assignment-test-state";
+import { deadlineStates } from "../../classes/application/assignment-test-state";
+import { WRITTEN_CONTENT_TYPE } from "../../classes/application/assignment-written-contract";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -50,9 +51,10 @@ export class ClassProgressController {
       });
     }
     const studentIds = assignment.targets.map((target) => target.studentId);
-    if (assignment.contentType === TEST_CONTENT_TYPE) {
-      // Test submissions are not Attempt rows; report the server-derived test state.
-      const { states, key } = await testStates(this.db, [assignment], studentIds);
+    if (assignment.contentType === TEST_CONTENT_TYPE || assignment.contentType === WRITTEN_CONTENT_TYPE) {
+      // Test and written (TAI2-T2) submissions are not Attempt rows; report the server-derived state.
+      // A written submission has no score until the teacher grades it (TAI2-T3), so `passed` stays false.
+      const { states, key } = await deadlineStates(this.db, [assignment], studentIds);
       return assignment.targets.map(({ student }) => {
         const state = states.get(key(assignment.id, student.id));
         return {

@@ -104,6 +104,19 @@ CSV import does not support `WRITTEN_TASK` (`IMPORT_KIND_UNSUPPORTED`).
 - Rubric rules beyond the type above: anchor `points` are multiples of 0.5 within `[0, maxPoints]` and strictly ascending, first 0 and last `maxPoints`; anchor `description` 1–300 chars; `maxChars` is an integer. Violations return `400 RUBRIC_INVALID` with `details: [{ path, message }]`.
 - CSV preview and import return `400 IMPORT_KIND_UNSUPPORTED` for `WRITTEN_TASK`, and the FE import tab does not offer it. Assignments, submissions and the Teacher AI panel are unchanged in T1.
 
+**TAI2-T2 decisions (2026-11-06):**
+
+- Migration (one idempotent SQL file): create enum `GradingMode`, add `gradingMode GradingMode NOT NULL DEFAULT 'AUTO'` (existing rows backfill to `AUTO` through the default), a `DO $$` preflight that raises when any `AUTO` row has a null `score` or `correctCount`, the CHECK constraint, and only then `DROP NOT NULL` on `score`/`correctCount`. `WrittenGradeDecision` comes in TAI2-T3.
+- `autoScore(row)` returns `{ score, correctCount }` for `AUTO` rows and throws for `TEACHER` rows; every TEST path reads scores through it, so TEST types and responses do not change.
+- The owner late flows (`rejectLate`, `reviseDeadline`, `lateQueue`) accept `test` and `written` assignments under the same `assignment-deadline:<id>` lock. The `test-status` route stays TEST-only; `written-status` comes in TAI2-T3.
+- `contentType: "written"` accepts only a `PUBLISHED` `WRITTEN_TASK` of the same class (otherwise `400 CONTENT_NOT_PUBLISHED`), requires `dueDate`, writes deadline revision 1, keeps targets and due date immutable (`TEST_ASSIGNMENT_IMMUTABLE`), and pins `contentVersion` to the resource version. `assignable-content` also returns `writtenTasks` with `promptCount`.
+- Response length: trim, normalize to NFC, then count Unicode code points (`[...text].length`); the FE counter uses the same rule. Violations return `400 WRITTEN_RESPONSES_INVALID`. Stored rows have `gradingMode: TEACHER`, null `score`/`correctCount` and `questionCount = prompts.length`.
+- Resubmission is allowed as specified: the latest submission is current and its status returns to `AWAITING_GRADE`.
+- Student written statuses in T2: `UPCOMING`, `DUE_SOON`, `OVERDUE_UNSUBMITTED`, `AWAITING_GRADE`, `LATE_REVIEW_PENDING`, `REJECTED` (score 0). `GRADED` comes in TAI2-T3. Submission history shows only the student's own responses, never the rubric.
+- Every student response for a written assignment builds content through `studentWrittenTaskContent` and is covered by a recursive key-scan test. Parent views do not list written assignments in T2 (status-only parent view in TAI2-T3); a test asserts the parent responses carry no written data.
+- Class progress and assignment support report the written state with `score: null` and count `AWAITING_GRADE` as submitted for support flags; the teacher assignment list returns `writtenSummary` counts; due-soon reminders include written assignments.
+- Audit `assignment.submit` adds `gradingMode` (also `AUTO` for TEST). `test:i3` needs an isolated loopback database that is not available on this machine; T2 is verified with the full vitest suite and in-memory fixtures, and `test:i3` stays pending until an isolated database exists.
+
 ## Student answer contract
 
 `POST assignments/:id/submissions` branches on `contentType`. Written body:

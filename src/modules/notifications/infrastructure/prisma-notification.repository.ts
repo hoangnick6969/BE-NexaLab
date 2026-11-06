@@ -2,7 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import { Db } from "../../../db/db";
 import { applicableAssignmentWhere } from "../../classes/application/class-access";
 import { TEST_CONTENT_TYPE } from "../../classes/application/assignment-test-contract";
-import { testStates } from "../../classes/application/assignment-test-state";
+import { deadlineStates } from "../../classes/application/assignment-test-state";
+import { WRITTEN_CONTENT_TYPE } from "../../classes/application/assignment-written-contract";
 import { notify, type NotificationInput } from "../application/notify";
 import type { AssignedTestState, NotificationRepository } from "../application/notification.repository";
 
@@ -40,14 +41,14 @@ export class PrismaNotificationRepository implements NotificationRepository {
   }
   async assignedTestStates(studentId: string): Promise<AssignedTestState[]> {
     const rows = await this.db.assignment.findMany({
-      where: { ...applicableAssignmentWhere(studentId), contentType: TEST_CONTENT_TYPE },
-      select: { id: true, title: true, dueDate: true, classroom: { select: { name: true } } },
+      where: { ...applicableAssignmentWhere(studentId), contentType: { in: [TEST_CONTENT_TYPE, WRITTEN_CONTENT_TYPE] } },
+      select: { id: true, title: true, dueDate: true, contentType: true, classroom: { select: { name: true } } },
     });
     if (!rows.length) return [];
-    const { states, key } = await testStates(this.db, rows, [studentId]);
+    const { states, key } = await deadlineStates(this.db, rows, [studentId]);
     return rows.flatMap((a) => {
       const state = states.get(key(a.id, studentId));
-      return state ? [{ assignmentId: a.id, title: a.title, className: a.classroom.name, status: state.status, revision: state.revision }] : [];
+      return state ? [{ assignmentId: a.id, title: a.title, className: a.classroom.name, status: state.status, revision: state.revision, contentType: a.contentType }] : [];
     });
   }
 }

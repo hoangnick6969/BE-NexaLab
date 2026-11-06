@@ -1,4 +1,5 @@
 import { studentTestState } from "./assignment-test-contract";
+import { studentWrittenState, WRITTEN_CONTENT_TYPE } from "./assignment-written-contract";
 
 const submissionSelect = {
   id: true,
@@ -7,6 +8,7 @@ const submissionSelect = {
   timing: true,
   score: true,
   correctCount: true,
+  gradingMode: true,
   questionCount: true,
   lateReason: true,
   submittedAt: true,
@@ -53,6 +55,43 @@ export async function testStates(db: any, assignments: Array<{ id: string; dueDa
           now,
         }),
       );
+  }
+  return { deadlines, states, key: (assignmentId: string, studentId: string) => assignmentId + ":" + studentId };
+}
+
+type DeadlineState = ReturnType<typeof studentTestState> | ReturnType<typeof studentWrittenState>;
+
+/**
+ * TAI-02: test and written assignments share the deadline lifecycle. Each assignment is derived by
+ * its own kind: TEST through studentTestState (unchanged), written through studentWrittenState.
+ * `withResponses` adds the student's own written responses (student self-views only).
+ */
+export async function deadlineStates(
+  db: any,
+  assignments: Array<{ id: string; dueDate: Date | null; contentType: string }>,
+  studentIds: string[],
+  now = new Date(),
+  options: { withResponses?: boolean } = {},
+) {
+  const [deadlines, submissions] = await Promise.all([
+    currentDeadlines(db, assignments),
+    db.assignmentSubmission.findMany({
+      where: { assignmentId: { in: assignments.map((a) => a.id) }, studentId: { in: studentIds } },
+      select: options.withResponses ? { ...submissionSelect, answers: true } : submissionSelect,
+    }),
+  ]);
+  const states = new Map<string, DeadlineState>();
+  for (const a of assignments) {
+    const deadline = deadlines.get(a.id);
+    if (!deadline) continue;
+    for (const studentId of studentIds) {
+      const rows = submissions.filter((row: any) => row.assignmentId === a.id && row.studentId === studentId);
+      const input = { dueAt: deadline.dueAt, revision: deadline.revision, submissions: rows, now };
+      states.set(
+        a.id + ":" + studentId,
+        a.contentType === WRITTEN_CONTENT_TYPE ? studentWrittenState({ ...input, withResponses: options.withResponses }) : studentTestState(input),
+      );
+    }
   }
   return { deadlines, states, key: (assignmentId: string, studentId: string) => assignmentId + ":" + studentId };
 }

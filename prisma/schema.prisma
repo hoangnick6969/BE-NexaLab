@@ -764,6 +764,12 @@ model AssignmentDeadlineRevision {
   @@unique([assignmentId, revision])
 }
 
+/// TAI-02: how an AssignmentSubmission is scored.
+enum GradingMode {
+  AUTO
+  TEACHER
+}
+
 /// Immutable test submission (I3 / 3.2). The server scores every submission; a late one stays
 /// pending until a LateDecision exists. The latest submission per student is current.
 model AssignmentSubmission {
@@ -778,9 +784,12 @@ model AssignmentSubmission {
   /// Resource version answered, so later test revisions never rescore history.
   resourceVersion    Int
   answers            Json
-  score              Int
-  correctCount       Int
+  /// Non-null when gradingMode = AUTO (DB CHECK AssignmentSubmission_auto_score_check); null for TEACHER (TAI-02 written).
+  score              Int?
+  correctCount       Int?
   questionCount      Int
+  /// AUTO = server-scored TEST; TEACHER = WRITTEN_TASK graded by the owning teacher (TAI-02).
+  gradingMode        GradingMode                @default(AUTO)
   /// ON_TIME (submittedAt <= dueAt) or LATE.
   timing             String
   lateReason         String?

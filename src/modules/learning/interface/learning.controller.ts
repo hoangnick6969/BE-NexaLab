@@ -12,7 +12,8 @@ import { ARCHIVED_CONTENT_MESSAGE } from "../../lessons/application/lesson-moder
 import { projectLesson } from "../../progress/application/progress-projection";
 import { parseAssignmentIdQuery } from "./assignment-query";
 import { scoreTest, studentTestContent, TEST_CONTENT_TYPE, testSubmissionSchema } from "../../classes/application/assignment-test-contract";
-import { currentDeadlines, testStates } from "../../classes/application/assignment-test-state";
+import { currentDeadlines, deadlineStates } from "../../classes/application/assignment-test-state";
+import { normalizeWrittenResponses, studentWrittenAssignmentContent, WRITTEN_CONTENT_TYPE, writtenSubmissionSchema } from "../../classes/application/assignment-written-contract";
 import { lock } from "../../classes/application/class-common";
 import { audit } from "../../../common/audit";
 import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
@@ -619,8 +620,10 @@ export class LearningController {
     return { state: started ? ("ARCHIVED_STARTED" as const) : ("ARCHIVED_NOT_STARTED" as const), content };
   }
   /** A published class test stays readable through its assignment even after the resource is archived. */
-  private async testState(a: { contentId: string; classId: string }) {
-    const test = await this.db.classResource.findFirst({ where: { id: a.contentId, classId: a.classId, kind: "TEST", status: { not: "DRAFT" } } });
+  private async testState(a: { contentId: string; classId: string; contentType?: string }) {
+    // TAI2-T2: a written assignment reads its WRITTEN_TASK resource the same way.
+    const kind = a.contentType === WRITTEN_CONTENT_TYPE ? "WRITTEN_TASK" : "TEST";
+    const test = await this.db.classResource.findFirst({ where: { id: a.contentId, classId: a.classId, kind, status: { not: "DRAFT" } } });
     return test ? { state: "AVAILABLE" as const, test } : { state: "UNAVAILABLE" as const, test: null };
   }
   @Roles("STUDENT") @Get("assignments") async assignments(@Req() req: any) {
@@ -633,8 +636,10 @@ export class LearningController {
     // Load each content type in one bounded query. The same rows power the
     // availability check and the catalog summary, avoiding per-assignment
     // detail reads while keeping the existing student authorization query.
-    const tests = rows.filter((a) => a.contentType === TEST_CONTENT_TYPE);
-    const testResourceIds = [...new Set(tests.map((a) => a.contentId))];
+    // TAI2-T2: written assignments are class resources with the same deadline lifecycle as tests.
+    const tests = rows.filter((a) => a.contentType === TEST_CONTENT_TYPE || a.contentType === WRITTEN_CONTENT_TYPE);
+    const testResourceIds = [...new Set(tests.filter((a) => a.contentType === TEST_CONTENT_TYPE).map((a) => a.contentId))];
+    const writtenResourceIds = [...new Set(tests.filter((a) => a.contentType === WRITTEN_CONTENT_TYPE).map((a) => a.contentId))];
     const labIds = [...new Set(rows.filter((a) => a.contentType === "lab").map((a) => a.contentId))];
     const testResources = testResourceIds.length
       ? await this.db.classResource.findMany({
@@ -642,10 +647,18 @@ export class LearningController {
           select: { id: true, classId: true, lessonId: true },
         })
       : [];
+    // TAI2-T2: written resources are read separately, so the TEST query stays unchanged.
+    const writtenResources = writtenResourceIds.length
+      ? await this.db.classResource.findMany({
+          where: { id: { in: writtenResourceIds }, kind: "WRITTEN_TASK", status: { not: "DRAFT" } },
+          select: { id: true, classId: true, lessonId: true },
+        })
+      : [];
     const resourceByClassAndId = new Map(testResources.map((resource: any) => [`${resource.classId}:${resource.id}`, resource]));
+    const writtenByClassAndId = new Map(writtenResources.map((resource: any) => [`${resource.classId}:${resource.id}`, resource]));
     const testResourceByAssignment = new Map(tests.map((assignment) => [
       assignment.id,
-      resourceByClassAndId.get(`${assignment.classId}:${assignment.contentId}`) ?? null,
+      (assignment.contentType === WRITTEN_CONTENT_TYPE ? writtenByClassAndId : resourceByClassAndId).get(`${assignment.classId}:${assignment.contentId}`) ?? null,
     ]));
     const testLessonIds = tests
       .map((assignment) => testResourceByAssignment.get(assignment.id)?.lessonId)
@@ -678,12 +691,13 @@ export class LearningController {
     };
     const testStateByAssignment = new Map<string, any>();
     if (tests.length) {
-      const { states, key } = await testStates(this.db, tests, [req.user.sub], now);
+      const { states, key } = await deadlineStates(this.db, tests, [req.user.sub], now);
       for (const test of tests) testStateByAssignment.set(test.id, states.get(key(test.id, req.user.sub)));
     }
     const items: any[] = [];
     for (const a of rows) {
-      const isTest = a.contentType === TEST_CONTENT_TYPE;
+      const isWritten = a.contentType === WRITTEN_CONTENT_TYPE;
+      const isTest = a.contentType === TEST_CONTENT_TYPE || isWritten;
       const testResource = isTest ? testResourceByAssignment.get(a.id) : null;
       const content = isTest
         ? (testResource?.lessonId ? contentByType.lesson.get(testResource.lessonId) : null)
@@ -715,7 +729,9 @@ export class LearningController {
         contentState: state,
         canOpen: state !== "ARCHIVED_NOT_STARTED",
         notice: state === "AVAILABLE" ? null : ARCHIVED_CONTENT_MESSAGE,
-        ...(isTest ? { testStatus: this.testSummary(testStateByAssignment.get(a.id)) } : {}),
+        ...(isWritten
+          ? { writtenStatus: this.testSummary(testStateByAssignment.get(a.id)) }
+          : isTest ? { testStatus: this.testSummary(testStateByAssignment.get(a.id)) } : {}),
       });
     }
     return items;
@@ -726,6 +742,7 @@ export class LearningController {
   ) {
     const a = await this.applicableAssignment(id, req.user.sub);
     if (a.contentType === TEST_CONTENT_TYPE) return this.testAssignment(a, req.user.sub);
+    if (a.contentType === WRITTEN_CONTENT_TYPE) return this.writtenAssignment(a, req.user.sub);
     const { state, content } = await this.contentState(a, req.user.sub);
     if (!content) throw new NotFoundException("Nội dung không còn khả dụng");
     if (state === "ARCHIVED_NOT_STARTED")
@@ -761,8 +778,29 @@ export class LearningController {
     if (!state) return null;
     return { status: state.status, dueAt: state.dueAt, revision: state.revision, extended: state.extended, dueSoon: state.dueSoon, score: state.current?.score ?? null };
   }
+  /** TAI2-T2: content only through studentWrittenTaskContent; history carries the student's own responses, never the rubric. */
+  private async writtenAssignment(a: any, studentId: string) {
+    const [{ test: resource }, { states, key }] = await Promise.all([
+      this.testState(a),
+      deadlineStates(this.db, [a], [studentId], new Date(), { withResponses: true }),
+    ]);
+    if (!resource) throw new NotFoundException("Nội dung không còn khả dụng");
+    const state = states.get(key(a.id, studentId))!;
+    return {
+      id: a.id,
+      title: a.title,
+      contentType: a.contentType,
+      dueDate: state.dueAt,
+      overdue: isOverdue(state.dueAt),
+      classroom: a.classroom,
+      contentState: "AVAILABLE" as const,
+      deadline: { revision: state.revision, dueAt: state.dueAt },
+      state,
+      content: studentWrittenAssignmentContent(resource),
+    };
+  }
   private async testAssignment(a: any, studentId: string) {
-    const [{ test }, { states, key }] = await Promise.all([this.testState(a), testStates(this.db, [a], [studentId])]);
+    const [{ test }, { states, key }] = await Promise.all([this.testState(a), deadlineStates(this.db, [a], [studentId])]);
     if (!test) throw new NotFoundException("Nội dung không còn khả dụng");
     const state = states.get(key(a.id, studentId))!;
     const content = studentTestContent(test.content);
@@ -782,9 +820,13 @@ export class LearningController {
   @Roles("STUDENT") @Post("assignments/:id/submissions")
   @ApiOperation({ summary: "Submit an assigned test; server scores it and decides on-time versus late (late needs a reason)" })
   async submitTest(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
+    // TAI2-T2: a written body ({ responses }) takes the written branch; every other body keeps the TEST path unchanged.
+    if (body && typeof body === "object" && !Array.isArray(body) && "responses" in body) return this.submitWritten(id, req, body);
     const b = testSubmissionSchema.parse(body);
     const studentId = req.user.sub;
     const a = await this.applicableAssignment(id, studentId);
+    if (a.contentType === WRITTEN_CONTENT_TYPE)
+      throw new BadRequestException({ code: "WRITTEN_RESPONSES_INVALID", message: "Bài tự luận cần gửi câu trả lời cho từng câu", details: [] });
     if (a.contentType !== TEST_CONTENT_TYPE)
       throw new BadRequestException({ code: "NOT_A_TEST_ASSIGNMENT", message: "Bài được giao này không phải bài kiểm tra" });
     const ctx = { actorId: studentId, key: readIdempotencyKey(req), scope: "POST assignments/:id/submissions:" + id, payload: b };
@@ -820,7 +862,7 @@ export class LearningController {
         action: "assignment.submit",
         targetType: "AssignmentSubmission",
         targetId: submission.id,
-        after: { assignmentId: id, timing: submission.timing, deadlineRevision: deadline.revision },
+        after: { assignmentId: id, timing: submission.timing, deadlineRevision: deadline.revision, gradingMode: "AUTO" },
       });
       const [owner, me] = await Promise.all([
         tx.classroom.findUnique({ where: { id: a.classId }, select: { teacherId: true } }),
@@ -836,9 +878,74 @@ export class LearningController {
           dedupKey: `submission:${submission.id}`,
         },
       ]);
-      const { states, key } = await testStates(tx, [current], [studentId], submittedAt);
+      const { states, key } = await deadlineStates(tx, [{ ...current, contentType: TEST_CONTENT_TYPE }], [studentId], submittedAt);
       const state = states.get(key(id, studentId))!;
-      return { submission: state.history.find((row) => row.id === submission.id), state };
+      return { submission: state.history.find((row: any) => row.id === submission.id), state };
+    });
+  }
+
+  /** TAI2-T2 written submission: same lock, timing, late reason, idempotency, audit and notification as TEST; no score. */
+  private async submitWritten(id: string, req: any, body: unknown) {
+    const b = writtenSubmissionSchema.parse(body);
+    const studentId = req.user.sub;
+    const a = await this.applicableAssignment(id, studentId);
+    if (a.contentType !== WRITTEN_CONTENT_TYPE)
+      throw a.contentType === TEST_CONTENT_TYPE
+        ? new BadRequestException({ code: "TEST_ANSWERS_INVALID", message: "Cần trả lời mỗi câu đúng một lần bằng một phương án có trong đề" })
+        : new BadRequestException({ code: "NOT_A_TEST_ASSIGNMENT", message: "Bài được giao này không phải bài kiểm tra" });
+    const ctx = { actorId: studentId, key: readIdempotencyKey(req), scope: "POST assignments/:id/submissions:" + id, payload: b };
+    return idempotent(this.db, ctx, async (tx) => {
+      await lock(tx, "assignment-deadline:" + id);
+      const current = await tx.assignment.findFirst({ where: { id, ...applicableAssignmentWhere(studentId) }, select: { id: true, dueDate: true } });
+      if (!current) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
+      const deadline = (await currentDeadlines(tx, [current])).get(id);
+      const resource = await tx.classResource.findFirst({ where: { id: a.contentId, classId: a.classId, kind: "WRITTEN_TASK", status: { not: "DRAFT" } } });
+      if (!deadline?.id || !resource) throw new NotFoundException("Nội dung không còn khả dụng");
+      const responses = normalizeWrittenResponses(resource.content, b.responses);
+      const submittedAt = new Date();
+      const late = submittedAt.getTime() > deadline.dueAt.getTime();
+      if (late && !b.lateReason)
+        throw new BadRequestException({ code: "LATE_REASON_REQUIRED", message: "Bài nộp sau hạn cần có lý do nộp trễ" });
+      const submission = await tx.assignmentSubmission.create({
+        data: {
+          assignmentId: id,
+          studentId,
+          deadlineRevisionId: deadline.id,
+          resourceVersion: resource.version,
+          answers: responses,
+          gradingMode: "TEACHER",
+          score: null,
+          correctCount: null,
+          questionCount: responses.length,
+          timing: late ? "LATE" : "ON_TIME",
+          lateReason: late ? b.lateReason! : null,
+          submittedAt,
+        },
+      });
+      await audit(tx, {
+        actor: req.user,
+        action: "assignment.submit",
+        targetType: "AssignmentSubmission",
+        targetId: submission.id,
+        after: { assignmentId: id, timing: submission.timing, deadlineRevision: deadline.revision, gradingMode: "TEACHER" },
+      });
+      const [owner, me] = await Promise.all([
+        tx.classroom.findUnique({ where: { id: a.classId }, select: { teacherId: true } }),
+        tx.user.findUnique({ where: { id: studentId }, select: { fullName: true } }),
+      ]);
+      await notify(tx, [
+        {
+          recipientId: owner?.teacherId ?? "",
+          type: late ? "LATE_SUBMISSION_PENDING" : "SUBMISSION_RECEIVED",
+          title: late ? `${me?.fullName} nộp trễ "${a.title}"` : `${me?.fullName} đã nộp "${a.title}"`,
+          body: late ? `Lý do: ${b.lateReason}` : null,
+          link: "/classes",
+          dedupKey: `submission:${submission.id}`,
+        },
+      ]);
+      const { states, key } = await deadlineStates(tx, [{ ...current, contentType: WRITTEN_CONTENT_TYPE }], [studentId], submittedAt, { withResponses: true });
+      const state = states.get(key(id, studentId))!;
+      return { submission: state.history.find((row: any) => row.id === submission.id), state };
     });
   }
 
