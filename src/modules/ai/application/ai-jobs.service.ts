@@ -33,6 +33,7 @@ import { AI_CONFIG, AI_PROVIDER, type AiProvider } from "./ai-provider";
 import { GENERATE_RESOURCE_PROMPT_VERSION, RESOURCE_ITEMS_SCHEMA_VERSION } from "./generate-resource-prompt";
 import { lessonOutcomeCodes, type LessonSource } from "./input-snapshot";
 import { findDuplicateResources, loadCorpusEntries } from "./duplicate-corpus";
+import { syncClassResourceFingerprints } from "./question-fingerprints";
 import { resourceItemSchema, type ResourceItem } from "./resource-items";
 import { contentFlags, corpusFlags, prepareCorpus, structuralDropReasons, type DropReason } from "./validate-items";
 import { buildSnapshotFor, lessonChangedSince, loadLessonSource } from "./lesson-source";
@@ -255,6 +256,7 @@ export class AiJobsService {
       });
       const linked = await tx.aiJob.updateMany({ where: { id: jobId, materializedResourceId: null }, data: { materializedResourceId: resource.id } });
       if (linked.count !== 1) throw aiJobAlreadyMaterialized();
+      await syncClassResourceFingerprints(tx, resource.id);
       const count = (decision: string) => latest.filter((entry: any) => entry.decision.decision === decision).length;
       await audit(tx, {
         actor: req.user, action: "ai_job.materialize", targetType: "AiJob", targetId: jobId,

@@ -1,4 +1,5 @@
 import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Put, Query, Req } from "@nestjs/common";
+import { syncLibraryLessonFingerprints } from "../../ai/application/question-fingerprints";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
 import { Roles } from "../../../common/decorators";
@@ -229,6 +230,7 @@ export class LessonsController {
         },
       });
       await this.writeSteps(tx, lesson.id, steps, data);
+      await syncLibraryLessonFingerprints(tx, lesson.id);
       await audit(tx, { actor: req.user, action: "lesson.create", targetType: "Lesson", targetId: lesson.id, after: this.lessonAuditFields(lesson) });
       return lesson;
     });
@@ -289,6 +291,7 @@ export class LessonsController {
       });
       // A locked structure is unchanged by definition; never rewrite its steps.
       if (!locked) await this.writeSteps(tx, id, steps, parsed);
+      await syncLibraryLessonFingerprints(tx, id);
       const action =
         l.status !== data.status ? (data.status === "published" ? "lesson.publish" : data.status === "archived" ? "lesson.archive" : "lesson.unpublish") : "lesson.update";
       const diff = changedFields(this.lessonAuditFields(l), this.lessonAuditFields(lesson));

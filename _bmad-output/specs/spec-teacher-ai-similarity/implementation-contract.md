@@ -4,7 +4,9 @@
 
 TAI-01 `validateItems` checks VW-01/VW-02 against the current class only, and computes on the fly. CSV import rejects duplicate rows inside one file (`parseResourceCsv`). Shared-library lessons hold quiz questions in `Lesson.questions` and in `LessonStep` quiz configs (`pathway.ts` `quizConfigSchema`), with `scope = SHARED_LIBRARY` and `synthetic` marking fixtures. After TAI2-T2, written answers are `AssignmentSubmission.answers.responses[]` with `gradingMode = TEACHER`. No similarity storage exists.
 
-TAI-03 adds a fingerprint table (Part A) and similarity run/match/review tables (Part B), all in the `ai` module. No provider is involved.
+**Library question source (decided 2026-11-06):** Part A reads shared-library questions only from `LessonStep` rows of type `QUIZ` and `BASIC_EXERCISE` (their `config.questions[]`), which is what students actually see. `Lesson.questions` is ignored: the QUIZ step is materialized from it (`materializeQuizQuestions`), so reading both would count each question twice. The fingerprint `itemId` is `<stepId>:<questionId>`, because question ids are unique only within one step.
+
+TAI-03 adds a fingerprint table (Part A) and similarity run/match/review tables (Part B), all in the `ai` module. The `qdup@1` function and the fingerprint sync live in `ai/application`; the `classes`, `lessons`, `content` and `users` modules call them through that application layer inside their own transactions (application-to-application imports are allowed by `check:layers`). No provider is involved.
 
 ## Data contract
 
@@ -16,7 +18,7 @@ model QuestionFingerprint {
   sourceId       String   // ClassResource.id or Lesson.id
   sourceVersion  Int      // resource version; 1 for lessons (rebuilt on publish)
   itemId         String   // question/card id inside the source
-  ownerTeacherId String?  // class owner; null for library
+  ownerTeacherId String?  // class owner (Classroom.teacherId); null for library; kept in sync on class reassignment
   classId        String?
   normalizedText String
   normalizedHash String
@@ -72,7 +74,11 @@ model SimilarityMatchReview {
 }
 ```
 
-- Fingerprint maintenance runs inside the existing `ClassResource` create, update-draft, import, publish, revise and archive transactions (archive deletes its rows). It also runs on shared-library lesson publish and quarantine. `scripts/backfill-question-fingerprints.ts` is idempotent and prints source and fingerprint counts.
+- Fingerprint maintenance runs inside the same transaction as every change of its source (decided 2026-11-06):
+  - `ClassResource`: create, update-draft, CSV import, publish, revise (the new draft gets its own rows; the published source keeps its rows), archive (deletes its rows), and the TAI-01 materialize route, which also creates a DRAFT.
+  - Shared-library lessons: every status change in code re-syncs the lesson — content release publish and rollback (the previous version is archived), admin lesson quarantine/release/archive, and the users ownership resolution for a disabled teacher's lessons. A lesson keeps fingerprints only while it is `scope = SHARED_LIBRARY`, `status = "published"` and `synthetic = false`; otherwise its rows are removed.
+  - `scripts/backfill-question-fingerprints.ts` is idempotent (a rerun inserts and deletes nothing) and prints source and fingerprint counts. Its npm script is guarded by `scripts/assert-isolated-db.mjs` like other database scripts; running it, or the migration, on the shared database needs a separate PO approval.
+- `ownerTeacherId` is denormalized for the `(ownerTeacherId, normalizedHash)` index, so the admin class reassignment (`users` ownership resolution, `class.reassign`) updates the fingerprints of that class in the same transaction.
 - The submission FKs of a match cascade on submission deletion. Runs are never edited.
 
 ## HTTP contract

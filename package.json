@@ -42,6 +42,8 @@
     "progress:check": "tsx scripts/progress-projection.ts",
     "preprogress:rebuild": "node scripts/assert-isolated-db.mjs progress rebuild",
     "progress:rebuild": "tsx scripts/progress-projection.ts --apply",
+    "prefingerprints:backfill": "node scripts/assert-isolated-db.mjs question fingerprint backfill",
+    "fingerprints:backfill": "tsx scripts/backfill-question-fingerprints.ts",
     "b1:preflight": "tsx scripts/b1-preflight.ts",
     "pretest:b1": "node scripts/assert-isolated-db.mjs integration tests",
     "test:b1": "tsx scripts/b1-integration.mjs",

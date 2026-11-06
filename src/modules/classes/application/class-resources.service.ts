@@ -10,6 +10,7 @@ import { normalizeResourceContent, parseResourceCsv, practiceKind, resourceKindS
 import { buildLabResource, validateResourceAttachment } from "./class-lab-resource";
 import { assertClassLesson } from "./class-lesson";
 import { notify } from "../../notifications/application/notify";
+import { syncClassResourceFingerprints } from "../../ai/application/question-fingerprints";
 
 const additionalAnswersSchema = z.object({
   assignmentId: z.string().trim().min(1).max(100).optional(),
@@ -65,6 +66,7 @@ export class ClassResourcesService {
     const ctx = { actorId: req.user.sub, key: readIdempotencyKey(req), scope: `POST classes/${classId}/resources`, payload: { ...b, content } };
     return idempotent(this.db, ctx, async (tx) => {
       const created = await tx.classResource.create({ data: { classId, kind: b.kind, title: b.title, lessonId: b.lessonId, content, createdById: req.user.sub }, select: resourceSelect });
+      await syncClassResourceFingerprints(tx, created.id);
       await audit(tx, { actor: req.user, action: "class_resource.create", targetType: "ClassResource", targetId: created.id, after: { classId, resourceKind: b.kind, resourceVersion: 1, itemCount: this.itemCount(created) } });
       return created;
     });
@@ -83,6 +85,7 @@ export class ClassResourcesService {
       const changed = await tx.classResource.updateMany({ where: { id: resourceId, classId, status: "DRAFT" }, data: { kind: b.kind, title: b.title, lessonId: b.lessonId, content } });
       if (!changed.count) throw new ConflictException({ code: "RESOURCE_VERSION_IMMUTABLE", message: "Bản đã xuất bản hoặc lưu trữ không thể sửa" });
       const updated = await tx.classResource.findUnique({ where: { id: resourceId }, select: resourceSelect });
+      await syncClassResourceFingerprints(tx, resourceId);
       await audit(tx, { actor: req.user, action: "class_resource.update_draft", targetType: "ClassResource", targetId: resourceId, before: { resourceKind: existing.kind, resourceVersion: existing.version }, after: { resourceKind: b.kind, resourceVersion: existing.version, itemCount: this.itemCount(updated) } });
       return updated;
     });
@@ -106,6 +109,7 @@ export class ClassResourcesService {
       const changed = await tx.classResource.updateMany({ where: { id: resourceId, classId, status: "DRAFT" }, data: { status: "PUBLISHED", publishedAt: new Date() } });
       if (!changed.count) throw new ConflictException({ code: "RESOURCE_NOT_DRAFT", message: "Chỉ có thể xuất bản bản nháp" });
       const updated = await tx.classResource.findUnique({ where: { id: resourceId }, select: resourceSelect });
+      await syncClassResourceFingerprints(tx, resourceId);
       await audit(tx, { actor: req.user, action: "class_resource.publish", targetType: "ClassResource", targetId: resourceId, after: { classId, resourceKind: existing.kind, resourceVersion: existing.version } });
       const members = await tx.enrollment.findMany({ where: { classId, status: "approved" }, select: { studentId: true } });
       await notify(tx, members.map((m) => ({ recipientId: m.studentId, type: "RESOURCE_PUBLISHED" as const, title: `Tài liệu mới trong lớp ${c.name}: ${existing.title}`, link: "/classes", dedupKey: `resource:${resourceId}` })));
@@ -122,6 +126,7 @@ export class ClassResourcesService {
       if (!source) throw this.denied();
       const version = await tx.classResource.aggregate({ where: { classId, kind: source.kind, title: source.title }, _max: { version: true } });
       const draft = await tx.classResource.create({ data: { classId, kind: source.kind, title: source.title, lessonId: source.lessonId, version: (version._max.version ?? source.version) + 1, content: source.content as Prisma.InputJsonValue, createdById: req.user.sub }, select: resourceSelect });
+      await syncClassResourceFingerprints(tx, draft.id);
       await audit(tx, { actor: req.user, action: "class_resource.revise", targetType: "ClassResource", targetId: draft.id, after: { classId, resourceKind: draft.kind, resourceVersion: draft.version } });
       return draft;
     });
@@ -137,6 +142,7 @@ export class ClassResourcesService {
       const changed = await tx.classResource.updateMany({ where: { id: resourceId, classId, status: { not: "ARCHIVED" } }, data: { status: "ARCHIVED", archivedAt: new Date() } });
       if (!changed.count) return { archived: true, alreadyArchived: true };
       const updated = await tx.classResource.findUnique({ where: { id: resourceId }, select: resourceSelect });
+      await syncClassResourceFingerprints(tx, resourceId);
       await audit(tx, { actor: req.user, action: "class_resource.archive", targetType: "ClassResource", targetId: resourceId, after: { classId, resourceKind: source.kind, resourceVersion: source.version } });
       return updated;
     });
@@ -176,6 +182,7 @@ export class ClassResourcesService {
     const ctx = { actorId: req.user.sub, key: readIdempotencyKey(req), scope: `POST classes/${classId}/resources/import`, payload: { ...b, csvBytes: Buffer.byteLength(b.csv) } };
     return idempotent(this.db, ctx, async (tx) => {
       const created = await tx.classResource.create({ data: { classId, kind: b.kind, title: b.title, lessonId: b.lessonId, content: result.data as Prisma.InputJsonValue, createdById: req.user.sub }, select: resourceSelect });
+      await syncClassResourceFingerprints(tx, created.id);
       await audit(tx, { actor: req.user, action: "class_resource.import", targetType: "ClassResource", targetId: created.id, after: { classId, resourceKind: b.kind, resourceVersion: 1, sourceName: b.filename, itemCount: this.itemCount(created) } });
       return { resource: created, imported: true, published: false };
     });

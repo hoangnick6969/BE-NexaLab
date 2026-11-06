@@ -4,10 +4,10 @@ Both functions are pure and versioned. Changing any constant or step requires a 
 
 ## `qdup@1` — question duplicate (Part A)
 
-- **Input text:** question `prompt` (or card `front`).
+- **Input text:** question `prompt` (or card `front`). For shared-library lessons, only the questions in `LessonStep` configs of type `QUIZ` and `BASIC_EXERCISE`; `Lesson.questions` is not read.
 - **Normalization:** `normalize` from TAI-01 `validation-rules.md`. Diacritics are kept.
 - **Exact:** `sha256(normalize(text))` equality.
-- **Near:** character-trigram Jaccard ≥ 0.85 on `normalize(text)` padded with one space on each side.
+- **Near:** character-trigram Jaccard ≥ 0.85 on `normalize(text)` padded with one space on each side. This padding is specific to `qdup@1`; TAI-01 VW-02 (`validate-items`) keeps its unpadded trigrams until TAI3-T2 switches the TAI-01 corpus to `qdup@1`.
 - **Output per item:** `{ level: EXACT | NEAR, score, source: { kind, resourceId | lessonId, title, classId?, itemId } }`, at most 3 matches, best first.
 - **Flag mapping:**
 

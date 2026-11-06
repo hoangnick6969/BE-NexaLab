@@ -1428,3 +1428,29 @@ model AiItemDecision {
 
   @@index([itemId, createdAt])
 }
+
+/// TAI-03 Part A (qdup@1): one row per live question/card of a class resource or a released shared-library lesson.
+/// Rebuilt inside the transaction of every change of its source; never edited by hand.
+model QuestionFingerprint {
+  id             String   @id @default(cuid())
+  /// "CLASS_RESOURCE" | "LIBRARY_LESSON"
+  sourceKind     String
+  /// ClassResource.id or Lesson.id
+  sourceId       String
+  /// Resource version; 1 for lessons (rebuilt on every lesson change)
+  sourceVersion  Int
+  /// Question/card id inside the source; "<stepId>:<questionId>" for lessons
+  itemId         String
+  /// Class owner (Classroom.teacherId); null for library rows
+  ownerTeacherId String?
+  classId        String?
+  normalizedText String
+  normalizedHash String
+  /// "qdup@1"
+  algorithm      String
+  createdAt      DateTime @default(now())
+
+  @@unique([sourceKind, sourceId, sourceVersion, itemId, algorithm])
+  @@index([ownerTeacherId, normalizedHash])
+  @@index([sourceKind, normalizedHash])
+}

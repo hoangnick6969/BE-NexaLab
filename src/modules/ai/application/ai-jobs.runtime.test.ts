@@ -86,6 +86,12 @@ function table(rows: Row[], defaults: () => Row = () => ({})) {
       for (const row of hit) applyData(row, data);
       return { count: hit.length };
     },
+    async deleteMany({ where }: Row) {
+      const keep = rows.filter((r) => !matches(r, where));
+      const count = rows.length - keep.length;
+      rows.splice(0, rows.length, ...keep);
+      return { count };
+    },
   };
 }
 
@@ -130,6 +136,7 @@ function makeDb() {
     },
     classroom: table([]),
     classResource: table([], () => ({ status: "DRAFT", version: 1, publishedAt: null, archivedAt: null })),
+    questionFingerprint: table([]),
     curriculumOutcome: table([]),
     lessonRows: [] as Row[],
     lessonStepRows: [] as Row[],
@@ -512,6 +519,10 @@ describe("item decisions and materialization (TAI-T4)", () => {
     await expect(decide(view.id, a.id, { decision: "REJECTED", reasonCode: "LATE" })).rejects.toMatchObject({ status: 409, response: { code: "AI_JOB_ALREADY_MATERIALIZED" } });
     expect(store.classResource.rows).toHaveLength(1);
     expect((await service.get("class-a", view.id, req())).materializedResourceId).toBe(resource.id);
+    // TAI3-T1: the materialized DRAFT gets qdup@1 fingerprints in the same transaction.
+    expect(store.questionFingerprint.rows.map((f: Row) => [f.sourceKind, f.sourceId, f.classId, f.ownerTeacherId])).toEqual([
+      ["CLASS_RESOURCE", resource.id, "class-a", OWNER.sub], ["CLASS_RESOURCE", resource.id, "class-a", OWNER.sub],
+    ]);
   });
 
   it("drops the answer key for STUDY_QUIZ and maps cards for DECK", async () => {
