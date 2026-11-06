@@ -87,7 +87,7 @@ export class AssignmentsService {
     const studentIds = [...new Set(tests.flatMap((a) => a.targets.map((t) => t.studentId)))];
     const { states, key } = await testStates(this.db, tests, studentIds);
     return rows.map(({ targets, ...a }) => {
-      if (a.contentType !== TEST_CONTENT_TYPE) return assignmentView(a);
+      if (a.contentType !== TEST_CONTENT_TYPE) return { ...assignmentView(a), ...(a.contentType === "lab" ? { targetStudentIds: a.audience === "SUBSET" ? targets.map((target) => target.studentId) : [] } : {}) };
       const counts = { SUBMITTED: 0, LATE_REVIEW_PENDING: 0, REJECTED: 0, OVERDUE_UNSUBMITTED: 0, NOT_SUBMITTED: 0 };
       let revision = 1;
       for (const t of targets) {
@@ -328,6 +328,7 @@ export class AssignmentsService {
           grade: true,
           chapter: true,
           topic: true,
+          labId: true,
           scope: true,
           synthetic: true,
           subject: { select: { id: true, name: true } },
@@ -375,6 +376,10 @@ export class AssignmentsService {
       return [{
         id: lab.id, title: lab.title, grade: lab.grade, topic: lab.topic, subject: lab.subject,
         release: { id: release.id, version: release.version, digest: release.digest },
+        ranges: (execution.template as any)?.ranges ?? {},
+        previewConfig: (execution.template as any)?.buoyancy ?? null,
+        effectiveParams: execution.effectiveParams,
+        lessonIds: lessons.filter((lesson: any) => lesson.labId === lab.id).map((lesson: any) => lesson.id),
         challenges: lab.challenges.filter((challenge: any) => challengeIds.includes(challenge.id)),
       }].filter((entry: any) => entry.challenges.length > 0);
     });

@@ -85,4 +85,5 @@ export const assignmentExecutionSchema = compatibleActivityTuple(executionFields
   selectedChallengeId: z.string().min(1).optional(),
   challengeParams: z.record(z.string(), z.record(z.string(), z.union([z.number(), z.string()]))),
   effectiveParams: z.record(z.string(), z.record(z.string(), z.union([z.number(), z.string()])).nullable()),
+  customParams: z.record(z.string(), z.number().finite()).optional(),
 }).strict());

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Put, Req } from "@nestjs/common";
+import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Put, Query, Req } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../../common/decorators";
 import { ClassResourcesService } from "../application/class-resources.service";
@@ -36,6 +36,12 @@ export class ClassResourcesController {
   }
 
   @Roles("TEACHER")
+  @Delete("classes/:id/resources/:resourceId")
+  deleteDraft(@Param("id") classId: string, @Param("resourceId") resourceId: string, @Req() req: any) {
+    return this.service.deleteDraft(classId, resourceId, req);
+  }
+
+  @Roles("TEACHER")
   @Post("classes/:id/resources/:resourceId/publish")
   publish(@Param("id") classId: string, @Param("resourceId") resourceId: string, @Req() req: any) {
     return this.service.publish(classId, resourceId, req);
@@ -69,6 +75,32 @@ export class ClassResourcesController {
   @Put("classes/:id/resources/:resourceId/practice")
   savePractice(@Param("id") classId: string, @Param("resourceId") resourceId: string, @Req() req: any, @Body() body: unknown) {
     return this.service.savePractice(classId, resourceId, req, body);
+  }
+
+  @Roles("STUDENT")
+  @Post("classes/:id/resources/:resourceId/additional-responses")
+  @ApiOperation({ summary: "Submit an immutable attempt for all published Class Lab supplementary prompts" })
+  submitAdditionalResponse(@Param("id") classId: string, @Param("resourceId") resourceId: string, @Req() req: any, @Body() body: unknown) {
+    return this.service.submitAdditionalResponse(classId, resourceId, req, body);
+  }
+
+  @Roles("STUDENT")
+  @Get("classes/:id/resources/:resourceId/additional-responses/mine")
+  myAdditionalResponses(@Param("id") classId: string, @Param("resourceId") resourceId: string, @Req() req: any, @Query("assignmentId") assignmentId?: string) {
+    return this.service.myAdditionalResponses(classId, resourceId, req, assignmentId);
+  }
+
+  @Roles("TEACHER")
+  @Get("classes/:id/resources/:resourceId/additional-responses")
+  @ApiOperation({ summary: "List immutable Class Lab response attempts for the owning teacher" })
+  listAdditionalResponses(@Param("id") classId: string, @Param("resourceId") resourceId: string, @Req() req: any, @Query("assignmentId") assignmentId?: string) {
+    return this.service.listAdditionalResponses(classId, resourceId, req, assignmentId);
+  }
+
+  @Roles("TEACHER")
+  @Put("classes/:id/resources/:resourceId/additional-responses/:responseId/grade")
+  gradeAdditionalResponse(@Param("id") classId: string, @Param("resourceId") resourceId: string, @Param("responseId") responseId: string, @Req() req: any, @Body() body: unknown) {
+    return this.service.gradeAdditionalResponse(classId, resourceId, responseId, req, body);
   }
 }
 

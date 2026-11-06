@@ -1,16 +1,34 @@
-import { ConflictException, ForbiddenException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 import { resolvePinnedAssignmentLab, snapshotAssignmentLab } from "../../labs/application/assignment-lab-execution";
 import { digest } from "../../labs/application/lab-run";
+import { packConfigurationErrors } from "../../labs/application/simulation-versions";
 import { mediaTypeFor } from "../../assets/application/media";
 import { classLabSnapshot, labResourceContentSchema, labResourceInputSchema, verifyClassLabSnapshot } from "./class-resource-contract";
 
 const denied = () => new ForbiddenException({ code: "CLASS_RESOURCE_ACCESS_DENIED" });
 
+export function validatedCustomParams(labId: string, pack: any, config: any, base: Record<string, number | string> | null, custom: Record<string, number>) {
+  const ranges = (pack?.template as any)?.ranges ?? {};
+  const params = { ...(base ?? {}), ...custom };
+  if (Object.keys(custom).some((key) => !Object.prototype.hasOwnProperty.call(ranges, key)) ||
+      !pack || !config || packConfigurationErrors(labId, pack, config, params).length)
+    throw new BadRequestException({ code: "PARAM_OUT_OF_APPROVED_RANGE" });
+  return params;
+}
+
 export async function buildLabResource(db: any, raw: unknown) {
   const input = labResourceInputSchema.parse(raw);
   const lab = await db.lab.findFirst({ where: { id: input.source.labId, status: "published", scope: "SHARED_LIBRARY", releaseCleared: true, synthetic: false, topicCode: { not: null } } });
   if (!lab) throw new ConflictException({ code: "LAB_SOURCE_NOT_ELIGIBLE" });
-  const execution = await snapshotAssignmentLab(db, input.source.labId, input.source.releaseId, input.source.challengeId);
+  let execution = await snapshotAssignmentLab(db, input.source.labId, input.source.releaseId, input.source.challengeId);
+  if (input.customParams && Object.keys(input.customParams).length) {
+    const pack = await db.simulationPackVersion.findUnique({ where: { id: execution.packVersionId } });
+    const config = await db.simulationConfigVersion.findUnique({ where: { id: execution.configVersionId } });
+    const base = execution.effectiveParams[input.source.challengeId] ?? {};
+    const params = validatedCustomParams(input.source.labId, pack, config, base, input.customParams);
+    execution = { ...execution, customParams: input.customParams, effectiveParams: { ...execution.effectiveParams,
+      [input.source.challengeId]: params } };
+  }
   return { ...input, execution, executionDigest: digest(execution) };
 }
 

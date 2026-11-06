@@ -6,9 +6,15 @@ import { idempotent, readIdempotencyKey, TX_LIMITS } from "../../../common/idemp
 import { Db } from "../../../db/db";
 import { ownedClass } from "./class-access";
 import { classArchived, lock } from "./class-common";
-import { normalizeResourceContent, parseResourceCsv, practiceKind, resourceKindSchema, studentResource, labResourceContentSchema } from "./class-resource-contract";
+import { normalizeResourceContent, parseResourceCsv, practiceKind, resourceKindSchema, studentResource, labResourceContentSchema, verifyClassLabSnapshot } from "./class-resource-contract";
 import { buildLabResource, validateResourceAttachment } from "./class-lab-resource";
 import { notify } from "../../notifications/application/notify";
+
+const additionalAnswersSchema = z.object({
+  assignmentId: z.string().trim().min(1).max(100).optional(),
+  answers: z.array(z.object({ promptId: z.string().trim().min(1).max(32), answer: z.string().trim().min(1).max(10_000) }).strict()).min(1).max(20),
+}).strict();
+const gradeResponseSchema = z.object({ score: z.number().int().min(0).max(100), feedback: z.string().trim().max(2_000).optional() }).strict();
 
 const kindSchema = resourceKindSchema;
 const csvKindSchema = z.enum(["DECK", "STUDY_QUIZ", "TEST"]);
@@ -92,7 +98,7 @@ export class ClassResourcesService {
       if (existing.status !== "DRAFT") throw new ConflictException({ code: "RESOURCE_NOT_DRAFT", message: "Chỉ có thể xuất bản bản nháp" });
       if (existing.kind === "LAB") {
         const content = labResourceContentSchema.parse(existing.content);
-        const current = await buildLabResource(tx, { source: content.source, learningObjective: content.learningObjective, instructions: content.instructions, reportPrompts: content.reportPrompts });
+        const current = await buildLabResource(tx, { source: content.source, learningObjective: content.learningObjective, instructions: content.instructions, reportPrompts: content.reportPrompts, customParams: content.customParams });
         if (current.executionDigest !== content.executionDigest) throw new ConflictException({ code: "LAB_SOURCE_CHANGED" });
       }
       if (existing.kind === "DOCUMENT" || existing.kind === "REPORT_TEMPLATE") await validateResourceAttachment(tx, existing.content, req.user.sub);
@@ -111,7 +117,7 @@ export class ClassResourcesService {
     if (c.status !== "ACTIVE") throw classArchived();
     return this.db.$transaction(async (tx) => {
       await lock(tx, `class-resource-version:${classId}`);
-      const source = await tx.classResource.findFirst({ where: { id: resourceId, classId, status: "PUBLISHED" } });
+      const source = await tx.classResource.findFirst({ where: { id: resourceId, classId, status: { in: ["PUBLISHED", "ARCHIVED"] } } });
       if (!source) throw this.denied();
       const version = await tx.classResource.aggregate({ where: { classId, kind: source.kind, title: source.title }, _max: { version: true } });
       const draft = await tx.classResource.create({ data: { classId, kind: source.kind, title: source.title, lessonId: source.lessonId, version: (version._max.version ?? source.version) + 1, content: source.content as Prisma.InputJsonValue, createdById: req.user.sub }, select: resourceSelect });
@@ -132,6 +138,20 @@ export class ClassResourcesService {
       const updated = await tx.classResource.findUnique({ where: { id: resourceId }, select: resourceSelect });
       await audit(tx, { actor: req.user, action: "class_resource.archive", targetType: "ClassResource", targetId: resourceId, after: { classId, resourceKind: source.kind, resourceVersion: source.version } });
       return updated;
+    });
+  }
+
+  async deleteDraft(classId: string, resourceId: string, req: any) {
+    const c = await ownedClass(this.db, classId, req.user);
+    if (c.status !== "ACTIVE") throw classArchived();
+    return this.db.$transaction(async (tx) => {
+      const resource = await tx.classResource.findFirst({ where: { id: resourceId, classId } });
+      if (!resource) throw this.denied();
+      if (resource.status !== "DRAFT") throw new ConflictException({ code: "RESOURCE_VERSION_IMMUTABLE" });
+      const deleted = await tx.classResource.deleteMany({ where: { id: resourceId, classId, status: "DRAFT" } });
+      if (!deleted.count) throw new ConflictException({ code: "RESOURCE_VERSION_IMMUTABLE" });
+      await audit(tx, { actor: req.user, action: "class_resource.delete_draft", targetType: "ClassResource", targetId: resourceId, before: { classId, resourceKind: resource.kind, resourceVersion: resource.version } });
+      return { deleted: true };
     });
   }
 
@@ -168,6 +188,90 @@ export class ClassResourcesService {
     await this.assertMember(classId, req.user.sub);
     const practice = await this.db.classResourcePractice.upsert({ where: { resourceId_studentId: { resourceId, studentId: req.user.sub } }, create: { resourceId, studentId: req.user.sub, state: b.state as Prisma.InputJsonValue }, update: { state: b.state as Prisma.InputJsonValue } });
     return { saved: true, updatedAt: practice.updatedAt, scored: false };
+  }
+
+  async submitAdditionalResponse(classId: string, resourceId: string, req: any, body: unknown) {
+    const b = additionalAnswersSchema.parse(body);
+    const classroom = await this.db.classroom.findUnique({ where: { id: classId }, select: { status: true } });
+    const resource = await this.db.classResource.findFirst({ where: { id: resourceId, classId, kind: "LAB", status: "PUBLISHED" } });
+    if (!classroom || classroom.status !== "ACTIVE" || !resource) throw this.denied();
+    await this.assertMember(classId, req.user.sub);
+    const content = labResourceContentSchema.parse(resource.content);
+    const prompts = content.reportPrompts.map((prompt, index) => ({ promptId: `prompt-${index + 1}`, prompt }));
+    if (!prompts.length) throw new BadRequestException({ code: "CLASS_LAB_HAS_NO_ADDITIONAL_PROMPTS" });
+    let assignment: any = null;
+    if (b.assignmentId) {
+      assignment = await this.db.assignment.findFirst({
+        where: { id: b.assignmentId, classId, contentType: "lab", contentId: content.source.labId, status: "ACTIVE", classroom: { status: "ACTIVE" }, targets: { some: { studentId: req.user.sub } } },
+      });
+      if (!assignment || !assignment.classLabSnapshot) throw this.denied();
+      const snapshot = verifyClassLabSnapshot(assignment.classLabSnapshot);
+      if (snapshot.resourceId !== resource.id || snapshot.version !== resource.version) throw this.denied();
+    }
+    const answerIds = b.answers.map(({ promptId }) => promptId);
+    if (new Set(answerIds).size !== answerIds.length || answerIds.length !== prompts.length || prompts.some(({ promptId }) => !answerIds.includes(promptId)))
+      throw new BadRequestException({ code: "CLASS_LAB_ANSWERS_INVALID", message: "Cần trả lời đúng một lần cho mỗi câu hỏi bổ sung" });
+    const orderedAnswers = prompts.map(({ promptId, prompt }) => {
+      const answer = b.answers.find((item) => item.promptId === promptId)!;
+      return { promptId, prompt, answer: answer.answer };
+    });
+    const key = readIdempotencyKey(req);
+    const ctx = { actorId: req.user.sub, key, scope: `POST class-lab-additional-response:${resourceId}:${b.assignmentId ?? "practice"}`, payload: { answers: orderedAnswers } };
+    return idempotent(this.db, ctx, async (tx) => {
+      await lock(tx, `class-lab-response:${resourceId}:${b.assignmentId ?? "practice"}:${req.user.sub}`);
+      const prior = await tx.classLabAdditionalResponse.findFirst({ where: { resourceId, assignmentId: b.assignmentId ?? null, studentId: req.user.sub }, orderBy: { attempt: "desc" }, select: { attempt: true } });
+      const result = await tx.classLabAdditionalResponse.create({ data: {
+        resourceId, assignmentId: b.assignmentId ?? null, studentId: req.user.sub, resourceVersion: resource.version,
+        promptSnapshot: prompts, answers: orderedAnswers, attempt: (prior?.attempt ?? 0) + 1, idempotencyKey: key,
+      }, include: { student: { select: { id: true, fullName: true, username: true } } } });
+      await audit(tx, { actor: req.user, action: "class_lab.additional_response.submit", targetType: "ClassLabAdditionalResponse", targetId: result.id, after: { classId, resourceId, resourceVersion: resource.version, assignmentId: b.assignmentId ?? null, attempt: result.attempt } });
+      return this.additionalResponseView(result);
+    }, { isolationLevel: "Serializable" });
+  }
+
+  async myAdditionalResponses(classId: string, resourceId: string, req: any, assignmentId?: string) {
+    await this.assertMember(classId, req.user.sub);
+    const rows = await this.db.classLabAdditionalResponse.findMany({
+      where: { resourceId, resource: { classId, kind: "LAB" }, studentId: req.user.sub, assignmentId: assignmentId ?? null },
+      include: { student: { select: { id: true, fullName: true, username: true } } },
+      orderBy: [{ attempt: "desc" }],
+    });
+    return rows.map((row: any) => this.additionalResponseView(row));
+  }
+
+  async listAdditionalResponses(classId: string, resourceId: string, req: any, assignmentId?: string) {
+    const classroom = await this.db.classroom.findUnique({ where: { id: classId } });
+    if (!classroom || classroom.teacherId !== req.user.sub) throw this.denied();
+    const resource = await this.db.classResource.findFirst({ where: { id: resourceId, classId, kind: "LAB" } });
+    if (!resource) throw this.denied();
+    if (assignmentId) {
+      const assignment = await this.db.assignment.findFirst({ where: { id: assignmentId, classId, contentType: "lab" } });
+      if (!assignment?.classLabSnapshot || verifyClassLabSnapshot(assignment.classLabSnapshot).resourceId !== resourceId) throw this.denied();
+    }
+    const rows = await this.db.classLabAdditionalResponse.findMany({
+      where: { resourceId, ...(assignmentId ? { assignmentId } : { assignmentId: null }) },
+      include: { student: { select: { id: true, fullName: true, username: true } } },
+      orderBy: [{ studentId: "asc" }, { attempt: "asc" }],
+    });
+    return rows.map((row: any) => this.additionalResponseView(row));
+  }
+
+  async gradeAdditionalResponse(classId: string, resourceId: string, responseId: string, req: any, body: unknown) {
+    const b = gradeResponseSchema.parse(body);
+    const classroom = await this.db.classroom.findUnique({ where: { id: classId } });
+    if (!classroom || classroom.teacherId !== req.user.sub) throw this.denied();
+    const response = await this.db.classLabAdditionalResponse.findFirst({ where: { id: responseId, resourceId, resource: { classId, kind: "LAB" } } });
+    if (!response) throw this.denied();
+    const saved = await this.db.$transaction(async (tx: any) => {
+      const updated = await tx.classLabAdditionalResponse.update({ where: { id: responseId }, data: { score: b.score, feedback: b.feedback ?? null, gradedById: req.user.sub, gradedAt: new Date() }, include: { student: { select: { id: true, fullName: true, username: true } } } });
+      await audit(tx, { actor: req.user, action: "class_lab.additional_response.grade", targetType: "ClassLabAdditionalResponse", targetId: responseId, before: { score: response.score, feedback: response.feedback }, after: { score: updated.score, feedback: updated.feedback } });
+      return updated;
+    }, TX_LIMITS);
+    return this.additionalResponseView(saved);
+  }
+
+  private additionalResponseView(row: any) {
+    return { id: row.id, resourceId: row.resourceId, assignmentId: row.assignmentId, resourceVersion: row.resourceVersion, attempt: row.attempt, promptSnapshot: row.promptSnapshot, answers: row.answers, submittedAt: row.submittedAt, student: row.student, grade: row.score === null ? null : { score: row.score, feedback: row.feedback, gradedAt: row.gradedAt } };
   }
 
   private async memberView(resource: any, studentId: string, metadataLoaded = false) {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { BadRequestException } from "@nestjs/common";
 import { httpsUrlSchema, normalizeResourceContent, parseResourceCsv, practiceKind, labResourceInputSchema, verifyClassLabSnapshot } from "./class-resource-contract";
 import { launchSchema, digest } from "../../labs/application/lab-run";
-import { validateResourceAttachment } from "./class-lab-resource";
+import { validateResourceAttachment, validatedCustomParams } from "./class-lab-resource";
 
 describe("rich class resource trust boundaries", () => {
   it("accepts provider HTTPS links and rejects schemes, credentials and unknown fields", () => {
@@ -13,11 +14,24 @@ describe("rich class resource trust boundaries", () => {
   it("rejects client science, malformed teacher text and CSV for richer kinds", () => {
     const fields = { source: { labId: "circuit", releaseId: "release", challengeId: "challenge" }, learningObjective: "Objective", instructions: "Instructions", reportPrompts: [] };
     expect(labResourceInputSchema.safeParse(fields).success).toBe(true);
+    expect(labResourceInputSchema.safeParse({ ...fields, customParams: { maxCurrentMa: 10 } }).success).toBe(true);
+    expect(labResourceInputSchema.safeParse({ ...fields, customParams: { "bad-key": 10 } }).success).toBe(false);
+    expect(labResourceInputSchema.safeParse({ ...fields, customParams: { maxCurrentMa: Infinity } }).success).toBe(false);
+    expect(labResourceInputSchema.safeParse({ ...fields, customParams: Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`p${i}`, i])) }).success).toBe(false);
     expect(labResourceInputSchema.safeParse({ ...fields, execution: {} }).success).toBe(false);
     expect(labResourceInputSchema.safeParse({ ...fields, reportPrompts: Array(21).fill("Prompt") }).success).toBe(false);
     for (const kind of ["LAB", "DOCUMENT", "REPORT_TEMPLATE", "LINK"] as const) {
       expect(() => parseResourceCsv(kind, "front,back\na,b")).toThrow();
       expect(practiceKind(kind)).toBe(false);
+    }
+  });
+  it("enforces approved pack ranges before a class Lab draft can be stored", () => {
+    const pack = { labId: "circuit", modelRef: "circuit@1.0.0", engineVersion: "1.0.0", template: { ranges: { maxCurrentMa: { min: 5, max: 20 }, minLitLeds: { min: 1, max: 3 } } } };
+    const config = { labId: "circuit", modelRef: pack.modelRef };
+    expect(validatedCustomParams("circuit", pack, config, { maxCurrentMa: 20, minLitLeds: 1 }, { maxCurrentMa: 10 })).toEqual({ maxCurrentMa: 10, minLitLeds: 1 });
+    for (const custom of [{ maxCurrentMa: 21 }, { maxCurrentMa: 4 }, { unknown: 10 }]) {
+      try { validatedCustomParams("circuit", pack, config, { maxCurrentMa: 20, minLitLeds: 1 }, custom); throw new Error("Expected rejection"); }
+      catch (error) { expect(error).toBeInstanceOf(BadRequestException); expect((error as BadRequestException).getStatus()).toBe(400); expect((error as BadRequestException).getResponse()).toMatchObject({ code: "PARAM_OUT_OF_APPROVED_RANGE" }); }
     }
   });
   it("rejects mixed run selectors and verifies the entire pedagogical snapshot", () => {

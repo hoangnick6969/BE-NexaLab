@@ -23,6 +23,7 @@ export const labResourceInputSchema = z.object({
   learningObjective: z.string().trim().min(1).max(1000),
   instructions: z.string().trim().min(1).max(10000),
   reportPrompts: z.array(z.string().trim().min(1).max(1000)).max(20),
+  customParams: z.record(z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/).max(80), z.number().finite()).refine((value) => Object.keys(value).length <= 10).optional(),
 }).strict();
 export const labResourceContentSchema = labResourceInputSchema.extend({ execution: assignmentExecutionSchema, executionDigest: z.string().regex(/^[0-9a-f]{64}$/) }).strict();
 export const documentResourceContentSchema = z.object({ description, source: z.discriminatedUnion("type", [
