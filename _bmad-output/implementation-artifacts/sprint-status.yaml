@@ -174,11 +174,11 @@ development_status:
   tai-01-t2-job-schema-routes-runner: done
   tai-01-t3-output-validation-pipeline: done
   tai-01-t4-item-decisions-materialization: done
-  tai-01-t5-teacher-ai-workspace-fe: ready-for-dev
+  tai-01-t5-teacher-ai-workspace-fe: done
   tai-01-t6-golden-evaluation-e2e: backlog
   epic-tai-02-essay-assessment: backlog
   tai-02-t0-provider-legal-scope-gate: backlog
-  tai-02-t1-written-task-rubric-contract: backlog
+  tai-02-t1-written-task-rubric-contract: ready-for-dev
   tai-02-t2-assign-submit-written-tasks: backlog
   tai-02-t3-teacher-rubric-grading-role-views: backlog
   tai-02-t4-assess-submission-job-purpose: backlog
@@ -186,7 +186,7 @@ development_status:
   tai-02-t6-assisted-grading: backlog
   tai-02-t7-e2e-journey-negatives: backlog
   epic-tai-03-similarity: backlog
-  tai-03-t1-question-fingerprint-backfill: backlog
+  tai-03-t1-question-fingerprint-backfill: ready-for-dev
   tai-03-t2-cross-class-duplicate-warnings: backlog
   tai-03-t3-subsim-engine: backlog
   tai-03-t4-similarity-runs-review-api: backlog
@@ -383,8 +383,10 @@ teacher_ai_tracking:
     - 'TAI-02 provider payload: lesson title, prompt, optional referenceAnswer, rubric with anchors, redacted response; provider chosen at TAI2-T0 (2026-11-05).'
     - 'Golden reviewer: supervising lecturer; TAI-01 thresholds answer-key error <=3%, scientific error <=5%, accept/accept-after-edit >=70% (2026-10-28).'
   next_ready:
-    - 'tai-01-t5-teacher-ai-workspace-fe (ready-for-dev; T2/T4 API contract frozen 2026-11-06)'
-    - 'tai-04-t1-insight-rule-engine-v1 (waits for G-5)'
+    - 'tai-03-t1-question-fingerprint-backfill (ready-for-dev; depends on TAI-T3 done; gate G-1 only; no provider)'
+    - 'tai-02-t1-written-task-rubric-contract (ready-for-dev; depends on TAI-T0 done; T1..T3 are manual grading, not blocked by G-2)'
+    - 'tai-01-t6-golden-evaluation-e2e (backlog; waits for G-6 live provider approval)'
+    - 'tai-04-t1-insight-rule-engine-v1 (backlog; waits for G-5 threshold approval)'
   story_notes:
     tai-01-t0-activate-fr21-scope:
       status: done
@@ -406,6 +408,10 @@ teacher_ai_tracking:
       status: done
       date: '2026-11-05'
       evidence: 'POST classes/:id/ai-jobs/:jobId/items/:itemId/decisions (append-only, latest wins by createdAt then id; EDITED re-parsed as resource-items@1, same item type, VR-02..05/VR-08 via structuralDropReasons -> 400 AI_EDIT_INVALID with rule ids; REJECTED needs reasonCode; duplicate flags never block ACCEPTED; 409 AI_JOB_NOT_REVIEWABLE / AI_JOB_ALREADY_MATERIALIZED / CLASS_ARCHIVED; per-job advisory lock; audit ai_item.decide). POST classes/:id/ai-jobs/:jobId/materialize (Idempotency-Key required; all decided and >=1 kept else 409 AI_REVIEW_INCOMPLETE; maps TEST with key, STUDY_QUIZ without key, DECK cards through normalizeResourceContent; one ClassResource DRAFT with lessonId = job lesson; materializedResourceId set by conditional update; second key 409, same key replays; audit ai_job.materialize with accepted/edited/rejected counts). GET detail adds computed duplicateOf and decision.flags. No ClassResource schema or existing resource code change. 7 new runtime tests incl. student list sees no DRAFT; AI module 117 tests pass; tsc and check:layers pass; full vitest 610 passed with the same 4 pre-existing errors/health failures; route manifest lists 7 AI routes. Not run: real-DB integration and the existing publish/revise/assign flow on a materialized draft (needs isolated DB; tracked for TAI-T6 end-to-end proof). PO accepted the review and the T4 decisions in .memlog.md 2026-11-06; T2/T4 API contract frozen for TAI-T5.'
+    tai-01-t5-teacher-ai-workspace-fe:
+      status: done
+      date: '2026-11-06'
+      evidence: 'FE-NexaLab (uncommitted): third tab "Soạn nháp bằng AI" in the owned Class Space resources view (TeacherAiPanel.tsx, teacher-ai-api.ts): generate form with quota shown before submit, 2 s status polling with a recoverable still-processing state after 120 s, cancel, failed state with retry-as-new-request (prefilled form), cancelled state, review list with flags in Vietnamese, duplicateOf titles and an accept-able duplicate warning, accept/edit/reject (reason select) with x/y decided, stale-lesson warning, materialize dialog (one Idempotency-Key per dialog) and focus/open of the created draft in the existing draft editor; selected job kept in the URL (?aiJob=) so a reload keeps the review. English error texts for AI codes. npm run lint and npm run build pass. tests/teacher-ai-live.spec.ts written (happy path with reload, edit, reject, materialize, student cannot see the draft or AI UI; duplicate warning acceptance), opt-in with TEST_AI_FAKE=1. Not done: running that Playwright journey (needs the API with AI_PROVIDER=fake on an isolated seeded database) and a provider-failure case; browser check done 2026-11-06 with a temporary API on :4101 (AI_PROVIDER=fake) and web on :5175 against the dev database on class-pilot-a: job ran to Sẵn sàng duyệt, keep/edit (negative stem flag recomputed)/reject with reason, decisions kept after reload, materialize created and opened the DRAFT, a second job showed EXACT duplicate of that draft with its title and could still be kept, dark mode checked (correct-answer color switched to --brand-ink, textarea font inherited, NEAR badge hidden when EXACT). Test data removed afterwards (2 AiJob with items/decisions, 1 DRAFT, 3 idempotency records; 10 audit rows kept); temporary servers stopped; AI_PROVIDER stays unset. Screenshots kept outside the repositories (workspace acceptance-screenshots/tai-t5/). PO accepted T5 2026-11-06 on this browser evidence; the opt-in Playwright spec tests/teacher-ai-live.spec.ts stays for the isolated-database run in TAI-T6.'
 
 student_ai_tracking:
   plan: ../planning-artifacts/increment-sai-student-ai.md
