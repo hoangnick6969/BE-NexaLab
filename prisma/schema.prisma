@@ -726,6 +726,8 @@ model Assignment {
   targets              AssignmentTarget[]
   deadlineRevisions    AssignmentDeadlineRevision[]
   submissions          AssignmentSubmission[]
+  /// TAI-03 (TAI3-T4): immutable similarity runs over this assignment's current submissions.
+  similarityRuns       SubmissionSimilarityRun[]
   stepProgress         StepProgress[]
   classLabAdditionalResponses ClassLabAdditionalResponse[]
   insightDisagreements HintInsightDisagreement[]
@@ -797,6 +799,9 @@ model AssignmentSubmission {
   decision           LateDecision?
   /// TAI-02 (TAI2-T3): append-only teacher grades; the latest row is the current grade.
   gradeDecisions     WrittenGradeDecision[]
+  /// TAI-03 (TAI3-T4): matches that name this submission on either side (cascade on delete).
+  similarityMatchesA SubmissionSimilarityMatch[] @relation("SimilarityMatchA")
+  similarityMatchesB SubmissionSimilarityMatch[] @relation("SimilarityMatchB")
 
   @@index([assignmentId, studentId, submittedAt])
   @@index([studentId, submittedAt])
@@ -830,6 +835,60 @@ model WrittenGradeDecision {
   createdAt           DateTime             @default(now())
 
   @@index([submissionId, createdAt])
+}
+
+/// TAI-03 (TAI3-T4): immutable result of one subsim@1 run over one written assignment.
+model SubmissionSimilarityRun {
+  id               String                      @id @default(cuid())
+  assignmentId     String
+  assignment       Assignment                  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  actorId          String
+  algorithmVersion String
+  /// sha256 of the sorted "submissionId:resourceVersion" lines of the current submissions.
+  inputDigest      String
+  submissionCount  Int
+  /// [{ submissionId, promptId, reason: "SHORT_RESPONSE" }]
+  skipped          Json
+  createdAt        DateTime                    @default(now())
+  matches          SubmissionSimilarityMatch[]
+
+  @@unique([assignmentId, algorithmVersion, inputDigest])
+  @@index([assignmentId, createdAt])
+}
+
+model SubmissionSimilarityMatch {
+  id             String                  @id @default(cuid())
+  runId          String
+  run            SubmissionSimilarityRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  /// Lexicographically smaller submission id.
+  submissionAId  String
+  submissionA    AssignmentSubmission    @relation("SimilarityMatchA", fields: [submissionAId], references: [id], onDelete: Cascade)
+  submissionBId  String
+  submissionB    AssignmentSubmission    @relation("SimilarityMatchB", fields: [submissionBId], references: [id], onDelete: Cascade)
+  /// "HIGH" | "ELEVATED"
+  level          String
+  maxContainment Float
+  /// [{ promptId, containment, shared, level, spansA[], spansB[] }]
+  perPrompt      Json
+  reviews        SimilarityMatchReview[]
+
+  @@unique([runId, submissionAId, submissionBId])
+  @@index([submissionAId])
+  @@index([submissionBId])
+}
+
+/// Append-only teacher review of one match; the newest row is current. The note is teacher-only.
+model SimilarityMatchReview {
+  id        String                    @id @default(cuid())
+  matchId   String
+  match     SubmissionSimilarityMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  actorId   String
+  /// "NOTED" | "DISMISSED"
+  status    String
+  note      String?
+  createdAt DateTime                  @default(now())
+
+  @@index([matchId, createdAt])
 }
 
 /// Owning teacher's decision on one late submission (I3 / 3.3): REJECT_ZERO, or

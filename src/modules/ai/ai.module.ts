@@ -4,19 +4,22 @@ import { AiJobsService } from "./application/ai-jobs.service";
 import { parseAiConfig } from "./application/ai-config";
 import { AI_CONFIG, AI_PROVIDER } from "./application/ai-provider";
 import { createAiProvider } from "./infrastructure/create-provider";
+import { SimilarityRunsService } from "./application/similarity-runs.service";
 import { AiJobsController } from "./interface/ai-jobs.controller";
+import { SimilarityController } from "./interface/similarity.controller";
 
 /**
  * Teacher AI runtime (TAI-01). Parsing the environment here makes boot fail for AI_PROVIDER=fake in production.
  * The runner starts only when a provider is configured and AI_RUNNER_ENABLED is not false.
  */
 @Module({
-  controllers: [AiJobsController],
+  controllers: [AiJobsController, SimilarityController],
   providers: [
     { provide: AI_CONFIG, useFactory: () => parseAiConfig(process.env) },
     { provide: AI_PROVIDER, useFactory: (config: ReturnType<typeof parseAiConfig>) => createAiProvider(config), inject: [AI_CONFIG] },
     AiJobsService,
     AiJobRunner,
+    SimilarityRunsService,
   ],
   exports: [AI_CONFIG, AI_PROVIDER, AiJobsService],
 })

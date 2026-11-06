@@ -34,6 +34,7 @@ model QuestionFingerprint {
 model SubmissionSimilarityRun {
   id               String   @id @default(cuid())
   assignmentId     String
+  assignment       Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   actorId          String
   algorithmVersion String   // "subsim@1"
   inputDigest      String   // sha256 of sorted (submissionId, resourceVersion) of current submissions
@@ -51,7 +52,9 @@ model SubmissionSimilarityMatch {
   runId         String
   run           SubmissionSimilarityRun @relation(fields: [runId], references: [id], onDelete: Cascade)
   submissionAId String                  // lexicographically smaller id
+  submissionA   AssignmentSubmission @relation("SimilarityMatchA", fields: [submissionAId], references: [id], onDelete: Cascade)
   submissionBId String
+  submissionB   AssignmentSubmission @relation("SimilarityMatchB", fields: [submissionBId], references: [id], onDelete: Cascade)
   level         String                  // "HIGH" | "ELEVATED"
   maxContainment Float
   perPrompt     Json                    // [{ promptId, containment, shared, spansA[], spansB[] }]
@@ -92,7 +95,7 @@ Teacher-owner only (`ownedClass`): a missing or not-owned class returns the same
 | TAI-01 `validateItems` | Duplicate corpus loader switches to `QuestionFingerprint` scoped to the actor plus the library. Same-class and new flags `EXACT_DUPLICATE`, `NEAR_DUPLICATE`, `EXACT_DUPLICATE_ELSEWHERE`, `NEAR_DUPLICATE_ELSEWHERE` are warnings only; none block a teacher decision. |
 | `POST classes/:id/assignments/:aid/similarity-runs` | Written assignment only, ≥ 2 current submissions, ≤ 200. Computes synchronously. If the same `inputDigest` and algorithm already exist, it returns that run (200) and no new run is created; otherwise it returns 201. |
 | `GET classes/:id/assignments/:aid/similarity-runs` | Runs newest first, with `stale: true` when the current input digest differs. |
-| `GET classes/:id/assignments/:aid/similarity-runs/:runId` | Matches with spans, current review, and student display names (owner-only). |
+| `GET classes/:id/assignments/:aid/similarity-runs/:runId` | Matches with spans, current review, student display names, and per reported prompt `promptText`, `textA` and `textB` (owner-only), plus `stale`. |
 | `POST classes/:id/assignments/:aid/similarity-runs/:runId/matches/:matchId/reviews` | Body `{ status, note? }`; appends. |
 
 ## Error codes
@@ -110,7 +113,7 @@ Teacher-owner only (`ownedClass`): a missing or not-owned class returns the same
 
 | Action | `after` allowlist |
 | --- | --- |
-| `similarity_run.create` | `assignmentId, algorithmVersion, submissionCount, matchCount, replayed` |
+| `similarity_run.create` | `assignmentId, algorithmVersion, submissionCount, matchCount, replayed` (a digest replay is audited with `replayed: true`; an `Idempotency-Key` replay is not audited again) |
 | `similarity_match.review` | `runId, matchId, status` (never note text) |
 
 Duplicate checks are read-only and not audited.
@@ -119,3 +122,15 @@ Duplicate checks are read-only and not audited.
 
 - **Resource editor and import preview:** an inline "Câu tương tự đã có" warning with the source title and class. The TAI-01 review list adds badges for the `*_ELSEWHERE` flags.
 - **Written-status board:** a "Kiểm tra nội dung tương đồng" action opens the run view. Pairs are listed with level badges, side-by-side responses with highlighted spans, and noted/dismissed controls with a note field. The copy explicitly states that similarity is evidence for teacher review only, not a conclusion. A stale-run banner offers a rerun.
+
+**TAI3-T4 decisions (2026-11-06):**
+
+- Foreign keys: `SubmissionSimilarityRun.assignmentId` references `Assignment`, `SubmissionSimilarityMatch.submissionAId` and `submissionBId` reference `AssignmentSubmission` (two named relations), and a review references its match; all cascade on delete. The migration only adds tables and is idempotent.
+- Current submissions: the latest submission of each student of the assignment, whatever its timing (on time, late pending, rejected zero) or grading state. Similarity is evidence only and changes nothing else.
+- `inputDigest` is the sha256 of the sorted lines `submissionId:resourceVersion` joined by a newline; a resubmission changes the submission id, so older runs become `stale`. The unique key `(assignmentId, algorithmVersion, inputDigest)` makes a run replayable.
+- `POST similarity-runs` needs `Idempotency-Key`. An existing run for the same digest returns 200 with `replayed: true` and no new run; a new run returns 201 with `replayed: false`. The same `Idempotency-Key` returns the stored response. Concurrent requests are serialized by the advisory lock `similarity:<assignmentId>`, and a unique violation (`P2002`) returns the existing run as the last guard.
+- A class archived blocks creating a run and recording a review with 409 `CLASS_ARCHIVED`; an archived assignment or resource still runs, and every `GET` works.
+- The list returns up to 20 runs (`limit` 1-50), newest first, each with a computed `stale` and `matchCount`.
+- A review body is `{ status: "NOTED" | "DISMISSED", note? }` (strict, note at most 1000 characters after trim and NFC); reviews are appended, the newest one is current, and a stale run can be reviewed. The audit never stores the note.
+- Error codes: 404 `ASSIGNMENT_NOT_FOUND` for a missing or foreign assignment, 404 `NOT_FOUND` for a missing run or match, 409 `NOT_A_WRITTEN_ASSIGNMENT`, 409 `SIMILARITY_INPUT_TOO_SMALL`, 413 `SIMILARITY_INPUT_TOO_LARGE`, 403 `CLASS_ACCESS_DENIED`.
+- The service and controller live in the `ai` module; routes are `TEACHER` only and use `ownedClass`. The route manifest grows by 4 routes (211 to 215). No student, parent or notification read model reads these tables.

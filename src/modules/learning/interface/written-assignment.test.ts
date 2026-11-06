@@ -188,7 +188,7 @@ beforeEach(() => {
   db = {};
   for (const name of [
     "classroom", "enrollment", "user", "classResource", "assignment", "assignmentTarget", "assignmentDeadlineRevision",
-    "assignmentSubmission", "lateDecision", "writtenGradeDecision", "auditLog", "notification", "idempotencyRecord", "lesson", "lab", "labPackRevocation", "parentLink",
+    "assignmentSubmission", "lateDecision", "writtenGradeDecision", "submissionSimilarityRun", "submissionSimilarityMatch", "similarityMatchReview", "auditLog", "notification", "idempotencyRecord", "lesson", "lab", "labPackRevocation", "parentLink",
   ])
     db[name] = table(name);
   db.$executeRaw = async () => 0;
@@ -608,5 +608,37 @@ describe("TAI2-T3 read models", () => {
     expect(item).toMatchObject({ assignmentId: id, status: "GRADED" });
     expect(keysAnywhere(item, HIDDEN_FROM_PARENT)).toEqual([]);
     expect(JSON.stringify(item)).not.toContain("Làm tốt");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// TAI3-T4: similarity evidence is teacher-only. The student, parent and notification read models never carry it,
+// even when runs, matches and reviews exist for the same submissions.
+describe("TAI3-T4 student, parent and notification isolation", () => {
+  const SIMILARITY_KEYS = ["similarity", "similarityRuns", "containment", "maxContainment", "spansA", "spansB", "perPrompt", "reviews", "inputDigest", "algorithmVersion", "matchCount", "stale"];
+
+  it("never exposes similarity data on any student, parent or notification view", async () => {
+    const id = await assignWritten();
+    const first = await submit(id, answers("Cùng một câu trả lời"));
+    const second = await submit(id, answers("Cùng một câu trả lời"), S2);
+    db.submissionSimilarityRun.rows.push({ id: "run-1", assignmentId: id, algorithmVersion: "subsim@1", inputDigest: "d", submissionCount: 2, skipped: [] });
+    db.submissionSimilarityMatch.rows.push({ id: "m-1", runId: "run-1", submissionAId: first.submission.id, submissionBId: second.submission.id, level: "HIGH", maxContainment: 0.93, perPrompt: [{ promptId: "p1", containment: 0.93, shared: 20, spansA: [{ start: 0, end: 5 }], spansB: [] }] });
+    db.similarityMatchReview.rows.push({ id: "r-1", matchId: "m-1", actorId: OWNER.sub, status: "NOTED", note: "ghi chú riêng của giáo viên" });
+    await service().gradeWritten("class-a", id, first.submission.id, req(OWNER), { kind: "MANUAL", criterionPoints: [{ promptId: "p1", criterionCode: "GIAI_THICH", points: 2 }, { promptId: "p2", criterionCode: "GIAI_THICH", points: 2 }] });
+
+    const parents = new ParentsController(db, { readableStudent: async () => undefined } as any, {} as any);
+    const views: unknown[] = [
+      await learning().assignment(id, { user: S1 }),
+      await learning().assignment(id, { user: S2 }),
+      await learning().assignments({ user: S1 }),
+      await learning().assignments({ user: S2 }),
+      await parents.childAssignment({ user: { sub: "parent-1", role: "PARENT" } }, "s1", id),
+      await new PrismaNotificationRepository(db).assignedTestStates("s1"),
+      db.notification.rows,
+    ];
+    for (const view of views) {
+      expect(keysAnywhere(view, SIMILARITY_KEYS)).toEqual([]);
+      expect(JSON.stringify(view)).not.toContain("ghi chú riêng");
+    }
   });
 });
