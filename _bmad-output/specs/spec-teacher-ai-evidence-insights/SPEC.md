@@ -1,6 +1,6 @@
 ---
 id: SPEC-teacher-ai-evidence-insights
-status: draft-blocked-on-po-threshold-approval
+status: approved-g5-2026-11-06
 companions:
   - implementation-contract.md
   - insight-rules.md

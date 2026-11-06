@@ -9,10 +9,12 @@ Built per class and student from records with `assignmentId` in the class's assi
 | Kind | Source | Fields used | Counts as scored |
 | --- | --- | --- | --- |
 | `QUIZ` | `QuizAttempt` | id, createdAt, score (0–100), passed, lessonId | yes |
-| `TEST` | `AssignmentSubmission` | id, submittedAt, score (0–100), resource lesson | yes, except `timing=LATE` without decision and `LateDecision=REJECT_ZERO` |
+| `TEST` | `AssignmentSubmission` | id, submittedAt, score (0–100), resource lesson | yes, only when `gradingMode=AUTO` and `score` is not null; excluded: `timing=LATE` without decision and `LateDecision=REJECT_ZERO`. Teacher-graded written submissions are left for `insights@2` (PO 2026-11-06). |
 | `PRACTICAL` | `Attempt` | id, createdAt, verdict, lesson via `lessonStepId`, max `HintLog.level` (0 if none) | no |
 
 An evidence item maps to outcome codes through its lesson's `outcomeCodes`.
+
+The loader (TAI4-T2) filters and normalizes evidence; the engine receives the list as `{ kind, id, at, score?, passed?, verdict?, maxHintLevel?, outcomeCodes }` and never reads the database. Items are ordered by time, then by id. `latest` is taken over QUIZ and TEST together. All numeric comparisons use a tolerance of 1e-9. Approved by the PO on 2026-11-06 (gate G-5): the thresholds below are unchanged.
 
 ## First wave
 
@@ -39,14 +41,18 @@ An evidence item maps to outcome codes through its lesson's `outcomeCodes`.
   - Boundaries: 2 of 3 → fires; 1 of 3 → does not; 4 of 6 → fires; 3 of 6 → does not.
 - Pattern: the 3 practicals before the latest each have maxHintLevel ≥ 3, and the latest has verdict `passed` with maxHintLevel 0.
   - Boundary: the latest used level 1 → no pattern.
-- Evidence IDs are the practical attempts considered.
+- The pattern needs at least 4 practicals. "The 3 practicals before the latest" are the 3 immediately before it.
+- The pattern can hold without the base rule (for example many unaided attempts, then 3 high-hint attempts, then a clean pass). One `HIGH_HINT_DEPENDENCE` insight is emitted when the base rule or the pattern holds, with `values.baseRuleMet` of 1 or 0.
+- Pilot visibility (PO, 2026-11-06): `SUDDEN_UNAIDED_PASS` is always computed and tested, but the service hides it unless `INSIGHTS_SHOW_SUDDEN_UNAIDED_PASS=true` (default false). Hidden, the insight drops to plain `HIGH_HINT_DEPENDENCE` (`INFORMATIONAL`, no `pattern`) when `baseRuleMet` is 1 and disappears when it is 0. The fingerprint does not change.
+- Evidence IDs are all practical attempts in scope.
 
 ### OBJECTIVE_MASTERY_INCONSISTENT — status `INFORMATIONAL`
 
 - Evaluated per outcome code `c`. Take the items linked to `c`, which must number at least 3.
 - A passing item is `QUIZ.passed`, `TEST.score ≥ 50` or `PRACTICAL.verdict = passed`.
 - Fires when there is at least one passing item of kind K1 and at least 2 non-passing items of a different kind K2.
-- The payload carries `outcomeCode`, `passingKind` and `nonPassingKind`. Evidence IDs are the items involved.
+- The payload carries `outcomeCode`, `passingKind` and `nonPassingKind`, in `values`.
+- Each outcome code produces at most one insight. When several (K1, K2) pairs qualify, the first pair in alphabetical order of (`passingKind`, `nonPassingKind`) is used (kinds: `PRACTICAL`, `QUIZ`, `TEST`). Evidence IDs are all passing items of K1 plus all non-passing items of K2. An item linked to several outcomes counts for each.
 - Boundaries: 1 pass + 1 non-pass of the other kind → does not fire; 1 + 2 → fires; passes and failures of the same kind only → does not fire.
 
 ## Second wave (not in `insights@1`; ships as `insights@2`)
@@ -63,7 +69,7 @@ Second-wave rules read only official records: teacher-final grades, never `sugge
 
 ```ts
 type Insight = {
-  fingerprint: string;          // sha256(ruleVersion|ruleCode|classId|studentId|sorted evidenceIds)
+  fingerprint: string;          // sha256(ruleVersion|ruleCode|classId|studentId|sorted evidenceIds); OBJECTIVE_MASTERY_INCONSISTENT also includes outcomeCode after studentId
   ruleVersion: "insights@1";
   ruleCode: string;
   pattern?: "SUDDEN_UNAIDED_PASS";
@@ -76,6 +82,12 @@ type Insight = {
   computedAt: string;
 };
 ```
+
+## Fingerprint, ordering and messages
+
+- The fingerprint is `sha256` of the parts joined by `|`: `ruleVersion`, `ruleCode`, `classId`, `studentId`, then (only for `OBJECTIVE_MASTERY_INCONSISTENT`) `outcomeCode`, then the sorted evidence IDs joined by `,`. The outcome code keeps two outcomes that share one evidence set from colliding (PO, 2026-11-06). The pattern is not part of it.
+- `INSUFFICIENT_EVIDENCE` uses the scored items present as evidence, so the fingerprint is fixed while a student has no scored item and changes with the first one.
+- Insights are ordered by rule code, then outcome code. Each rule has one fixed Vietnamese template, and the pattern has its own. Messages never contain a raw rule code.
 
 ## Forbidden vocabulary
 

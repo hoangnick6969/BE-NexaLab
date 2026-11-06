@@ -192,8 +192,8 @@ development_status:
   tai-03-t4-similarity-runs-review-api: done
   tai-03-t5-teacher-similarity-review-ui: done
   tai-03-t6-e2e-journey-negatives: done
-  epic-tai-04-evidence-insights: backlog
-  tai-04-t1-insight-rule-engine-v1: backlog
+  epic-tai-04-evidence-insights: in-progress
+  tai-04-t1-insight-rule-engine-v1: done
   tai-04-t2-evidence-loader-read-routes: backlog
   tai-04-t3-acknowledgements-replay: backlog
   tai-04-t4-teacher-insight-ux: backlog
@@ -372,7 +372,7 @@ teacher_ai_tracking:
     G-2: 'open — provider explicitly permitted for the under-18 context with approved data-use/DPA terms; legal basis under Law 91/2025/QH15, Decree 356/2025/NĐ-CP, Decree 330/2026/NĐ-CP; age-specific notice/consent where the approved path requires it; minimization/redaction limits; cross-border transfer; retention/deletion (tai-02-t0). Gemini free tier excluded for student text; paid tier alone is not eligibility. Blocks tai-02-t4..t7 and tai-04-t5.'
     G-3: 'open — one month of measured TAI-01 usage and approved prices (tai-05-t0).'
     G-4: 'open — PO accepts TAI-06 v1 scope and reviewer approves CHALLENGE_PARAMETERS ranges Q-C2-04 (tai-06-t0).'
-    G-5: 'open — PO approves insights@1 thresholds and SUDDEN_UNAIDED_PASS visibility (TAI-04).'
+    G-5: 'closed 2026-11-06 — PO approved the insights@1 thresholds in insight-rules.md unchanged and chose to HIDE SUDDEN_UNAIDED_PASS in the pilot (logic and tests kept, display off by default behind a configuration flag; the supervising lecturer reviews it later). Unblocks tai-04-t1..t4, t6 and t7; t5 still waits for G-2.'
     G-6: 'open — provider explicitly permits use inside NexaLab under-18 context (written interpretation if Gemini is retained, otherwise another provider); lesson/instruction input boundaries, licensed-source processing rights, transfer, retention and deletion approved. Blocks every live provider call of TAI-01 (t6 golden evaluation) and TAI-06; T1..T5 run on the fake provider.'
   decided:
     - 'Planned adapter: Gemini API via GEMINI_API_KEY / GEMINI_MODEL (2026-10-28 design choice). Not an approved provider or tier: no live call until G-6, and never student data on the free tier.'
@@ -388,7 +388,8 @@ teacher_ai_tracking:
     - 'tai-02-t6-assisted-grading (backlog; waits for TAI2-T5 pass)'
     - 'tai-02-t7-e2e-journey-negatives (backlog; waits for TAI2-T6)'
     - 'tai-01-t6-golden-evaluation-e2e (backlog; waits for G-6 live provider approval)'
-    - 'tai-04-t1-insight-rule-engine-v1 (backlog; waits for G-5 threshold approval)'
+    - 'tai-04-t1-insight-rule-engine-v1 (done 2026-11-06; G-5 closed)'
+    - 'tai-04-t2..t4, t6, t7 (backlog; unblocked in order t2, t3, t4, t6, t7; t5 waits for G-2)'
   story_notes:
     tai-01-t0-activate-fr21-scope:
       status: done
@@ -452,6 +453,11 @@ teacher_ai_tracking:
       date: '2026-11-06'
       evidence: 'FE-NexaLab: WrittenSimilarity.tsx opened from a Kiểm tra nội dung tương đồng action on the written-status board (WrittenTracking): neutral notice (evidence for the teacher, no change to scores, statuses or notifications, invisible to students and parents), run or rerun button with Idempotency-Key, replayed notice when the submission set is unchanged, stale banner, skipped short answers, pairs with level badges and a maximum shared percentage, side-by-side answers per question with the shared parts highlighted from spansA and spansB (React text nodes and mark elements, no dangerouslySetInnerHTML), prompt text, and a review form (NOTED or DISMISSED, optional note up to 1000 characters) showing the current review and the review count. similarity-spans.ts (segmentsOf: clamp, sort, merge, exact concatenation) with 4 node tests including NFD offsets, added to test:regression; vi and en copy without the words cheating or plagiarism. FE lint (tsc) and build pass. Browser check 2026-11-06 of T4 and T5 together on a temporary class with a temporary teacher and 6 temporary students (the 6 answers were submitted through the API as the test students so the teacher session stayed in the browser): the teacher created, published and assigned a WRITTEN_TASK from the UI; the similarity view opened from Theo dõi và chấm bài; run 1 returned 201 and flagged only the copied pair (Mức cao, 82%, 23 shared passages); the pair that shares only the prompt text and formulas and the two independent answers were not flagged; running again with an unchanged set returned 200 (replayed), the UI showed the reuse notice and the database kept a single run for that digest; the side-by-side view highlighted the shared parts at the exact offsets (324 of 391 characters on both sides, Vietnamese text intact, no HTML injection) in light and dark mode; NOTED with a note and then DISMISSED with a note were saved (201), the newest was current with 2 reviews, and it persisted after a reload; after a student resubmitted, the old run showed the stale banner and a rerun created a new run (0 pairs); the student view showed only Đã nộp, chờ giáo viên chấm with no similarity wording and no score, and a student calling the four routes got 403 with no similarity key in the student detail or list. Screenshots outside the repos in acceptance-screenshots/tai3-t5/. Test data removed after a dry-run: 1 assignment, 7 submissions, 2 runs, 1 match, 2 reviews, the resource, 6 enrollments, the class, 7 test accounts with 10 sessions, 19 notifications and 14 idempotency records; all three similarity tables, WrittenGradeDecision and class-pilot-a resources are back to 0. Notes: a merged span can include the few changed words between two shared passages (gap of at most 3 tokens, by design); the pair of identical prompt-and-formula answers is not flagged even without the exclusions because the short prompt alone gives too few shared fingerprints, so the exclusion itself is proved by the unit test with a long prompt. Not done: Playwright script. PO accepted the code.'
 
+    tai-04-t1-insight-rule-engine-v1:
+      status: done
+      date: '2026-11-06'
+      evidence: 'src/modules/reports/application/insights/ (types, messages, fingerprint, rules, index): pure insights@1 engine for INSUFFICIENT_EVIDENCE, SCORE_CHANGE_UNUSUAL, HIGH_HINT_DEPENDENCE (+ SUDDEN_UNAIDED_PASS) and OBJECTIVE_MASTERY_INCONSISTENT, sha256 fingerprint (outcomeCode added for the mastery rule only), fixed neutral Vietnamese templates, registry engineFor(ruleVersion) and applyPatternVisibility(insights, show). 33 tests in insights.test.ts cover every boundary fixture of insight-rules.md, ordering and tie-breakers, float tolerance 1e-9, hidden-pattern downgrade/drop, fingerprint stability and the forbidden-vocabulary scan. tsc, check:layers pass; full vitest 752 passed (719 + 33), the same 4 unrelated failures (errors.test.ts x2, health.controller.test.ts x2). insight-rules.md updated: AUTO-only TEST evidence, tie-breakers, pattern without base rule, fingerprint outcomeCode, pilot visibility flag. No schema, route or config change; the INSIGHTS_SHOW_SUDDEN_UNAIDED_PASS flag is read in TAI4-T2. PO approved 2026-11-06, including baseRuleMet handling.'
+      decision: 'The pattern can hold without the base rule (n >= 5 practicals), so the engine emits one HIGH_HINT_DEPENDENCE with values.baseRuleMet; hiding the pattern downgrades when baseRuleMet = 1 and drops the insight when 0. This corrects the earlier claim that the pattern always implies the base rule.'
     tai-03-t6-e2e-journey-negatives:
       status: done
       date: '2026-11-06'
