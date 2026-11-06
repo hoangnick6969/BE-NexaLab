@@ -40,6 +40,10 @@ enum ClassResourceKind {
   DECK
   STUDY_QUIZ
   TEST
+  LAB
+  DOCUMENT
+  REPORT_TEMPLATE
+  LINK
 }
 
 enum ClassResourceStatus {
@@ -210,6 +214,7 @@ model ClassResource {
   publishedAt DateTime?
   archivedAt  DateTime?
   practice    ClassResourcePractice[]
+  labRuns     LabRun[]
 
   @@unique([classId, kind, title, version])
   @@index([classId, status, kind, createdAt])
@@ -679,6 +684,7 @@ model Assignment {
   /// Null for legacy assignments; never backfilled from current active versions.
   labExecution       Json?
   labExecutionDigest String?
+  classLabSnapshot   Json?
   status             String                       @default("ACTIVE")
   createdById        String?
   archivedAt         DateTime?
@@ -801,6 +807,9 @@ model LabRun {
   labId            String
   challengeId      String
   assignmentId     String?
+  resourceId       String?
+  resource         ClassResource? @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  classLabSnapshot Json?
   context          String
   execution        Json
   executionDigest  String
@@ -814,6 +823,7 @@ model LabRun {
 
   @@index([studentId, createdAt])
   @@index([labId, revokedAt])
+  @@index([resourceId])
 }
 
 /// Ordered server evidence for activities that require a prediction before observation.

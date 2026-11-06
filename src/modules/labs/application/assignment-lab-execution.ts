@@ -111,13 +111,9 @@ export async function resolvePinnedAssignmentLab(tx: any, assignment: { labExecu
         digest(releaseSnapshot) !== release.digest || !releaseSnapshot?.lab || releaseSnapshot.lab.id !== labId ||
         !releasedExecution.success || release.status === "QUARANTINED" || release.status === "DRAFT" || release.status === "APPROVED")
       throw new ConflictException({ code: release?.status === "QUARANTINED" ? "RUN_REVOKED" : "LAB_RELEASE_INVALID" });
-    if (releasedExecution.data.packVersionId !== snapshot.packVersionId ||
-        releasedExecution.data.configVersionId !== snapshot.configVersionId ||
-        releasedExecution.data.activityVersionId !== snapshot.activityVersionId ||
-        releasedExecution.data.modelRef !== snapshot.modelRef ||
-        releasedExecution.data.engineVersion !== snapshot.engineVersion ||
-        canonical(releasedExecution.data.effectiveParams) !== canonical(snapshot.effectiveParams))
-      throw new ConflictException({ code: "LAB_RELEASE_INVALID" });
+    const { releaseId: _releasedId, releaseDigest: _releasedDigest, selectedChallengeId: _releasedChallenge, ...releasedTuple } = releasedExecution.data;
+    const { releaseId: _pinId, releaseDigest: _pinDigest, selectedChallengeId: _pinChallenge, ...pinnedTuple } = snapshot;
+    if (canonical(releasedTuple) !== canonical(pinnedTuple)) throw new ConflictException({ code: "LAB_RELEASE_INVALID" });
   }
   const [config, pack, activity] = await Promise.all([
     tx.simulationConfigVersion.findUnique({ where: { id: snapshot.configVersionId } }),

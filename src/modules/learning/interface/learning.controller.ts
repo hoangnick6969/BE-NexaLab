@@ -712,6 +712,7 @@ export class LearningController {
       id: a.id,
       title: a.title,
       contentType: a.contentType,
+      classLabSnapshot: a.classLabSnapshot ?? null,
       dueDate: a.dueDate,
       overdue: isOverdue(a.dueDate),
       classroom: a.classroom,

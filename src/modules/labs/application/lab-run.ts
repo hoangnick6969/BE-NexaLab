@@ -19,7 +19,8 @@ export const launchSchema = z.object({
   challengeId: z.string().min(1).max(80),
   assignmentId: z.string().min(1).max(100).optional(),
   releaseId: z.string().min(1).max(100).optional(),
-}).strict();
+  resourceId: z.string().min(1).max(100).optional(),
+}).strict().refine((value) => [value.assignmentId, value.releaseId, value.resourceId].filter(Boolean).length <= 1, "Run selectors cannot be combined");
 
 const runSubmissionBase = z.object({
   contract: z.literal("lab-contract/1"),

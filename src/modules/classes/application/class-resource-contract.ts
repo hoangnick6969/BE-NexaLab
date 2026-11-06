@@ -1,6 +1,7 @@
 import { BadRequestException } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { assignmentExecutionSchema, digest } from "../../labs/application/lab-run";
 
 const nonEmpty = z.string().trim().min(1).max(500);
 const optionsSchema = z.array(nonEmpty).min(2).max(6);
@@ -8,9 +9,49 @@ const cardSchema = z.object({ front: nonEmpty, back: nonEmpty }).strict();
 const questionSchema = z.object({ prompt: nonEmpty, options: optionsSchema, explanation: z.string().trim().max(1000).optional() }).strict();
 const testQuestionSchema = questionSchema.extend({ correctOption: z.number().int().min(0).max(5) });
 
-export type ResourceKind = "DECK" | "STUDY_QUIZ" | "TEST";
+export const resourceKindSchema = z.enum(["DECK", "STUDY_QUIZ", "TEST", "LAB", "DOCUMENT", "REPORT_TEMPLATE", "LINK"]);
+export type ResourceKind = z.infer<typeof resourceKindSchema>;
+export const practiceKind = (kind: string) => kind === "DECK" || kind === "STUDY_QUIZ";
+const identifier = z.string().trim().min(1).max(100);
+export const httpsUrlSchema = z.string().trim().max(2048).url().refine((value) => {
+  const url = new URL(value);
+  return url.protocol === "https:" && !url.username && !url.password;
+}, "Use an HTTPS URL without credentials");
+const description = z.string().trim().max(10000).default("");
+export const labResourceInputSchema = z.object({
+  source: z.object({ labId: identifier, releaseId: identifier, challengeId: identifier }).strict(),
+  learningObjective: z.string().trim().min(1).max(1000),
+  instructions: z.string().trim().min(1).max(10000),
+  reportPrompts: z.array(z.string().trim().min(1).max(1000)).max(20),
+}).strict();
+export const labResourceContentSchema = labResourceInputSchema.extend({ execution: assignmentExecutionSchema, executionDigest: z.string().regex(/^[0-9a-f]{64}$/) }).strict();
+export const documentResourceContentSchema = z.object({ description, source: z.discriminatedUnion("type", [
+  z.object({ type: z.literal("upload"), assetVersionId: identifier }).strict(),
+  z.object({ type: z.literal("link"), url: httpsUrlSchema }).strict(),
+]) }).strict();
+export const linkResourceContentSchema = z.object({ url: httpsUrlSchema, description }).strict();
+export const classLabSnapshotSchema = z.object({
+  resourceId: identifier, version: z.number().int().positive(), title: z.string().trim().min(1).max(160),
+  lessonId: identifier.nullable(), ...labResourceInputSchema.omit({ source: true }).shape,
+  source: labResourceInputSchema.shape.source, contentDigest: z.string().regex(/^[0-9a-f]{64}$/),
+}).strict();
+export function classLabSnapshot(resource: any) {
+  const content = labResourceContentSchema.parse(resource.content);
+  const fields = { resourceId: resource.id, version: resource.version, title: resource.title, lessonId: resource.lessonId,
+    source: content.source, learningObjective: content.learningObjective, instructions: content.instructions, reportPrompts: content.reportPrompts };
+  return classLabSnapshotSchema.parse({ ...fields, contentDigest: digest(fields) });
+}
+export function verifyClassLabSnapshot(value: unknown) {
+  const parsed = classLabSnapshotSchema.parse(value);
+  const { contentDigest, ...fields } = parsed;
+  if (digest(fields) !== contentDigest) throw new BadRequestException({ code: "CLASS_LAB_SNAPSHOT_INVALID" });
+  return parsed;
+}
 
 export function normalizeResourceContent(kind: ResourceKind, raw: unknown) {
+  if (kind === "LAB") return labResourceInputSchema.parse(raw);
+  if (kind === "DOCUMENT" || kind === "REPORT_TEMPLATE") return documentResourceContentSchema.parse(raw);
+  if (kind === "LINK") return linkResourceContentSchema.parse(raw);
   const parsed: any =
     kind === "DECK"
       ? z.object({ cards: z.array(cardSchema).min(1).max(200) }).strict().parse(raw)
@@ -35,6 +76,7 @@ export function studentResource(kind: ResourceKind, content: any) {
 }
 
 export function parseResourceCsv(kind: ResourceKind, csv: string) {
+  if (!["DECK", "STUDY_QUIZ", "TEST"].includes(kind)) throw new BadRequestException({ code: "IMPORT_KIND_UNSUPPORTED" });
   if (Buffer.byteLength(csv, "utf8") > 1_000_000) throw new BadRequestException({ code: "IMPORT_TOO_LARGE", message: "CSV không được vượt quá 1 MB" });
   const records = parseCsv(csv);
   const headers = kind === "DECK" ? ["front", "back"] : kind === "STUDY_QUIZ"

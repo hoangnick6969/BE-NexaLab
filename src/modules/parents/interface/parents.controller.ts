@@ -128,7 +128,7 @@ export class ParentsController {
     const [progress, quizAttempts, practicalAttempts] = await Promise.all([
       this.db.progress.findMany({ where: { studentId }, select: { contentId: true, score: true, status: true, attemptsCount: true, updatedAt: true } }),
       this.db.quizAttempt.findMany({ where: { studentId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true, lessonId: true, stepId: true, score: true, passed: true, createdAt: true } }),
-      this.db.attempt.findMany({ where: { studentId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true, challengeId: true, lessonStepId: true, verdict: true, durationMs: true, createdAt: true } }),
+      this.db.attempt.findMany({ where: { studentId, OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true, challengeId: true, lessonStepId: true, verdict: true, durationMs: true, createdAt: true } }),
     ]);
     return { progress, summary: { quizAttempts: quizAttempts.length, practicalAttempts: practicalAttempts.length, passedPracticals: practicalAttempts.filter((a) => a.verdict === "passed").length, lastActivityAt: [quizAttempts[0]?.createdAt, practicalAttempts[0]?.createdAt].filter(Boolean).sort().at(-1) ?? null } };
   }
@@ -137,7 +137,7 @@ export class ParentsController {
     const q = z.object({ limit: z.coerce.number().int().min(1).max(50).default(20) }).parse(query);
     const [quiz, practical] = await Promise.all([
       this.db.quizAttempt.findMany({ where: { studentId }, orderBy: { createdAt: "desc" }, take: q.limit, select: { id: true, lessonId: true, stepId: true, score: true, passed: true, createdAt: true } }),
-      this.db.attempt.findMany({ where: { studentId }, orderBy: { createdAt: "desc" }, take: q.limit, select: { id: true, challengeId: true, lessonStepId: true, verdict: true, durationMs: true, createdAt: true } }),
+      this.db.attempt.findMany({ where: { studentId, OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }] }, orderBy: { createdAt: "desc" }, take: q.limit, select: { id: true, challengeId: true, lessonStepId: true, verdict: true, durationMs: true, createdAt: true } }),
     ]);
     return [...quiz.map((a) => ({ kind: "QUIZ", ...a })), ...practical.map((a) => ({ kind: "PRACTICAL", ...a }))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, q.limit);
   }

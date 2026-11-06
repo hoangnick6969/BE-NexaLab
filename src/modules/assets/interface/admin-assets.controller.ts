@@ -128,7 +128,7 @@ export class AdminAssetsController {
       const asset = await tx.asset.findUnique({ where: { id }, include: { versions: true } });
       if (!asset) throw notFound("tệp");
       const references = await assetReferences(tx, { versionIds: asset.versions.map((v) => v.id) });
-      if (references.lessons.length || references.labs.length || references.simPacks.length || references.ebookEditions.length)
+      if (references.lessons.length || references.labs.length || references.simPacks.length || references.ebookEditions.length || references.classResources.length)
         throw new ConflictException({
           code: "ASSET_REFERENCED",
           message: "Tệp đang được bài học, phòng thực hành, gói mô phỏng hoặc ảnh bìa ebook tham chiếu; không thể xóa",

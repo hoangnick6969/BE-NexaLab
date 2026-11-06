@@ -26,6 +26,8 @@ import { nextFl06Event, validateFl06History, type Fl06Event } from "../applicati
 import { evaluateFl06Activity } from "../application/fl-06-activity";
 import { nextFl07Event, validateFl07History, fl07Snapshot, type Fl07Event } from "../application/fl-07-events";
 import { evaluateFl07Activity } from "../application/fl-07-activity";
+import { assertAssignedClassLab, assertClassPracticeRun, resolveClassLabResource } from "../../classes/application/class-lab-resource";
+import { verifyClassLabSnapshot } from "../../classes/application/class-resource-contract";
 
 /** Client renderer for a pinned rubric; null keeps the client's legacy lookup by Lab id. */
 function rendererKeyFor(rubricRef: string): string | null {
@@ -42,11 +44,13 @@ export class LabsController {
     if (!run) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
     if (run.revokedAt || (run.expiresAt && run.expiresAt.getTime() <= Date.now()))
       throw new ConflictException({ code: run.revokedAt ? "RUN_REVOKED" : "RUN_EXPIRED" });
-    if (run.assignmentId) {
+    if (run.context === "CLASS_PRACTICE") await assertClassPracticeRun(tx, run, studentId);
+    else if (run.assignmentId) {
       const assignment = await tx.assignment.findFirst({ where: {
         ...applicableAssignmentWhere(studentId), id: run.assignmentId, contentId: run.labId, contentType: "lab",
       } });
       if (!assignment) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+      await assertAssignedClassLab(tx, run, assignment);
     } else {
       const lab = await tx.lab.findUnique({ where: { id: run.labId } });
       if (!lab || lab.status !== "published" || lab.scope !== "SHARED_LIBRARY" || !lab.releaseCleared || lab.synthetic || !lab.topicCode)
@@ -68,9 +72,11 @@ export class LabsController {
     if (!run) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
     if (run.revokedAt || (run.expiresAt && run.expiresAt.getTime() <= Date.now()))
       throw new ConflictException({ code: run.revokedAt ? "RUN_REVOKED" : "RUN_EXPIRED" });
-    if (run.assignmentId) {
+    if (run.context === "CLASS_PRACTICE") await assertClassPracticeRun(tx, run, studentId);
+    else if (run.assignmentId) {
       const assignment = await tx.assignment.findFirst({ where: { ...applicableAssignmentWhere(studentId), id: run.assignmentId, contentId: run.labId, contentType: "lab" } });
       if (!assignment) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+      await assertAssignedClassLab(tx, run, assignment);
     } else {
       const lab = await tx.lab.findUnique({ where: { id: run.labId } });
       if (!lab || lab.status !== "published" || lab.scope !== "SHARED_LIBRARY" || !lab.releaseCleared || lab.synthetic || !lab.topicCode)
@@ -88,9 +94,11 @@ export class LabsController {
     if (!run) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
     if (run.revokedAt || (run.expiresAt && run.expiresAt.getTime() <= Date.now()))
       throw new ConflictException({ code: run.revokedAt ? "RUN_REVOKED" : "RUN_EXPIRED" });
-    if (run.assignmentId) {
+    if (run.context === "CLASS_PRACTICE") await assertClassPracticeRun(tx, run, studentId);
+    else if (run.assignmentId) {
       const assignment = await tx.assignment.findFirst({ where: { ...applicableAssignmentWhere(studentId), id: run.assignmentId, contentId: run.labId, contentType: "lab" } });
       if (!assignment) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
+      await assertAssignedClassLab(tx, run, assignment);
     } else {
       const lab = await tx.lab.findUnique({ where: { id: run.labId } });
       if (!lab || lab.status !== "published" || lab.scope !== "SHARED_LIBRARY" || !lab.releaseCleared || lab.synthetic || !lab.topicCode)
@@ -451,22 +459,25 @@ export class LabsController {
   async launchRun(@Param("labId") labId: string, @Req() req: any, @Body() body: unknown) {
     const b = launchSchema.parse(body);
     return this.db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-version:" + labId);
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
+      const privateLab = b.resourceId ? await resolveClassLabResource(tx, b.resourceId, req.user.sub) : null;
+      if (privateLab && (privateLab.content.source.labId !== labId || privateLab.content.source.challengeId !== b.challengeId)) throw new NotFoundException({ code: "LAB_NOT_FOUND" });
       const challenge = await tx.challenge.findUnique({ where: { id: b.challengeId }, include: { lab: true } });
       if (!challenge || challenge.labId !== labId || challenge.lab.status !== "published" || challenge.id.includes("_v-"))
         throw new NotFoundException({ code: "LAB_NOT_FOUND" });
       const isOpen = challenge.lab.scope === "SHARED_LIBRARY" && challenge.lab.releaseCleared && !challenge.lab.synthetic && Boolean(challenge.lab.topicCode);
       // Circuit library practice must not inherit an unrelated legacy LED assignment.
-      const assignment = labId === "circuit" && !b.assignmentId && isOpen ? null : await tx.assignment.findFirst({
+      const assignment = privateLab || (labId === "circuit" && !b.assignmentId && isOpen) ? null : await tx.assignment.findFirst({
         where: { ...applicableAssignmentWhere(req.user.sub), contentId: labId, contentType: "lab", ...(b.assignmentId ? { id: b.assignmentId } : {}) },
         orderBy: assignmentQueueOrder,
       });
       if (b.releaseId && assignment) throw new ConflictException({ code: "LAB_RELEASE_CONTEXT_MISMATCH" });
-      if ((b.assignmentId && !assignment) || (!assignment && !isOpen))
+      if ((b.assignmentId && !assignment) || (!assignment && !privateLab && !isOpen))
         throw new NotFoundException({ code: "LAB_NOT_FOUND" });
-      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-version:" + labId);
-      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + labId);
-      let execution: any;
-      if (assignment?.labExecution !== null && assignment?.labExecution !== undefined) {
+      let execution: any = privateLab?.execution;
+      if (privateLab) { /* Resource execution is pinned at publication. */ }
+      else if (assignment?.labExecution !== null && assignment?.labExecution !== undefined) {
         execution = await resolvePinnedAssignmentLab(tx, assignment, labId, challenge.id);
       } else if (!assignment) {
         const activeRelease = await tx.labRelease.findFirst({ where: { labId, status: "ACTIVE" } });
@@ -506,9 +517,12 @@ export class LabsController {
       if (await tx.labPackRevocation.findUnique({ where: { packVersionId: execution.packVersionId } }))
         throw new ConflictException({ code: "RUN_REVOKED" });
       const now = new Date();
+      const pedagogy = privateLab?.snapshot ?? (assignment?.classLabSnapshot ? verifyClassLabSnapshot(assignment.classLabSnapshot) : null);
+      if (pedagogy && (pedagogy.source.labId !== labId || pedagogy.source.challengeId !== challenge.id || pedagogy.source.releaseId !== execution.releaseId)) throw new ConflictException({ code: "CLASS_LAB_SNAPSHOT_INVALID" });
       const run = await tx.labRun.create({ data: {
         studentId: req.user.sub, labId, challengeId: challenge.id, assignmentId: assignment?.id ?? null,
-        context: assignment ? "ASSIGNMENT" : "FOUNDATIONAL", execution: execution as any,
+        resourceId: privateLab?.resource.id ?? null, ...(pedagogy ? { classLabSnapshot: pedagogy } : {}),
+        context: privateLab ? "CLASS_PRACTICE" : assignment ? "ASSIGNMENT" : "FOUNDATIONAL", execution: execution as any,
         executionDigest: digest(execution), expiresAt: assignment ? null : new Date(now.getTime() + 86400000),
       } });
       const template = execution.template as any;
@@ -522,6 +536,7 @@ export class LabsController {
         // The pinned rubric's evaluator names the client renderer (e.g. density-bench for the density Lab).
         rendererKey: rendererKeyFor(execution.rubricRef),
         expiresAt: run.expiresAt, context: run.context, assignmentId: run.assignmentId,
+        classLabSnapshot: pedagogy,
         versionBinding: execution.binding,
         // Server-chosen run parameters (e.g. FL-03 specimen pins); the client shows them, the server checks them.
         runtimeParams: execution.params ?? null,
@@ -541,13 +556,15 @@ export class LabsController {
       if (existing) {
         if (existing.labRunId !== b.runId || canonical(existing.labState) !== canonical(evidence))
           throw new ConflictException({ code: "IDEMPOTENCY_KEY_REUSED" });
-        return { ...existing, attempt: existing, retryGuidance: this.access.retryGuidance((await tx.labRun.findUniqueOrThrow({ where: { id: b.runId } })).labId, existing.verdict, existing.simulationResult) };
+        const existingRun = await tx.labRun.findUniqueOrThrow({ where: { id: b.runId } });
+        return { ...existing, attempt: existing, retryGuidance: this.access.retryGuidance(existingRun.labId, existing.verdict, existing.simulationResult) };
       }
       const run = await tx.labRun.findFirst({ where: { id: b.runId, studentId: req.user.sub } });
       if (!run) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:sim-pack-lab:" + run.labId);
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:lab-run:" + run.id);
       const locked = await tx.labRun.findUniqueOrThrow({ where: { id: run.id } });
+      if (locked.context === "CLASS_PRACTICE") await assertClassPracticeRun(tx, locked, req.user.sub);
       if (locked.labId === "thermal-energy") {
         if (submitted.envelope !== "labState") throw new BadRequestException("FL-07 requires labState evidence");
         const completed = await tx.attempt.findFirst({ where: { labRunId: locked.id, studentId: req.user.sub } });
@@ -564,7 +581,8 @@ export class LabsController {
           ...applicableAssignmentWhere(req.user.sub), id: locked.assignmentId, contentId: locked.labId, contentType: "lab",
         } });
         if (!assignment) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
-      } else {
+        await assertAssignedClassLab(tx, locked, assignment);
+      } else if (locked.context !== "CLASS_PRACTICE") {
         const lab = await tx.lab.findUnique({ where: { id: locked.labId } });
         if (!lab || lab.status !== "published" || lab.scope !== "SHARED_LIBRARY" || !lab.releaseCleared || lab.synthetic || !lab.topicCode)
           throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
@@ -618,7 +636,7 @@ export class LabsController {
         simulationResult: result, verdict, durationMs: b.durationMs, simulationModelVersion: execution.engineVersion,
         configVersionId: execution.configVersionId, packVersionId: execution.packVersionId,
       } });
-      await projectLab(tx, req.user.sub, locked.labId);
+      if (locked.context !== "CLASS_PRACTICE") await projectLab(tx, req.user.sub, locked.labId);
       return { ...attempt, attempt, retryGuidance: this.access.retryGuidance(locked.labId, verdict, result) };
     }, { timeout: 20000 });
   }

@@ -165,6 +165,11 @@ export async function canReadVersion(db: any, user: { sub: string; role: string 
   if (user.role === "ADMIN") return true;
   if (version.status !== "READY" || version.asset.status !== "ACTIVE") return false;
   if (version.asset.ownerId === user.sub) return true;
+  if (user.role === "STUDENT" && await db.classResource.findFirst({ where: {
+    kind: { in: ["DOCUMENT", "REPORT_TEMPLATE"] }, status: "PUBLISHED",
+    AND: [{ content: { path: ["source", "type"], equals: "upload" } }, { content: { path: ["source", "assetVersionId"], equals: version.id } }],
+    classroom: { status: "ACTIVE", enrollments: { some: { studentId: user.sub, status: "approved" } } },
+  }, select: { id: true } })) return true;
   if (version.asset.scope === "SHARED_LIBRARY" && ["TEACHER", "ADMIN"].includes(user.role)) return true;
   if (version.asset.scope === "SHARED_LIBRARY" && version.asset.kind === "pdf" && version.sha256) {
     const matchingAssets = await db.assetVersion.count({
@@ -206,7 +211,7 @@ export async function canReadVersion(db: any, user: { sub: string; role: string 
 /** Lessons, steps and labs whose JSON references any version of the asset (or a given version), and simulation packs using a version as their visual. */
 export async function assetReferences(db: any, ids: { versionIds: string[] }) {
   const needles = ids.versionIds.map((id) => `%assetv:${id}%`);
-  if (!needles.length) return { lessons: [], labs: [], simPacks: [], ebookEditions: [] };
+  if (!needles.length) return { lessons: [], labs: [], simPacks: [], ebookEditions: [], classResources: [] };
   const lessons: any[] = [];
   const labs: any[] = [];
   for (const needle of needles) {
@@ -229,7 +234,11 @@ export async function assetReferences(db: any, ids: { versionIds: string[] }) {
         select: { id: true, subjectId: true, version: true },
       })
     : [];
-  return { lessons: unique(lessons), labs: unique(labs), simPacks, ebookEditions };
+  const classResources = await db.classResource.findMany({ where: {
+    kind: { in: ["DOCUMENT", "REPORT_TEMPLATE"] },
+    OR: ids.versionIds.map((id) => ({ AND: [{ content: { path: ["source", "type"], equals: "upload" } }, { content: { path: ["source", "assetVersionId"], equals: id } }] })),
+  }, select: { id: true, title: true, status: true, classId: true, version: true } });
+  return { lessons: unique(lessons), labs: unique(labs), simPacks, ebookEditions, classResources };
 }
 
 /** Validates an upload request and creates the asset (or its next version) in PENDING state. */
