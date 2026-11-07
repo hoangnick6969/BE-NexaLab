@@ -26,6 +26,7 @@ function makeDb(t: Tables) {
       if (cond === undefined) return true;
       if (key === "attempt") return matches(t.attempt!.find((a) => a.id === row.attemptId) ?? {}, cond);
       if (key === "actorId_key") return matches(row, cond);
+      if (key === "run") return matches(t.submissionSimilarityRun!.find((r) => r.id === row.runId) ?? {}, cond);
       const value = row[key];
       if (cond && typeof cond === "object" && !(cond instanceof Date)) {
         if ("in" in cond) return cond.in.includes(value);
@@ -76,7 +77,7 @@ let seq = 0;
 const id = (p: string) => `${p}${++seq}`;
 
 function emptyTables(): Tables {
-  return { classroom: [], enrollment: [], assignment: [], quizAttempt: [], attempt: [], assignmentSubmission: [], hintLog: [], lessonStep: [], classResource: [], lesson: [], auditLog: [], insightAcknowledgement: [], idempotencyRecord: [] };
+  return { classroom: [], enrollment: [], assignment: [], quizAttempt: [], attempt: [], assignmentSubmission: [], hintLog: [], lessonStep: [], classResource: [], lesson: [], auditLog: [], insightAcknowledgement: [], idempotencyRecord: [], submissionSimilarityRun: [], submissionSimilarityMatch: [] };
 }
 function baseTables(students: Array<[string, string, string?]> = [["s1", "Anh"]]): Tables {
   const t = emptyTables();
@@ -613,5 +614,227 @@ describe("TAI4-T3 replay and as-of evidence", () => {
     const rows = JSON.stringify(t.insightAcknowledgement);
     expect((await svc.replay("c1", "s1", fp, teacher)).fingerprint).toBe(fp);
     expect(JSON.stringify(t.insightAcknowledgement)).toBe(rows);
+  });
+});
+
+/* ---------------------------------------------------------------- TAI4-T6 */
+
+describe("TAI4-T6 SUBMISSION_SIMILARITY_HIGH (insights@2)", () => {
+  beforeEach(() => setClock(new Date("2026-11-07T10:00:00.000Z")));
+  const T0 = at(1);
+  const T1 = at(5);
+  const T2 = at(8);
+
+  /** Written assignment "a-w" with three current submissions and one similarity run at T1 (HIGH pair s1-s2, ELEVATED pair s1-s3). */
+  function writtenClass() {
+    const t = baseTables([["s1", "Anh"], ["s2", "Bình"], ["s3", "Chi"], ["s4", "Dũng", "pending"]]);
+    t.assignment!.push({ id: "a-w", classId: "c1", contentType: "written", contentId: "res-w", title: "Bài tự luận 1", status: "ACTIVE" });
+    for (const [sid, studentId] of [["w1", "s1"], ["w2", "s2"], ["w3", "s3"], ["w4", "s4"]] as const)
+      t.assignmentSubmission!.push({ id: sid, assignmentId: "a-w", studentId, score: null, gradingMode: "TEACHER", timing: "ON_TIME", submittedAt: T0, decision: null });
+    t.submissionSimilarityRun!.push({ id: "r1", assignmentId: "a-w", createdAt: T1 });
+    t.submissionSimilarityMatch!.push(
+      { id: "m12", runId: "r1", level: "HIGH", submissionAId: "w1", submissionBId: "w2", reviews: [] },
+      { id: "m13", runId: "r1", level: "ELEVATED", submissionAId: "w1", submissionBId: "w3", reviews: [] },
+    );
+    return t;
+  }
+  const sim = async (svc: InsightsService, studentId: string, status = "all") =>
+    (await svc.studentInsights("c1", studentId, { status }, teacher)).insights.filter((i) => i.ruleCode === "SUBMISSION_SIMILARITY_HIGH");
+
+  it("gives both students of a HIGH pair one insight and nobody else, and ignores ELEVATED", async () => {
+    const svc = service(writtenClass());
+    const [one] = await sim(svc, "s1");
+    const [two] = await sim(svc, "s2");
+    expect(one).toMatchObject({ ruleVersion: "insights@2", status: "TEACHER_REVIEW_RECOMMENDED", values: { assignmentId: "a-w", assignmentTitle: "Bài tự luận 1", level: "HIGH", pairCount: 1 } });
+    expect(two).toBeDefined();
+    expect(await sim(svc, "s3")).toEqual([]);
+    expect(one!.fingerprint).not.toBe(two!.fingerprint);
+  });
+
+  it("uses the student's own submission and the matches as evidence and reveals nothing about the other student", async () => {
+    const svc = service(writtenClass());
+    const [one] = await sim(svc, "s1");
+    expect(one!.evidence.map((e) => [e.kind, e.id])).toEqual([["WRITTEN", "w1"], ["SIMILARITY_MATCH", "m12"]]);
+    const json = JSON.stringify(one);
+    for (const leak of ["w2", "s2", "Bình", "Chi", "w3"]) expect(json).not.toContain(leak);
+    const [two] = await sim(svc, "s2");
+    expect(two!.evidence.map((e) => e.id)).toEqual(["w2", "m12"]);
+    expect(JSON.stringify(two)).not.toContain("w1");
+  });
+
+  it("removes the insight for both students once the pair has any review, in open and in all", async () => {
+    for (const status of ["NOTED", "DISMISSED"]) {
+      const t = writtenClass();
+      t.submissionSimilarityMatch!.find((m) => m.id === "m12")!.reviews = [{ createdAt: at(6), status }];
+      const svc = service(t);
+      for (const sid of ["s1", "s2"]) {
+        expect(await sim(svc, sid, "all")).toEqual([]);
+        expect(await sim(svc, sid, "open")).toEqual([]);
+      }
+    }
+  });
+
+  it("keeps the per-student acknowledgement independent of the pair review", async () => {
+    const t = writtenClass();
+    const svc = service(t);
+    const [one] = await sim(svc, "s1");
+    await svc.acknowledge("c1", "s1", one!.fingerprint, req(KEY(1)), { action: "DISMISSED" });
+    expect(await sim(svc, "s1", "open")).toEqual([]);
+    expect(await sim(svc, "s2", "open")).toHaveLength(1);
+    expect(t.insightAcknowledgement![0]).toMatchObject({ ruleVersion: "insights@2", ruleCode: "SUBMISSION_SIMILARITY_HIGH" });
+  });
+
+  it("uses only the newest run of an assignment, and a newer run reopens the insight with a new fingerprint", async () => {
+    const t = writtenClass();
+    t.submissionSimilarityRun!.push({ id: "r0", assignmentId: "a-w", createdAt: at(2) });
+    t.submissionSimilarityMatch!.push({ id: "m-old", runId: "r0", level: "HIGH", submissionAId: "w2", submissionBId: "w3", reviews: [] });
+    const svc = service(t);
+    expect(await sim(svc, "s3")).toEqual([]);
+    const [before] = await sim(svc, "s1");
+    await svc.acknowledge("c1", "s1", before!.fingerprint, req(KEY(1)), { action: "DISMISSED" });
+    t.submissionSimilarityRun!.push({ id: "r2", assignmentId: "a-w", createdAt: T2 });
+    t.submissionSimilarityMatch!.push({ id: "m12b", runId: "r2", level: "HIGH", submissionAId: "w1", submissionBId: "w2", reviews: [] });
+    const open = await sim(svc, "s1", "open");
+    expect(open).toHaveLength(1);
+    expect(open[0]!.fingerprint).not.toBe(before!.fingerprint);
+    expect(open[0]!.evidence.map((e) => e.id)).toEqual(["w1", "m12b"]);
+  });
+
+  it("keeps the valid pairs of a stale run and drops a pair whose submission was replaced", async () => {
+    const t = writtenClass();
+    t.submissionSimilarityMatch!.push({ id: "m23", runId: "r1", level: "HIGH", submissionAId: "w2", submissionBId: "w3", reviews: [] });
+    t.assignmentSubmission!.push({ id: "w3b", assignmentId: "a-w", studentId: "s3", score: null, gradingMode: "TEACHER", timing: "ON_TIME", submittedAt: at(6), decision: null });
+    const svc = service(t);
+    expect((await sim(svc, "s1"))[0]!.values.pairCount).toBe(1);
+    const [two] = await sim(svc, "s2");
+    expect(two!.values.pairCount).toBe(1);
+    expect(two!.evidence.map((e) => e.id)).toEqual(["w2", "m12"]);
+    expect(await sim(svc, "s3")).toEqual([]);
+    t.assignmentSubmission!.push({ id: "w2b", assignmentId: "a-w", studentId: "s2", score: null, gradingMode: "TEACHER", timing: "ON_TIME", submittedAt: at(7), decision: null });
+    expect(await sim(svc, "s1")).toEqual([]);
+    expect(await sim(svc, "s2")).toEqual([]);
+  });
+
+  it("counts several pairs of one student in one insight and changes the fingerprint when one pair is reviewed", async () => {
+    const t = writtenClass();
+    t.submissionSimilarityMatch!.push({ id: "m23", runId: "r1", level: "HIGH", submissionAId: "w2", submissionBId: "w3", reviews: [] });
+    const svc = service(t);
+    const [both] = await sim(svc, "s2");
+    expect(both!.values.pairCount).toBe(2);
+    expect(both!.evidence.map((e) => e.id)).toEqual(["w2", "m12", "m23"]);
+    t.submissionSimilarityMatch!.find((m) => m.id === "m23")!.reviews = [{ createdAt: at(6), status: "NOTED" }];
+    const [one] = await sim(svc, "s2");
+    expect(one!.values.pairCount).toBe(1);
+    expect(one!.fingerprint).not.toBe(both!.fingerprint);
+  });
+
+  it("drops a pair whose other student is no longer an approved member", async () => {
+    const t = writtenClass();
+    t.enrollment!.find((e) => e.studentId === "s2")!.status = "removed";
+    const svc = service(t);
+    expect(await sim(svc, "s1")).toEqual([]);
+  });
+
+  it("gives one insight per written assignment, each with its own title and evidence", async () => {
+    const t = writtenClass();
+    t.assignment!.push({ id: "a-w2", classId: "c1", contentType: "written", contentId: "res-w2", title: "Bài tự luận 2", status: "ARCHIVED" });
+    for (const [sid, studentId] of [["x1", "s1"], ["x2", "s2"]] as const)
+      t.assignmentSubmission!.push({ id: sid, assignmentId: "a-w2", studentId, score: null, gradingMode: "TEACHER", timing: "ON_TIME", submittedAt: T0, decision: null });
+    t.submissionSimilarityRun!.push({ id: "r-x", assignmentId: "a-w2", createdAt: T1 });
+    t.submissionSimilarityMatch!.push({ id: "mx12", runId: "r-x", level: "HIGH", submissionAId: "x1", submissionBId: "x2", reviews: [] });
+    const found = await sim(service(t), "s1");
+    expect(found.map((i) => i.values.assignmentTitle)).toEqual(["Bài tự luận 1", "Bài tự luận 2"]);
+    expect(found[1]!.evidence.map((e) => e.id)).toEqual(["x1", "mx12"]);
+  });
+
+  it("never attaches a match to a submission of another assignment", async () => {
+    const t = writtenClass();
+    t.assignment!.push({ id: "a-w2", classId: "c1", contentType: "written", contentId: "res-w2", title: "Bài tự luận 2", status: "ACTIVE" });
+    t.assignmentSubmission!.push({ id: "x1", assignmentId: "a-w2", studentId: "s3", score: null, gradingMode: "TEACHER", timing: "ON_TIME", submittedAt: T0, decision: null });
+    t.submissionSimilarityMatch!.push({ id: "mx", runId: "r1", level: "HIGH", submissionAId: "w1", submissionBId: "x1", reviews: [] });
+    const svc = service(t);
+    expect((await sim(svc, "s3"))).toEqual([]);
+    expect((await sim(svc, "s1"))[0]!.values.pairCount).toBe(1);
+  });
+
+  it("does not let written submissions leak into the scored evidence of insights@1", async () => {
+    const svc = service(writtenClass());
+    const all = (await svc.studentInsights("c1", "s1", { status: "all" }, teacher)).insights;
+    expect(all.filter((i) => i.ruleCode !== "SUBMISSION_SIMILARITY_HIGH").every((i) => i.evidence.every((e) => !["WRITTEN", "SIMILARITY_MATCH"].includes(e.kind)))).toBe(true);
+    expect(all.find((i) => i.ruleCode === "INSUFFICIENT_EVIDENCE")!.values.scoredCount).toBe(0);
+  });
+
+  it("leaves the insights@1 fingerprints and the order unchanged when similarity facts appear", async () => {
+    const { t, svc } = jumpClass();
+    const before = (await svc.studentInsights("c1", "s1", { status: "all" }, teacher)).insights;
+    expect(before.map((i) => i.ruleCode)).toEqual(["SCORE_CHANGE_UNUSUAL"]);
+    t.assignment!.push({ id: "a-w", classId: "c1", contentType: "written", contentId: "res-w", title: "Bài tự luận 1", status: "ACTIVE" });
+    for (const [sid, studentId] of [["w1", "s1"], ["w2", "s2"]] as const)
+      t.assignmentSubmission!.push({ id: sid, assignmentId: "a-w", studentId, score: null, gradingMode: "TEACHER", timing: "ON_TIME", submittedAt: at(1), decision: null });
+    t.enrollment!.push({ classId: "c1", studentId: "s2", status: "approved", student: { id: "s2", fullName: "Bình" } });
+    t.submissionSimilarityRun!.push({ id: "r1", assignmentId: "a-w", createdAt: at(5) });
+    t.submissionSimilarityMatch!.push({ id: "m12", runId: "r1", level: "HIGH", submissionAId: "w1", submissionBId: "w2", reviews: [] });
+    const after = (await svc.studentInsights("c1", "s1", { status: "all" }, teacher)).insights;
+    expect(after.map((i) => i.ruleCode)).toEqual(["SCORE_CHANGE_UNUSUAL", "SUBMISSION_SIMILARITY_HIGH"]);
+    expect(after[0]!.fingerprint).toBe(before[0]!.fingerprint);
+    expect(after[0]!.ruleVersion).toBe("insights@1");
+  });
+
+  it("replays as of the first acknowledgement: later reviews, runs and submissions do not count", async () => {
+    const t = writtenClass();
+    const svc = service(t);
+    const [seen] = await sim(svc, "s1");
+    setClock(new Date(at(6).getTime() + 3600_000));
+    await svc.acknowledge("c1", "s1", seen!.fingerprint, req(KEY(1)), { action: "ACKNOWLEDGED" });
+    t.submissionSimilarityMatch!.find((m) => m.id === "m12")!.reviews = [{ createdAt: at(9), status: "DISMISSED" }];
+    t.submissionSimilarityRun!.push({ id: "r9", assignmentId: "a-w", createdAt: at(10) });
+    t.assignmentSubmission!.push({ id: "w1b", assignmentId: "a-w", studentId: "s1", score: null, gradingMode: "TEACHER", timing: "ON_TIME", submittedAt: at(11), decision: null });
+    expect(await sim(svc, "s1", "all")).toEqual([]);
+    const replayed = await svc.replay("c1", "s1", seen!.fingerprint, teacher);
+    expect(replayed.fingerprint).toBe(seen!.fingerprint);
+    expect(replayed.ruleVersion).toBe("insights@2");
+    expect(replayed.evidence).toEqual(seen!.evidence);
+  });
+
+  it("replays a stored insights@1 row with the version 1 engine only", async () => {
+    const t = writtenClass();
+    quiz(t, "s1", 1, 60); quiz(t, "s1", 2, 60); quiz(t, "s1", 3, 60); quiz(t, "s1", 4, 90);
+    const svc = service(t);
+    const v1 = (await current(svc, "all")).find((i) => i.ruleCode === "SCORE_CHANGE_UNUSUAL")!;
+    setClock(new Date(at(4).getTime() + 3600_000));
+    await svc.acknowledge("c1", "s1", v1.fingerprint, req(KEY(1)), { action: "DISMISSED" });
+    expect((await svc.replay("c1", "s1", v1.fingerprint, teacher)).ruleVersion).toBe("insights@1");
+  });
+});
+
+describe("TAI4-T6 loader cost", () => {
+  const withWritten = (n: number) => {
+    const t = baseTables(Array.from({ length: n }, (_, i) => [`s${i}`, `Học sinh ${String(i).padStart(2, "0")}`] as [string, string]));
+    t.assignment!.push({ id: "a-w", classId: "c1", contentType: "written", contentId: "res-w", title: "Bài tự luận", status: "ACTIVE" });
+    for (let i = 0; i < n; i++) { quiz(t, `s${i}`, 1, 60); submission(t, `s${i}`, 3); t.assignmentSubmission!.push({ id: `w${i}`, assignmentId: "a-w", studentId: `s${i}`, score: null, gradingMode: "TEACHER", timing: "ON_TIME", submittedAt: at(2), decision: null }); }
+    t.submissionSimilarityRun!.push({ id: "r1", assignmentId: "a-w", createdAt: at(5) });
+    for (let i = 0; i + 1 < n; i += 2) t.submissionSimilarityMatch!.push({ id: `m${i}`, runId: "r1", level: "HIGH", submissionAId: `w${i}`, submissionBId: `w${i + 1}`, reviews: [] });
+    return t;
+  };
+  it("issues the same queries for 3 or 40 students, all similarity queries in the same stage as the other stage-2 queries", async () => {
+    const small = makeDb(withWritten(3));
+    const large = makeDb(withWritten(40));
+    await loadClassEvidence(small, "c1");
+    await loadClassEvidence(large, "c1");
+    expect(large.calls).toEqual(small.calls);
+    for (const name of ["submissionSimilarityRun.findMany", "submissionSimilarityMatch.findMany"]) expect(large.calls.filter((c: string) => c === name)).toHaveLength(1);
+    // 3 stage-1 queries, 9 stage-2 queries issued together, then the lesson lookup: no extra sequential stage.
+    expect(large.calls.indexOf("lesson.findMany")).toBe(12);
+    expect(large.calls.length).toBe(13);
+  });
+  it("skips every similarity query when the class has no written assignment", async () => {
+    const db = makeDb(baseTables());
+    await loadClassEvidence(db, "c1");
+    expect(db.calls.filter((c: string) => c.startsWith("submissionSimilarity"))).toEqual([]);
+  });
+  it("reads the title of the assignment with the assignment query itself", async () => {
+    const db = makeDb(withWritten(3));
+    await loadClassEvidence(db, "c1");
+    expect(db.calls.filter((c: string) => c === "assignment.findMany")).toHaveLength(1);
   });
 });

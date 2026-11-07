@@ -1,9 +1,16 @@
 import { submissionStatus, TEST_CONTENT_TYPE } from "../../../classes/application/assignment-test-contract";
-import type { InsightEvidence } from "./types";
+import { WRITTEN_CONTENT_TYPE } from "../../../classes/application/assignment-written-contract";
+import type { InsightEvidence, SimilarityFact } from "./types";
 
 export type ClassMember = { id: string; displayName: string };
 export type AckRow = { id: string; studentId: string; fingerprint: string; ruleVersion: string; ruleCode: string; action: string; note: string | null; createdAt: Date };
-export type ClassEvidence = { members: ClassMember[]; evidenceByStudent: Map<string, InsightEvidence[]>; acknowledgements: AckRow[] };
+export type ClassEvidence = {
+  members: ClassMember[];
+  evidenceByStudent: Map<string, InsightEvidence[]>;
+  /** insights@2 inputs: valid matches of the newest similarity run of each written assignment, per student. */
+  similarityByStudent: Map<string, SimilarityFact[]>;
+  acknowledgements: AckRow[];
+};
 export type LoadOptions = {
   studentId?: string;
   /** false: members only, no evidence and no acknowledgement queries. */
@@ -26,17 +33,21 @@ const codesOf = (value: unknown): string[] => (Array.isArray(value) ? value.filt
  * members only, never free practice or other classes. TEST rows count only when `gradingMode = AUTO` with a score and
  * a status of SCORED or ACCEPTED_BY_EXTENSION.
  *
- * Cost: stage 1 runs three queries in parallel (members, assignments, acknowledgements), stage 2 runs six in parallel,
- * and a lesson lookup follows only for lessons not already known. The count does not depend on the number of students.
+ * Cost: stage 1 runs three queries in parallel (members, assignments, acknowledgements), stage 2 runs six in parallel
+ * (nine when the class has a written assignment: its current submissions, its similarity runs and its HIGH matches with
+ * review times), and a lesson lookup follows only for lessons not already known. The count does not depend on the number
+ * of students.
  */
 export async function loadClassEvidence(db: any, classId: string, options: LoadOptions = {}): Promise<ClassEvidence> {
   const wantAcks = options.withEvidence !== false && options.acknowledgements !== false;
   const [enrollments, assignments, acknowledgements] = await Promise.all([
+    // Always every approved member: a similarity pair is valid only when both students are approved, even when the
+    // caller asks about one student. `members` below is narrowed to that student.
     db.enrollment.findMany({
-      where: { classId, status: "approved", ...(options.studentId ? { studentId: options.studentId } : {}) },
+      where: { classId, status: "approved" },
       select: { studentId: true, student: { select: { id: true, fullName: true } } },
     }),
-    db.assignment.findMany({ where: { classId }, select: { id: true, contentType: true, contentId: true } }),
+    db.assignment.findMany({ where: { classId }, select: { id: true, title: true, contentType: true, contentId: true } }),
     wantAcks
       ? db.insightAcknowledgement.findMany({
           where: { classId, ...(options.studentId ? { studentId: options.studentId } : {}) },
@@ -45,18 +56,24 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
         })
       : Promise.resolve([]),
   ]);
-  const members: ClassMember[] = enrollments.map((row: any) => ({ id: row.student.id, displayName: row.student.fullName }));
+  const approvedIds: string[] = enrollments.map((row: any) => row.student.id);
+  const members: ClassMember[] = enrollments
+    .filter((row: any) => !options.studentId || row.student.id === options.studentId)
+    .map((row: any) => ({ id: row.student.id, displayName: row.student.fullName }));
   const evidenceByStudent = new Map<string, InsightEvidence[]>(members.map((m) => [m.id, []]));
-  if (options.withEvidence === false || !members.length || !assignments.length) return { members, evidenceByStudent, acknowledgements };
+  const similarityByStudent = new Map<string, SimilarityFact[]>(members.map((m) => [m.id, []]));
+  if (options.withEvidence === false || !members.length || !assignments.length) return { members, evidenceByStudent, similarityByStudent, acknowledgements };
 
   const studentIds = members.map((m) => m.id);
   const assignmentIds: string[] = assignments.map((a: any) => a.id);
   const testAssignments = assignments.filter((a: any) => a.contentType === TEST_CONTENT_TYPE);
+  const writtenAssignments = assignments.filter((a: any) => a.contentType === WRITTEN_CONTENT_TYPE);
+  const writtenIds: string[] = writtenAssignments.map((a: any) => a.id);
   const lessonAssignmentIds: string[] = assignments.filter((a: any) => a.contentType === "lesson").map((a: any) => a.contentId);
   const asOf = options.asOf;
   const attemptWhere = { assignmentId: { in: assignmentIds }, studentId: { in: studentIds }, ...(asOf ? { createdAt: { lte: asOf } } : {}) };
 
-  const [quizzes, attempts, submissions, hints, steps, resources] = await Promise.all([
+  const [quizzes, attempts, submissions, hints, steps, resources, writtenSubs, simRuns, simMatches] = await Promise.all([
     db.quizAttempt.findMany({ where: attemptWhere, select: { id: true, studentId: true, lessonId: true, score: true, passed: true, createdAt: true } }),
     db.attempt.findMany({ where: attemptWhere, select: { id: true, studentId: true, lessonStepId: true, verdict: true, createdAt: true } }),
     testAssignments.length
@@ -69,6 +86,21 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
     lessonAssignmentIds.length ? db.lessonStep.findMany({ where: { lessonId: { in: lessonAssignmentIds } }, select: { id: true, lessonId: true } }) : Promise.resolve([]),
     testAssignments.length
       ? db.classResource.findMany({ where: { id: { in: testAssignments.map((a: any) => a.contentId) } }, select: { id: true, lessonId: true } })
+      : Promise.resolve([]),
+    writtenIds.length
+      ? db.assignmentSubmission.findMany({
+          where: { assignmentId: { in: writtenIds }, studentId: { in: approvedIds }, ...(asOf ? { submittedAt: { lte: asOf } } : {}) },
+          select: { id: true, assignmentId: true, studentId: true, submittedAt: true },
+        })
+      : Promise.resolve([]),
+    writtenIds.length
+      ? db.submissionSimilarityRun.findMany({ where: { assignmentId: { in: writtenIds }, ...(asOf ? { createdAt: { lte: asOf } } : {}) }, select: { id: true, assignmentId: true, createdAt: true } })
+      : Promise.resolve([]),
+    writtenIds.length
+      ? db.submissionSimilarityMatch.findMany({
+          where: { level: "HIGH", run: { assignmentId: { in: writtenIds }, ...(asOf ? { createdAt: { lte: asOf } } : {}) } },
+          select: { id: true, runId: true, level: true, submissionAId: true, submissionBId: true, reviews: { select: { createdAt: true } } },
+        })
       : Promise.resolve([]),
   ]);
 
@@ -94,5 +126,47 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
     const lessonId = resourceLesson.get(assignmentResource.get(s.assignmentId) ?? "") ?? null;
     push(s.studentId, { kind: "TEST", id: s.id, at: s.submittedAt, score: s.score, outcomeCodes: outcomesOf(lessonId) });
   }
-  return { members, evidenceByStudent, acknowledgements };
+
+  if (writtenIds.length) {
+    // Newest run per written assignment; a match is valid while both submissions are still the current ones of their
+    // students (both students are approved because only approved members' submissions were read). A stale run is not
+    // dropped as a whole.
+    const later = (a: any, b: any) => a.submittedAt.getTime() > b.submittedAt.getTime() || (a.submittedAt.getTime() === b.submittedAt.getTime() && a.id > b.id);
+    const current = new Map<string, any>();
+    for (const s of writtenSubs) {
+      const key = s.assignmentId + ":" + s.studentId;
+      const previous = current.get(key);
+      if (!previous || later(s, previous)) current.set(key, s);
+    }
+    const currentById = new Map<string, any>([...current.values()].map((s) => [s.id, s]));
+    const newest = new Map<string, any>();
+    for (const run of simRuns) {
+      const previous = newest.get(run.assignmentId);
+      if (!previous || run.createdAt.getTime() > previous.createdAt.getTime() || (run.createdAt.getTime() === previous.createdAt.getTime() && run.id > previous.id)) newest.set(run.assignmentId, run);
+    }
+    const newestIds = new Set<string>([...newest.values()].map((r) => r.id));
+    const runById = new Map<string, any>(simRuns.map((r: any) => [r.id, r]));
+    const titles = new Map<string, string>(writtenAssignments.map((a: any) => [a.id, a.title]));
+    for (const match of simMatches) {
+      if (!newestIds.has(match.runId)) continue;
+      const a = currentById.get(match.submissionAId);
+      const b = currentById.get(match.submissionBId);
+      const runAssignment = runById.get(match.runId).assignmentId;
+      // Both submissions must belong to the assignment of the run: a pair never crosses assignments.
+      if (!a || !b || a.studentId === b.studentId || a.assignmentId !== runAssignment || b.assignmentId !== runAssignment) continue;
+      const reviewed = match.reviews.some((r: any) => !asOf || r.createdAt.getTime() <= asOf.getTime());
+      for (const own of [a, b])
+        similarityByStudent.get(own.studentId)?.push({
+          assignmentId: own.assignmentId,
+          assignmentTitle: titles.get(own.assignmentId) ?? "",
+          submissionId: own.id,
+          submittedAt: own.submittedAt,
+          matchId: match.id,
+          runAt: runById.get(match.runId).createdAt,
+          level: match.level,
+          reviewed,
+        });
+    }
+  }
+  return { members, evidenceByStudent, similarityByStudent, acknowledgements };
 }

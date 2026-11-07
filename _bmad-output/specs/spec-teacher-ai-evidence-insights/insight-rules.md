@@ -55,7 +55,9 @@ The loader (TAI4-T2) filters and normalizes evidence; the engine receives the li
 - Each outcome code produces at most one insight. When several (K1, K2) pairs qualify, the first pair in alphabetical order of (`passingKind`, `nonPassingKind`) is used (kinds: `PRACTICAL`, `QUIZ`, `TEST`). Evidence IDs are all passing items of K1 plus all non-passing items of K2. An item linked to several outcomes counts for each.
 - Boundaries: 1 pass + 1 non-pass of the other kind → does not fire; 1 + 2 → fires; passes and failures of the same kind only → does not fire.
 
-## Second wave (not in `insights@1`; ships as `insights@2`)
+## Second wave (not in `insights@1`)
+
+Each wave is its own rule version holding only its new rules, so a released version is never edited and the fingerprints of acknowledged insights stay valid (the fingerprint contains `ruleVersion`). `SUBMISSION_SIMILARITY_HIGH` is `insights@2`; the explanation-mismatch rules of TAI4-T5 will be `insights@3`. The service runs every active version (`insights@1`, `insights@2`), and replay runs only the version stored on the acknowledgement row.
 
 | Rule | Depends on | Definition sketch | Status |
 | --- | --- | --- | --- |
@@ -63,7 +65,18 @@ The loader (TAI4-T2) filters and normalizes evidence; the engine receives the li
 | `SIMULATION_EXPLANATION_MISMATCH` | TAI-02 written explanation linked to a practical | Practical `passed` and the explanation criterion ≤ 40%, or `needs_practice` and the explanation ≥ 80% | `TEACHER_REVIEW_RECOMMENDED` |
 | `SUBMISSION_SIMILARITY_HIGH` | TAI-03 submission similarity | A match above the TAI-03 high threshold that the teacher has not yet reviewed; disappears once reviewed | `TEACHER_REVIEW_RECOMMENDED` |
 
-Second-wave rules read only official records: teacher-final grades, never `suggestedScore`. Exact thresholds are fixed in this file when `insights@2` is specified.
+Second-wave rules read only official records: teacher-final grades, never `suggestedScore`. Exact thresholds of the explanation-mismatch rules are fixed in this file when `insights@3` is specified.
+
+### SUBMISSION_SIMILARITY_HIGH — `insights@2`, status `TEACHER_REVIEW_RECOMMENDED` (TAI4-T6, PO 2026-11-07)
+
+Input: for each approved student, one fact per `HIGH` match of the newest similarity run of each written assignment, `{ assignmentId, assignmentTitle, submissionId, submittedAt, matchId, runAt, level, reviewed }`, prepared by the loader.
+
+- Only `HIGH` counts (`ELEVATED` never does). A match is `reviewed` once it has any review row (`NOTED` or `DISMISSED`) with `createdAt <= asOf`; a reviewed match is not counted, for both students of the pair.
+- The loader uses only the newest run of each written assignment. A match is valid while both of its submissions are still the latest submissions of their students and both students are approved members. A run that is `stale` is not dropped as a whole.
+- One insight per `(student, assignment)` with at least one unreviewed valid match. `evidence` is the student's own current submission (`WRITTEN`, at the submission time) plus one `SIMILARITY_MATCH` entry per unreviewed match (at the run time), so the fingerprint changes with a new run or when a pair is reviewed.
+- `values` are `assignmentId`, `assignmentTitle`, `level: "HIGH"`, `pairCount`; `thresholds` are `highContainmentPercent: 80` and `minSharedShingles: 8` (the TAI-03 `subsim@1` values). Nothing identifies the other student of a pair: no name, no student id, no submission id, no text.
+- Message (neutral): "Bài làm có nội dung trùng khá nhiều với bài của học sinh khác trong cùng bài giao. Đây là bằng chứng để giáo viên đối chiếu, không phải kết luận."
+- The pair review of TAI-03 and the per-student acknowledgement of TAI4-T3 are independent: reviewing a pair removes the insight for both students, acknowledging a card hides only that student's card.
 
 ## Insight output
 

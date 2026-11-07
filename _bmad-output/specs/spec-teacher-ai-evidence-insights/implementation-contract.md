@@ -107,3 +107,11 @@ The evidence loader issues a bounded number of queries per class: one per eviden
 - **Evidence.** QUIZ and PRACTICAL open the existing B2 detail routes and show only score or result and time. TEST has no B2 detail route: it shows kind and time and is not clickable. No backend route is added in T4.
 - **Replay.** In `all`, a handled card has "Xem lại lúc ghi nhận" calling the replay route.
 - **Verification.** Node tests for the pure view logic, the vi/en vocabulary scan and import isolation; browser verification on a temporary class after a separate PO approval of the data plan. No Playwright spec while live specs need seeded credentials.
+
+## TAI4-T6 decisions (PO, 2026-11-07)
+
+- **Versions.** `insights@1` keeps its four rules unchanged; `insights@2` holds only `SUBMISSION_SIMILARITY_HIGH`; the T5 rules will be `insights@3`. The service evaluates every active version and sorts the union by rule code then outcome code; replay evaluates only the stored `ruleVersion`, so existing acknowledgements keep their fingerprints.
+- **Rule inputs.** `InsightInput` gains optional `similarity` facts. The loader adds three queries to stage 2 (current submissions of the written assignments, their similarity runs, and `HIGH` matches with review times), only when the class has a written assignment, and `title` to the assignment query. Stage 1 and the number of sequential stages do not change, and the query count does not depend on the number of students.
+- **As-of.** Runs need `createdAt <= asOf`, submissions `submittedAt <= asOf`, and a match counts as reviewed only through a review with `createdAt <= asOf`.
+- **Evidence kinds** `WRITTEN` and `SIMILARITY_MATCH` have no B2 detail route; the UI shows their label and time only.
+- **Frontend.** The card offers "Xem xét nội dung tương đồng", which opens `?tab=work&similarity=<assignmentId>`; the assignment list opens the written tracking modal in the similarity view.

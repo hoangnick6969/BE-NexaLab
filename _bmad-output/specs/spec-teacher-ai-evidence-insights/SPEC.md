@@ -51,6 +51,7 @@ On seeded fixtures, the owner teacher of `class-pilot-a` sees `SCORE_CHANGE_UNUS
 
 - Quiz pass follows the existing schema-bound threshold of 50. A practical counts as passing only with verdict `passed`.
 - The `insights@1` thresholds in `insight-rules.md` were approved by the PO on 2026-11-06 (gate G-5).
+- Rule versions are additive: `insights@2` adds `SUBMISSION_SIMILARITY_HIGH` (TAI4-T6) and leaves `insights@1` fingerprints untouched.
 - Acknowledgement rows are append-only and keyed by fingerprint. In the `all` view an acknowledged insight carries `latestAcknowledgement`; replay reads evidence as of the first acknowledgement (TAI4-T3, 2026-11-07).
 
 ## Open Questions
