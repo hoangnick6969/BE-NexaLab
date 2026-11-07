@@ -8,6 +8,8 @@
     "start": "node dist/src/main.js",
     "pretest": "node scripts/assert-isolated-db.mjs tests",
     "test": "vitest run",
+    "pretest:auth": "node scripts/assert-isolated-db.mjs auth integration tests",
+    "test:auth": "node scripts/login-auth-integration.mjs",
     "db:generate": "prisma generate",
     "predb:migrate": "node scripts/assert-isolated-db.mjs schema migration",
     "db:migrate": "prisma migrate deploy",
