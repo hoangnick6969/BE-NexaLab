@@ -97,3 +97,13 @@ The evidence loader issues a bounded number of queries per class: one per eviden
 - **Cost.** The acknowledgement query joins stage 1 of the loader; still two stages, independent of the number of students.
 - **Audit** `insight.acknowledge` with `classId, studentId, ruleCode, ruleVersion, action` (allowlist extended with `ruleCode, ruleVersion, action`); the note is never audited.
 - **Migration** `20261107100000_tai04_insight_acknowledgement` is expand-only and idempotent; it is validated and generated but not deployed to the shared database until the PO approves.
+
+## TAI4-T4 decisions (PO, 2026-11-07)
+
+- **Placement.** A class tab "Gợi ý hỗ trợ" (`?tab=insights`) after "Theo dõi", hidden for an archived class, and a lazily loaded "insights for this student" section inside the open evidence block of the progress board. The list keeps the order the API returns; no per-student count is shown.
+- **Filter and groups.** `open` is the default, `all` also shows handled insights with "Đã ghi nhận" or "Đã ẩn" and the time. Students whose insight is `INSUFFICIENT_EVIDENCE` are listed in one collapsed group; students without insights are not listed.
+- **Card and copy.** Neutral wording per `ruleCode` in vi and en, neutral badge tones, thresholds, key values, evidence list and Acknowledge/Dismiss with an optional note (500 characters, counter). An unknown rule code shows the API `message`.
+- **Submit flow.** One `Idempotency-Key` per opened note form. `409 INSIGHT_STALE` and `409 CLASS_ARCHIVED` show a notice and reload the list; after success the card leaves the `open` list.
+- **Evidence.** QUIZ and PRACTICAL open the existing B2 detail routes and show only score or result and time. TEST has no B2 detail route: it shows kind and time and is not clickable. No backend route is added in T4.
+- **Replay.** In `all`, a handled card has "Xem lại lúc ghi nhận" calling the replay route.
+- **Verification.** Node tests for the pure view logic, the vi/en vocabulary scan and import isolation; browser verification on a temporary class after a separate PO approval of the data plan. No Playwright spec while live specs need seeded credentials.
