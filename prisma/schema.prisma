@@ -40,6 +40,10 @@ enum ClassResourceKind {
   DECK
   STUDY_QUIZ
   TEST
+  LAB
+  DOCUMENT
+  REPORT_TEMPLATE
+  LINK
 }
 
 enum ClassResourceStatus {
@@ -106,6 +110,7 @@ model User {
   children                   ParentLink[]               @relation("parent")
   assignmentTargets          AssignmentTarget[]
   assignmentSubmissions      AssignmentSubmission[]
+  classLabAdditionalResponses ClassLabAdditionalResponse[]
   notifications              Notification[]
   ebookAnnotations           EbookAnnotation[]
   labReviewAssignments       LabReviewerAuthorization[] @relation("LabReviewerAuthorizationUser")
@@ -212,6 +217,8 @@ model ClassResource {
   publishedAt DateTime?
   archivedAt  DateTime?
   practice    ClassResourcePractice[]
+  labRuns     LabRun[]
+  additionalResponses ClassLabAdditionalResponse[]
 
   @@unique([classId, kind, title, version])
   @@index([classId, status, kind, createdAt])
@@ -230,6 +237,32 @@ model ClassResourcePractice {
 
   @@unique([resourceId, studentId])
   @@index([studentId, updatedAt])
+}
+
+/// Immutable student text response attempts for teacher-authored Class Lab prompts.
+model ClassLabAdditionalResponse {
+  id              String        @id @default(cuid())
+  resourceId      String
+  resource        ClassResource @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  assignmentId    String?
+  assignment      Assignment?   @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  studentId       String
+  student         User          @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  resourceVersion Int
+  promptSnapshot  Json
+  answers         Json
+  attempt         Int
+  idempotencyKey  String?
+  score           Int?
+  feedback        String?
+  gradedById      String?
+  gradedAt        DateTime?
+  submittedAt     DateTime      @default(now())
+
+  @@index([studentId, idempotencyKey])
+  @@index([resourceId, assignmentId, studentId, attempt])
+  @@index([resourceId, assignmentId, submittedAt])
+  @@index([studentId, submittedAt])
 }
 
 model Enrollment {
@@ -682,6 +715,7 @@ model Assignment {
   /// Null for legacy assignments; never backfilled from current active versions.
   labExecution         Json?
   labExecutionDigest   String?
+  classLabSnapshot     Json?
   status               String                       @default("ACTIVE")
   createdById          String?
   archivedAt           DateTime?
@@ -691,6 +725,7 @@ model Assignment {
   deadlineRevisions    AssignmentDeadlineRevision[]
   submissions          AssignmentSubmission[]
   stepProgress         StepProgress[]
+  classLabAdditionalResponses ClassLabAdditionalResponse[]
   insightDisagreements HintInsightDisagreement[]
 
   @@index([classId, status, dueDate])
@@ -805,6 +840,9 @@ model LabRun {
   labId            String
   challengeId      String
   assignmentId     String?
+  resourceId       String?
+  resource         ClassResource? @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  classLabSnapshot Json?
   context          String
   execution        Json
   executionDigest  String
@@ -819,6 +857,7 @@ model LabRun {
 
   @@index([studentId, createdAt])
   @@index([labId, revokedAt])
+  @@index([resourceId])
 }
 
 /// Ordered server evidence for activities that require a prediction before observation.

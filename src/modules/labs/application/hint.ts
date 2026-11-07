@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, HttpExcepti
 import { applicableAssignmentWhere } from "../../classes/application/class-access";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
 import { buildContext } from "./tutor";
+import { assertClassPracticeRun } from "../../classes/application/class-lab-resource";
 import {
   CHECKPOINT_HINT_CATALOGS, CheckpointHintInputError, evaluateOneCheckpoint, hasCheckpointHints, hasRunHints, hasRunReflections, planCheckpointHint, planRunHint, runHintSteps,
   type PreviousCheckpointHint, type PreviousRunHint, type RunHintMoment,
@@ -22,7 +23,11 @@ export function providerDelayMs(env: NodeJS.ProcessEnv = process.env) {
 }
 
 /** Authorization that must still hold when the provider returns. */
-async function assertStillAuthorized(db: any, actor: Actor, attempt: { id: string; assignmentId: string | null }) {
+async function assertStillAuthorized(db: any, actor: Actor, attempt: { id: string; assignmentId: string | null; labRunId?: string | null }) {
+  if (attempt.labRunId) {
+    const run = await db.labRun.findUnique({ where: { id: attempt.labRunId } });
+    if (run?.context === "CLASS_PRACTICE") await assertClassPracticeRun(db, run, actor.sub);
+  }
   const session = await db.session.findFirst({
     where: { id: actor.sid, userId: actor.sub, kind: "refresh", expiresAt: { gt: new Date() } },
     select: { user: { select: { status: true, role: true } } },
@@ -51,6 +56,7 @@ export async function requestHint(db: any, actor: Actor, attemptId: string, prov
     include: { challenge: true, hints: true },
   });
   if (!attempt) throw new NotFoundException();
+  await assertStillAuthorized(db, actor, attempt);
   const rubricRef = attempt.labRunId
     ? ((await db.labRun.findUnique({ where: { id: attempt.labRunId }, select: { execution: true } }))?.execution as any)?.rubricRef
     : null;

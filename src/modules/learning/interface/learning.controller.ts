@@ -32,7 +32,7 @@ export class LearningController {
   private async applicableAssignment(id: string, studentId: string) {
     const assignment = await this.db.assignment.findFirst({
       where: { id, ...applicableAssignmentWhere(studentId) },
-      include: { classroom: { select: { id: true, name: true, grade: true } } },
+      include: { classroom: { select: { id: true, name: true, grade: true, teacher: { select: { fullName: true, username: true } } } } },
     });
     if (!assignment)
       throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
@@ -627,7 +627,7 @@ export class LearningController {
     const now = new Date();
     const rows = await this.db.assignment.findMany({
       where: applicableAssignmentWhere(req.user.sub),
-      include: { classroom: { select: { id: true, name: true } } },
+      include: { classroom: { select: { id: true, name: true, teacher: { select: { fullName: true, username: true } } } } },
       orderBy: assignmentQueueOrder,
     });
     // Load each content type in one bounded query. The same rows power the
@@ -734,7 +734,9 @@ export class LearningController {
       id: a.id,
       title: a.title,
       contentType: a.contentType,
+      classLabSnapshot: a.classLabSnapshot ?? null,
       dueDate: a.dueDate,
+      createdAt: a.createdAt,
       overdue: isOverdue(a.dueDate),
       classroom: a.classroom,
       contentState: state,

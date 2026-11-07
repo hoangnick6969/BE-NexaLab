@@ -11,6 +11,7 @@ const sourcePdf = {
 describe("canReadVersion source PDFs", () => {
   it("allows a student only when a released public lesson declares the exact source digest", async () => {
     const db = {
+      classResource: { findFirst: vi.fn().mockResolvedValue(null) },
       assetVersion: { count: vi.fn().mockResolvedValue(1) },
       $queryRaw: vi.fn().mockResolvedValueOnce([{ "?column?": 1 }]),
     };
@@ -21,6 +22,7 @@ describe("canReadVersion source PDFs", () => {
 
   it("fails closed when no released lesson declares the digest", async () => {
     const db = {
+      classResource: { findFirst: vi.fn().mockResolvedValue(null) },
       assetVersion: { count: vi.fn().mockResolvedValue(1) },
       $queryRaw: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]),
     };
@@ -28,7 +30,7 @@ describe("canReadVersion source PDFs", () => {
   });
 
   it("denies duplicate digest assets and does not run the lesson authorization query", async () => {
-    const db = { assetVersion: { count: vi.fn().mockResolvedValue(2) }, $queryRaw: vi.fn() };
+    const db = { classResource: { findFirst: vi.fn().mockResolvedValue(null) }, assetVersion: { count: vi.fn().mockResolvedValue(2) }, $queryRaw: vi.fn() };
     await expect(canReadVersion(db, { sub: "student-1", role: "STUDENT" }, sourcePdf)).resolves.toBe(false);
     expect(db.$queryRaw).not.toHaveBeenCalled();
   });

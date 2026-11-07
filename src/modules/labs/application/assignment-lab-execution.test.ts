@@ -11,6 +11,17 @@ vi.mock("../../progress/application/progress-projection", () => ({
 }));
 
 describe("legacy Circuit assignment model compatibility", () => {
+  it("acquires both Lab locks before resolving a private resource after a quarantine wait", async () => {
+    const order: string[] = [];
+    const tx: any = {
+      $executeRawUnsafe: vi.fn(async (_sql: string, key: string) => { order.push(key); }),
+      classResource: { findFirst: vi.fn(async () => { order.push("resolve-source"); return null; }) },
+    };
+    const controller = new LabsController({ $transaction: (work: any) => work(tx) } as any, {} as any, {} as any);
+    await expect(controller.launchRun("circuit", { user: { sub: "student" } }, { resourceId: "resource", challengeId: "circuit_001" })).rejects.toThrow();
+    expect(order).toEqual(["nexalab:sim-version:circuit", "nexalab:sim-pack-lab:circuit", "resolve-source"]);
+    expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(2);
+  });
   it("does not attach open Circuit library practice to an implicit legacy LED assignment", async () => {
     const tx: any = {
       challenge: { findUnique: vi.fn().mockResolvedValue({ id: "circuit_001", labId: "circuit", lab: { status: "published", scope: "SHARED_LIBRARY", releaseCleared: true, synthetic: false, topicCode: "KHTN8-L22" } }) },
