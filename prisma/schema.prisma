@@ -117,6 +117,8 @@ model User {
   ebookAnnotations           EbookAnnotation[]
   labReviewAssignments       LabReviewerAuthorization[] @relation("LabReviewerAuthorizationUser")
   labReleaseReviews          LabReleaseReview[]         @relation("LabReleaseReviewer")
+  /// TAI-04 (TAI4-T3): acknowledgements that concern this student as the subject (cascade on user deletion).
+  insightAcknowledgements    InsightAcknowledgement[]
 }
 
 model Session {
@@ -198,6 +200,8 @@ model Classroom {
   enrollments       Enrollment[]
   assignments       Assignment[]
   resources         ClassResource[]
+  /// TAI-04 (TAI4-T3): teacher responses to insights of this class (cascade on class deletion).
+  insightAcknowledgements InsightAcknowledgement[]
 
   @@index([teacherId, status])
 }
@@ -1554,4 +1558,32 @@ model QuestionFingerprint {
   @@unique([sourceKind, sourceId, sourceVersion, itemId, algorithm])
   @@index([ownerTeacherId, normalizedHash])
   @@index([sourceKind, normalizedHash])
+}
+
+enum InsightAckAction {
+  ACKNOWLEDGED
+  DISMISSED
+}
+
+/// TAI-04 (TAI4-T3): append-only teacher response to one insight fingerprint. Insights themselves are never stored.
+/// The latest row per fingerprint is current; rows are never updated or deleted by the application.
+model InsightAcknowledgement {
+  id          String           @id @default(cuid())
+  classId     String
+  classroom   Classroom        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fingerprint String
+  ruleVersion String
+  ruleCode    String
+  /// Sorted evidence ids, kept for replay.
+  evidenceIds Json
+  action      InsightAckAction
+  /// At most 500 characters, teacher-only, never audited.
+  note        String?
+  actorId     String
+  createdAt   DateTime         @default(now())
+
+  @@index([classId, studentId, createdAt])
+  @@index([fingerprint, createdAt])
 }

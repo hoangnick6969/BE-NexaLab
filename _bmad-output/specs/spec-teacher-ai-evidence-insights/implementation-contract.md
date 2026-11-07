@@ -13,7 +13,9 @@ enum InsightAckAction { ACKNOWLEDGED DISMISSED }
 model InsightAcknowledgement {
   id          String           @id @default(cuid())
   classId     String
+  classroom   Classroom        @relation(fields: [classId], references: [id], onDelete: Cascade)
   studentId   String
+  student     User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
   fingerprint String
   ruleVersion String
   ruleCode    String
@@ -29,7 +31,7 @@ model InsightAcknowledgement {
 ```
 
 - The latest row per fingerprint is current. A later `ACKNOWLEDGED` after `DISMISSED` reopens nothing. Open means no row exists.
-- Rows are never updated or deleted, and they cascade only through class deletion.
+- Rows are never updated or deleted, and they cascade only through class deletion or deletion of the student. `classId` references `Classroom` and `studentId` references `User`, both `onDelete: Cascade`; `actorId` is a plain string. Append-only is enforced in code, not by a trigger.
 
 ## HTTP contract
 
@@ -52,6 +54,7 @@ All routes use `@Roles("TEACHER")` and the existing owned-class check. A missing
 | 400 | `IDEMPOTENCY_KEY_REQUIRED` | Acknowledgement without key |
 | 403 | `CLASS_ACCESS_DENIED` | Missing or not-owned class |
 | 404 | `NOT_FOUND` | Student or fingerprint not visible inside an owned class |
+| 409 | `CLASS_ARCHIVED` | Acknowledgement in an archived class (checked before the fingerprint) |
 | 409 | `INSIGHT_STALE` | Fingerprint no longer computed (new evidence changed it) |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | Existing helper |
 
@@ -83,3 +86,14 @@ The evidence loader issues a bounded number of queries per class: one per eviden
 - **Visibility flag.** `INSIGHTS_SHOW_SUDDEN_UNAIDED_PASS` (`true` or `false`, default `false`, any other value stops boot) is parsed by `parseInsightsConfig` and applied by the service through `applyPatternVisibility`.
 - **Loader cost.** At most two sequential stages of parallel queries (plus one lesson lookup only if a lesson is not already known), independent of the number of students. Measured in memory for 40 students × 6 steps; shared-database latency is not measured in T2.
 
+## TAI4-T3 decisions (PO, 2026-11-07)
+
+- **Repeated acknowledgement.** The same fingerprint may be acknowledged again with a different `Idempotency-Key`; each call appends one row and the newest row is current. There is no route to reopen an insight; it reopens only when new evidence produces a new fingerprint.
+- **`status=open`** drops every insight whose fingerprint has at least one row, and the student route returns `acknowledgements: []`. **`status=all`** returns every insight with `latestAcknowledgement: { action, createdAt } | null`, and the student route returns all rows of the fingerprints in the response, newest first (fields `id, fingerprint, ruleVersion, ruleCode, action, note, createdAt`, no `actorId`).
+- **POST checks, in order:** class owner (403), archived class (409 `CLASS_ARCHIVED`), `Idempotency-Key` present (400 `IDEMPOTENCY_KEY_REQUIRED`), strict body and 64-hex fingerprint (400 `VALIDATION_FAILED`), approved student (404 `NOT_FOUND`), then inside the idempotent callback the fingerprint must be in the student's current set after `applyPatternVisibility` (409 `INSIGHT_STALE`). A replayed key returns the stored row even if the insight has since changed.
+- **Body** `{ action: "ACKNOWLEDGED" | "DISMISSED", note? }`, strict; `note` is trimmed and NFC-normalized, at most 500 characters, empty becomes `null`. The 201 body is the row without `actorId`.
+- **Replay** uses the earliest row of `(classId, studentId, fingerprint)` as the instant. No row, an unknown `ruleVersion` or a fingerprint that is not reproduced returns 404 `NOT_FOUND`. The current pattern visibility flag applies as on the GET routes.
+- **As-of evidence.** The loader takes `asOf` and keeps only evidence with `at <= asOf`, late-submission decisions with `createdAt <= asOf` (a later decision counts as absent) and hint levels from `HintLog.createdAt <= asOf`.
+- **Cost.** The acknowledgement query joins stage 1 of the loader; still two stages, independent of the number of students.
+- **Audit** `insight.acknowledge` with `classId, studentId, ruleCode, ruleVersion, action` (allowlist extended with `ruleCode, ruleVersion, action`); the note is never audited.
+- **Migration** `20261107100000_tai04_insight_acknowledgement` is expand-only and idempotent; it is validated and generated but not deployed to the shared database until the PO approves.
