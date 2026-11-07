@@ -194,8 +194,8 @@ development_status:
   tai-03-t6-e2e-journey-negatives: done
   epic-tai-04-evidence-insights: in-progress
   tai-04-t1-insight-rule-engine-v1: done
-  tai-04-t2-evidence-loader-read-routes: backlog
-  tai-04-t3-acknowledgements-replay: backlog
+  tai-04-t2-evidence-loader-read-routes: done
+  tai-04-t3-acknowledgements-replay: ready-for-dev
   tai-04-t4-teacher-insight-ux: backlog
   tai-04-t5-explanation-mismatch-rules-v2: backlog
   tai-04-t6-similarity-backed-insight: backlog
@@ -389,7 +389,8 @@ teacher_ai_tracking:
     - 'tai-02-t7-e2e-journey-negatives (backlog; waits for TAI2-T6)'
     - 'tai-01-t6-golden-evaluation-e2e (backlog; waits for G-6 live provider approval)'
     - 'tai-04-t1-insight-rule-engine-v1 (done 2026-11-06; G-5 closed)'
-    - 'tai-04-t2..t4, t6, t7 (backlog; unblocked in order t2, t3, t4, t6, t7; t5 waits for G-2)'
+    - 'tai-04-t3-acknowledgements-replay (ready-for-dev; T2 done 2026-11-07)'
+    - 'tai-04-t4, t6, t7 (backlog; unblocked in order t4, t6, t7; t5 waits for G-2)'
   story_notes:
     tai-01-t0-activate-fr21-scope:
       status: done
@@ -458,6 +459,10 @@ teacher_ai_tracking:
       date: '2026-11-06'
       evidence: 'src/modules/reports/application/insights/ (types, messages, fingerprint, rules, index): pure insights@1 engine for INSUFFICIENT_EVIDENCE, SCORE_CHANGE_UNUSUAL, HIGH_HINT_DEPENDENCE (+ SUDDEN_UNAIDED_PASS) and OBJECTIVE_MASTERY_INCONSISTENT, sha256 fingerprint (outcomeCode added for the mastery rule only), fixed neutral Vietnamese templates, registry engineFor(ruleVersion) and applyPatternVisibility(insights, show). 33 tests in insights.test.ts cover every boundary fixture of insight-rules.md, ordering and tie-breakers, float tolerance 1e-9, hidden-pattern downgrade/drop, fingerprint stability and the forbidden-vocabulary scan. tsc, check:layers pass; full vitest 752 passed (719 + 33), the same 4 unrelated failures (errors.test.ts x2, health.controller.test.ts x2). insight-rules.md updated: AUTO-only TEST evidence, tie-breakers, pattern without base rule, fingerprint outcomeCode, pilot visibility flag. No schema, route or config change; the INSIGHTS_SHOW_SUDDEN_UNAIDED_PASS flag is read in TAI4-T2. PO approved 2026-11-06, including baseRuleMet handling.'
       decision: 'The pattern can hold without the base rule (n >= 5 practicals), so the engine emits one HIGH_HINT_DEPENDENCE with values.baseRuleMet; hiding the pattern downgrades when baseRuleMet = 1 and drops the insight when 0. This corrects the earlier claim that the pattern always implies the base rule.'
+    tai-04-t2-evidence-loader-read-routes:
+      status: done
+      date: '2026-11-07'
+      evidence: 'src/modules/reports/application/insights: insights-config.ts (parseInsightsConfig for INSIGHTS_SHOW_SUDDEN_UNAIDED_PASS, default false, invalid value stops boot; added to .env.example), insights-loader.ts (stage 1: enrollments and class assignments in parallel; stage 2: quiz attempts, practical attempts, auto-scored TEST rows, hint max by groupBy, lesson steps and test resources in parallel; one lesson lookup; same query list for 3 or 40 students), insights.service.ts (ownedClass, engine, applyPatternVisibility, ordering by display name then id, archived class returns classArchived true with empty insights and loads no evidence). insights.controller.ts: GET classes/:classId/insights and GET classes/:classId/students/:studentId/insights, TEACHER only, 403 CLASS_ACCESS_DENIED, 404 NOT_FOUND, status=open|all validated (both identical until T3, acknowledgements []). Registered in ReportsModule. No schema or migration change; no write, no audit row except the existing class denial audit. 24 new tests in insights-read.test.ts; in-memory benchmark 40 students x 6 steps p95 about 7 ms (budget 500 ms; shared-database latency not measured). tsc and check:layers pass; route manifest 215 -> 217 (the two insights GET routes); full vitest 776 passed with the same 4 unrelated failures. PO approved 2026-11-07 (two-stage loader, archived class lists students with empty insights).'
     tai-03-t6-e2e-journey-negatives:
       status: done
       date: '2026-11-06'

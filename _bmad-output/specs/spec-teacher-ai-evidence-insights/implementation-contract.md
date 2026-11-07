@@ -70,3 +70,16 @@ The evidence loader issues a bounded number of queries per class: one per eviden
 ## Frontend contract
 
 `FE-NexaLab/src/features/classes/` teacher evidence board gains an "Insights" tab and a per-student section in the evidence sheet. Each card shows the message, status chip (neutral colors only; no red/green), thresholds, evidence links into the existing B2 sheet, and Acknowledge/Dismiss with an optional note. Empty, loading, error and `NEEDS_MORE_EVIDENCE` states are explicit. The student and parent apps have no route or component for insights.
+
+## TAI4-T2 decisions (PO, 2026-11-06)
+
+- **No schema change in T2.** `status=open|all` both return the full computed list and `acknowledgements` is `[]` until TAI4-T3 adds `InsightAcknowledgement` and filters `open`.
+- **Evidence scope.** Every assignment of the class counts, including `ARCHIVED` ones (results are immutable evidence). Only students whose enrollment is `approved` are listed and counted. Rows with a null `assignmentId` (free practice) and other classes never count.
+- **TEST rows.** Every `AssignmentSubmission` with `gradingMode=AUTO` and a non-null `score` is one evidence item (resubmissions included, like each `QuizAttempt`). Rows whose status is `LATE_REVIEW_PENDING` or `REJECTED_ZERO` are dropped; `SCORED` and `ACCEPTED_BY_EXTENSION` count.
+- **Outcome codes.** QUIZ through `QuizAttempt.lessonId`; PRACTICAL through `lessonStepId` → `LessonStep.lessonId`; TEST through `Assignment.contentId` → `ClassResource.lessonId`. All read `Lesson.outcomeCodes`.
+- **Students without evidence** stay in the list with `INSUFFICIENT_EVIDENCE` (fewer than 3 scored items); collapsing that group is a T4 concern.
+- **Archived class.** Approved students are listed with `insights: []` and `classArchived: true`; no evidence is loaded. The per-student route returns `insights: []` and `classArchived: true`.
+- **Denial.** `@Roles("TEACHER")`; `ownedClass` returns 403 `CLASS_ACCESS_DENIED` for a missing or not-owned class; a student who is not an approved member returns 404 `NOT_FOUND`. B2's older evidence routes keep their `EVIDENCE_NOT_FOUND` code.
+- **Visibility flag.** `INSIGHTS_SHOW_SUDDEN_UNAIDED_PASS` (`true` or `false`, default `false`, any other value stops boot) is parsed by `parseInsightsConfig` and applied by the service through `applyPatternVisibility`.
+- **Loader cost.** At most two sequential stages of parallel queries (plus one lesson lookup only if a lesson is not already known), independent of the number of students. Measured in memory for 40 students × 6 steps; shared-database latency is not measured in T2.
+
