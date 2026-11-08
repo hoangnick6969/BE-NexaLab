@@ -24,7 +24,7 @@ export function studentHintPromptDigest() {
   return createHash("sha256").update(STUDENT_HINT_PROMPT_VERSION + "\n" + STUDENT_HINT_SYSTEM_PROMPT).digest("hex");
 }
 
-export type HintSurface = "lab-legacy" | "lab-checkpoint" | "lab-run" | "lesson-quiz" | "basic-exercise" | "verdict-explanation";
+export type HintSurface = "lab-legacy" | "lab-checkpoint" | "lab-run" | "lesson-quiz" | "basic-exercise" | "verdict-explanation" | "what-if";
 
 /** The exact provider payload. A unit test asserts its keys; it never carries a user, class, attempt, key or draft. */
 export type HintPayload = {

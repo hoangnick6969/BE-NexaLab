@@ -81,3 +81,8 @@ SAI-03-T3 section of `../specs/spec-student-ai-lesson-hints/SPEC.md`. B5 (free-t
 AD-18, spine Deferred, FE Student P0 UX). SAI-01 T1–T5 built on `research/student-ai` with the provider path off
 by default (fake adapter in tests only); T6 review set `../specs/spec-student-ai-tutor/hint-review-set.md` waits for
 the lecturer. Migration `20261108090000_sai01_hint_provenance` must be applied to shared development by the owner.
+
+2026-11-08 (later): owner decision "bỏ Human Rule Base mà sử dụng LLM" → LLM chính, luật dự phòng, for Lab hints,
+quiz/exercise hints, B2/B3 explanations and the SAI-04 tutor chat, enabled only in dev/test until SG-2 (and SG-4 for
+the chat). See `../specs/spec-student-ai-llm/SPEC.md`. Migrations to apply to shared development by the owner:
+`20261108090000_sai01_hint_provenance`, `20261108120000_sai04_tutor_conversation`.
