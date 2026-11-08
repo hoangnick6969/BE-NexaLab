@@ -177,7 +177,7 @@ flowchart LR
 - Paid Supabase plan, final region, production RPO/RTO, and backup/PITR policy must be selected before pilot launch and verified by restore rehearsal.
 - Teacher, Parent, and Admin screen architecture waits for their increments; shared identity and ownership invariants do not.
 - Exact R2 bucket names, signed-URL TTLs, media size limits, connector schedules, and source-specific parsers are epic/spec configuration under AD-13 rather than initiative-level architecture decisions.
-- AI-generated Class Space content is deferred to a later sprint. Provider, prompt/output schema, safety/evaluation, failure/fallback behavior, and AI-generated content UX are outside this change. The general-purpose AI assistant and student tutor remain future capabilities.
+- AI-generated Class Space content is deferred to a later sprint. Provider, prompt/output schema, safety/evaluation, failure/fallback behavior, and AI-generated content UX are outside this change. The general-purpose AI assistant remains a future capability. Student hints are no longer deferred: see AD-18 (increment SAI, PO approval 2026-11-08); free-text tutoring (SAI-04) stays deferred behind gates SG-2 and SG-4.
 - Full Teacher and Parent product UX remain deferred; only the assignment lifecycle surfaces for Teacher and explicitly linked/approved Parent are included in this change.
 
 
@@ -186,6 +186,12 @@ flowchart LR
 - **Binds:** FR-11, FR-13, FR-17, FR-24
 - **Prevents:** partial/unvalidated imports, mutable attempt history, deadline changes that silently alter recipients, and custom-Lab access through guessed IDs or stale links.
 - **Rule:** direct authoring and validated structured-file import create teacher-owned drafts; file import is limited to decks, study quizzes, and tests, with confirmation persisting atomically. Lab creation uses a separate guided 3D authoring workflow, not generic file import. Assigned-test deadlines and late decisions are server-authoritative. Rejection records zero for the late submission; expiry without submission does not auto-score zero. Approval revises the due date of the same assignment for all its assigned recipients in its owning Class Space and records an immutable deadline revision. Every custom-Lab operation checks active, approved membership in the owning class; scored writes additionally check the assignment target snapshot. Details live in `../../specs/spec-open-learning-catalog/class-space-assignment-contract.md`. AI generation is excluded from this delivery.
+
+### AD-18 — Student AI is an advisory, versioned hint layer
+
+- **Binds:** FR-22, BR-06, BR-09, BR-11, BR-13 (SRS UC-AI-01..04, 08, 09)
+- **Prevents:** AI changing official results, hints that skip levels without a real retry, untraceable or unreplayable hint text, student data sent to a provider that trains on it, and misconception labels shown to students or parents.
+- **Rule:** hint code writes only `HintLog` (and the existing `lastHintLevel` projection); it never writes verdict, score, simulation result, assignment status or progress. Every hint is built from versioned rules (`tutor-rules@n`, `checkpoint-hints@n`, `lesson-hints@n`) and logs its rule version, decision inputs and provider, so the rule part can be replayed. Levels follow Question → Concept → Action → Explanation and rise only after a changed answer. A provider may only prepend one guarded Socratic question at levels 3–4, behind the `STUDENT_AI_LLM_ENABLED` kill switch, with an allowlisted payload, a per-student budget and a cache keyed without student data; it stays off in production until gate SG-2 closes. Students never receive free-text answers (SAI-04 is deferred). Misconception hypotheses are teacher-only; parents see hint counts only. Specs: `../../specs/spec-student-ai-tutor/`, `spec-student-ai-checkpoint-hints/`, `spec-student-ai-lesson-hints/`, `spec-student-ai-teacher-insight/`, `spec-student-ai-what-if/`.
 
 ### AD-16 — Cross-role assignment status and notifications
 

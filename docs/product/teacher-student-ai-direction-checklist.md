@@ -134,6 +134,7 @@ Hai track có thể chạy song song:
 | Phần | Phạm vi | Spec |
 | --- | --- | --- |
 | Gợi ý từng bước (mức 1–4, chỉ tăng sau khi thật sự làm lại) | 11 Foundational Lab: sau khi nộp; trong lúc làm mức 1–2 | `spec-student-ai-checkpoint-hints` |
+| Gợi ý Lab cũ (mạch điện, hoá học, mắt) theo `tutor-rules@1`; AI chỉ thêm một câu hỏi ở mức 3–4 khi bật công tắc (mặc định tắt, chờ SG-2) | Lab mạch điện, hoá học, mắt | `spec-student-ai-tutor` |
 | Giải thích vì sao đạt/chưa đạt (B2) | 11 Foundational Lab | `spec-student-ai-checkpoint-hints` |
 | Nhận diện lỗi hiểu sai (B8) | 11 Foundational Lab | `spec-student-ai-checkpoint-hints` |
 | Gợi ý câu hỏi quiz bài học, không đọc đáp án (SAI-03A) | Quiz trong bài học được giao; bài tập luyện tập của bài học mở (SAI-03-T3) | `spec-student-ai-lesson-hints` |

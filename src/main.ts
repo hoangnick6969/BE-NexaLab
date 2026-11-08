@@ -8,6 +8,7 @@ import express from "express";
 import { AppModule } from "./app.module";
 import { Errors } from "./common/errors";
 import { quizOpenApiSchemas } from "./modules/learning/interface/quiz-contract";
+import { labHintOpenApiSchemas } from "./modules/labs/interface/hint-contract";
 async function bootstrap() {
   if (
     !process.env.JWT_SECRET ||
@@ -52,6 +53,7 @@ async function bootstrap() {
   spec.components.schemas = {
     ...spec.components.schemas,
     ...quizOpenApiSchemas,
+    ...labHintOpenApiSchemas,
   };
   SwaggerModule.setup("api/docs", app, spec);
   await app.listen(

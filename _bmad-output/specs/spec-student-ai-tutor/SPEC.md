@@ -1,6 +1,6 @@
 ---
 id: SPEC-student-ai-tutor
-status: draft-awaiting-sai-t0-scope-approval
+status: in-progress
 companions:
   - implementation-contract.md
   - hint-rules.md
@@ -63,8 +63,43 @@ On `class-pilot-a`, `student.active` builds an open circuit in `circuit_001` and
 - The current Anthropic adapter is kept as the first real adapter behind the new provider port. The model id stays in `ANTHROPIC_MODEL` (no default in code).
 - One hint per attempt remains the unit. "Still don't get it" in UC-AI-03 maps to "run again, then ask again".
 
-## Open Questions
+## Decisions (SAI-T0, product owner 2026-11-08: "Tôi duyệt tiếp tục làm đi")
 
-- PRD §10 item 17 and the ARCHITECTURE-SPINE Deferred section treat AI as future work. FE `08-STUDENT-P0-UX-DEFINITION.md` says no hint UI in Student P0, yet `Lab.tsx` already shows "Nhận gợi ý". Does the PO approve activating FR-22 as increment SAI (SAI-T0)? Should the rules-only hint button stay visible in P0, or move behind `VITE_STUDENT_HINTS_ENABLED`?
-- Should a `passed` attempt really refuse hints (SRS pre-condition), or return a level-4 reflection, which is what today's `SAFE` templates do?
-- Which provider tier and legal basis (NFR-07, Decree 13/2023/NĐ-CP for minors) does the PO approve for gate SG-2?
+- FR-22 is active as increment SAI for legacy Lab hints too (PRD §10.17 amended, AD-18 added, spine Deferred and FE `08-STUDENT-P0-UX-DEFINITION.md` reconciled).
+- The rules-only hint button stays visible in-context (no `VITE_STUDENT_HINTS_ENABLED` flag); no AI entry in navigation or dashboard.
+- A `passed` attempt refuses hints with `409 HINT_NOT_NEEDED` (same as SAI-01A D2); `SAFE` is not a hint key.
+- SG-2 stays open: `STUDENT_AI_LLM_ENABLED` defaults to `false`; the provider path is built and tested with the fake adapter only.
+
+## Implementation (2026-11-08, branch `research/student-ai`)
+
+T0–T5 built; T6 template review set ready for the lecturer. Code: `labs/application/tutor-rules.ts` (`tutor-rules@1`),
+`tutor-provider.ts` (`tutor-observation@1`, guard, payload, budget/cache resolution), `hint.ts` (`requestHint`),
+`labs/infrastructure/llm.ts` (anthropic + fake adapters), `labs/interface/hint-contract.ts`, migration
+`20261108090000_sai01_hint_provenance` (expand-only: HintLog provenance columns, `HintObservationCache`). FE:
+`features/labs/runtime/LegacyHintPanel.tsx`.
+
+Choices made while building (within the contract):
+- Chemistry pH runs (`experiment: "ph"`) get their own key `CHEMISTRY_PH`; before, they fell through to the eye templates.
+- `retryAfterSeconds` travels in the error envelope's `details` (`{ code: "HINT_RATE_LIMITED", details: { retryAfterSeconds } }`),
+  because the API error envelope only carries `code`, `message` and `details`.
+- The 10-minute window counts this route's `tutor-rules@*` hints; checkpoint hints (SAI-01A) keep their own guards.
+- The provider budget counts rows that reached the model (`model` set, `provider` not `cache`), so a guarded or failed
+  call also uses budget.
+- `STUDENT_AI_PROVIDER` (`anthropic` default, `fake` only with `APP_ENV` development/test) chooses the adapter; the
+  controller builds it at boot, so a fake adapter in production fails the boot.
+- At level 4 a changed state cannot climb further: same level, next variant, `escalated: false`.
+- The FE shows "same level" copy only when the previous hint in this session had the same level (the API has no repeat flag).
+
+Verification: BE Vitest 623 passed (isolated PostgreSQL), incl. `tutor-rules.test.ts` (pinned digest, every engine
+status, escalation, normalisation), `tutor-provider.test.ts` (payload keys, each guard rule, adapter 429/5xx/parse/
+timeout, kill switch, budget, cache), `hint.test.ts` (B0P-T4 boundary, contract fixture) and
+`tutor-hints.integration.test.ts` 3/3 (ladder, cache across students with zero provider calls, kill switch, guard,
+window 8/9 with `retryAfterSeconds` across two Prisma clients, budget fallback, teacher/parent read shapes).
+`scripts/integration.mjs` 102/102 against an isolated API (`nexalab_sai01`, fake provider) incl. the OpenAPI fixture
+`docs/contracts/student-lab-hint-v1.json`. FE `legacy-lab-hints.spec.ts` 2/2 (mocked, axe on the panel) and
+`legacy-hints-journey-live.spec.ts` 1/1 — the success signal on the real isolated stack (open circuit → level 1;
+same run → level 1 b with the same-level copy; overload → 2; changed resistor → 3 with the fake observation and AI
+chip; → 4 with 350 Ω; 470 Ω passes and no hint is offered).
+
+Not done: the lecturer's marks on `hint-review-set.md`; the 40 real-provider observations (SG-2 open); applying the
+migration to shared development (owner).

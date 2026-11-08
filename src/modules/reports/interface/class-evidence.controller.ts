@@ -128,7 +128,7 @@ export class ClassEvidenceController {
   @Get("classes/:classId/students/:studentId/attempts/:attemptId")
   async practical(@Param("classId") classId: string, @Param("studentId") studentId: string, @Param("attemptId") attemptId: string, @Req() req: any) {
     await this.authorizedStudent(classId, studentId, req.user);
-    const row = await this.db.attempt.findFirst({ where: { id: attemptId, studentId }, include: { hints: true } });
+    const row = await this.db.attempt.findFirst({ where: { id: attemptId, studentId }, include: { hints: { select: { id: true, level: true, content: true, provider: true, escalated: true, createdAt: true }, orderBy: { createdAt: "asc" } } } });
     const assignment = row?.assignmentId ? await this.db.assignment.findFirst({ where: { id: row.assignmentId, classId, targets: { some: { studentId } } } }) : null;
     if (!row || !assignment) throw notFound();
     return row;

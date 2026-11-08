@@ -884,11 +884,35 @@ model HintLog {
   contextSnapshot Json
   triggeredBy     String      @default("student")
   createdAt       DateTime    @default(now())
+  /// SAI-01 provenance (legacy Lab hints). Null on older rows; readers treat a null ruleVersion as legacy.
+  contextDigest   String?
+  labDigest       String?
+  ruleVersion     String?
+  promptVersion   String?
+  /// rules | rules-fallback | anthropic | fake | cache
+  provider        String?
+  model           String?
+  fallbackReason  String?
+  escalated       Boolean?
+  variant         String?
 
   @@unique([attemptId, level])
   @@index([labRunId, createdAt])
   @@index([studentId, lessonStepId, createdAt])
   @@index([lessonStepId])
+  @@index([createdAt])
+}
+
+/// SAI-01: validated provider observations only. No student data in key or value.
+model HintObservationCache {
+  key           String   @id
+  observation   String
+  promptVersion String
+  model         String
+  createdAt     DateTime @default(now())
+  expiresAt     DateTime
+
+  @@index([expiresAt])
 }
 
 model Progress {

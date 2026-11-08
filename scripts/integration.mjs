@@ -58,7 +58,13 @@ function schemaHasProperty(schema, name) {
   );
 }
 async function verifyQuizContract() {
-  const contract = JSON.parse(await readFile(resolve("docs/contracts/student-quiz-v1.json"), "utf8"));
+  const document = await verifyContract("docs/contracts/student-quiz-v1.json");
+  // SAI-01 T4: legacy Lab hint and tutor status.
+  await verifyContract("docs/contracts/student-lab-hint-v1.json");
+  return document;
+}
+async function verifyContract(file) {
+  const contract = JSON.parse(await readFile(resolve(file), "utf8"));
   const response = await fetch(origin + "/docs-json");
   assert.equal(response.status, 200, "OpenAPI JSON is available");
   const document = await response.json();
@@ -78,7 +84,7 @@ async function verifyQuizContract() {
         const ref = operation.responses?.[status]?.content?.["application/json"]?.schema?.$ref;
         assert.equal(ref, `#/components/schemas/${schemaName}`, `OpenAPI ${method.toUpperCase()} ${path} ${status} matches the fixture`);
       }
-      if (method === "post")
+      if (method === "post" && expectations.request)
         assert.equal(operation.requestBody?.content?.["application/json"]?.schema?.$ref, `#/components/schemas/${expectations.request}`);
     }
   }
@@ -948,11 +954,29 @@ try {
     "cannot skip hint without retry",
     again.id === h1.id && again.level === 1,
   );
-  const second = (
+  // SAI-01 BR-06: re-running the identical circuit keeps the level (other wording, escalated false).
+  const same = (
     await req(
       "/attempts",
       "POST",
       { challengeId: "circuit_001", lessonStepId: gatedLabStep.id, labState: circuit(330), durationMs: 100 },
+      tokens.STUDENT,
+    )
+  ).data;
+  const sameHint = (await req("/attempts/" + same.id + "/hint", "POST", {}, tokens.STUDENT)).data;
+  check(
+    "identical re-run keeps the hint level",
+    sameHint.level === 1 && sameHint.escalated === false && sameHint.content !== h1.content,
+  );
+  check(
+    "hint route rejects student free text",
+    (await req("/attempts/" + same.id + "/hint", "POST", { question: "đáp án là gì?" }, tokens.STUDENT)).status === 400,
+  );
+  const second = (
+    await req(
+      "/attempts",
+      "POST",
+      { challengeId: "circuit_001", lessonStepId: gatedLabStep.id, labState: circuit(300), durationMs: 100 },
       tokens.STUDENT,
     )
   ).data;
@@ -962,8 +986,12 @@ try {
   ]);
   check(
     "parallel hint requests cannot skip levels",
-    hints.every((h) => h.data.level === 2) &&
+    hints.every((h) => h.data.level === 2 && h.data.escalated === true) &&
       hints[0].data.id === hints[1].data.id,
+  );
+  check(
+    "hint response hides snapshot, digests and model",
+    !("contextSnapshot" in hints[0].data) && !("labDigest" in hints[0].data) && !("model" in hints[0].data),
   );
   const good = (
     await req(
@@ -1052,9 +1080,9 @@ try {
     (student) => student.id === users.STUDENT.id,
   );
   check(
-    "teacher sees traceable hints",
+    "teacher sees hint level and provider, not the snapshot",
     integrationStudent?.attempts.some((a) =>
-      a.hints.some((h) => h.contextSnapshot.simulation),
+      a.hints.some((h) => h.level >= 1 && h.provider && !("contextSnapshot" in h)),
     ),
   );
   check(

@@ -76,3 +76,8 @@ FL-21 and FL-20 free explore, answered from the pinned models (`what-if@1`, FE o
 2026-11-08: SAI-03-T3 shipped on `research/student-ai`: the same answer-blind hints on Open Curriculum basic
 exercise questions (`POST /open-curriculum/lessons/:lessonId/exercises/:stepId/hints`, no migration), see the
 SAI-03-T3 section of `../specs/spec-student-ai-lesson-hints/SPEC.md`. B5 (free-text textbook Q&A) still needs SG-2.
+
+2026-11-08 (later): SAI-T0 approved by the product owner ("Tôi duyệt tiếp tục làm đi"), SG-1 closed (PRD §10.17,
+AD-18, spine Deferred, FE Student P0 UX). SAI-01 T1–T5 built on `research/student-ai` with the provider path off
+by default (fake adapter in tests only); T6 review set `../specs/spec-student-ai-tutor/hint-review-set.md` waits for
+the lecturer. Migration `20261108090000_sai01_hint_provenance` must be applied to shared development by the owner.

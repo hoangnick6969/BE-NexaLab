@@ -215,7 +215,7 @@ development_status:
   tai-06-t3-draft-lab-challenge-job-routes: backlog
   tai-06-t4-teacher-proposal-review-ux: backlog
   tai-06-t5-golden-evaluation-e2e: backlog
-  # Student AI increment (SAI) — plan ../planning-artifacts/increment-sai-student-ai.md; blocked on gate SG-1 (SAI-T0).
+  # Student AI increment (SAI) — plan ../planning-artifacts/increment-sai-student-ai.md; SG-1 closed 2026-11-08 (SAI-T0).
   epic-sai-01a-checkpoint-hints: review
   sai-01a-t1-checkpoint-hint-rules-and-misconceptions: done
   sai-01a-t2-hint-api-for-checkpoint-runs: done
@@ -240,14 +240,14 @@ development_status:
   sai-03-t3-basic-exercise-hints: review
   b3-what-if-rules-fl21-fl20: review
   b3-what-if-more-labs: review # what-if@2: FL-25, FL-03, FL-05, FL-27, FL-06, FL-07
-  epic-sai-01-lab-hint-tutor: backlog
-  sai-01-t0-activate-fr22-scope: backlog
-  sai-01-t1-versioned-rules-escalation-eligibility: backlog
-  sai-01-t2-provider-port-payload-guard-kill-switch: backlog
-  sai-01-t3-cache-rate-window-provider-budget: backlog
-  sai-01-t4-read-side-narrowing-api-contract: backlog
-  sai-01-t5-student-lab-hint-ux: backlog
-  sai-01-t6-evaluation-journey-proof: backlog
+  epic-sai-01-lab-hint-tutor: in-progress
+  sai-01-t0-activate-fr22-scope: done
+  sai-01-t1-versioned-rules-escalation-eligibility: review
+  sai-01-t2-provider-port-payload-guard-kill-switch: review
+  sai-01-t3-cache-rate-window-provider-budget: review
+  sai-01-t4-read-side-narrowing-api-contract: review
+  sai-01-t5-student-lab-hint-ux: review
+  sai-01-t6-evaluation-journey-proof: in-progress # lecturer marks on hint-review-set.md; SG-2 observations
 
 fl21_tracking:
   spec: ../specs/spec-fl-21-food-web/SPEC.md
@@ -383,8 +383,8 @@ teacher_ai_tracking:
 
 student_ai_tracking:
   plan: ../planning-artifacts/increment-sai-student-ai.md
-  status: backlog
-  date: '2026-10-29'
+  status: in-progress
+  date: '2026-11-08'
   branch: research/student-ai (BE and FE)
   scope: 'Student AI advisory hints (FR-22): SAI-01 hardens the existing labs rules tutor into versioned 4-level hints with real-retry escalation, provider payload allowlist and guard, kill switch, cache, budget and full HintLog. SAI-02..06 are roadmap only.'
   specs:
@@ -395,22 +395,25 @@ student_ai_tracking:
     sai-01: ../specs/spec-student-ai-tutor/SPEC.md
     roadmap: ../specs/spec-student-ai-tutor/student-ai-roadmap.md
   gates:
-    SG-1: 'open — PO activates FR-22; PRD §10.17 and spine Deferred amended, AD-18 added; FE Student P0 UX reconciled with the existing Lab hint button (sai-01-t0). Blocks every epic.'
+    SG-1: 'closed 2026-11-08 — PO approved SAI-T0 ("Tôi duyệt tiếp tục làm đi"): PRD §10.17 amended, AD-18 added, spine Deferred and FE 08-STUDENT-P0-UX-DEFINITION reconciled; hint button stays visible, rules-first.'
     SG-2: 'open — provider tier that does not train on API data, legal basis NFR-07 / Decree 13/2023 for minors, payload allowlist approved. Blocks the provider path in production, SAI-04, SAI-06.'
     SG-3: 'open — insight thresholds, decided jointly with TAI G-5. Blocks SAI-02, SAI-06.'
     SG-4: 'open — safety evaluation set for free-text tutoring. Blocks SAI-04.'
-  open_decisions:
-    - 'Passed attempt: refuse hints with 409 HINT_NOT_NEEDED (SRS pre-condition, recommended) or keep level-4 reflection (current SAFE templates).'
-    - 'Lab hint button in Student P0: keep rules-only hints visible (recommended, already shipped) or hide behind VITE_STUDENT_HINTS_ENABLED.'
+  open_decisions: []
+  decided_2026_11_08:
+    - 'Passed attempt → 409 HINT_NOT_NEEDED (also for legacy Labs).'
+    - 'Hint button stays visible in-context, rules-only by default; no flag.'
   findings_2026_10_29:
     - 'Existing tutor escalates on any new attempt, even an identical re-run (violates BR-06 / UC-AI-03).'
     - 'llm.ts sends studentLevel to Anthropic with no payload allowlist and no kill switch; enabled by key presence alone.'
     - 'Hint rate limit is in-memory per instance (8/min) with no retry-after; no cache, no provider budget.'
     - 'Teacher class-progress returns full HintLog incl. contextSnapshot; misconceptions() hardcoded to circuit_001.'
     - 'No Student AI spec existed; FE 08-STUDENT-P0-UX-DEFINITION says no hint UI in P0 while Lab.tsx shows it.'
-  next_ready_when_gate_sg1_closes:
-    - sai-01-t1-versioned-rules-escalation-eligibility
+  next:
+    - 'Lecturer marks hint-review-set.md (sai-01-t6); owner applies migration 20261108090000_sai01_hint_provenance to shared development.'
+    - 'SG-2 (provider tier, legal basis) before STUDENT_AI_LLM_ENABLED=true anywhere shared; SG-3 for sai-02-t3.'
   story_notes:
+    sai-01-epic: '2026-11-08: tutor-rules@1 (8 keys incl. CHEMISTRY_PH, a/b variants, pinned digest), labDigest escalation (BR-06), HINT_NOT_LATEST_ATTEMPT / HINT_NOT_NEEDED, provider port with anthropic + fake adapters, STUDENT_AI_LLM_ENABLED kill switch (default false), payload allowlist, guard (tutor-observation@1), PostgreSQL cache + 10-min window (429 details.retryAfterSeconds) + 24-h budget, HintLog provenance columns (migration 20261108090000_sai01_hint_provenance, expand-only), teacher/student hint reads without contextSnapshot, OpenAPI fixture docs/contracts/student-lab-hint-v1.json, FE LegacyHintPanel. Verified: BE Vitest 623 passed (isolated PG), integration.mjs 102/102 on isolated API nexalab_sai01 with fake provider, FE legacy-lab-hints 2/2 (axe) and legacy-hints-journey-live 1/1 on the isolated stack. Restored FE devDependency @axe-core/playwright 4.14.0 (lost in a merge). Pre-existing FE failure unchanged: lab-run-host "Lab Space pilot" focus test fails on the baseline too.'
     sai-01a-t4-ui-journey-proof: '2026-11-08: FE tests/checkpoint-hints-journey-live.spec.ts 1/1 on the real stack (Vite :5173 → API :4000 on research/student-ai → shared Supabase dev, all 54 migrations applied): student.active plays FL-21 from the library and submits 5 times in one LabRun — HUNT=DECREASE → level 1 FW_ALL_DECREASE wording; same answers → level 1, SAME_ANSWER, other wording, same score; NO_DIRECT_EFFECT → level 2 escalated; HUNT right → explanation level 1; right explanation → passed, hint panel gone. Leaves 5 FL-21 attempts and 4 HintLog rows for student.active on shared dev.'
     sai-03-t3-basic-exercise-hints: '2026-11-08: POST /open-curriculum/lessons/:lessonId/exercises/:stepId/hints (lesson-hints@1, kind exercise-question-hint, no migration); quiz and exercise share issueLadderHint in lesson-hint.ts. FE ExerciseQuestionHint under each basic exercise question, hidden when COMPLETED. Verified: BE lint/build/check:layers, Vitest 594 passed (isolated PostgreSQL 55432 incl. exercise-hints.integration 2/2), FE lint/build, Playwright exercise-question-hints 2/2 + quiz-question-hints 1/1 (mocked API). Not run: real-stack browser check against a released lesson with a BASIC_EXERCISE step. Found: migration 20261025150000 makes ContentPack.subjectId NOT NULL (and a domain check) but schema.prisma has no subjectId field, so prisma.contentPack.create fails on a migrated DB.'
 
