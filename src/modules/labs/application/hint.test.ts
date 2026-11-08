@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { legacyHintView, providerDelayMs, requestHint } from "./hint";
 import { labHintOpenApiSchemas } from "../interface/hint-contract";
-import { studentAiConfig, type StudentTutorProvider } from "./tutor-provider";
+import { studentAiConfig, type StudentAiProvider } from "../../student-ai/application/student-llm";
 
 vi.mock("../../progress/application/progress-projection", () => ({ projectLab: vi.fn(async () => undefined), projectLesson: vi.fn(async () => undefined) }));
 
 const actor = { sub: "s1", sid: "sess1" };
-const config = { ...studentAiConfig({}), llmEnabled: true };
+const config = studentAiConfig({ APP_ENV: "test", STUDENT_AI_LLM_ENABLED: "true" } as any);
 /** Two attempts on circuit_001: the earlier one got a level-2 hint, the current (changed) one asks → level 3. */
 function fakeDb(state: { sessionValid: boolean; assignmentApplicable?: boolean; verdict?: string }) {
   const log: string[] = [];
@@ -59,20 +59,20 @@ function fakeDb(state: { sessionValid: boolean; assignmentApplicable?: boolean; 
   return { client, log, attempt, inTransaction: () => inTransaction };
 }
 
-function provider(onCall: () => void, reply = "Điều gì giới hạn dòng điện qua LED?"): StudentTutorProvider {
-  return { name: "fake", model: "fake-tutor@1", complete: async () => { onCall(); return JSON.stringify({ observation: reply }); } };
+function provider(onCall: () => void, reply = "Điều gì giới hạn dòng điện qua LED?"): StudentAiProvider {
+  return { name: "fake", model: "fake-student@1", complete: async () => { onCall(); return JSON.stringify({ hint: reply }); } };
 }
 
-describe("hint provider boundary (B0P-T4, SAI-01)", () => {
+describe("hint provider boundary (B0P-T4, SAI-01, LLM-first)", () => {
   it("calls the provider with no transaction or advisory lock held, then persists in a short transaction", async () => {
     const db = fakeDb({ sessionValid: true });
     const hint = await requestHint(db.client, actor, "a1", { config, provider: provider(() => db.log.push(db.inTransaction() ? "provider:in-tx" : "provider:outside-tx")) });
     expect(hint).toMatchObject({ level: 3, escalated: true, provider: "fake" });
-    expect(hint.content).toMatch(/^Điều gì giới hạn dòng điện qua LED\?\n\n/);
+    expect(hint.content).toBe("Điều gì giới hạn dòng điện qua LED?");
     expect(Object.keys(hint).sort()).toEqual(["attemptId", "content", "createdAt", "escalated", "id", "level", "provider"]);
     expect(db.log).toEqual(["provider:outside-tx", "tx:start", "lock", "persist", "tx:end", "cache"]);
     const row = db.attempt.hints[0];
-    expect(row).toMatchObject({ ruleVersion: "tutor-rules@1", promptVersion: "tutor-observation@1", model: "fake-tutor@1", fallbackReason: null, variant: "a" });
+    expect(row).toMatchObject({ ruleVersion: "tutor-rules@1", promptVersion: "student-hint@1", model: "fake-student@1", fallbackReason: null, variant: "a" });
     expect(row.labDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(row.contextDigest).toMatch(/^[0-9a-f]{64}$/);
   });
@@ -127,7 +127,7 @@ describe("hint provider boundary (B0P-T4, SAI-01)", () => {
     const hint = await requestHint(db.client, actor, "a1", { config, provider: provider(() => undefined, "Dùng 9 V nhé?") });
     expect(hint.provider).toBe("rules-fallback");
     expect(hint.content).not.toContain("9 V");
-    expect(db.attempt.hints[0].fallbackReason).toBe("GUARD:NUMERIC");
+    expect(db.attempt.hints[0].fallbackReason).toBe("GUARD:NUMBER_NOT_GROUNDED");
   });
 
   it("the hint view matches the OpenAPI fixture and drops every internal field", () => {

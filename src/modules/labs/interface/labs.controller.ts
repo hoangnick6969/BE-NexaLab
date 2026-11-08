@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Req } from "@nestjs/common";
+import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Optional, Param, Post, Req } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
 import { access } from "../../auth/interface/auth";
@@ -8,8 +8,7 @@ import { Db } from "../../../db/db";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { text } from "../../../common/validation";
 import { checkRunPrediction, explainAttempt, listRunHintSteps, requestHint, requestRunHint } from "../application/hint";
-import { createStudentTutorProvider } from "../infrastructure/llm";
-import { studentAiConfig } from "../application/tutor-provider";
+import { STUDENT_AI_PROVIDER, studentAiConfig, type StudentAiProvider } from "../../student-ai/application/student-llm";
 import { TUTOR_RULES } from "../application/tutor-rules";
 import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
@@ -38,9 +37,13 @@ function rendererKeyFor(rubricRef: string): string | null {
 @ApiBearerAuth()
 @Controller()
 export class LabsController {
-  /** SAI-01 provider adapter, chosen once at boot (a fake adapter in production fails the boot). */
-  private readonly tutorProvider = createStudentTutorProvider(process.env);
-  constructor(@Inject(Db) private db: Db, @Inject(StudentAccessService) private access: StudentAccessService, @Inject(RequestRateLimiter) private limiter: RequestRateLimiter) {}
+  constructor(
+    @Inject(Db) private db: Db,
+    @Inject(StudentAccessService) private access: StudentAccessService,
+    @Inject(RequestRateLimiter) private limiter: RequestRateLimiter,
+    /** Student AI LLM adapter (StudentAiModule); null means rules-only wording. */
+    @Optional() @Inject(STUDENT_AI_PROVIDER) private tutorProvider: StudentAiProvider | null = null,
+  ) {}
   private async fl10Run(tx: any, studentId: string, runId: string) {
     const run = await tx.labRun.findFirst({ where: { id: runId, studentId } });
     if (!run) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
@@ -686,12 +689,12 @@ export class LabsController {
       state: z.unknown().refine((value) => value === undefined || JSON.stringify(value).length <= 20000).optional(),
       prediction: z.unknown().refine((value) => value === undefined || JSON.stringify(value).length <= 2000).optional(),
     }).strict().parse(body);
-    return requestRunHint(this.db, req.user, runId, request);
+    return requestRunHint(this.db, req.user, runId, request, { provider: this.tutorProvider });
   }
   /** B2: rules-only explanation of an attempt's verdict, from its stored evaluator result. No write. */
   @Roles("STUDENT") @Get("attempts/:id/explanation") explanation(@Param("id") id: string, @Req() req: any) {
     this.limiter.rate("explanation:" + req.user.sub, 60);
-    return explainAttempt(this.db, req.user, id);
+    return explainAttempt(this.db, req.user, id, { provider: this.tutorProvider });
   }
   @ApiOperation({ summary: "Get a versioned, traceable hint for the student's latest Lab attempt (empty body)" })
   @ApiResponse({ status: 201, schema: { $ref: "#/components/schemas/StudentLabHint" } })

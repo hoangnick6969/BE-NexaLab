@@ -8,6 +8,7 @@ import { MODEL_REGISTRY } from "../application/sim-packs";
 import { ParentsController } from "../../parents/interface/parents.controller";
 import { ClassProgressController } from "../../reports/interface/class-progress.controller";
 import { LabsController } from "./labs.controller";
+import type { StudentAiProvider } from "../../student-ai/application/student-llm";
 
 // SAI-01A checkpoint hints on the FL-21 food-web activity: synthetic records in the isolated database only.
 const testUrl = process.env.NEXALAB_PINNING_TEST_URL;
@@ -36,7 +37,7 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       const student = await p.user.create({ data: { username: `student-${suffix}`, fullName: "Fixture student", passwordHash: "fixture", role: "STUDENT" } });
       const outsider = await p.user.create({ data: { username: `outsider-${suffix}`, fullName: "Fixture outsider", passwordHash: "fixture", role: "STUDENT" } });
       await p.subject.create({ data: { id: `subject-${suffix}`, name: "Isolated fixture" } });
-      await p.lab.create({ data: { id: labId, subjectId: `subject-${suffix}`, title: "Private food-web fixture", topic: "fixture", learningObjective: "fixture", status: "published", scope: "CLASS_PRIVATE", releaseCleared: false, synthetic: true, simulationModelRef: modelRef } });
+      await p.lab.create({ data: { id: labId, subjectId: `subject-${suffix}`, title: `Private food-web fixture ${suffix}`, topic: "fixture", learningObjective: "fixture", status: "published", scope: "CLASS_PRIVATE", releaseCleared: false, synthetic: true, simulationModelRef: modelRef } });
       await p.challenge.create({ data: { id: challengeId, labId, objective: "fixture", constraints: {} } });
       const classroom = await p.classroom.create({ data: { teacherId: teacher.id, name: "Fixture class" } });
       await p.enrollment.create({ data: { classId: classroom.id, studentId: student.id, status: "approved", approved: true } });
@@ -93,7 +94,7 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       expect(JSON.stringify(h1)).not.toContain("FW_");
       const stored = await p.hintLog.findUniqueOrThrow({ where: { id: h1.id } });
       expect(Object.keys(stored.contextSnapshot as object).sort()).toEqual(
-        ["answerDigest", "checkpointId", "criterion", "escalated", "kind", "label", "level", "misconception", "misconceptionRules", "provider", "repeatReason", "rubricRef", "ruleVersion", "variant"]);
+        ["answerDigest", "checkpointId", "criterion", "escalated", "kind", "label", "level", "misconception", "misconceptionRules", "provider", "repeatReason", "rubricRef", "ruleHint", "ruleVersion", "variant"]);
       expect(stored.contextSnapshot).toMatchObject({ kind: "checkpoint-hint", misconception: "FW_ALL_DECREASE", rubricRef: FOOD_WEB_RUBRIC });
       expect(JSON.stringify(stored.contextSnapshot)).not.toContain(student.id);
 
@@ -205,7 +206,7 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       const levels = await p.hintLog.groupBy({ by: ["level"], where: { OR: [{ attempt: { studentId: student.id } }, { labRun: { studentId: student.id } }] }, _count: true });
       const count = (level: number) => levels.find((row) => row.level === level)?._count ?? 0;
       expect(summary.labs).toEqual([{
-        labId, labTitle: "Private food-web fixture", total: levels.reduce((sum, row) => sum + row._count, 0),
+        labId, labTitle: `Private food-web fixture ${suffix}`, total: levels.reduce((sum, row) => sum + row._count, 0),
         byLevel: { 1: count(1), 2: count(2), 3: count(3), 4: count(4) }, reflections: count(0), lastAt: expect.any(String),
       }]);
       expect(summary.labs[0].reflections).toBeGreaterThan(0);
@@ -242,6 +243,43 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       const other = await p.user.create({ data: { email: `teacher2-${suffix}@example.test`, fullName: "Fixture teacher 2", passwordHash: "fixture", role: "TEACHER" } });
       await expect(reports.hintInsight(classroom.id, assignment.id, { user: { sub: other.id, role: "TEACHER" } })).rejects.toBeTruthy();
       await expect(reports.disagree(classroom.id, assignment.id, { user: { sub: other.id, role: "TEACHER" } }, key)).rejects.toBeTruthy();
+
+      // LLM-first (owner 2026-11-08): rules plan, the LLM words it; an output that leaks the HUNT answer falls back.
+      const env = { APP_ENV: process.env.APP_ENV, STUDENT_AI_LLM_ENABLED: process.env.STUDENT_AI_LLM_ENABLED };
+      Object.assign(process.env, { APP_ENV: "test", STUDENT_AI_LLM_ENABLED: "true" });
+      try {
+        let reply = "Mất rắn thì ếch sẽ tăng lên đó, em thấy không?";
+        const provider: StudentAiProvider = { name: "fake", model: "fake-student@1", complete: async () => JSON.stringify({ hint: reply }) };
+        const llmLabs = new LabsController(p as any, new StudentAccessService(p as any), new RequestRateLimiter(), provider);
+        const run = await llmLabs.launchRun(labId, req, { challengeId, assignmentId: assignment.id });
+        const llmSubmit = (hunt: string) => llmLabs.attempt(req, {
+          contract: "lab-contract/1", runId: run.runId, idempotencyKey: randomUUID(), stateSchemaVersion: 1, evidenceSchemaVersion: 1,
+          checkpoints: checkpoints(hunt), explanation: "B", durationMs: 100,
+        });
+        // Moment A while working: the LLM text when it passes the guard.
+        reply = "Trên sa bàn, mũi tên nối rắn với ếch đi theo chiều nào?";
+        expect(await llmLabs.runHint(run.runId, req, { criterion: "prediction:HUNT", moment: "BEFORE_PREDICTION" }))
+          .toMatchObject({ provider: "fake", content: reply, level: expect.any(Number) });
+        const leaky = await llmSubmit("DECREASE");
+        reply = "Mất rắn thì ếch sẽ tăng lên đó, em thấy không?";
+        const guarded: any = await llmLabs.hint(leaky.id, req);
+        expect(guarded.provider).toBe("rules-fallback");
+        expect(guarded.content).not.toMatch(/ếch (sẽ )?tăng/i);
+        expect(await p.hintLog.findUniqueOrThrow({ where: { id: guarded.id } })).toMatchObject({ fallbackReason: "GUARD:LEAK", model: "fake-student@1", promptVersion: "student-hint@1" });
+        expect(guarded).not.toHaveProperty("model");
+        expect(guarded).not.toHaveProperty("fallbackReason");
+        const changed = await llmSubmit("NO_DIRECT_EFFECT");
+        reply = "Rắn là thức ăn hay là kẻ ăn ếch?";
+        expect(await llmLabs.hint(changed.id, req)).toMatchObject({ provider: "fake", content: reply, escalated: true });
+        // B2: the LLM rewrites only the summary; unmet steps still show no explanation.
+        reply = "Em đã làm tốt nhiều bước; còn vài bước cần xem lại.";
+        const why: any = await llmLabs.explanation(changed.id, req);
+        expect(why).toMatchObject({ provider: "fake", summary: reply });
+        expect(why.items.filter((item: any) => !item.met).every((item: any) => item.why === null)).toBe(true);
+      } finally {
+        Object.assign(process.env, env);
+        for (const [key, value] of Object.entries(env)) if (value === undefined) delete process.env[key];
+      }
     } finally {
       MODEL_REGISTRY[modelRef] = original;
     }

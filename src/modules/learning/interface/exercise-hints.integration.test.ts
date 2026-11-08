@@ -4,6 +4,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { LearningController } from "./learning.controller";
+import type { StudentAiProvider } from "../../student-ai/application/student-llm";
 
 // SAI-03-T3 basic exercise hints: synthetic records in the isolated database only.
 const testUrl = process.env.NEXALAB_PINNING_TEST_URL;
@@ -32,7 +33,7 @@ async function releasedLesson(p: PrismaClient, suffix: string, options: { synthe
     ],
   };
   return p.lesson.create({ data: {
-    subjectId: `subject-${suffix}`, authorId: teacher.id, title: "Fixture Ohm", chapter: "fixture", grade: 9, topic: "fixture",
+    subjectId: `subject-${suffix}`, authorId: teacher.id, title: `Fixture Ohm ${suffix}`, chapter: "fixture", grade: 9, topic: "fixture",
     learningObjective: "fixture", prerequisites: "", curriculum: "fixture", status: "published", scope: "SHARED_LIBRARY",
     synthetic: options.synthetic ?? false, packVersionId: pack.id, content: "fixture",
     steps: { create: [
@@ -81,7 +82,7 @@ describe.skipIf(!db)("isolated basic exercise hints (SAI-03-T3)", () => {
     expect(stored).toMatchObject({ studentId: student.id, lessonStepId: step.id, attemptId: null, labRunId: null, level: 3 });
     expect(stored.contextSnapshot).toMatchObject({ kind: "exercise-question-hint", assignmentId: null, questionId: "q1" });
     expect(Object.keys(stored.contextSnapshot as object).sort()).toEqual(
-      ["assignmentId", "escalated", "kind", "lessonId", "level", "passage", "provider", "questionId", "repeatReason", "ruleVersion", "stepId", "variant"]);
+      ["assignmentId", "escalated", "kind", "lessonId", "level", "passage", "provider", "questionId", "repeatReason", "ruleHint", "ruleVersion", "stepId", "variant"]);
     expect(JSON.stringify(stored.contextSnapshot)).not.toContain("correctOptionId");
 
     // FR-22: the attempt and step progress are unchanged by hints.
@@ -116,5 +117,35 @@ describe.skipIf(!db)("isolated basic exercise hints (SAI-03-T3)", () => {
         .rejects.toMatchObject({ response: { code: "CURRICULUM_EXERCISE_NOT_FOUND" } });
     await learning.basicExerciseHint(live.id, exercise(live), { questionId: "q1" }, { user: { sub: a.id } });
     expect(await learning.basicExerciseHint(live.id, exercise(live), { questionId: "q1" }, { user: { sub: b.id } })).toMatchObject({ level: 1 });
+  }, 60000);
+
+  it("LLM-first: the LLM words the hint; naming an option falls back to the answer-blind rule text", async () => {
+    const p = db!;
+    const suffix = randomUUID().slice(0, 8);
+    const lesson = await releasedLesson(p, suffix);
+    const step = lesson.steps.find((item) => item.type === "BASIC_EXERCISE")!;
+    const student = await p.user.create({ data: { username: `llm-${suffix}`, fullName: "Fixture student", passwordHash: "fixture", role: "STUDENT" } });
+    let reply = "Câu hỏi đang nói về điện áp và điện trở; em cần tìm điều gì?";
+    const sent: string[] = [];
+    const provider: StudentAiProvider = { name: "fake", model: "fake-student@1", complete: async ({ user }) => { sent.push(user); return JSON.stringify({ hint: reply }); } };
+    const learning = new LearningController(p as any, new StudentAccessService(p as any), new RequestRateLimiter(), provider);
+    const env = { APP_ENV: process.env.APP_ENV, STUDENT_AI_LLM_ENABLED: process.env.STUDENT_AI_LLM_ENABLED };
+    Object.assign(process.env, { APP_ENV: "test", STUDENT_AI_LLM_ENABLED: "true" });
+    try {
+      const req = { user: { sub: student.id, role: "STUDENT" } };
+      const h1: any = await learning.basicExerciseHint(lesson.id, step.id, { questionId: "q1" }, req);
+      expect(h1).toMatchObject({ level: 1, provider: "fake", content: reply });
+      // The payload has the prompt and option texts, never the key or an ID.
+      expect(JSON.parse(sent[0])).toMatchObject({ surface: "basic-exercise", question: { prompt: expect.any(String), options: ["Giảm", "Tăng", "Không đổi"] } });
+      expect(sent[0]).not.toMatch(/correctOptionId|"a"|q1|exercise-|lesson/);
+      reply = "Dòng điện sẽ Giảm, đúng không?";
+      const h2: any = await learning.basicExerciseHint(lesson.id, step.id, { questionId: "q1" }, req);
+      expect(h2.provider).toBe("rules-fallback");
+      expect(h2.content).not.toMatch(/(?<![\p{L}])giảm(?![\p{L}])/iu);
+      expect(await p.hintLog.findUniqueOrThrow({ where: { id: h2.id } })).toMatchObject({ fallbackReason: "GUARD:OPTION_NAMED", promptVersion: "student-hint@1" });
+    } finally {
+      Object.assign(process.env, env);
+      for (const [key, value] of Object.entries(env)) if (value === undefined) delete process.env[key];
+    }
   }, 60000);
 });

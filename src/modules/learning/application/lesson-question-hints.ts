@@ -22,6 +22,8 @@ export type QuestionHint = {
   variant: "a" | "b";
   content: string;
   passage: { stepId: string; kind: HintSourceKind; sentence: number } | null;
+  /** The quoted lesson sentence with every option masked (level 3 only), for the LLM payload. */
+  masked: string | null;
 };
 
 // Vietnamese function syllables that carry no topic (kept small and explicit; versioned with the rules).
@@ -136,7 +138,7 @@ export function planQuestionHint(input: { question: HintQuestion; sources: reado
       : masked.includes(MASK) ? `Đọc lại câu này trong ${WHERE[pick.source.kind]}: “${masked}”. Chỗ “${MASK}” là ý em cần tự nhớ ra; sau đó so với các lựa chọn.`
       : `Đọc lại câu này trong ${WHERE[pick.source.kind]}: “${masked}”. Câu đó áp dụng thế nào vào trường hợp trong câu hỏi?`;
   }
-  return { level, variant, content, passage };
+  return { level, variant, content, passage, masked: level === 3 && pick ? masked : null };
 }
 
 /** The first `n` words of a sentence, keeping its own spacing and the mask. */

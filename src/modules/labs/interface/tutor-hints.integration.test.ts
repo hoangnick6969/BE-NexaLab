@@ -8,10 +8,17 @@ import { ParentsController } from "../../parents/interface/parents.controller";
 import { ClassProgressController } from "../../reports/interface/class-progress.controller";
 import { requestHint } from "../application/hint";
 import { renderTutorTemplate } from "../application/tutor-rules";
-import { studentAiConfig } from "../application/tutor-provider";
-import { FakeTutorProvider } from "../infrastructure/llm";
+import { studentAiConfig, type StudentAiProvider } from "../../student-ai/application/student-llm";
 
-// SAI-01 legacy Lab hints (tutor-rules@1, tutor-observation@1 with the fake adapter): isolated database only.
+// SAI-01 legacy Lab hints, LLM-first (tutor-rules@1 plans and falls back, student-hint@1 phrases): isolated database only.
+class TestProvider implements StudentAiProvider {
+  readonly name = "fake" as const;
+  readonly model = "fake-student@1";
+  calls = 0;
+  constructor(private readonly reply: string) {}
+  async complete() { this.calls += 1; return JSON.stringify({ hint: this.reply }); }
+}
+const LLM_ON = studentAiConfig({ APP_ENV: "test", STUDENT_AI_LLM_ENABLED: "true" } as any);
 const testUrl = process.env.NEXALAB_PINNING_TEST_URL;
 if (process.env.CI && !testUrl) throw new Error("CI requires NEXALAB_PINNING_TEST_URL for tutor hint integration");
 if (testUrl) {
@@ -40,7 +47,7 @@ async function fixture(p: PrismaClient) {
   await p.subject.create({ data: { id: `subject-${suffix}`, name: "Isolated fixture" } });
   const labId = `circuit-tutor-${suffix}`, challengeId = `circuit-tutor-${suffix}-001`;
   await p.lab.create({ data: { id: labId, subjectId: `subject-${suffix}`, title: "Circuit tutor fixture", topic: "fixture", learningObjective: "fixture", status: "published", scope: "CLASS_PRIVATE", releaseCleared: false, synthetic: true, simulationModelRef: "circuit@1.0.0" } });
-  await p.challenge.create({ data: { id: challengeId, labId, objective: "Làm LED sáng mà không quá dòng", constraints: {} } });
+  await p.challenge.create({ data: { id: challengeId, labId, objective: `Làm LED sáng mà không quá dòng (fixture ${suffix})`, constraints: {} } });
   const student = async (name: string) => {
     const user = await p.user.create({ data: { username: `${name}-${suffix}`, fullName: "Fixture student", passwordHash: "fixture", role: "STUDENT" } });
     const session = await p.session.create({ data: { userId: user.id, tokenHash: randomUUID(), kind: "refresh", expiresAt: new Date(Date.now() + 3600_000) } });
@@ -56,65 +63,51 @@ async function fixture(p: PrismaClient) {
 }
 
 describe.skipIf(!db)("isolated legacy Lab hints (SAI-01)", () => {
-  it("climbs only on a real retry, logs provenance, caches across students and never changes the verdict", async () => {
+  it("rules plan the ladder, the LLM writes it, the cache serves other students, and the verdict never changes", async () => {
     const p = db!;
     const f = await fixture(p);
     const a = await f.student("active");
     const b = await f.student("other");
-    const provider = new FakeTutorProvider("Điều gì đang giới hạn dòng điện qua LED?");
-    const deps = { provider, config: { ...studentAiConfig({}), llmEnabled: true } };
+    const provider = new TestProvider("Em thử lần theo dây từ nguồn xem dòng điện đi đâu?");
+    const deps = { provider, config: LLM_ON };
     const ask = (actor: any, attemptId: string, d: any = deps) => requestHint(p, actor, attemptId, d) as Promise<any>;
 
-    // Level 1 on an open circuit; replay returns the same row.
+    // Kill switch off: the rule template, logged as DISABLED.
     const first = await f.submit(a.user.id, open);
-    const h1 = await ask(a.actor, first.id);
-    expect(h1).toMatchObject({ level: 1, escalated: false, provider: "rules" });
-    expect(h1.content).toBe(renderTutorTemplate("OPEN_CIRCUIT", 1, 0, first.simulationResult));
-    expect(await ask(a.actor, first.id)).toEqual(h1);
-    // Identical re-run → level 1, variant b.
+    const off = await ask(a.actor, first.id, { provider, config: studentAiConfig({}) });
+    expect(off).toMatchObject({ level: 1, escalated: false, provider: "rules" });
+    expect(off.content).toBe(renderTutorTemplate("OPEN_CIRCUIT", 1, 0, first.simulationResult));
+    expect(await p.hintLog.findUniqueOrThrow({ where: { id: off.id } })).toMatchObject({ fallbackReason: "DISABLED", model: null, ruleVersion: "tutor-rules@1" });
+    expect(await ask(a.actor, first.id)).toEqual(off);
+    expect(provider.calls).toBe(0);
+
+    // LLM on. Identical re-run → level 1 (variant b), written by the LLM; the rule text stays in the snapshot.
     const same = await f.submit(a.user.id, { ...open, nodes: [...open.nodes].reverse() });
     const h1b = await ask(a.actor, same.id);
-    expect(h1b).toMatchObject({ level: 1, escalated: false });
-    expect(h1b.content).toBe(renderTutorTemplate("OPEN_CIRCUIT", 1, 1, first.simulationResult));
+    expect(h1b).toMatchObject({ level: 1, escalated: false, provider: "fake", content: "Em thử lần theo dây từ nguồn xem dòng điện đi đâu?" });
+    const row1b = await p.hintLog.findUniqueOrThrow({ where: { id: h1b.id } });
+    expect(row1b).toMatchObject({ promptVersion: "student-hint@1", model: "fake-student@1", variant: "b", fallbackReason: null });
+    expect((row1b.contextSnapshot as any).ruleHint).toBe(renderTutorTemplate("OPEN_CIRCUIT", 1, 1, first.simulationResult));
     // Older attempt → 400; another student's attempt → 404.
-    await expect(ask(a.actor, first.id)).resolves.toMatchObject({ id: h1.id }); // a stored hint is still replayed
     const third = await f.submit(a.user.id, loop(330, false));
     await expect(ask(b.actor, third.id)).rejects.toMatchObject({ status: 404 });
     const fresh = await f.submit(a.user.id, loop(330, false));
     await expect(ask(a.actor, third.id)).rejects.toMatchObject({ response: { code: "HINT_NOT_LATEST_ATTEMPT" } });
 
-    // Changed wiring → level 2 (SWITCH_OPEN), then two more real retries reach 3 and 4 with the fake observation.
+    // Changed wiring → 2, then two more real retries → 3 and 4; FR-22: the attempt row is unchanged.
     const before = await p.attempt.findUniqueOrThrow({ where: { id: fresh.id } });
-    const h2 = await ask(a.actor, fresh.id);
-    expect(h2).toMatchObject({ level: 2, escalated: true, provider: "rules" });
+    expect(await ask(a.actor, fresh.id)).toMatchObject({ level: 2, escalated: true, provider: "fake" });
     expect(await p.attempt.findUniqueOrThrow({ where: { id: fresh.id } })).toEqual(before);
-    const overload = await f.submit(a.user.id, loop(330));
-    const h3 = await ask(a.actor, overload.id);
-    expect(h3).toMatchObject({ level: 3, escalated: true, provider: "fake" });
-    expect(h3.content).toMatch(/^Điều gì đang giới hạn dòng điện qua LED\?\n\n/);
-    const row3 = await p.hintLog.findUniqueOrThrow({ where: { id: h3.id } });
-    expect(row3).toMatchObject({ ruleVersion: "tutor-rules@1", promptVersion: "tutor-observation@1", provider: "fake", model: "fake-tutor@1", fallbackReason: null, escalated: true, variant: "a" });
-    expect((row3.contextSnapshot as any).simulation).toEqual(overload.simulationResult);
-    const overload2 = await f.submit(a.user.id, loop(300));
-    const h4 = await ask(a.actor, overload2.id);
-    expect(h4).toMatchObject({ level: 4, escalated: true });
-    expect(h4.content).toContain("350 Ω");
-    expect(provider.calls).toBe(2);
+    expect(await ask(a.actor, (await f.submit(a.user.id, loop(330))).id)).toMatchObject({ level: 3, escalated: true });
+    expect(await ask(a.actor, (await f.submit(a.user.id, loop(300))).id)).toMatchObject({ level: 4, escalated: true });
+    expect(provider.calls).toBe(4);
 
-    // Another student with the same state (same challenge, digest, level) is served from the cache: no provider call.
-    await f.submit(b.user.id, open);
-    const bOpen = await p.attempt.findFirstOrThrow({ where: { studentId: b.user.id }, orderBy: { createdAt: "desc" } });
-    await ask(b.actor, bOpen.id);
-    await ask(b.actor, (await f.submit(b.user.id, loop(330, false))).id);
-    const bh3 = await ask(b.actor, (await f.submit(b.user.id, loop(330))).id);
-    expect(bh3).toMatchObject({ level: 3, provider: "cache" });
-    expect(provider.calls).toBe(2);
-    expect(await p.hintLog.findUniqueOrThrow({ where: { id: bh3.id } })).toMatchObject({ provider: "cache", model: "fake-tutor@1" });
-
-    // Kill switch off → template only with DISABLED; an injected digit is dropped by the guard.
-    const off = await ask(b.actor, (await f.submit(b.user.id, loop(300))).id, { provider, config: studentAiConfig({}) });
-    expect(off).toMatchObject({ level: 4, provider: "rules" });
-    expect(await p.hintLog.findUniqueOrThrow({ where: { id: off.id } })).toMatchObject({ fallbackReason: "DISABLED", model: null });
+    // Another student reaching the same rule decision gets the cached wording: no provider call.
+    const bOpen = await f.submit(b.user.id, open);
+    await ask(b.actor, bOpen.id, { provider, config: studentAiConfig({}) });
+    const bSame = await ask(b.actor, (await f.submit(b.user.id, open)).id);
+    expect(bSame).toMatchObject({ level: 1, provider: "cache", content: h1b.content });
+    expect(provider.calls).toBe(4);
 
     // Passing, then asking → 409.
     const passed = await f.submit(a.user.id, loop(350));
@@ -122,28 +115,22 @@ describe.skipIf(!db)("isolated legacy Lab hints (SAI-01)", () => {
     await expect(ask(a.actor, passed.id)).rejects.toMatchObject({ response: { code: "HINT_NOT_NEEDED" } });
   }, 60000);
 
-  it("injected unsafe output falls back, the 10-minute window answers 429 with retryAfterSeconds, the budget falls back to rules", async () => {
+  it("an unsafe LLM output falls back to the rule text, the window answers 429 with retryAfterSeconds, the budget falls back", async () => {
     const p = db!;
     const f = await fixture(p);
     const s = await f.student("window");
-    const unsafe = new FakeTutorProvider("Dùng 9 V là được?");
-    const config = { ...studentAiConfig({}), llmEnabled: true, hintsPer10Min: 8, dailyProviderCalls: 1 };
-    // Climb to level 3 with distinct states: open → switch open → overload (provider), → overload changed (budget).
+    const unsafe = new TestProvider("Dùng 9 V là được?");
+    const config = { ...LLM_ON, hintsPer10Min: 8, dailyProviderCalls: 1 };
     const states = [open, loop(330, false), loop(330), loop(300), loop(250), loop(200), loop(150), loop(100)];
     const hints: any[] = [];
-    for (const state of states) {
-      const attempt = await f.submit(s.user.id, state);
-      hints.push(await requestHint(p, s.actor, attempt.id, { provider: unsafe, config }));
-    }
+    for (const state of states) hints.push(await requestHint(p, s.actor, (await f.submit(s.user.id, state)).id, { provider: unsafe, config }));
     expect(hints.map((h) => h.level)).toEqual([1, 2, 3, 4, 4, 4, 4, 4]);
-    const rows = await p.hintLog.findMany({ where: { id: { in: hints.map((h) => h.id) } } });
-    const byId = new Map(rows.map((row) => [row.id, row]));
-    expect(byId.get(hints[2].id)).toMatchObject({ provider: "rules-fallback", fallbackReason: "GUARD:NUMERIC", model: "fake-tutor@1" });
-    expect(hints[2].content).not.toContain("9 V");
-    // One provider call already used today (the guarded one): the next level-4 hint is over budget.
-    expect(byId.get(hints[3].id)).toMatchObject({ provider: "rules-fallback", fallbackReason: "BUDGET", model: null });
+    const rows = new Map((await p.hintLog.findMany({ where: { id: { in: hints.map((h) => h.id) } } })).map((row) => [row.id, row]));
+    expect(rows.get(hints[0].id)).toMatchObject({ provider: "rules-fallback", fallbackReason: "GUARD:NUMBER_NOT_GROUNDED", model: "fake-student@1" });
+    expect(hints[0].content).not.toContain("9 V");
+    // One provider call already used today (the guarded one): the next hint is over budget.
+    expect(rows.get(hints[1].id)).toMatchObject({ provider: "rules-fallback", fallbackReason: "BUDGET", model: null });
     expect(unsafe.calls).toBe(1);
-    // Ninth hint inside 10 minutes → 429 with retryAfterSeconds; the eighth was allowed.
     const ninth = await f.submit(s.user.id, loop(90));
     const error: any = await requestHint(p, s.actor, ninth.id, { provider: unsafe, config }).catch((e) => e);
     expect(error.getStatus()).toBe(429);
@@ -167,7 +154,7 @@ describe.skipIf(!db)("isolated legacy Lab hints (SAI-01)", () => {
     const classroom = await p.classroom.create({ data: { teacherId: teacher.id, name: "Fixture class" } });
     await p.enrollment.create({ data: { classId: classroom.id, studentId: s.user.id, status: "approved", approved: true } });
     const attempt = await f.submit(s.user.id, open);
-    await requestHint(p, s.actor, attempt.id, { provider: null });
+    await requestHint(p, s.actor, attempt.id);
     const analytics: any[] = await new ClassProgressController(p as any).analytics(classroom.id, { user: { sub: teacher.id, role: "TEACHER" } });
     const hint = analytics[0].attempts[0].hints[0];
     expect(Object.keys(hint).sort()).toEqual(["content", "createdAt", "escalated", "id", "level", "provider"]);

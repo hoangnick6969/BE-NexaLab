@@ -19,6 +19,7 @@ import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { notify } from "../../notifications/application/notify";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { requestBasicExerciseHint, requestLessonQuestionHint } from "../application/lesson-hint";
+import { STUDENT_AI_PROVIDER, type StudentAiProvider } from "../../student-ai/application/student-llm";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -28,6 +29,8 @@ export class LearningController {
     @Inject(Db) private db: Db,
     @Inject(StudentAccessService) private access: StudentAccessService,
     @Optional() @Inject(RequestRateLimiter) private limiter?: RequestRateLimiter,
+    /** Student AI LLM adapter (StudentAiModule); null means rules-only wording. */
+    @Optional() @Inject(STUDENT_AI_PROVIDER) private tutorProvider: StudentAiProvider | null = null,
   ) {}
   private async applicableAssignment(id: string, studentId: string) {
     const assignment = await this.db.assignment.findFirst({
@@ -185,7 +188,7 @@ export class LearningController {
   ) {
     this.limiter?.rate("lesson-hint:" + req.user.sub, 30);
     const { questionId } = z.object({ questionId: z.string().min(1).max(80) }).strict().parse(body);
-    return requestBasicExerciseHint(this.db, { studentId: req.user.sub, lessonId, stepId, questionId });
+    return requestBasicExerciseHint(this.db, { studentId: req.user.sub, lessonId, stepId, questionId }, { provider: this.tutorProvider });
   }
   @Roles("STUDENT")
   @Put("open-curriculum/lessons/:lessonId/steps/:stepId/progress")
@@ -255,7 +258,7 @@ export class LearningController {
     this.limiter?.rate("lesson-hint:" + req.user.sub, 30);
     const assignmentId = parseAssignmentIdQuery(rawQuery);
     const { questionId } = z.object({ questionId: z.string().min(1).max(80) }).strict().parse(body);
-    return requestLessonQuestionHint(this.db, this.access, { studentId: req.user.sub, lessonId, assignmentId, questionId });
+    return requestLessonQuestionHint(this.db, this.access, { studentId: req.user.sub, lessonId, assignmentId, questionId }, { provider: this.tutorProvider });
   }
   @Roles("STUDENT")
   @Get("lessons/:lessonId/quiz-attempts")
