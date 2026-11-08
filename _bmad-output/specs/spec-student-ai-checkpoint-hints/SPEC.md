@@ -189,3 +189,6 @@ level-1 question about `HUNT` worded for `FW_ALL_DECREASE`. Resubmitting the sam
 returns level 1 variant b with `escalated: false`. Changing `HUNT` to `NO_DIRECT_EFFECT` and asking returns
 level 2. Answering `HUNT` correctly moves the next hint to `explanation` at level 1. Passing the run hides
 the panel. The attempt verdicts and progress match a run without hints.
+
+Proof (T4, 2026-11-08): FE `tests/checkpoint-hints-journey-live.spec.ts` runs this journey on the real stack (FL-21
+released on shared development) and passes.

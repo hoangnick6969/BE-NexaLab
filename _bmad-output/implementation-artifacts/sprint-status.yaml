@@ -220,7 +220,7 @@ development_status:
   sai-01a-t1-checkpoint-hint-rules-and-misconceptions: done
   sai-01a-t2-hint-api-for-checkpoint-runs: done
   sai-01a-t3-student-checkpoint-hint-panel: review
-  sai-01a-t4-ui-journey-proof: in-progress
+  sai-01a-t4-ui-journey-proof: review
   sai-01a-t5-in-run-hints-moments-a-b: review
   sai-01a-t6-hints-evidence-labs-fl03-fl27-fl16-fl05: review
   sai-01a-t7-hints-event-labs-fl06-fl07-fl10: review
@@ -411,6 +411,7 @@ student_ai_tracking:
   next_ready_when_gate_sg1_closes:
     - sai-01-t1-versioned-rules-escalation-eligibility
   story_notes:
+    sai-01a-t4-ui-journey-proof: '2026-11-08: FE tests/checkpoint-hints-journey-live.spec.ts 1/1 on the real stack (Vite :5173 → API :4000 on research/student-ai → shared Supabase dev, all 54 migrations applied): student.active plays FL-21 from the library and submits 5 times in one LabRun — HUNT=DECREASE → level 1 FW_ALL_DECREASE wording; same answers → level 1, SAME_ANSWER, other wording, same score; NO_DIRECT_EFFECT → level 2 escalated; HUNT right → explanation level 1; right explanation → passed, hint panel gone. Leaves 5 FL-21 attempts and 4 HintLog rows for student.active on shared dev.'
     sai-03-t3-basic-exercise-hints: '2026-11-08: POST /open-curriculum/lessons/:lessonId/exercises/:stepId/hints (lesson-hints@1, kind exercise-question-hint, no migration); quiz and exercise share issueLadderHint in lesson-hint.ts. FE ExerciseQuestionHint under each basic exercise question, hidden when COMPLETED. Verified: BE lint/build/check:layers, Vitest 594 passed (isolated PostgreSQL 55432 incl. exercise-hints.integration 2/2), FE lint/build, Playwright exercise-question-hints 2/2 + quiz-question-hints 1/1 (mocked API). Not run: real-stack browser check against a released lesson with a BASIC_EXERCISE step. Found: migration 20261025150000 makes ContentPack.subjectId NOT NULL (and a domain check) but schema.prisma has no subjectId field, so prisma.contentPack.create fails on a migrated DB.'
 
 increment_i2_tracking:
