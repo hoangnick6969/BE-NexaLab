@@ -55,6 +55,8 @@
     "test:cf": "tsx scripts/cf-integration.mjs",
     "pretest:tai03": "node scripts/assert-isolated-db.mjs integration tests",
     "test:tai03": "tsx scripts/tai03-integration.mjs",
+    "pretest:tai04": "node scripts/assert-isolated-db.mjs integration tests",
+    "test:tai04": "tsx scripts/tai04-integration.mjs",
     "pretest:i3": "node scripts/assert-isolated-db.mjs integration tests",
     "test:i3": "tsx scripts/i3-integration.mjs",
     "pretest:acc": "node scripts/assert-isolated-db.mjs integration tests",
