@@ -116,6 +116,7 @@ TAI-01 spec đề xuất worker polling DB (2 giây), lease 90 giây, timeout pr
 - [ ] Phòng trao đổi: giáo viên gửi; AI chỉ soạn nháp.
 - [x] Student AI theo luật: tách quyền/dữ liệu; chỉ trên bài và lượt làm của chính học sinh; gợi ý không lộ đáp án (leak test); "Nếu… thì sao?" chỉ mở khi đã làm xong hoặc đã đạt (nhánh `research/student-ai`).
 - [x] Student AI hội thoại (SAI-04): đã xây, chặn xin đáp án/chèn lệnh/chủ đề nguy hiểm trước khi gọi LLM; chỉ bật ở dev/test, chờ SG-2 và SG-4 trước khi bật ở môi trường dùng chung.
+- [x] B5: học sinh bôi đen đoạn sách giáo khoa và hỏi AI (chỉ dev/test, `spec-student-ai-llm`).
 - [x] LLM viết lời gợi ý và giải thích cho học sinh, luật chọn bước/mức và làm dự phòng (quyết định 08/11/2026, `spec-student-ai-llm`); chỉ dev/test tới khi SG-2 đóng.
 
 ## 6. Thứ tự phát triển khuyến nghị

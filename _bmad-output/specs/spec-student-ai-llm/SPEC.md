@@ -59,6 +59,7 @@ on API data; legal basis for minors' data under Decree 13/2023) is decided in wr
 | Lesson quiz, basic exercise (SAI-03) | `POST /lessons/:id/quiz/hints`, `POST /open-curriculum/lessons/:id/exercises/:stepId/hints` | the hint | HintLog |
 | B2 verdict explanation | `GET /attempts/:id/explanation` | `summary` only; unmet steps keep `why: null` | no (read-only), cache |
 | B3 what-if | `POST /tutor/what-if/phrase` (FE sends the model's answer) | rewording of the model answer | no (read-only), cache |
+| B5 textbook passage Q&A | same chat routes with `contextKind: "EBOOK"` (subject id) and `passage {text, prefix?, suffix?, pageNumber}` | explanation of the highlighted passage | `TutorMessage.passage`, `pageNumber` |
 | SAI-04 tutor chat | `POST /tutor/conversations`, `GET /tutor/conversations/:id`, `POST /tutor/conversations/:id/messages`, `GET /tutor/chat/status` | the reply | `TutorConversation`, `TutorMessage` |
 
 ## SAI-04 tutor chat
@@ -75,6 +76,26 @@ on API data; legal basis for minors' data under Decree 13/2023) is decided in wr
   the prefilter test covers every deterministic category. Model-dependent categories (on/off topic quality) need a
   real provider and the lecturer.
 
+## B5 — ask about a highlighted textbook passage (owner 2026-11-08: "Làm tiếp B5")
+
+- In the textbook reader a student switches to **Hỏi AI**, highlights up to 2 000 characters and asks. Shown only to
+  students while the tutor chat is enabled (dev/test).
+- `POST /tutor/conversations { contextKind: "EBOOK", contextId: <subjectId> }` (subject must have a textbook link, as
+  for reading and annotating); messages carry `passage { text ≤ 2000, prefix ≤ 400, suffix ≤ 400, pageNumber }`.
+  A passage is required for EBOOK and refused elsewhere (`400 TUTOR_PASSAGE_INVALID`).
+- `tutor-chat-rules@2`: the message rules of @1, plus an injection check on the client-supplied passage (prefix, text,
+  suffix). Safety words in the book itself ("điện lưới", warnings) are not refused.
+- `textbook-qa@1`: explain the passage in simple words, only from the passage and grade-8 KHTN, never solve exercises,
+  end with a check-understanding question; off topic → fixed redirect. Output guard as for the chat; numbers must
+  appear in the passage, question or history; a catalog answer pattern that the passage itself states is not a leak.
+- Logged as `TutorMessage` with `passage` and `pageNumber` (migration `20261108150000_b5_textbook_passage`,
+  expand-only: EBOOK context kind, two nullable columns).
+- Verified: `tutor-chat.integration.test.ts` B5 case (answer grounded in the passage, ungrounded number → fallback,
+  injected passage refused without a model call, safety text not refused, passage required/refused, subject without
+  textbook → 404), `tutor-chat.test.ts`; FE `textbook-ask.spec.ts` 2/2 (generated PDF with a text layer, highlight,
+  ask, AI chip, page and quote, axe; hidden when off). Not run on a real stack (needs a textbook PDF URL on the
+  isolated database).
+
 ## Verification (2026-11-08)
 
 BE Vitest 640 passed on isolated PostgreSQL (`student-llm.test.ts` 19, `tutor-chat.test.ts` 11,
@@ -90,5 +111,5 @@ isolated stack (LLM wording at every level, chat answer, answer request refused)
 - SG-4: lecturer approves the safety set and thresholds; run it against the chosen real provider.
 - Lecturer review of LLM wording samples per surface (scientific accuracy, no answer leak).
 - Retention of `TutorMessage` follows PO decision 6 (12 months after last activity); no purge job yet.
-- The owner applies migrations `20261108090000_sai01_hint_provenance` and `20261108120000_sai04_tutor_conversation`
-  to shared development.
+- The owner applies migrations `20261108090000_sai01_hint_provenance`, `20261108120000_sai04_tutor_conversation` and
+  `20261108150000_b5_textbook_passage` to shared development.

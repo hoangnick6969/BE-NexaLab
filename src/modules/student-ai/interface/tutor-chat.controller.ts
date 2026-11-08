@@ -5,7 +5,7 @@ import { Roles } from "../../../common/decorators";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { Db } from "../../../db/db";
 import { llmStore, phraseHint, STUDENT_AI_PROVIDER, studentAiConfig, writeHintCache, type StudentAiProvider } from "../application/student-llm";
-import { getConversation, openConversation, sendMessage, TUTOR_CHAT_MAX_MESSAGE, TUTOR_CHAT_PROMPT_VERSION } from "../application/tutor-chat";
+import { getConversation, openConversation, PASSAGE_MAX, sendMessage, TUTOR_CHAT_MAX_MESSAGE, TUTOR_CHAT_PROMPT_VERSION } from "../application/tutor-chat";
 
 /** SAI-04 Socratic tutor chat (students only; dev/test only until SG-2 / SG-4). */
 @ApiTags("NexaLab")
@@ -27,10 +27,10 @@ export class TutorChatController {
 
   @Roles("STUDENT")
   @Post("tutor/conversations")
-  @ApiOperation({ summary: "Open (or resume) the student's tutor conversation for a Lab or lesson they can open" })
+  @ApiOperation({ summary: "Open (or resume) the student's tutor conversation for a Lab, lesson or textbook (B5) they can open" })
   async open(@Body() body: unknown, @Req() req: any) {
     this.limiter?.rate("tutor-open:" + req.user.sub, 30);
-    const input = z.object({ contextKind: z.enum(["LAB", "LESSON"]), contextId: z.string().min(1).max(120) }).strict().parse(body);
+    const input = z.object({ contextKind: z.enum(["LAB", "LESSON", "EBOOK"]), contextId: z.string().min(1).max(120) }).strict().parse(body);
     return openConversation(this.db, req.user.sub, input.contextKind, input.contextId);
   }
 
@@ -46,8 +46,12 @@ export class TutorChatController {
   @ApiOperation({ summary: "Ask the tutor; returns the student turn and the tutor reply" })
   async send(@Param("id") id: string, @Body() body: unknown, @Req() req: any) {
     this.limiter?.rate("tutor-message:" + req.user.sub, 10);
-    const { message } = z.object({ message: z.string().min(1).max(TUTOR_CHAT_MAX_MESSAGE) }).strict().parse(body);
-    return sendMessage(this.db, req.user.sub, id, message, { provider: this.provider });
+    const { message, passage } = z.object({
+      message: z.string().min(1).max(TUTOR_CHAT_MAX_MESSAGE),
+      // B5: the highlighted textbook passage (EBOOK conversations only).
+      passage: z.object({ text: z.string().min(1).max(PASSAGE_MAX), prefix: z.string().max(400).optional(), suffix: z.string().max(400).optional(), pageNumber: z.number().int().min(1).max(2000) }).strict().optional(),
+    }).strict().parse(body);
+    return sendMessage(this.db, req.user.sub, id, message, { provider: this.provider }, passage);
   }
 
   /**

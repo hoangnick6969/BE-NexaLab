@@ -1,7 +1,7 @@
 ---
 id: SPEC-student-ai-lesson-hints
 status: review
-slice: SAI-03A (lesson quiz questions) + SAI-03-T3 (Open Curriculum basic exercises); B5 textbook Q&A follows
+slice: SAI-03A (lesson quiz questions) + SAI-03-T3 (Open Curriculum basic exercises); B5 textbook Q&A in spec-student-ai-llm
 ideas: SAI-03 lesson and quiz hints (roadmap; owner 2026-11-05: "làm tiếp SAI-03")
 companions:
   - ../spec-student-ai-checkpoint-hints/SPEC.md
@@ -57,7 +57,7 @@ submitting with this question still wrong. Note: "Gợi ý không cho đáp án 
 ## Non-goals
 
 - Scored TEST assignments (never while open). Basic exercises: see SAI-03-T3 below.
-- B5 Q&A on a highlighted textbook passage (free text: needs SG-2 / SAI-04).
+- B5 Q&A on a highlighted textbook passage: built 2026-11-08 in `../spec-student-ai-llm/SPEC.md` (dev/test only).
 - Lesson hints in the parent summary (SAI-05) or teacher insight (SAI-02A).
 
 ## SAI-03-T3 — basic exercises (Open Curriculum, 2026-11-08)

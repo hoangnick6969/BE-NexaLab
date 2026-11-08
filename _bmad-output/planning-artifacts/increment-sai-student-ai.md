@@ -86,3 +86,6 @@ the lecturer. Migration `20261108090000_sai01_hint_provenance` must be applied t
 quiz/exercise hints, B2/B3 explanations and the SAI-04 tutor chat, enabled only in dev/test until SG-2 (and SG-4 for
 the chat). See `../specs/spec-student-ai-llm/SPEC.md`. Migrations to apply to shared development by the owner:
 `20261108090000_sai01_hint_provenance`, `20261108120000_sai04_tutor_conversation`.
+
+2026-11-08 (later): B5 shipped (dev/test only): "Hỏi AI" on a highlighted textbook passage, see the B5 section of
+`../specs/spec-student-ai-llm/SPEC.md`. One more migration for the owner: `20261108150000_b5_textbook_passage`.

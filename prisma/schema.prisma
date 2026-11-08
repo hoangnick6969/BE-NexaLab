@@ -1333,7 +1333,7 @@ model TutorConversation {
   id          String         @id @default(cuid())
   studentId   String
   student     User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  /// LAB | LESSON
+  /// LAB | LESSON | EBOOK (B5: contextId is the subject whose textbook is read)
   contextKind String
   contextId   String
   createdAt   DateTime       @default(now())
@@ -1353,6 +1353,9 @@ model TutorMessage {
   /// STUDENT | TUTOR
   role           String
   content        String
+  /// B5: the textbook passage the student highlighted (STUDENT rows of EBOOK conversations).
+  passage        String?           @db.Text
+  pageNumber     Int?
   /// ANSWERED | REFUSED | DISABLED | FALLBACK (TUTOR rows only)
   outcome        String?
   /// Why a turn was refused or fell back: INJECTION, UNSAFE_TOPIC, PERSONAL_DATA, ANSWER_SEEKING, OFF_TOPIC, GUARD:<rule>, BUDGET, ...
