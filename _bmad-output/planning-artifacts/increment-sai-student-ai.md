@@ -72,3 +72,7 @@ summary with misconception hypotheses and teacher disagreement (migration `20261
 2026-11-06: B3 rules part shipped on `research/student-ai` (owner: "làm B3 bằng luật trước"): "Nếu… thì sao?" in
 FL-21 and FL-20 free explore, answered from the pinned models (`what-if@1`, FE only), see
 `../specs/spec-student-ai-what-if/SPEC.md`. SAI-04 (typed questions) still waits for SG-2.
+
+2026-11-08: SAI-03-T3 shipped on `research/student-ai`: the same answer-blind hints on Open Curriculum basic
+exercise questions (`POST /open-curriculum/lessons/:lessonId/exercises/:stepId/hints`, no migration), see the
+SAI-03-T3 section of `../specs/spec-student-ai-lesson-hints/SPEC.md`. B5 (free-text textbook Q&A) still needs SG-2.

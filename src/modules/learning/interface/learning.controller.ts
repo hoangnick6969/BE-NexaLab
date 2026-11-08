@@ -18,7 +18,7 @@ import { audit } from "../../../common/audit";
 import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { notify } from "../../notifications/application/notify";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
-import { requestLessonQuestionHint } from "../application/lesson-hint";
+import { requestBasicExerciseHint, requestLessonQuestionHint } from "../application/lesson-hint";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -171,6 +171,21 @@ export class LearningController {
       const attempt = await this.db.basicExerciseAttempt.findUniqueOrThrow({ where: { studentId_idempotencyKey: { studentId: req.user.sub, idempotencyKey: request.idempotencyKey } } });
       return { id: attempt.id, score: attempt.score, passThreshold: attempt.passThreshold, passed: attempt.passed, createdAt: attempt.createdAt.toISOString() };
     }
+  }
+  /** SAI-03-T3: rules-only hint on one basic exercise question; never the answer key, never the student's draft. */
+  @Roles("STUDENT")
+  @Post("open-curriculum/lessons/:lessonId/exercises/:stepId/hints")
+  @ApiOperation({ summary: "Get a rules-only hint for one question of an Open Curriculum basic exercise" })
+  @ApiBody({ schema: { type: "object", required: ["questionId"], properties: { questionId: { type: "string" } } } })
+  async basicExerciseHint(
+    @Param("lessonId") lessonId: string,
+    @Param("stepId") stepId: string,
+    @Body() body: unknown,
+    @Req() req: any,
+  ) {
+    this.limiter?.rate("lesson-hint:" + req.user.sub, 30);
+    const { questionId } = z.object({ questionId: z.string().min(1).max(80) }).strict().parse(body);
+    return requestBasicExerciseHint(this.db, { studentId: req.user.sub, lessonId, stepId, questionId });
   }
   @Roles("STUDENT")
   @Put("open-curriculum/lessons/:lessonId/steps/:stepId/progress")

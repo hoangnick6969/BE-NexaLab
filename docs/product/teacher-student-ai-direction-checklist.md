@@ -9,7 +9,7 @@
 
 **Teacher AI chưa phải tính năng đã có.** TAI-01..06 là draft/backlog. Code hiện có một adapter Anthropic riêng cho gợi ý Lab; chưa có AI job chung, Gemini adapter, credit ledger, bài viết/rubric hay phòng trao đổi.
 
-**Student AI theo luật (không gọi LLM) đã có trên nhánh `research/student-ai`, chưa merge vào main** (cập nhật 06/11/2026): gợi ý từng bước cho 11 Foundational Lab và quiz bài học, giải thích kết quả, nhận diện lỗi hiểu sai, "Nếu… thì sao?", tóm tắt cho phụ huynh và giáo viên. Student AI hội thoại (SAI-04) vẫn chưa có và chờ cổng SG-2. Xem mục 7.
+**Student AI theo luật (không gọi LLM) đã có trên nhánh `research/student-ai`, chưa merge vào main** (cập nhật 08/11/2026): gợi ý từng bước cho 11 Foundational Lab, quiz bài học và bài tập luyện tập, giải thích kết quả, nhận diện lỗi hiểu sai, "Nếu… thì sao?", tóm tắt cho phụ huynh và giáo viên. Student AI hội thoại (SAI-04) vẫn chưa có và chờ cổng SG-2. Xem mục 7.
 
 ## 1. Code hiện tại và spec hiện tại
 
@@ -136,7 +136,7 @@ Hai track có thể chạy song song:
 | Gợi ý từng bước (mức 1–4, chỉ tăng sau khi thật sự làm lại) | 11 Foundational Lab: sau khi nộp; trong lúc làm mức 1–2 | `spec-student-ai-checkpoint-hints` |
 | Giải thích vì sao đạt/chưa đạt (B2) | 11 Foundational Lab | `spec-student-ai-checkpoint-hints` |
 | Nhận diện lỗi hiểu sai (B8) | 11 Foundational Lab | `spec-student-ai-checkpoint-hints` |
-| Gợi ý câu hỏi quiz bài học, không đọc đáp án (SAI-03A) | Quiz trong bài học được giao | `spec-student-ai-lesson-hints` |
+| Gợi ý câu hỏi quiz bài học, không đọc đáp án (SAI-03A) | Quiz trong bài học được giao; bài tập luyện tập của bài học mở (SAI-03-T3) | `spec-student-ai-lesson-hints` |
 | "Nếu… thì sao?" từ mô hình (B3) | 8 Lab | `spec-student-ai-what-if` |
 | Phụ huynh: số lần xin gợi ý theo mức (SAI-05) | Lab | `spec-student-ai-checkpoint-hints` |
 | Giáo viên: "Lớp đang vướng ở đâu", giả thuyết lỗi, không đồng ý (SAI-02A) | Bài Lab được giao | `spec-student-ai-teacher-insight` |

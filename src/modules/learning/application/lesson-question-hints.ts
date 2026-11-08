@@ -9,6 +9,8 @@
  */
 export const LESSON_HINT_RULES = "lesson-hints@1";
 export const LESSON_HINT_KIND = "lesson-question-hint";
+/** SAI-03-T3: same rules on an Open Curriculum basic exercise question. */
+export const EXERCISE_HINT_KIND = "exercise-question-hint";
 export const MASK = "___";
 
 export type HintSourceKind = "READING" | "STUDY_CARDS" | "VIDEO";

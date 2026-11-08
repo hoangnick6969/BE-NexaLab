@@ -226,7 +226,7 @@ development_status:
   sai-01a-t7-hints-event-labs-fl06-fl07-fl10: review
   sai-01a-t8-b2-post-verdict-explanation: review
   sai-01a-t9-in-run-step-picker-station-event-labs: review
-  sai-01a-t10-misconceptions-station-event-labs: review # FL-03/05/06/07/10; FL-27 and FL-16 open
+  sai-01a-t10-misconceptions-station-event-labs: review # FL-03/05/06/07/10; FL-27 and FL-16 in t11
   sai-01a-t11-misconceptions-gene-eye: review
   epic-sai-05-parent-help-seeking: review
   sai-05-t1-help-seeking-summary-api-and-parent-panel: review
@@ -237,7 +237,7 @@ development_status:
   epic-sai-03a-lesson-quiz-hints: review
   sai-03a-t1-answer-blind-question-hint-rules: review
   sai-03a-t2-quiz-hint-api-and-panel: review
-  sai-03-t3-basic-exercise-hints: backlog
+  sai-03-t3-basic-exercise-hints: review
   b3-what-if-rules-fl21-fl20: review
   b3-what-if-more-labs: review # what-if@2: FL-25, FL-03, FL-05, FL-27, FL-06, FL-07
   epic-sai-01-lab-hint-tutor: backlog
@@ -410,7 +410,8 @@ student_ai_tracking:
     - 'No Student AI spec existed; FE 08-STUDENT-P0-UX-DEFINITION says no hint UI in P0 while Lab.tsx shows it.'
   next_ready_when_gate_sg1_closes:
     - sai-01-t1-versioned-rules-escalation-eligibility
-  story_notes: {}
+  story_notes:
+    sai-03-t3-basic-exercise-hints: '2026-11-08: POST /open-curriculum/lessons/:lessonId/exercises/:stepId/hints (lesson-hints@1, kind exercise-question-hint, no migration); quiz and exercise share issueLadderHint in lesson-hint.ts. FE ExerciseQuestionHint under each basic exercise question, hidden when COMPLETED. Verified: BE lint/build/check:layers, Vitest 594 passed (isolated PostgreSQL 55432 incl. exercise-hints.integration 2/2), FE lint/build, Playwright exercise-question-hints 2/2 + quiz-question-hints 1/1 (mocked API). Not run: real-stack browser check against a released lesson with a BASIC_EXERCISE step. Found: migration 20261025150000 makes ContentPack.subjectId NOT NULL (and a domain check) but schema.prisma has no subjectId field, so prisma.contentPack.create fails on a migrated DB.'
 
 increment_i2_tracking:
   plan: ../planning-artifacts/increment-i2-epic-02-class-space-resources.md
