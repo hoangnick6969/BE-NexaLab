@@ -1,5 +1,6 @@
 import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Inject, NotFoundException, Optional, Param, Post, Put, Query, Req } from "@nestjs/common";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { access } from "../../auth/interface/auth";
 import { Roles } from "../../../common/decorators";
@@ -644,10 +645,11 @@ export class LearningController {
     const test = await this.db.classResource.findFirst({ where: { id: a.contentId, classId: a.classId, kind, status: { not: "DRAFT" } } });
     return test ? { state: "AVAILABLE" as const, test } : { state: "UNAVAILABLE" as const, test: null };
   }
-  @Roles("STUDENT") @Get("assignments") async assignments(@Req() req: any) {
+  @Roles("STUDENT") @Get("assignments") async assignments(@Req() req: any, @Query() rawQuery: unknown = {}) {
+    const { classId } = z.object({ classId: z.string().min(1).max(100).optional() }).strict().parse(rawQuery);
     const now = new Date();
     const rows = await this.db.assignment.findMany({
-      where: applicableAssignmentWhere(req.user.sub),
+      where: { ...applicableAssignmentWhere(req.user.sub), ...(classId ? { classId } : {}) },
       include: { classroom: { select: { id: true, name: true, teacher: { select: { fullName: true, username: true } } } } },
       orderBy: assignmentQueueOrder,
     });
@@ -660,10 +662,11 @@ export class LearningController {
     const writtenResourceIds = [...new Set(tests.filter((a) => a.contentType === WRITTEN_CONTENT_TYPE).map((a) => a.contentId))];
     const labIds = [...new Set(rows.filter((a) => a.contentType === "lab").map((a) => a.contentId))];
     const testResources = testResourceIds.length
-      ? await this.db.classResource.findMany({
-          where: { id: { in: testResourceIds }, kind: "TEST", status: { not: "DRAFT" } },
-          select: { id: true, classId: true, lessonId: true },
-        })
+      ? await this.db.$queryRaw<Array<{ id: string; classId: string; lessonId: string | null; thumbnailUrl: string | null }>>(Prisma.sql`
+          SELECT id, "classId", "lessonId", content->>'thumbnailUrl' AS "thumbnailUrl"
+          FROM "ClassResource"
+          WHERE id IN (${Prisma.join(testResourceIds)}) AND kind = 'TEST' AND status <> 'DRAFT'
+        `)
       : [];
     // TAI2-T2: written resources are read separately, so the TEST query stays unchanged.
     const writtenResources = writtenResourceIds.length
@@ -730,10 +733,12 @@ export class LearningController {
         title: a.title,
         contentId: a.contentId,
         contentType: a.contentType,
+        ...(isTest ? { thumbnailUrl: testResource?.thumbnailUrl ?? null } : a.contentType === "lab" ? { thumbnailUrl: (a.classLabSnapshot as any)?.thumbnailUrl ?? null } : {}),
         ...(content ? {
           contentTitle: content.title,
           subject: { id: content.subject.id, name: content.subject.name },
           grade: content.grade,
+          ...(a.contentType === "lab" ? { topicCode: content.topicCode } : {}),
           chapter: lessonContext ? content.chapter : null,
           topic: content.topic,
           curriculumOrder: lessonContext ? content.curriculumOrder : null,

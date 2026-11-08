@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { assignmentInput } from "./assignments.service";
+import { describe, expect, it, vi } from "vitest";
+import { AssignmentsService, assignmentInput } from "./assignments.service";
 
 describe("assignment audience validation", () => {
   const base = { contentType: "lesson", contentId: "lesson-circuit" };
@@ -16,5 +16,21 @@ describe("assignment audience validation", () => {
     expect(assignmentInput.safeParse({ ...base, audience: "CLASS", studentIds: ["student-a"] }).success).toBe(false);
     expect(assignmentInput.parse(base).studentIds).toEqual([]);
     expect(assignmentInput.parse({ ...base, studentIds: ["student-a"] }).studentIds).toEqual(["student-a"]);
+  });
+});
+
+describe("assignment grade compatibility", () => {
+  it("rejects a published grade 9 Lab for a grade 8 class", async () => {
+    const service = new AssignmentsService({} as any);
+    const tx = { lab: { findFirst: vi.fn().mockResolvedValue({ id: "em-induction", title: "Cảm ứng điện từ", grade: 9 }) } };
+    await expect((service as any).assignableContentOrThrow(tx, "class-8", "lab", "em-induction", "teacher", 8))
+      .rejects.toMatchObject({ response: { code: "ASSIGNMENT_GRADE_MISMATCH" } });
+  });
+
+  it("rejects a Test linked to a lesson from another grade", async () => {
+    const service = new AssignmentsService({} as any);
+    const tx = { classResource: { findFirst: vi.fn().mockResolvedValue({ id: "test-9", title: "Kiểm tra", version: 1, lesson: { grade: 9 } }) } };
+    await expect((service as any).assignableContentOrThrow(tx, "class-8", "test", "test-9", "teacher", 8))
+      .rejects.toMatchObject({ response: { code: "ASSIGNMENT_GRADE_MISMATCH" } });
   });
 });
