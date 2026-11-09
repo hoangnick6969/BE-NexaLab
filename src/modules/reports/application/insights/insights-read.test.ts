@@ -727,9 +727,9 @@ describe("TAI4-T6 loader cost", () => {
     await loadClassEvidence(large, "c1");
     expect(large.calls).toEqual(small.calls);
     for (const name of ["submissionSimilarityRun.findMany", "submissionSimilarityMatch.findMany"]) expect(large.calls.filter((c: string) => c === name)).toHaveLength(1);
-    // 3 stage-1 queries, 9 stage-2 queries issued together, then the lesson lookup: no extra sequential stage.
-    expect(large.calls.indexOf("lesson.findMany")).toBe(12);
-    expect(large.calls.length).toBe(13);
+    // 3 stage-1 queries, 11 stage-2 queries issued together, then the lesson lookup: no extra sequential stage.
+    expect(large.calls.indexOf("lesson.findMany")).toBe(14);
+    expect(large.calls.length).toBe(15);
   });
   it("skips every similarity query when the class has no written assignment", async () => {
     const db = makeDb(baseTables());

@@ -106,7 +106,7 @@ try {
 
   // ---------- Part A: qdup@1 (TAI3-T1, TAI3-T2) ----------
   const question = "Đơn vị đo điện trở trong hệ SI là gì và ký hiệu của nó như thế nào?";
-  const quiz = (title, text) => ({ kind: "STUDY_QUIZ", title, lessonId: lesson.id, content: { questions: [{ prompt: text, options: ["Vôn", "Ôm"], correctOption: 1, explanation: "Điện trở đo bằng ôm" }] } });
+  const quiz = (title, text) => ({ kind: "STUDY_QUIZ", title, lessonId: lesson.id, content: { questions: [{ prompt: text, options: ["Vôn", "Ôm"], explanation: "Điện trở đo bằng ôm" }] } });
   const quizA = await req(`/classes/${classA.id}/resources`, "POST", quiz(`${prefix} Quiz A`, question), owner.token, key());
   check("owner creates a quiz in class A", quizA.status === 201, quizA.data);
   const quizAId = quizA.data.id;
@@ -122,7 +122,7 @@ try {
   check("the copy warns EXACT_DUPLICATE_ELSEWHERE with the source title and class", warning?.flag === "EXACT_DUPLICATE_ELSEWHERE" && warning.level === "EXACT" && warning.source.title === `${prefix} Quiz A` && warning.source.className === `${prefix} class A`, direct.data.duplicateWarnings);
   check("the outsider's identical question never appears", !JSON.stringify(direct.data.duplicateWarnings).includes(`${prefix} Outsider`) && direct.data.duplicateWarnings[0].matches.length === 1);
   const dupCheck = await req(`/classes/${classB.id}/resources/duplicate-check`, "POST", { kind: "TEST", items: [{ text: question }] }, owner.token);
-  check("duplicate-check is read-only and returns the same single match", dupCheck.status === 200 && dupCheck.data.warnings?.[0]?.matches?.length === 1, dupCheck.data);
+  check("duplicate-check is read-only and returns the existing same-class and cross-class matches", dupCheck.status === 200 && dupCheck.data.warnings?.[0]?.matches?.length === 2 && dupCheck.data.warnings[0].matches.some((m) => m.flag === "EXACT_DUPLICATE_ELSEWHERE") && dupCheck.data.warnings[0].matches.some((m) => m.flag === "EXACT_DUPLICATE"), dupCheck.data);
   const dupForeign = await req(`/classes/${classA.id}/resources/duplicate-check`, "POST", { kind: "TEST", items: [{ text: question }] }, outsider.token);
   check("another teacher cannot check against a class they do not own", code(dupForeign, 403, "CLASS_ACCESS_DENIED"), dupForeign.data);
   const dupOutsider = await req(`/classes/${classO.id}/resources/duplicate-check`, "POST", { kind: "TEST", items: [{ text: question }] }, outsider.token);

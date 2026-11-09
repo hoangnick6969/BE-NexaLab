@@ -208,7 +208,7 @@ try {
   check("fixtures: four attempts for the student, one for a classmate", (await db.quizAttempt.count({ where: { studentId: { in: [a.id, b.id] } } })) === 5);
 
   // ---- the written part (TAI4-T6): two near-identical answers --------------------------------------------------------
-  const rubric = { code: "GIAI_THICH", description: "Giải thích đúng", maxPoints: 2, anchors: [{ points: 0, description: "Không giải thích" }, { points: 2, description: "Giải thích đầy đủ" }] };
+  const rubric = { code: "EXPLANATION", description: "Giải thích đúng", maxPoints: 2, anchors: [{ points: 0, description: "Không giải thích" }, { points: 2, description: "Giải thích đầy đủ" }] };
   const written = await req(`/classes/${classA.id}/resources`, "POST", { kind: "WRITTEN_TASK", title: `${prefix} written`, lessonId: lesson.id, content: { prompts: [{ prompt: "Giải thích hiện tượng.", maxChars: 3000, criteria: [rubric] }] } }, owner.token, key());
   check("owner creates the written task", written.status === 201, written.data);
   const publish = await req(`/classes/${classA.id}/resources/${written.data.id}/publish`, "POST", undefined, owner.token);
@@ -227,6 +227,12 @@ try {
   };
   const subA = await submit(a, textA);
   const subB = await submit(b, textB);
+  // TAI4-T5: a teacher-final explanation grade, never an AI suggestion, drives insights@3.
+  const gradeDetail = await req(`/classes/${classA.id}/assignments/${WRITTEN_A}/submissions/${subA}`, "GET", undefined, owner.token);
+  check("owner opens the submission for final grading", gradeDetail.status === 200, gradeDetail.data);
+  const promptId = gradeDetail.data.rubric.prompts[0].id;
+  const grade = await req(`/classes/${classA.id}/assignments/${WRITTEN_A}/submissions/${subA}/grades`, "POST", { kind: "MANUAL", criterionPoints: [{ promptId, criterionCode: "EXPLANATION", points: 0 }] }, owner.token, key());
+  check("owner records a zero-point teacher-final explanation grade", grade.status === 201 && grade.data.grade?.score === 0, grade.data);
 
   // ---- snapshots: scores, progress, B2 flags, evidence, parent view, notifications -----------------------------------
   const probes = {
@@ -280,6 +286,12 @@ try {
   const jump = mine(open1.data, a.id).find((i) => i.ruleCode === "SCORE_CHANGE_UNUSUAL");
   check("a fourth attempt 30 points above a stable baseline gives SCORE_CHANGE_UNUSUAL (insights@1)", !!jump && jump.ruleVersion === "insights@1" && jump.status === "TEACHER_REVIEW_RECOMMENDED" && jump.values.latest === 90 && jump.values.mean === 60 && jump.values.delta === 30 && jump.values.direction === "UP", jump);
   check("its evidence is exactly the four attempts", stable([...jump.evidence.map((e) => e.id)].sort()) === stable([...quizIds].sort()) && jump.evidence.every((e) => e.kind === "QUIZ"), jump.evidence);
+  const mismatch = mine(open1.data, a.id).find((i) => i.ruleCode === "MCQ_EXPLANATION_MISMATCH");
+  check("insights@3 flags high quiz score versus low teacher-final explanation", !!mismatch && mismatch.ruleVersion === "insights@3" && mismatch.values.direction === "ANSWER_HIGH_EXPLANATION_LOW" && mismatch.values.explanationPercent === 0 && mismatch.values.mcqScore === 90, mismatch);
+  check("insights@3 links the quiz, own written submission and final grade only", !!mismatch && stable(mismatch.evidence.map((e) => e.id)) === stable([attempts[3].id, subA, grade.data.grade.id]) && !JSON.stringify(mismatch).includes(subB) && !JSON.stringify(mismatch).includes(b.id), mismatch);
+  const mismatchAck = await req(`${base}/students/${a.id}/insights/${mismatch.fingerprint}/acknowledgements`, "POST", { action: "ACKNOWLEDGED" }, owner.token, key());
+  const mismatchReplay = await req(`${base}/students/${a.id}/insights/${mismatch.fingerprint}/replay`, "GET", undefined, owner.token);
+  check("insights@3 replay preserves the rule version, fingerprint and evidence", mismatchAck.status === 201 && mismatchAck.data.ruleVersion === "insights@3" && mismatchReplay.status === 200 && mismatchReplay.data.ruleVersion === "insights@3" && mismatchReplay.data.fingerprint === mismatch.fingerprint && stable(mismatchReplay.data.evidence) === stable(mismatch.evidence), mismatchReplay.data);
   check("the order of students is by display name and carries no count", open1.data.students.every((s) => Object.keys(s).sort().join() === "displayName,insights,studentId"));
 
   // ---- 2. every linked attempt opens through the B2 route ---------------------------------------------------------------
@@ -297,11 +309,11 @@ try {
   const ack1 = await req(ackPath(a.id, jump.fingerprint), "POST", { action: "DISMISSED", note: NOTE }, owner.token, { "Idempotency-Key": ackKey });
   check("owner dismisses the insight with a note (201, no actor in the body)", ack1.status === 201 && ack1.data.action === "DISMISSED" && ack1.data.note === NOTE && !("actorId" in ack1.data) && ack1.data.ruleVersion === "insights@1", ack1.data);
   const ack1Again = await req(ackPath(a.id, jump.fingerprint), "POST", { action: "DISMISSED", note: NOTE }, owner.token, { "Idempotency-Key": ackKey });
-  check("the same key returns the same row", ack1Again.status === 201 && ack1Again.data.id === ack1.data.id && (await db.insightAcknowledgement.count({ where: { classId: classA.id } })) === 1);
+  check("the same key returns the same row", ack1Again.status === 201 && ack1Again.data.id === ack1.data.id && (await db.insightAcknowledgement.count({ where: { classId: classA.id } })) === 2);
   const open2 = await req(`${base}/insights?status=open`, "GET", undefined, owner.token);
   check("the dismissed insight leaves the open list", !mine(open2.data, a.id).some((i) => i.fingerprint === jump.fingerprint));
   const all2 = await req(`${base}/students/${a.id}/insights?status=all`, "GET", undefined, owner.token);
-  check("it stays in all with its latest acknowledgement and the row history", all2.data.insights.find((i) => i.fingerprint === jump.fingerprint)?.latestAcknowledgement?.action === "DISMISSED" && all2.data.acknowledgements.length === 1 && !("actorId" in all2.data.acknowledgements[0]));
+  check("it stays in all with its latest acknowledgement and the row history", all2.data.insights.find((i) => i.fingerprint === jump.fingerprint)?.latestAcknowledgement?.action === "DISMISSED" && all2.data.acknowledgements.length === 2 && !("actorId" in all2.data.acknowledgements[0]));
   const s1 = await snapshot();
   same(s0a, s1, "after reading and dismissing");
 
@@ -416,11 +428,11 @@ try {
   same(s4, s5, "after the privacy scans");
   const acks = await db.insightAcknowledgement.findMany({ where: { classId: classA.id } });
   const ackAudits = await db.auditLog.findMany({ where: { action: "insight.acknowledge", actorId: owner.id } });
-  check("one insight.acknowledge audit row per stored acknowledgement", ackAudits.length === acks.length && acks.length === 3, { audits: ackAudits.length, acks: acks.length });
+  check("one insight.acknowledge audit row per stored acknowledgement", ackAudits.length === acks.length && acks.length === 4, { audits: ackAudits.length, acks: acks.length });
   check("the audit rows keep only class, student, rule, version and action", ackAudits.every((r) => stable(Object.keys(r.after ?? {}).sort()) === stable(["action", "classId", "ruleCode", "ruleVersion", "studentId"])), ackAudits.map((r) => r.after));
   const everyAudit = JSON.stringify(await db.auditLog.findMany({ where: { OR: [{ actorId: { in: createdUsers } }, { targetId: { in: [...acks.map((x) => x.id), classA.id, a.id, b.id] } }] } }));
   check("no audit row contains a note text", !everyAudit.includes(NOTE) && !everyAudit.includes("xem lại sau") && !everyAudit.includes("đã xem cặp bài"));
-  check("the acknowledgement rows are append-only here: three rows, none updated", acks.every((x) => x.createdAt instanceof Date) && acks.length === 3);
+  check("the acknowledgement rows are append-only here: four rows, none updated", acks.every((x) => x.createdAt instanceof Date) && acks.length === 4);
 
   // ---- 9. latency record (pilot unless the database is a local one) ----------------------------------------------------------
   const host = (() => { try { return new URL(process.env.DATABASE_URL ?? process.env.DIRECT_URL ?? "").hostname; } catch { return ""; } })();

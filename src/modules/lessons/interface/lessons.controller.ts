@@ -10,6 +10,7 @@ import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { text } from "../../../common/validation";
 import { materializeLegacySteps } from "../application/pathway";
 import { CHALLENGE_PARAMETERS, DOMAINS, RELEASE_REVIEW_KINDS, RELEASE_REVIEW_LABELS, legacyAssetIds, attribution, challengeObjective, challengeParamErrors, domainSchema, isStructureChange, materialVersionIds, publishBlockers, variantChallengeId } from "../application/lesson-content";
+import { assertChallengeParams, lessonAuditFields, lessonStructureLocked, lessonStructureLockedIds, writeLessonSteps } from "../application/lesson-challenge";
 import { lessonSchema, publishedSteps } from "./lesson-schema";
 
 @ApiTags("NexaLab")
@@ -104,53 +105,9 @@ export class LessonsController {
         details: { missing },
       });
   }
-  /** D7: a published lesson with an active assignment or any evidence keeps its structure. */
-  private async structureLocked(lessonId: string, db: any = this.db) {
-    const stepIds = (await db.lessonStep.findMany({ where: { lessonId }, select: { id: true } })).map((step: any) => step.id);
-    const [assignments, progress, quiz, practical] = await Promise.all([
-      db.assignment.count({ where: { contentType: "lesson", contentId: lessonId, status: "ACTIVE" } }),
-      db.stepProgress.count({ where: { stepId: { in: stepIds } } }),
-      db.quizAttempt.count({ where: { lessonId } }),
-      db.attempt.count({ where: { lessonStepId: { in: stepIds } } }),
-    ]);
-    return assignments + progress + quiz + practical > 0;
-  }
-  /** structureLocked for many lessons in a fixed number of queries (the library lists every own lesson). */
-  private async structureLockedIds(lessonIds: string[]) {
-    if (!lessonIds.length) return new Set<string>();
-    const steps = await this.db.lessonStep.findMany({ where: { lessonId: { in: lessonIds } }, select: { id: true, lessonId: true } });
-    const lessonOfStep = new Map(steps.map((step: any) => [step.id, step.lessonId as string]));
-    const stepIds = [...lessonOfStep.keys()];
-    const [assignments, progress, quiz, practical] = await Promise.all([
-      this.db.assignment.groupBy({ by: ["contentId"], where: { contentType: "lesson", contentId: { in: lessonIds }, status: "ACTIVE" } }),
-      this.db.stepProgress.groupBy({ by: ["stepId"], where: { stepId: { in: stepIds } } }),
-      this.db.quizAttempt.groupBy({ by: ["lessonId"], where: { lessonId: { in: lessonIds } } }),
-      this.db.attempt.groupBy({ by: ["lessonStepId"], where: { lessonStepId: { in: stepIds } } }),
-    ]);
-    return new Set<string>([
-      ...assignments.map((row: any) => row.contentId),
-      ...quiz.map((row: any) => row.lessonId),
-      ...[...progress.map((row: any) => row.stepId), ...practical.map((row: any) => row.lessonStepId)].map((stepId) => lessonOfStep.get(stepId)!),
-    ]);
-  }
-  private lessonAuditFields(lesson: any) {
-    return {
-      title: lesson.title,
-      status: lesson.status,
-      scope: lesson.scope,
-      grade: lesson.grade,
-      clonedFromId: lesson.clonedFromId,
-      reviewChecklist: Boolean(lesson.review),
-      domain: lesson.domain ?? null,
-      outcomeCodes: lesson.outcomeCodes ?? [],
-      challengeParams: lesson.challengeParams ?? null,
-    };
-  }
   /** Outcome codes must exist in the map for the lesson's grade; challenge parameters must be in range. */
   private async assertTaxonomy(data: z.infer<typeof lessonSchema>, alreadyMapped: string[] = []) {
-    const errors = challengeParamErrors(data.labId, data.challengeParams);
-    if (errors.length)
-      throw new BadRequestException({ code: "INVALID_CHALLENGE_PARAMS", message: errors.join("; "), details: { errors } });
+    assertChallengeParams(data.labId, data.challengeParams);
     const codes = [...new Set(data.outcomeCodes)];
     if (codes.length !== data.outcomeCodes.length)
       throw new BadRequestException({ code: "INVALID_OUTCOME", message: "Yêu cầu cần đạt bị trùng" });
@@ -171,39 +128,6 @@ export class LessonsController {
         code: "INVALID_OUTCOME",
         message: "Yêu cầu cần đạt không thuộc khối lớp hoặc mạch nội dung đã chọn: " + invalid.join(", "),
         details: { invalid },
-      });
-  }
-  private async writeSteps(
-    tx: any,
-    lessonId: string,
-    steps: ReturnType<typeof publishedSteps>,
-    variant?: { labId?: string | null; challengeParams?: Record<string, number | string> | null },
-  ) {
-    if (steps.length && variant?.labId && variant.challengeParams) {
-      // A teacher variant gets its own challenge row; the shared model is untouched.
-      const challengeId = variantChallengeId(variant.labId, lessonId);
-      const challenge = {
-        objective: challengeObjective(variant.labId, variant.challengeParams),
-        constraints: { params: variant.challengeParams, modelRef: CHALLENGE_PARAMETERS[variant.labId].modelRef } as any,
-      };
-      await tx.challenge.upsert({ where: { id: challengeId }, create: { id: challengeId, labId: variant.labId, ...challenge }, update: challenge });
-      steps = [...steps, { type: "CHALLENGE", position: 60, required: true, config: { challengeId } }] as typeof steps;
-    }
-    const stepRows = steps.map((step) => ({
-      ...step,
-      id: `step-${lessonId}-${step.type.toLowerCase().replace("_", "-")}`,
-      lessonId,
-      config: step.config as any,
-    }));
-    if (!stepRows.length) return;
-    await tx.lessonStep.deleteMany({
-      where: { lessonId, id: { notIn: stepRows.map((step) => step.id) } },
-    });
-    for (const step of stepRows)
-      await tx.lessonStep.upsert({
-        where: { id: step.id },
-        create: step,
-        update: { type: step.type, position: step.position, required: step.required, config: step.config },
       });
   }
   @Roles("TEACHER", "ADMIN") @Post("lessons") async createLesson(
@@ -229,9 +153,9 @@ export class LessonsController {
           publishedAt: data.status === "published" ? new Date() : null,
         },
       });
-      await this.writeSteps(tx, lesson.id, steps, data);
+      await writeLessonSteps(tx, lesson.id, steps, data);
       await syncLibraryLessonFingerprints(tx, lesson.id);
-      await audit(tx, { actor: req.user, action: "lesson.create", targetType: "Lesson", targetId: lesson.id, after: this.lessonAuditFields(lesson) });
+      await audit(tx, { actor: req.user, action: "lesson.create", targetType: "Lesson", targetId: lesson.id, after: lessonAuditFields(lesson) });
       return lesson;
     });
   }
@@ -263,7 +187,7 @@ export class LessonsController {
     const reviewsStale = l.scope === "SHARED_LIBRARY" && isStructureChange(l as any, parsed as any);
     const data = { ...parsed, releaseReview: reviewsStale ? null : l.releaseReview };
     this.assertPublishable(data as any, l.scope);
-    const locked = l.status !== "draft" && (await this.structureLocked(id));
+    const locked = l.status !== "draft" && (await lessonStructureLocked(this.db, id));
     if (locked) {
       if (isStructureChange(l as any, data as any))
         throw new ConflictException({
@@ -290,11 +214,11 @@ export class LessonsController {
         },
       });
       // A locked structure is unchanged by definition; never rewrite its steps.
-      if (!locked) await this.writeSteps(tx, id, steps, parsed);
+      if (!locked) await writeLessonSteps(tx, id, steps, parsed);
       await syncLibraryLessonFingerprints(tx, id);
       const action =
         l.status !== data.status ? (data.status === "published" ? "lesson.publish" : data.status === "archived" ? "lesson.archive" : "lesson.unpublish") : "lesson.update";
-      const diff = changedFields(this.lessonAuditFields(l), this.lessonAuditFields(lesson));
+      const diff = changedFields(lessonAuditFields(l), lessonAuditFields(lesson));
       await audit(tx, {
         actor: req.user,
         action,
@@ -390,7 +314,7 @@ export class LessonsController {
       include: { subject: { select: { id: true, name: true } } },
       orderBy: [{ grade: "asc" }, { chapter: "asc" }, { title: "asc" }],
     });
-    const locked = await this.structureLockedIds(rows.filter((lesson) => lesson.authorId === req.user.sub && lesson.status !== "draft").map((lesson) => lesson.id));
+    const locked = await lessonStructureLockedIds(this.db, rows.filter((lesson) => lesson.authorId === req.user.sub && lesson.status !== "draft").map((lesson) => lesson.id));
     const items: any[] = [];
     for (const lesson of rows) {
       const own = lesson.authorId === req.user.sub;

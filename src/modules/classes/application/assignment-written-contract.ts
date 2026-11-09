@@ -71,16 +71,28 @@ export function studentWrittenAssignmentContent(resource: { id: string; title: s
 
 // ---------- TAI2-T3: teacher grading ----------
 
+/**
+ * Grade body. MANUAL since TAI2-T3; the `*_AI` kinds (TAI2-T6) record which stored suggestion the teacher reviewed and
+ * need `basedOnSuggestionId`, which MANUAL must not carry. The points are always the teacher's.
+ */
+export const WRITTEN_GRADE_KINDS = ["MANUAL", "ACCEPTED_AI", "EDITED_AI", "REJECTED_AI"] as const;
 export const writtenGradeSchema = z
   .object({
-    kind: z.literal("MANUAL"),
+    kind: z.enum(WRITTEN_GRADE_KINDS),
     criterionPoints: z
       .array(z.object({ promptId: z.string().min(1).max(80), criterionCode: z.string().min(1).max(40), points: z.number() }).strict())
       .min(1)
       .max(60),
     feedback: z.string().max(4000).optional(),
+    basedOnSuggestionId: z.string().trim().min(1).max(64).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((body, ctx) => {
+    if (body.kind === "MANUAL" && body.basedOnSuggestionId !== undefined)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["basedOnSuggestionId"], message: "Chỉ dùng khi chấm dựa trên gợi ý AI" });
+    if (body.kind !== "MANUAL" && body.basedOnSuggestionId === undefined)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["basedOnSuggestionId"], message: "Bắt buộc khi chấm dựa trên gợi ý AI" });
+  });
 
 /** Feedback is teacher-written text, at most 2000 characters after trim and NFC (TAI2-T3 decision). */
 export function normalizeFeedback(feedback: string | undefined) {

@@ -806,6 +806,9 @@ model AssignmentSubmission {
   /// TAI-03 (TAI3-T4): matches that name this submission on either side (cascade on delete).
   similarityMatchesA SubmissionSimilarityMatch[] @relation("SimilarityMatchA")
   similarityMatchesB SubmissionSimilarityMatch[] @relation("SimilarityMatchB")
+  /// TAI-02 (TAI2-T4): ASSESS_SUBMISSION jobs and their suggestions die with the submission (redacted snapshot included).
+  aiJobs             AiJob[]
+  aiSuggestions      AiAssessmentSuggestion[]
 
   @@index([assignmentId, studentId, submittedAt])
   @@index([studentId, submittedAt])
@@ -1467,9 +1470,10 @@ model AiJob {
   id                     String            @id @default(cuid())
   classId                String
   actorId                String
-  /// "GENERATE_RESOURCE" in TAI-01; quota is counted per actor and purpose.
+  /// "GENERATE_RESOURCE" in TAI-01, "ASSESS_SUBMISSION" (TAI-02), "DRAFT_LAB_CHALLENGE" (TAI-06); quota is counted per actor and purpose.
   purpose                String
-  targetKind             ClassResourceKind
+  /// Resource kind of a GENERATE_RESOURCE job; null for purposes that do not create a class resource (TAI-06).
+  targetKind             ClassResourceKind?
   lessonId               String
   /// Normalized request body (instruction included). Written once at creation.
   request                Json
@@ -1491,15 +1495,58 @@ model AiJob {
   /// [{ position, reasonCodes[] }]
   droppedItems           Json              @default("[]")
   materializedResourceId String?           @unique
+  /// TAI-06: the lesson a DRAFT_LAB_CHALLENGE proposal was applied to, and the one applied item (one apply per job).
+  appliedLessonId        String?
+  appliedItemId          String?           @unique
+  /// TAI-02 (TAI2-T4): set only for purpose ASSESS_SUBMISSION; cascade so the redacted snapshot dies with the submission.
+  submissionId           String?
+  submission             AssignmentSubmission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   createdAt              DateTime          @default(now())
   startedAt              DateTime?
   completedAt            DateTime?
   cancelledAt            DateTime?
+  /// TAI-05: credit columns, null for a job created while AI_CREDITS_ENABLED=false. A job with estimatedCredits set is
+  /// always settled or refunded in its terminal transition, whatever the flag says later.
+  pricingVersionId       String?
+  estimatedCredits       Int?
+  chargedCredits         Int?
   items                  AiJobItem[]
+  suggestion             AiAssessmentSuggestion?
 
   @@index([actorId, purpose, createdAt])
   @@index([status, leaseUntil])
   @@index([classId, createdAt])
+  @@index([submissionId, promptVersion])
+}
+
+/// TAI-02 (TAI2-T4): verification outcome of one assessment suggestion.
+enum AiSuggestionStatus {
+  VALID
+  PARTIAL
+  SUPPRESSED
+}
+
+/// TAI-02 (TAI2-T4): immutable AI rubric suggestion produced by one ASSESS_SUBMISSION job. Teacher-only; never part of
+/// a student, parent, rollup or notification read model. In shadow mode only the evaluation report reads it.
+model AiAssessmentSuggestion {
+  id               String               @id @default(cuid())
+  jobId            String               @unique
+  job              AiJob                @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  submissionId     String
+  submission       AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  resourceVersion  Int
+  promptVersion    String
+  /// "shadow" | "assist": AI_ASSESSMENT_MODE when the job was created.
+  mode             String
+  status           AiSuggestionStatus
+  /// [{ promptId, criterionCode, valid, reasonCode, suggestedPoints, rationale, uncertainty, evidence[{ quote, start, end }], returnedQuotes, verifiedQuotes }]
+  criterionResults Json
+  /// e.g. ["INJECTION_SUSPECTED"]
+  flags            Json                 @default("[]")
+  createdAt        DateTime             @default(now())
+
+  @@index([submissionId, createdAt])
+  @@index([promptVersion, mode])
 }
 
 /// Immutable validated item, written in the transaction that moves its job to SUCCEEDED.
@@ -1586,4 +1633,86 @@ model InsightAcknowledgement {
 
   @@index([classId, studentId, createdAt])
   @@index([fingerprint, createdAt])
+}
+
+/// TAI-05: ledger account kinds. Teacher accounts are per teacher, system accounts are singletons (ownerId null).
+enum CreditAccountKind {
+  TEACHER_AVAILABLE
+  TEACHER_RESERVED
+  SYSTEM_ISSUANCE
+  SYSTEM_CONSUMED
+}
+
+enum CreditTxKind {
+  GRANT
+  ADJUST
+  RESERVE
+  SETTLE
+  REFUND
+}
+
+/// TAI-05: `balance` is a cached projection of the entries, updated in the posting transaction. A DB CHECK (migration)
+/// keeps teacher accounts >= 0, and a partial unique index (migration) keeps each system account a singleton.
+model CreditAccount {
+  id        String            @id @default(cuid())
+  kind      CreditAccountKind
+  ownerId   String?
+  balance   Int               @default(0)
+  createdAt DateTime          @default(now())
+  entries   CreditEntry[]
+
+  @@unique([kind, ownerId])
+}
+
+/// TAI-05: immutable header of one posting. No route or code path updates or deletes it.
+model CreditTransaction {
+  id               String        @id @default(cuid())
+  kind             CreditTxKind
+  aiJobId          String?
+  pricingVersionId String?
+  /// Admin for GRANT/ADJUST, teacher for RESERVE, null (system) for SETTLE/REFUND.
+  actorId          String?
+  /// Required for GRANT/ADJUST.
+  reason           String?
+  idempotencyKey   String?
+  createdAt        DateTime      @default(now())
+  entries          CreditEntry[]
+
+  @@unique([aiJobId, kind])
+  @@unique([actorId, idempotencyKey])
+  @@index([createdAt])
+}
+
+/// TAI-05: immutable signed amount; the entries of one transaction sum to zero.
+model CreditEntry {
+  id            String            @id @default(cuid())
+  transactionId String
+  transaction   CreditTransaction @relation(fields: [transactionId], references: [id])
+  accountId     String
+  account       CreditAccount     @relation(fields: [accountId], references: [id])
+  amount        Int
+
+  @@index([accountId])
+  @@index([transactionId])
+}
+
+/// TAI-05: versioned price of one AI purpose. A job pins the version used at reserve. Active rows are never edited.
+model PricingVersion {
+  id                       String    @id @default(cuid())
+  purpose                  String
+  version                  Int
+  baseCredits              Int
+  perItemCredits           Int
+  creditsPer1kInputTokens  Int
+  creditsPer1kOutputTokens Int
+  /// Path to the pricing evidence note.
+  evidenceRef              String
+  /// draft | active | retired
+  status                   String    @default("draft")
+  createdById              String
+  createdAt                DateTime  @default(now())
+  activatedAt              DateTime?
+  retiredAt                DateTime?
+
+  @@unique([purpose, version])
 }

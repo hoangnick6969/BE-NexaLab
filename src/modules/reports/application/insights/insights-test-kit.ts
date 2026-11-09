@@ -22,6 +22,7 @@ export function makeDb(t: Tables) {
       if (key === "attempt") return matches(t.attempt!.find((a) => a.id === row.attemptId) ?? {}, cond);
       if (key === "actorId_key") return matches(row, cond);
       if (key === "run") return matches(t.submissionSimilarityRun!.find((r) => r.id === row.runId) ?? {}, cond);
+      if (key === "submission") return matches(t.assignmentSubmission!.find((s) => s.id === row.submissionId) ?? {}, cond);
       const value = row[key];
       if (cond && typeof cond === "object" && !(cond instanceof Date)) {
         if ("in" in cond) return cond.in.includes(value);
@@ -72,7 +73,7 @@ let seq = 0;
 export const id = (p: string) => `${p}${++seq}`;
 
 export function emptyTables(): Tables {
-  return { classroom: [], enrollment: [], assignment: [], quizAttempt: [], attempt: [], assignmentSubmission: [], hintLog: [], lessonStep: [], classResource: [], lesson: [], auditLog: [], insightAcknowledgement: [], idempotencyRecord: [], submissionSimilarityRun: [], submissionSimilarityMatch: [] };
+  return { classroom: [], enrollment: [], assignment: [], quizAttempt: [], attempt: [], assignmentSubmission: [], hintLog: [], lessonStep: [], classResource: [], lesson: [], auditLog: [], insightAcknowledgement: [], idempotencyRecord: [], submissionSimilarityRun: [], submissionSimilarityMatch: [], writtenGradeDecision: [] };
 }
 export function baseTables(students: Array<[string, string, string?]> = [["s1", "Anh"]]): Tables {
   const t = emptyTables();

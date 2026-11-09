@@ -77,7 +77,7 @@ describe("QR-09 in memory: 40 students x 6 steps", () => {
 });
 
 describe("loader query shape", () => {
-  it("is 3 stage-1 queries, 9 stage-2 queries issued together and one lesson lookup, for 3, 40 and 200 students", async () => {
+  it("is 3 stage-1 queries, 11 stage-2 queries issued together and one lesson lookup, for 3, 40 and 200 students", async () => {
     const lists: string[][] = [];
     for (const n of [3, 40, 200]) {
       const db = makeDb(workload(n));
@@ -88,12 +88,12 @@ describe("loader query shape", () => {
     expect(lists[2]).toEqual(lists[0]);
     const calls = lists[2]!;
     expect(calls.slice(0, 3).sort()).toEqual(["assignment.findMany", "enrollment.findMany", "insightAcknowledgement.findMany"]);
-    expect(calls.slice(3, 12).sort()).toEqual([
-      "assignmentSubmission.findMany", "assignmentSubmission.findMany", "attempt.findMany", "classResource.findMany", "hintLog.groupBy",
-      "lessonStep.findMany", "quizAttempt.findMany", "submissionSimilarityMatch.findMany", "submissionSimilarityRun.findMany",
+    expect(calls.slice(3, 14).sort()).toEqual([
+      "assignmentSubmission.findMany", "assignmentSubmission.findMany", "attempt.findMany", "classResource.findMany", "classResource.findMany", "hintLog.groupBy",
+      "lessonStep.findMany", "quizAttempt.findMany", "submissionSimilarityMatch.findMany", "submissionSimilarityRun.findMany", "writtenGradeDecision.findMany",
     ]);
-    expect(calls.slice(12)).toEqual(["lesson.findMany"]);
-    expect(calls).toHaveLength(13);
+    expect(calls.slice(14)).toEqual(["lesson.findMany"]);
+    expect(calls).toHaveLength(15);
   });
 
   it("is the same for the per-student read and for the as-of replay, and is smaller for an archived class", async () => {
@@ -104,7 +104,7 @@ describe("loader query shape", () => {
     expect(one.calls).toEqual(all.calls);
     const replay = makeDb(workload(40));
     await loadClassEvidence(replay, "c1", { studentId: "s7", acknowledgements: false, asOf: at(20) });
-    expect(replay.calls).toHaveLength(12);
+    expect(replay.calls).toHaveLength(14);
     const members = makeDb(workload(40));
     await loadClassEvidence(members, "c1", { withEvidence: false });
     expect(members.calls.sort()).toEqual(["assignment.findMany", "enrollment.findMany"]);

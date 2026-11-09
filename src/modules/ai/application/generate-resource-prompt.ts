@@ -7,6 +7,8 @@ import { createHash } from "node:crypto";
  */
 export const GENERATE_RESOURCE_PROMPT_VERSION = "generate-resource@1";
 export const RESOURCE_ITEMS_SCHEMA_VERSION = "resource-items@1";
+/** Output budget of one generate-resource call (runner and golden evaluation send the same value). */
+export const GENERATE_RESOURCE_MAX_OUTPUT_TOKENS = 8_192;
 
 /** Mirrors InputSnapshotV1 in implementation-contract.md. TAI-T2 builds it; the prompt only reads it. */
 export type InputSnapshotV1 = {

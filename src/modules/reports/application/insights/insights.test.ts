@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  ACTIVE_INSIGHT_VERSIONS, applyPatternVisibility, engineFor, evaluateInsightsV1, evaluateInsightsV2, FORBIDDEN_INSIGHT_WORDS, INSIGHT_MESSAGES,
+  ACTIVE_INSIGHT_VERSIONS, applyPatternVisibility, engineFor, evaluateInsightsV1, evaluateInsightsV2, evaluateInsightsV3, FORBIDDEN_INSIGHT_WORDS, INSIGHT_MESSAGES,
   insightFingerprint, type InsightEvidence,
 } from "./index";
 
@@ -191,9 +191,10 @@ describe("fingerprints and determinism", () => {
     expect(list.every((i) => i.ruleVersion === "insights@1" && i.studentId === "s1" && i.computedAt === now.toISOString())).toBe(true);
   });
   it("keeps insights@1 callable through the registry", () => {
-    expect(ACTIVE_INSIGHT_VERSIONS).toEqual(["insights@1", "insights@2"]);
+    expect(ACTIVE_INSIGHT_VERSIONS).toEqual(["insights@1", "insights@2", "insights@3"]);
     expect(engineFor("insights@1")).toBe(evaluateInsightsV1);
     expect(engineFor("insights@2")).toBe(evaluateInsightsV2);
+    expect(engineFor("insights@3")).toBe(evaluateInsightsV3);
     expect(engineFor("insights@9")).toBeUndefined();
   });
 });
@@ -205,7 +206,7 @@ describe("neutral vocabulary", () => {
     quiz("oq", -1, 60, ["O"]),
   ]);
   const texts = [...Object.values(INSIGHT_MESSAGES), ...everything.map((i) => i.message)];
-  const ruleCodes = ["INSUFFICIENT_EVIDENCE", "SCORE_CHANGE_UNUSUAL", "HIGH_HINT_DEPENDENCE", "OBJECTIVE_MASTERY_INCONSISTENT", "SUDDEN_UNAIDED_PASS", "SUBMISSION_SIMILARITY_HIGH"];
+  const ruleCodes = ["INSUFFICIENT_EVIDENCE", "SCORE_CHANGE_UNUSUAL", "HIGH_HINT_DEPENDENCE", "OBJECTIVE_MASTERY_INCONSISTENT", "SUDDEN_UNAIDED_PASS", "SUBMISSION_SIMILARITY_HIGH", "MCQ_EXPLANATION_MISMATCH", "SIMULATION_EXPLANATION_MISMATCH"];
   it("keeps every template and rule code free of forbidden words", () => {
     for (const text of [...texts, ...ruleCodes]) for (const word of FORBIDDEN_INSIGHT_WORDS) expect(text.toLowerCase()).not.toContain(word);
   });

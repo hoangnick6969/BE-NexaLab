@@ -119,6 +119,23 @@ export const AUDIT_FIELDS = new Set([
   "resourceId",
   "editedCount",
   "rejectedCount",
+  // TAI-02 AI assessment. Never response text, rationale, quotes or feedback.
+  "basedOnSuggestionId",
+  "createdCount",
+  "skippedCount",
+  "suggestionStatus",
+  "mode",
+  // TAI-05 credits. Numbers and the price evidence path only; the free-text reason travels in AuditLog.reason.
+  "teacherId",
+  "credits",
+  "balanceAfter",
+  "chargedCredits",
+  "refundedCredits",
+  "baseCredits",
+  "perItemCredits",
+  "evidenceRef",
+  // TAI-06 lab challenge apply. Numbers, ids and the engine version only; never rationale or provider text.
+  "engineVersion",
 ]);
 
 const credentialLike = [

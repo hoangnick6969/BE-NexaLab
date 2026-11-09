@@ -1,6 +1,7 @@
 import { submissionStatus, TEST_CONTENT_TYPE } from "../../../classes/application/assignment-test-contract";
 import { WRITTEN_CONTENT_TYPE } from "../../../classes/application/assignment-written-contract";
-import type { InsightEvidence, SimilarityFact } from "./types";
+import { EXPLANATION_CRITERION_CODES } from "./explanation-rule";
+import type { ExplanationFact, InsightEvidence, SimilarityFact } from "./types";
 
 export type ClassMember = { id: string; displayName: string };
 export type AckRow = { id: string; studentId: string; fingerprint: string; ruleVersion: string; ruleCode: string; action: string; note: string | null; createdAt: Date };
@@ -9,6 +10,8 @@ export type ClassEvidence = {
   evidenceByStudent: Map<string, InsightEvidence[]>;
   /** insights@2 inputs: valid matches of the newest similarity run of each written assignment, per student. */
   similarityByStudent: Map<string, SimilarityFact[]>;
+  /** insights@3 inputs: teacher-final explanation grades of each student's current graded written submissions. */
+  explanationsByStudent: Map<string, ExplanationFact[]>;
   acknowledgements: AckRow[];
 };
 export type LoadOptions = {
@@ -27,15 +30,15 @@ export type LoadOptions = {
 const codesOf = (value: unknown): string[] => (Array.isArray(value) ? value.filter((x): x is string => typeof x === "string") : []);
 
 /**
- * Loads normalized evidence for the approved members of one class (or one of them) for the `insights@1` engine.
+ * Loads normalized evidence for the approved members of one class (or one of them) for the insight engines.
  *
  * Scope (implementation-contract.md, TAI4-T2): every assignment of the class including archived ones, approved
  * members only, never free practice or other classes. TEST rows count only when `gradingMode = AUTO` with a score and
  * a status of SCORED or ACCEPTED_BY_EXTENSION.
  *
  * Cost: stage 1 runs three queries in parallel (members, assignments, acknowledgements), stage 2 runs six in parallel
- * (nine when the class has a written assignment: its current submissions, its similarity runs and its HIGH matches with
- * review times), and a lesson lookup follows only for lessons not already known. The count does not depend on the number
+ * (eleven when the class has a written assignment: its current submissions, its similarity runs, its HIGH matches with
+ * review times, the teacher grade decisions and the written task resources), and a lesson lookup follows only for lessons not already known. The count does not depend on the number
  * of students.
  */
 export async function loadClassEvidence(db: any, classId: string, options: LoadOptions = {}): Promise<ClassEvidence> {
@@ -62,7 +65,8 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
     .map((row: any) => ({ id: row.student.id, displayName: row.student.fullName }));
   const evidenceByStudent = new Map<string, InsightEvidence[]>(members.map((m) => [m.id, []]));
   const similarityByStudent = new Map<string, SimilarityFact[]>(members.map((m) => [m.id, []]));
-  if (options.withEvidence === false || !members.length || !assignments.length) return { members, evidenceByStudent, similarityByStudent, acknowledgements };
+  const explanationsByStudent = new Map<string, ExplanationFact[]>(members.map((m) => [m.id, []]));
+  if (options.withEvidence === false || !members.length || !assignments.length) return { members, evidenceByStudent, similarityByStudent, explanationsByStudent, acknowledgements };
 
   const studentIds = members.map((m) => m.id);
   const assignmentIds: string[] = assignments.map((a: any) => a.id);
@@ -73,7 +77,7 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
   const asOf = options.asOf;
   const attemptWhere = { assignmentId: { in: assignmentIds }, studentId: { in: studentIds }, ...(asOf ? { createdAt: { lte: asOf } } : {}) };
 
-  const [quizzes, attempts, submissions, hints, steps, resources, writtenSubs, simRuns, simMatches] = await Promise.all([
+  const [quizzes, attempts, submissions, hints, steps, resources, writtenSubs, simRuns, simMatches, writtenGrades, writtenResources] = await Promise.all([
     db.quizAttempt.findMany({ where: attemptWhere, select: { id: true, studentId: true, lessonId: true, score: true, passed: true, createdAt: true } }),
     db.attempt.findMany({ where: attemptWhere, select: { id: true, studentId: true, lessonStepId: true, verdict: true, createdAt: true } }),
     testAssignments.length
@@ -90,7 +94,7 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
     writtenIds.length
       ? db.assignmentSubmission.findMany({
           where: { assignmentId: { in: writtenIds }, studentId: { in: approvedIds }, ...(asOf ? { submittedAt: { lte: asOf } } : {}) },
-          select: { id: true, assignmentId: true, studentId: true, submittedAt: true },
+          select: { id: true, assignmentId: true, studentId: true, submittedAt: true, timing: true, decision: { select: { decision: true, createdAt: true } } },
         })
       : Promise.resolve([]),
     writtenIds.length
@@ -101,6 +105,16 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
           where: { level: "HIGH", run: { assignmentId: { in: writtenIds }, ...(asOf ? { createdAt: { lte: asOf } } : {}) } },
           select: { id: true, runId: true, level: true, submissionAId: true, submissionBId: true, reviews: { select: { createdAt: true } } },
         })
+      : Promise.resolve([]),
+    // insights@3: teacher grades only (WrittenGradeDecision); the AI suggestion table is never read here.
+    writtenIds.length
+      ? db.writtenGradeDecision.findMany({
+          where: { submission: { assignmentId: { in: writtenIds }, studentId: { in: studentIds } }, ...(asOf ? { createdAt: { lte: asOf } } : {}) },
+          select: { id: true, submissionId: true, criterionPoints: true, createdAt: true },
+        })
+      : Promise.resolve([]),
+    writtenIds.length
+      ? db.classResource.findMany({ where: { id: { in: writtenAssignments.map((a: any) => a.contentId) } }, select: { id: true, lessonId: true, content: true } })
       : Promise.resolve([]),
   ]);
 
@@ -116,15 +130,15 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
 
   const push = (studentId: string, item: InsightEvidence) => evidenceByStudent.get(studentId)?.push(item);
   for (const q of quizzes)
-    push(q.studentId, { kind: "QUIZ", id: q.id, at: q.createdAt, score: q.score, passed: q.passed, outcomeCodes: outcomesOf(q.lessonId) });
+    push(q.studentId, { kind: "QUIZ", id: q.id, at: q.createdAt, score: q.score, passed: q.passed, outcomeCodes: outcomesOf(q.lessonId), lessonId: q.lessonId ?? null });
   for (const a of attempts)
-    push(a.studentId, { kind: "PRACTICAL", id: a.id, at: a.createdAt, verdict: a.verdict, maxHintLevel: maxHint.get(a.id) ?? 0, outcomeCodes: outcomesOf(a.lessonStepId ? stepLesson.get(a.lessonStepId) : null) });
+    push(a.studentId, { kind: "PRACTICAL", id: a.id, at: a.createdAt, verdict: a.verdict, maxHintLevel: maxHint.get(a.id) ?? 0, outcomeCodes: outcomesOf(a.lessonStepId ? stepLesson.get(a.lessonStepId) : null), lessonId: (a.lessonStepId ? stepLesson.get(a.lessonStepId) : null) ?? null });
   for (const s of submissions) {
     const decision = s.decision && (!asOf || s.decision.createdAt.getTime() <= asOf.getTime()) ? s.decision : null;
     const status = submissionStatus({ timing: s.timing, decision });
     if (status !== "SCORED" && status !== "ACCEPTED_BY_EXTENSION") continue;
     const lessonId = resourceLesson.get(assignmentResource.get(s.assignmentId) ?? "") ?? null;
-    push(s.studentId, { kind: "TEST", id: s.id, at: s.submittedAt, score: s.score, outcomeCodes: outcomesOf(lessonId) });
+    push(s.studentId, { kind: "TEST", id: s.id, at: s.submittedAt, score: s.score, outcomeCodes: outcomesOf(lessonId), lessonId });
   }
 
   if (writtenIds.length) {
@@ -167,6 +181,53 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
           reviewed,
         });
     }
+
+    // insights@3: the teacher-final explanation score of each student's current written submission. The newest grade
+    // decision of that submission counts; a current submission that is late-pending or rejected has no fact, and an older
+    // submission never stands in for it.
+    const gradeOf = new Map<string, any>();
+    for (const g of writtenGrades) {
+      const previous = gradeOf.get(g.submissionId);
+      if (!previous || g.createdAt.getTime() > previous.createdAt.getTime() || (g.createdAt.getTime() === previous.createdAt.getTime() && g.id > previous.id)) gradeOf.set(g.submissionId, g);
+    }
+    const resourceOf = new Map<string, any>(writtenResources.map((r: any) => [r.id, r]));
+    const resourceIdOf = new Map<string, string>(writtenAssignments.map((a: any) => [a.id, a.contentId]));
+    const explanationCodes = new Set<string>(EXPLANATION_CRITERION_CODES);
+    for (const sub of current.values()) {
+      const target = explanationsByStudent.get(sub.studentId);
+      const grade = gradeOf.get(sub.id);
+      const resource = resourceOf.get(resourceIdOf.get(sub.assignmentId) ?? "");
+      if (!target || !grade || !resource?.lessonId) continue;
+      const decision = sub.decision && (!asOf || sub.decision.createdAt.getTime() <= asOf.getTime()) ? sub.decision : null;
+      const status = submissionStatus({ timing: sub.timing, decision });
+      if (status !== "SCORED" && status !== "ACCEPTED_BY_EXTENSION") continue;
+      const given = new Map<string, number>((Array.isArray(grade.criterionPoints) ? grade.criterionPoints : []).map((c: any) => [`${c.promptId}|${c.criterionCode}`, Number(c.points)]));
+      let points = 0;
+      let max = 0;
+      let complete = true;
+      for (const prompt of Array.isArray(resource.content?.prompts) ? resource.content.prompts : [])
+        for (const criterion of Array.isArray(prompt?.criteria) ? prompt.criteria : []) {
+          if (!explanationCodes.has(criterion?.code)) continue;
+          const value = given.get(`${prompt.id}|${criterion.code}`);
+          if (value === undefined || !Number.isFinite(value) || !Number.isFinite(Number(criterion.maxPoints))) complete = false;
+          else {
+            points += value;
+            max += Number(criterion.maxPoints);
+          }
+        }
+      if (!complete || max <= 0) continue;
+      target.push({
+        assignmentId: sub.assignmentId,
+        assignmentTitle: titles.get(sub.assignmentId) ?? "",
+        lessonId: resource.lessonId,
+        submissionId: sub.id,
+        submittedAt: sub.submittedAt,
+        gradeId: grade.id,
+        gradedAt: grade.createdAt,
+        explanationPoints: points,
+        explanationMaxPoints: max,
+      });
+    }
   }
-  return { members, evidenceByStudent, similarityByStudent, acknowledgements };
+  return { members, evidenceByStudent, similarityByStudent, explanationsByStudent, acknowledgements };
 }

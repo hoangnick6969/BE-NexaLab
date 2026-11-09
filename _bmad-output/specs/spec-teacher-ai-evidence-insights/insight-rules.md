@@ -57,7 +57,7 @@ The loader (TAI4-T2) filters and normalizes evidence; the engine receives the li
 
 ## Second wave (not in `insights@1`)
 
-Each wave is its own rule version holding only its new rules, so a released version is never edited and the fingerprints of acknowledged insights stay valid (the fingerprint contains `ruleVersion`). `SUBMISSION_SIMILARITY_HIGH` is `insights@2`; the explanation-mismatch rules of TAI4-T5 will be `insights@3`. The service runs every active version (`insights@1`, `insights@2`), and replay runs only the version stored on the acknowledgement row.
+Each wave is its own rule version holding only its new rules, so a released version is never edited and the fingerprints of acknowledged insights stay valid (the fingerprint contains `ruleVersion`). `SUBMISSION_SIMILARITY_HIGH` is `insights@2`; the explanation-mismatch rules of TAI4-T5 are `insights@3`. The service runs every active version (`insights@1`, `insights@2`, `insights@3`), and replay runs only the version stored on the acknowledgement row.
 
 | Rule | Depends on | Definition sketch | Status |
 | --- | --- | --- | --- |
@@ -65,7 +65,24 @@ Each wave is its own rule version holding only its new rules, so a released vers
 | `SIMULATION_EXPLANATION_MISMATCH` | TAI-02 written explanation linked to a practical | Practical `passed` and the explanation criterion ≤ 40%, or `needs_practice` and the explanation ≥ 80% | `TEACHER_REVIEW_RECOMMENDED` |
 | `SUBMISSION_SIMILARITY_HIGH` | TAI-03 submission similarity | A match above the TAI-03 high threshold that the teacher has not yet reviewed; disappears once reviewed | `TEACHER_REVIEW_RECOMMENDED` |
 
-Second-wave rules read only official records: teacher-final grades, never `suggestedScore`. Exact thresholds of the explanation-mismatch rules are fixed in this file when `insights@3` is specified.
+Second-wave rules read only official records: teacher-final grades, never `suggestedScore`. The exact thresholds of the explanation-mismatch rules are fixed below (`insights@3`).
+
+### MCQ_EXPLANATION_MISMATCH and SIMULATION_EXPLANATION_MISMATCH — `insights@3`, status `TEACHER_REVIEW_RECOMMENDED` (TAI4-T5)
+
+> **Team-lead decision 2026-11-09, pending PO/lecturer confirmation (not an approval).** The thresholds, the criterion codes and the lesson link below are conservative, deterministic choices made so the rules could be built and tested; they are not yet approved by the PO or the supervising lecturer and may change in a later rule version (never by editing `insights@3` once acknowledged fingerprints exist).
+
+Input (prepared by the loader, `ExplanationFact`): for each approved student and each written assignment, the **newest `WrittenGradeDecision`** (teacher-final points; the `*_AI` kinds store the teacher's points too) of the student's **current** submission, reduced to the explanation criteria. `AiAssessmentSuggestion` and `AiJob` are never queried and `suggestedScore` never read; an AI suggestion without a teacher grade produces nothing.
+
+- **Explanation criteria:** the rubric criteria whose `code` is `EXPLANATION` or `REASONING`, summed over all prompts. `explanationPercent = points / maxPoints × 100` of those criteria only (maxPoints comes from the rubric the assignment pins). A rubric with no such criterion, a grade missing one of them, or a zero maximum gives no fact. Teachers mark a criterion as the explanation by using one of these codes.
+- **Link:** by lesson. A written fact belongs to the lesson of its resource (`ClassResource.lessonId`); the answer side is the student's **newest** (time, then id) scored `QUIZ` or `TEST` (MCQ rule) or `PRACTICAL` attempt (simulation rule) of the same lesson within the class assignments. No lesson, or no such item, gives no insight.
+- **Current submission only:** the fact exists only while the newest submission of the student is graded and is `SCORED` or `ACCEPTED_BY_EXTENSION` (late-pending and reject-zero submissions give nothing; an older submission never stands in for a newer ungraded one).
+- **MCQ_EXPLANATION_MISMATCH** fires per graded written submission when (answer score ≥ 80 and `explanationPercent` ≤ 40) or (answer score ≤ 40 and `explanationPercent` ≥ 80). `values.direction` is `ANSWER_HIGH_EXPLANATION_LOW` or `ANSWER_LOW_EXPLANATION_HIGH`. Thresholds: `answerHighMin: 80`, `answerLowMax: 40`, `explanationHighMin: 80`, `explanationLowMax: 40`.
+- **SIMULATION_EXPLANATION_MISMATCH** fires per graded written submission when (practical verdict `passed` and `explanationPercent` ≤ 40) or (verdict `needs_practice` and `explanationPercent` ≥ 80); any other verdict gives nothing. `values.direction` is `PASSED_EXPLANATION_LOW` or `NEEDS_PRACTICE_EXPLANATION_HIGH`. Thresholds: `explanationHighMin: 80`, `explanationLowMax: 40`.
+- Comparisons use the 1e-9 tolerance; the shown `explanationPercent` is rounded to one decimal, the decision uses the exact value.
+- **Evidence** (fingerprint input): the answer item (`QUIZ`, `TEST` or `PRACTICAL`), the written submission (`WRITTEN`) and the grade decision (`WRITTEN_GRADE`), so a regrade, a newer answer or a newer submission gives a new fingerprint. `values` also carry `assignmentId`, `assignmentTitle`, `lessonId`, `explanationPercent`, plus `mcqScore` or `verdict`.
+- Boundaries (explanation out of 100): MCQ 80/40 fires, 79/40 and 80/41 do not; MCQ 40/80 fires, 41/80 and 40/79 do not; practical `passed`/40 fires, `passed`/41 does not; `needs_practice`/80 fires, `needs_practice`/79 does not.
+- Neutral messages (fixed, no raw codes): MCQ: "Điểm trắc nghiệm và phần giải thích bằng văn bản của cùng một bài học chưa tương xứng với nhau. Đây là bằng chứng để giáo viên đối chiếu, không phải kết luận."; simulation: "Kết quả thực hành và phần giải thích bằng văn bản của cùng một bài học chưa tương xứng với nhau. Đây là bằng chứng để giáo viên đối chiếu, không phải kết luận."
+- Teacher-only, no ranking, no effect on scores or progress, no provider call anywhere; acknowledgement, replay (as-of grades, submissions and late decisions) and `INSIGHT_STALE` work as for the other versions.
 
 ### SUBMISSION_SIMILARITY_HIGH — `insights@2`, status `TEACHER_REVIEW_RECOMMENDED` (TAI4-T6, PO 2026-11-07)
 
@@ -83,7 +100,7 @@ Input: for each approved student, one fact per `HIGH` match of the newest simila
 ```ts
 type Insight = {
   fingerprint: string;          // sha256(ruleVersion|ruleCode|classId|studentId|sorted evidenceIds); OBJECTIVE_MASTERY_INCONSISTENT also includes outcomeCode after studentId
-  ruleVersion: "insights@1";
+  ruleVersion: "insights@1" | "insights@2" | "insights@3";
   ruleCode: string;
   pattern?: "SUDDEN_UNAIDED_PASS";
   status: "INFORMATIONAL" | "NEEDS_MORE_EVIDENCE" | "TEACHER_REVIEW_RECOMMENDED";
@@ -91,7 +108,7 @@ type Insight = {
   message: string;              // neutral Vietnamese, from a fixed template per rule
   thresholds: Record<string, number>;
   values: Record<string, number | string>;
-  evidence: Array<{ kind: "QUIZ" | "TEST" | "PRACTICAL"; id: string; at: string }>;
+  evidence: Array<{ kind: "QUIZ" | "TEST" | "PRACTICAL" | "WRITTEN" | "SIMILARITY_MATCH" | "WRITTEN_GRADE"; id: string; at: string }>;
   computedAt: string;
 };
 ```

@@ -1,7 +1,12 @@
 import { BadRequestException, ConflictException, HttpException, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { z } from "zod";
+import { labChallengeBody } from "./lab-challenge-contract";
 
-export const AI_PURPOSES = ["GENERATE_RESOURCE"] as const;
+/**
+ * Purposes known to the runtime. ASSESS_SUBMISSION (TAI-02) is created through its own route, not the create body below.
+ * DRAFT_LAB_CHALLENGE (TAI-06) is the second branch of the create body.
+ */
+export const AI_PURPOSES = ["GENERATE_RESOURCE", "ASSESS_SUBMISSION", "DRAFT_LAB_CHALLENGE"] as const;
 
 /** duplicateOf entry on the job detail view (computed on read from qdup@1; never stored). */
 export type DuplicateMatch = {
@@ -30,6 +35,8 @@ const generateResourceBody = z
     difficulty: difficulty.optional(),
     outcomeCodes: z.array(z.string().trim().min(1).max(64)).max(10).optional(),
     instruction: z.string().trim().max(1000).optional(),
+    /** TAI-05: the estimate the teacher confirmed. Required while AI_CREDITS_ENABLED=true, ignored otherwise. */
+    confirmedCredits: z.number().int().min(0).max(100_000).optional(),
   })
   .strict();
 
@@ -37,7 +44,8 @@ const generateResourceBody = z
  * Create body: a strict discriminated union on the required `purpose` (implementation-contract.md). TAI-01 ships only
  * GENERATE_RESOURCE; later purposes (TAI-06 DRAFT_LAB_CHALLENGE) add branches without changing this one.
  */
-export const createAiJobBody = z.discriminatedUnion("purpose", [generateResourceBody]).superRefine((body, ctx) => {
+export const createAiJobBody = z.discriminatedUnion("purpose", [generateResourceBody, labChallengeBody]).superRefine((body, ctx) => {
+  if (body.purpose !== "GENERATE_RESOURCE") return;
   if (body.targetKind !== "DECK" && body.itemCount > MAX_QUESTIONS_PER_JOB)
     ctx.addIssue({ code: z.ZodIssueCode.too_big, maximum: MAX_QUESTIONS_PER_JOB, inclusive: true, type: "number", path: ["itemCount"], message: `Tối đa ${MAX_QUESTIONS_PER_JOB} câu hỏi mỗi lần tạo` });
   if (body.outcomeCodes && new Set(body.outcomeCodes).size !== body.outcomeCodes.length)
@@ -46,7 +54,7 @@ export const createAiJobBody = z.discriminatedUnion("purpose", [generateResource
 export type CreateAiJobBody = z.infer<typeof createAiJobBody>;
 
 /** Normalized request stored on AiJob.request and hashed for idempotency: empty optionals become null. */
-export function normalizeCreateBody(body: CreateAiJobBody) {
+export function normalizeCreateBody(body: Extract<CreateAiJobBody, { purpose: "GENERATE_RESOURCE" }>) {
   return {
     purpose: body.purpose,
     targetKind: body.targetKind,
@@ -61,6 +69,8 @@ export type NormalizedAiRequest = ReturnType<typeof normalizeCreateBody>;
 
 export const listAiJobsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
+  /** TAI-06: DRAFT_LAB_CHALLENGE lists proposal jobs; the default keeps the TAI-01 list unchanged. */
+  purpose: z.enum(["GENERATE_RESOURCE", "DRAFT_LAB_CHALLENGE"]).default("GENERATE_RESOURCE"),
   cursor: z.string().trim().min(1).max(64).optional(),
 });
 
@@ -115,10 +125,11 @@ export const aiQuotaExceeded = (purpose: string, resetsAt: Date | null) =>
 export const PROVIDER_SIDE_FAILURES = ["PROVIDER_UNAVAILABLE", "PROVIDER_TIMEOUT"] as const;
 
 type JobRow = {
-  id: string; classId: string; lessonId: string; targetKind: string; status: string; failureCode: string | null;
+  id: string; classId: string; lessonId: string; targetKind: string | null; status: string; failureCode: string | null;
   promptVersion: string; outputSchemaVersion: string; model: string; request: unknown; droppedItems: unknown;
   inputTokens: number | null; outputTokens: number | null; materializedResourceId: string | null;
   createdAt: Date; completedAt: Date | null;
+  estimatedCredits?: number | null; chargedCredits?: number | null;
 };
 type ItemRow = {
   id: string; position: number; payload: unknown; flags: unknown;
@@ -128,7 +139,7 @@ type ItemRow = {
 };
 
 /** AiJobView (implementation-contract.md). `items` is present only on the detail route. */
-export function toAiJobView(job: JobRow, options: { lessonChangedSinceGeneration: boolean; items?: ItemRow[]; itemCount?: number }) {
+export function toAiJobView(job: JobRow, options: { lessonChangedSinceGeneration: boolean; items?: ItemRow[]; itemCount?: number; credits?: boolean }) {
   const { lessonChangedSinceGeneration, items } = options;
   const itemCount = items?.length ?? options.itemCount ?? null;
   const dropped = Array.isArray(job.droppedItems) ? job.droppedItems : [];
@@ -143,15 +154,18 @@ export function toAiJobView(job: JobRow, options: { lessonChangedSinceGeneration
     failureCode: job.failureCode,
     promptVersion: job.promptVersion,
     outputSchemaVersion: job.outputSchemaVersion,
-    model: job.model,
+    model: options.credits ? "" : job.model,
     requestedCount: Number((job.request as { itemCount?: unknown })?.itemCount ?? 0),
     validCount: succeeded ? itemCount : validated ? 0 : null,
     droppedCount: validated ? dropped.length : null,
-    usage: { inputTokens: job.inputTokens, outputTokens: job.outputTokens },
+    // TAI-05: with credits on, a teacher never sees raw provider tokens or the model name (`usage` is omitted and `model`
+    // is blank); cost is shown in credits through `credits`.
+    ...(options.credits ? {} : { usage: { inputTokens: job.inputTokens, outputTokens: job.outputTokens } }),
     lessonChangedSinceGeneration,
     materializedResourceId: job.materializedResourceId,
     createdAt: job.createdAt.toISOString(),
     completedAt: job.completedAt?.toISOString() ?? null,
+    ...(options.credits ? { credits: jobCredits(job) } : {}),
     ...(items
       ? {
           items: items.map((item) => {
@@ -170,4 +184,19 @@ export function toAiJobView(job: JobRow, options: { lessonChangedSinceGeneration
         }
       : {}),
   };
+}
+
+/**
+ * Credit view of one job (credits only): `reserved` while it runs, `settled` with the charge and the part returned,
+ * `refunded` in full when it failed or was cancelled. Null estimate means the job was created with credits off.
+ */
+export function jobCredits(job: Pick<JobRow, "status" | "estimatedCredits" | "chargedCredits">) {
+  const estimated = job.estimatedCredits ?? null;
+  if (estimated === null) return null;
+  if (job.status === "PENDING" || job.status === "RUNNING") return { estimated, state: "reserved" as const, charged: null, refunded: null };
+  if (job.status === "SUCCEEDED") {
+    const charged = job.chargedCredits ?? null;
+    return { estimated, state: "settled" as const, charged, refunded: charged === null ? null : estimated - charged };
+  }
+  return { estimated, state: "refunded" as const, charged: 0, refunded: estimated };
 }

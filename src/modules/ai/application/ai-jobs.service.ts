@@ -1,5 +1,7 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
+import { AI_ASSESSMENT_CONFIG, assistActive, parseAiAssessmentConfig, type AiAssessmentConfig } from "../../../config/ai-assessment";
 import { audit } from "../../../common/audit";
+import { suggestionSelect, teacherSuggestionView } from "../../classes/application/assignment-written-ai";
 import { idempotent, readIdempotencyKey, TX_LIMITS } from "../../../common/idempotency";
 import { Db } from "../../../db/db";
 import { ownedClass } from "../../classes/application/class-access";
@@ -31,6 +33,11 @@ import {
   type NormalizedAiRequest,
 } from "./ai-job-contract";
 import { AI_CONFIG, AI_PROVIDER, type AiProvider } from "./ai-provider";
+import { quotaUsage } from "./ai-quota";
+import { confirmedCreditsRequired } from "./credits-contract";
+import { AiCreditsService } from "./credits.service";
+import { AiLabChallengesService } from "./ai-lab-challenges.service";
+import { LAB_CHALLENGE_PURPOSE } from "./lab-challenge-contract";
 import { GENERATE_RESOURCE_PROMPT_VERSION, RESOURCE_ITEMS_SCHEMA_VERSION } from "./generate-resource-prompt";
 import { lessonOutcomeCodes, type LessonSource } from "./input-snapshot";
 import { checkQuestionDuplicates, loadQdupCorpus, qdupFlagger, syncClassResourceFingerprints } from "./question-fingerprints";
@@ -82,29 +89,7 @@ export function mapItemsToContent(kind: ResourceKind, items: ResourceItem[]) {
 }
 const TERMINAL = new Set(["SUCCEEDED", "FAILED", "CANCELLED"]);
 
-/** Daily and concurrency usage for one actor and purpose (job-runtime-and-failure-modes.md, "Quota"). */
-export async function quotaUsage(db: any, actorId: string, purpose: string, config: AiConfig, now = new Date()) {
-  const since = new Date(now.getTime() - DAY_MS);
-  const counted = {
-    actorId,
-    purpose,
-    createdAt: { gt: since },
-    NOT: { status: "FAILED", failureCode: { in: [...PROVIDER_SIDE_FAILURES] } },
-  };
-  const [usedLast24h, activeJobs, oldest] = await Promise.all([
-    db.aiJob.count({ where: counted }),
-    db.aiJob.count({ where: { actorId, purpose, status: { in: ["PENDING", "RUNNING"] } } }),
-    db.aiJob.findFirst({ where: counted, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
-  ]);
-  return {
-    purpose,
-    dailyLimit: config.dailyJobLimit,
-    usedLast24h,
-    activeJobs,
-    concurrencyLimit: config.concurrentJobLimit,
-    resetsAt: oldest ? new Date(oldest.createdAt.getTime() + DAY_MS) : null,
-  };
-}
+export { quotaUsage };
 
 /**
  * Owner-only Teacher AI job routes (TAI-T2). Class denial follows ownedClass (403 CLASS_ACCESS_DENIED for a missing or
@@ -112,14 +97,30 @@ export async function quotaUsage(db: any, actorId: string, purpose: string, conf
  */
 @Injectable()
 export class AiJobsService {
+  private assessment: AiAssessmentConfig;
+
   constructor(
     @Inject(Db) private db: Db,
     @Inject(AI_CONFIG) private config: AiConfig,
     @Inject(AI_PROVIDER) private provider: AiProvider | null,
-  ) {}
+    @Optional() @Inject(AI_ASSESSMENT_CONFIG) assessment?: AiAssessmentConfig,
+    @Optional() @Inject(AiCreditsService) private credits?: AiCreditsService,
+    @Optional() @Inject(AiLabChallengesService) lab?: AiLabChallengesService,
+  ) {
+    this.assessment = assessment ?? parseAiAssessmentConfig({});
+    // TAI-06: DRAFT_LAB_CHALLENGE jobs are handled by their own service behind these same routes.
+    this.lab = lab ?? new AiLabChallengesService(db, config, provider, undefined, credits);
+  }
+  private lab: AiLabChallengesService;
+
+  /** TAI-05: credits apply to this service only while AI_CREDITS_ENABLED=true. */
+  private get creditsOn() {
+    return !!this.credits?.enabled;
+  }
 
   async create(classId: string, req: any, raw: unknown) {
     const body = createAiJobBody.parse(raw);
+    if (body.purpose === LAB_CHALLENGE_PURPOSE) return this.lab.create(classId, req, body);
     const key = readIdempotencyKey(req);
     if (!key) throw idempotencyKeyRequired();
     const classroom = await ownedClass(this.db, classId, req.user);
@@ -130,40 +131,50 @@ export class AiJobsService {
     const allowed = new Set(lessonOutcomeCodes(lesson));
     if (body.outcomeCodes?.some((code) => !allowed.has(code))) throw outcomeNotInLesson();
     if (!this.provider || !this.config.provider || !this.config.model) throw aiProviderNotConfigured();
+    const credits = this.creditsOn ? this.credits! : null;
+    if (credits && body.confirmedCredits === undefined) throw confirmedCreditsRequired();
 
     const request = normalizeCreateBody(body);
     const { snapshot, digest } = await buildSnapshotFor(this.db, lesson, request);
     const actorId = req.user.sub as string;
-    const ctx = { actorId, key, scope: `POST classes/${classId}/ai-jobs`, payload: request };
+    // confirmedCredits is part of the replay hash only when it was sent, so existing credit-free requests hash as before.
+    const ctx = { actorId, key, scope: `POST classes/${classId}/ai-jobs`, payload: { ...request, confirmedCredits: credits ? body.confirmedCredits : undefined } };
     return idempotent(this.db, ctx, async (tx) => {
       // Per-actor, per-purpose lock: two concurrent creates at the limit cannot both pass.
       await lock(tx, `ai-quota:${actorId}:${request.purpose}`);
       const usage = await quotaUsage(tx, actorId, request.purpose, this.config);
-      if (usage.usedLast24h >= usage.dailyLimit || usage.activeJobs >= usage.concurrencyLimit)
+      if (usage.usedLast24h >= usage.dailyLimit || (usage.concurrencyLimit !== null && usage.activeJobs >= usage.concurrencyLimit))
         throw aiQuotaExceeded(request.purpose, usage.resetsAt ?? new Date(Date.now() + DAY_MS));
+      // TAI-05: same per-actor lock as the quota. Recompute the estimate under the active price and compare it with the
+      // confirmed value (409 AI_ESTIMATE_CHANGED); the balance check and RESERVE follow the job insert (402 rolls it back).
+      const quote = credits ? await credits.confirm(tx, request.purpose, request.itemCount, body.confirmedCredits!) : null;
       const job = await tx.aiJob.create({
         data: {
           classId, actorId, purpose: request.purpose, targetKind: request.targetKind, lessonId: request.lessonId,
           request, inputSnapshot: snapshot, inputDigest: digest,
           promptVersion: GENERATE_RESOURCE_PROMPT_VERSION, outputSchemaVersion: RESOURCE_ITEMS_SCHEMA_VERSION,
           provider: this.config.provider!, model: this.config.model!,
+          ...(quote ? { pricingVersionId: quote.price.id, estimatedCredits: quote.credits } : {}),
         },
       });
+      if (quote) await credits!.reserve(tx, { jobId: job.id, actorId, credits: quote.credits, pricingVersionId: quote.price.id });
       await audit(tx, {
         actor: req.user, action: "ai_job.create", targetType: "AiJob", targetId: job.id,
         after: { classId, purpose: request.purpose, lessonId: request.lessonId, targetKind: request.targetKind, itemCount: request.itemCount, promptVersion: job.promptVersion, model: job.model },
       });
-      return toAiJobView(job, { lessonChangedSinceGeneration: false, itemCount: 0 });
+      return toAiJobView(job, { lessonChangedSinceGeneration: false, itemCount: 0, credits: this.creditsOn });
     });
   }
 
   async list(classId: string, req: any, rawQuery: unknown) {
     const query = listAiJobsQuery.parse(rawQuery ?? {});
+    if (query.purpose === LAB_CHALLENGE_PURPOSE) return this.lab.list(classId, req, query);
     await ownedClass(this.db, classId, req.user);
     if (query.cursor && !(await this.db.aiJob.findFirst({ where: { id: query.cursor, classId }, select: { id: true } })))
       throw aiJobNotFound();
     const rows = await this.db.aiJob.findMany({
-      where: { classId },
+      // TAI-02: ASSESS_SUBMISSION jobs are read through the written grading views, never in the authoring list.
+      where: { classId, purpose: "GENERATE_RESOURCE" },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: query.limit + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
@@ -172,7 +183,7 @@ export class AiJobsService {
     const page = rows.slice(0, query.limit);
     const changed = await this.changedFlags(page);
     return {
-      items: page.map((job: any) => toAiJobView(job, { lessonChangedSinceGeneration: changed.get(job.id)!, itemCount: job._count.items })),
+      items: page.map((job: any) => toAiJobView(job, { lessonChangedSinceGeneration: changed.get(job.id)!, itemCount: job._count.items, credits: this.creditsOn })),
       nextCursor: rows.length > query.limit ? page[page.length - 1].id : null,
     };
   }
@@ -184,8 +195,21 @@ export class AiJobsService {
       include: { items: { orderBy: { position: "asc" }, include: { decisions: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } } },
     });
     if (!job) throw aiJobNotFound();
+    if (job.purpose === "ASSESS_SUBMISSION") return this.assessmentJobView(job);
+    if (job.purpose === LAB_CHALLENGE_PURPOSE) return this.lab.detail(job);
     const changed = await lessonChangedSince(this.db, job.lessonId, job.request as NormalizedAiRequest, job.inputDigest);
-    return toAiJobView(job as any, { lessonChangedSinceGeneration: changed, items: await this.enrichItems(job) });
+    return toAiJobView(job as any, { lessonChangedSinceGeneration: changed, items: await this.enrichItems(job), credits: this.creditsOn });
+  }
+
+  /**
+   * TAI-02 job view: status and failure only. The suggestion is added in assist mode only; in shadow mode no suggestion
+   * field is returned (the evaluation report is the only reader). The redacted snapshot is never returned.
+   */
+  private async assessmentJobView(job: any) {
+    const view = { ...toAiJobView(job, { lessonChangedSinceGeneration: false, itemCount: 0, credits: this.creditsOn }), purpose: job.purpose as string, submissionId: job.submissionId as string | null };
+    if (!assistActive(this.assessment)) return view;
+    const suggestion = await this.db.aiAssessmentSuggestion.findFirst({ where: { jobId: job.id, mode: "assist" }, select: suggestionSelect });
+    return { ...view, suggestion: suggestion ? teacherSuggestionView(suggestion as any) : null };
   }
 
   /** Computed on read: duplicateOf for flagged items and VW flags of edited payloads. Nothing is stored. */
@@ -220,6 +244,11 @@ export class AiJobsService {
     const body = decisionBody.parse(raw);
     const classroom = await ownedClass(this.db, classId, req.user);
     if (classroom.status !== "ACTIVE") throw classArchived();
+    const target = await this.db.aiJob.findFirst({ where: { id: jobId, classId }, select: { purpose: true } });
+    if (target?.purpose === LAB_CHALLENGE_PURPOSE) {
+      await this.lab.reject(classId, jobId, itemId, req, raw);
+      return this.get(classId, jobId, req);
+    }
     let editedPayload: ResourceItem | null = null;
     if (body.decision === "EDITED") {
       const parsed = resourceItemSchema.safeParse(body.editedPayload);
@@ -228,7 +257,7 @@ export class AiJobsService {
     }
     await this.db.$transaction(async (tx: any) => {
       await lock(tx, `ai-job:${jobId}`);
-      const job = await tx.aiJob.findFirst({ where: { id: jobId, classId }, select: { status: true, materializedResourceId: true } });
+      const job = await tx.aiJob.findFirst({ where: { id: jobId, classId, purpose: "GENERATE_RESOURCE" }, select: { status: true, materializedResourceId: true } });
       if (!job) throw aiJobNotFound();
       if (job.materializedResourceId) throw aiJobAlreadyMaterialized();
       if (job.status !== "SUCCEEDED") throw aiJobNotReviewable();
@@ -264,7 +293,7 @@ export class AiJobsService {
     return idempotent(this.db, ctx, async (tx) => {
       await lock(tx, `ai-job:${jobId}`);
       const job = await tx.aiJob.findFirst({
-        where: { id: jobId, classId },
+        where: { id: jobId, classId, purpose: "GENERATE_RESOURCE" },
         include: { items: { orderBy: { position: "asc" }, include: { decisions: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } } },
       });
       if (!job) throw aiJobNotFound();
@@ -294,6 +323,11 @@ export class AiJobsService {
     });
   }
 
+  /** TAI-06: apply one proposal of a DRAFT_LAB_CHALLENGE job to its draft lesson (Idempotency-Key required). */
+  async applyProposal(classId: string, jobId: string, itemId: string, req: any) {
+    return this.lab.apply(classId, jobId, itemId, req);
+  }
+
   /** PENDING/RUNNING -> CANCELLED. Idempotent on an already cancelled job; 409 from any other terminal state. */
   async cancel(classId: string, jobId: string, req: any) {
     await ownedClass(this.db, classId, req.user);
@@ -308,7 +342,9 @@ export class AiJobsService {
           data: { status: "CANCELLED", cancelledAt: new Date(), leaseUntil: null },
         });
         if (result.count !== 1) return false;
-        await audit(tx, { actor: req.user, action: "ai_job.cancel", targetType: "AiJob", targetId: jobId, after: { fromStatus: job.status } });
+        // TAI-05: a cancelled job refunds in full in this same transaction (a late provider result is discarded).
+        const settled = this.credits ? await this.credits.finalize(tx, jobId, { kind: "REFUND" }) : {};
+        await audit(tx, { actor: req.user, action: "ai_job.cancel", targetType: "AiJob", targetId: jobId, after: { fromStatus: job.status, ...settled } });
         return true;
       });
       if (cancelled) return this.get(classId, jobId, req);
@@ -319,7 +355,8 @@ export class AiJobsService {
 
   async quota(req: any, rawQuery: unknown) {
     const { purpose } = quotaQuery.parse(rawQuery ?? {});
-    const usage = await quotaUsage(this.db, req.user.sub, purpose as AiPurpose, this.config);
+    const limits = purpose === "ASSESS_SUBMISSION" ? { daily: this.assessment.dailyLimit, concurrency: null } : purpose === LAB_CHALLENGE_PURPOSE ? this.lab.limits : undefined;
+    const usage = await quotaUsage(this.db, req.user.sub, purpose as AiPurpose, this.config, new Date(), limits);
     return { ...usage, resetsAt: usage.resetsAt?.toISOString() ?? null };
   }
 

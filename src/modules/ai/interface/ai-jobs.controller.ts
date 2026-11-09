@@ -51,6 +51,15 @@ export class AiJobsController {
   }
 
   @Roles("TEACHER")
+  @Post("classes/:id/ai-jobs/:jobId/items/:itemId/apply")
+  @HttpCode(200)
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiOperation({ summary: "Apply one DRAFT_LAB_CHALLENGE proposal to its draft lesson (once per job; re-validated, replayable)" })
+  apply(@Param("id") classId: string, @Param("jobId") jobId: string, @Param("itemId") itemId: string, @Req() req: any) {
+    return this.service.applyProposal(classId, jobId, itemId, req);
+  }
+
+  @Roles("TEACHER")
   @Post("classes/:id/ai-jobs/:jobId/materialize")
   @HttpCode(201)
   @ApiHeader({ name: "Idempotency-Key", required: true })

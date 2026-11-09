@@ -52,6 +52,9 @@ const UNSAFE = [
   /ổ cắm( điện)?|nguồn điện 220|220 ?v\b|tự pha chế|tự điều trị|tự chữa|liều (dùng|thuốc)/iu,
 ];
 
+/** VR-08 as a single check, shared with other Teacher AI purposes (TAI-06 rationale safety). */
+export const isUnsafeText = (text: string) => UNSAFE.some((pattern) => pattern.test(text.normalize("NFC")));
+
 const UNIT_TOKEN = /(?<![\p{L}])(V|A|Ω|g|kg|mg|mol|°C|km\/h|m\/s|m|cm|mm|km|s|J|W|N|Pa|L|ml)(?![\p{L}])/u;
 const NEGATION = /(^|[\s,(])(không|sai)([\s,.?!)]|$)/u;
 

@@ -1,5 +1,7 @@
-import { Injectable, BadRequestException, Body, ConflictException, Controller, Get, Inject, NotFoundException, Param, Post, Put, Query, Req, } from "@nestjs/common";
+import { Injectable, BadRequestException, Body, ConflictException, Controller, Get, Inject, NotFoundException, Optional, Param, Post, Put, Query, Req, } from "@nestjs/common";
 import { z } from "zod";
+import { AI_ASSESSMENT_CONFIG, assistActive, parseAiAssessmentConfig, type AiAssessmentConfig } from "../../../config/ai-assessment";
+import { assertGradeMatchesSuggestion, suggestionSelect, teacherSuggestionView } from "./assignment-written-ai";
 import { isOverdue, ownedClass, targetHash } from "./class-access";
 import { MSG, classArchived, lock, reason, text } from "./class-common";
 import { audit } from "../../../common/audit";
@@ -72,7 +74,15 @@ const assignmentUpdate = z
 /** Use cases behind AssignmentsController (moved from the controller unchanged; repository ports are the next step). */
 @Injectable()
 export class AssignmentsService {
-  constructor(@Inject(Db) private db: Db) {}
+  private assessment: AiAssessmentConfig;
+
+  constructor(
+    @Inject(Db) private db: Db,
+    @Optional() @Inject(AI_ASSESSMENT_CONFIG) assessment?: AiAssessmentConfig,
+  ) {
+    // TAI2-T6: suggestions are shown and *_AI grades accepted only in assist mode; default (no config) is off.
+    this.assessment = assessment ?? parseAiAssessmentConfig({});
+  }
 
   async classAssignments(id: string, req: any, query: unknown) {
     const q = z.object({ status: z.enum(["ACTIVE", "ARCHIVED", "ALL"]).default("ALL") }).parse(query);
@@ -780,12 +790,42 @@ export class AssignmentsService {
         select: { revision: true, dueAt: true, note: true, createdAt: true, triggeredBySubmissionId: true },
       }),
     ]);
+    const students = a.targets.map((t: any) => ({ student: t.student, ...states.get(key(a.id, t.studentId))! }));
+    const assist = assistActive(this.assessment);
+    // TAI2-T6: in assist mode each current submission carries its latest AI job state and suggestion summary.
+    // In shadow mode nothing about suggestions (content or existence) is returned.
+    const aiByCurrent = assist ? await this.latestAiState(students.map((s: any) => s.current?.id).filter(Boolean)) : new Map();
     return {
       assignment: assignmentView({ ...a, _count: { targets: a.targets.length } }),
       deadlines: revisions,
       permittedDecisions: this.permittedDecisions(a),
-      students: a.targets.map((t: any) => ({ student: t.student, ...states.get(key(a.id, t.studentId))! })),
+      aiAssessment: this.aiAssessmentFlags(),
+      students: assist ? students.map((s: any) => ({ ...s, aiSuggestion: (s.current && aiByCurrent.get(s.current.id)) ?? null })) : students,
     };
+  }
+
+  /** What the teacher UI may offer: requests in shadow or assist mode, suggestions in assist mode only. */
+  private aiAssessmentFlags() {
+    const available = this.assessment.enabled && this.assessment.mode !== "off";
+    return { available, assist: assistActive(this.assessment) };
+  }
+
+  /** Latest ASSESS_SUBMISSION job per submission with its assist-mode suggestion summary (assist mode only). */
+  private async latestAiState(submissionIds: string[]) {
+    const map = new Map<string, { jobId: string; jobStatus: string; failureCode: string | null; suggestionId: string | null; status: string | null }>();
+    if (!submissionIds.length) return map;
+    const jobs = await this.db.aiJob.findMany({
+      where: { submissionId: { in: submissionIds }, purpose: "ASSESS_SUBMISSION", promptVersion: this.assessment.promptVersion },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, submissionId: true, status: true, failureCode: true, request: true, suggestion: { select: { id: true, status: true, mode: true } } },
+    });
+    for (const job of jobs as any[]) {
+      // Jobs created in shadow mode stay hidden after the switch to assist (their suggestions belong to the evaluation).
+      if (map.has(job.submissionId) || job.request?.mode !== "assist") continue;
+      const visible = job.suggestion && job.suggestion.mode === "assist" ? job.suggestion : null;
+      map.set(job.submissionId, { jobId: job.id, jobStatus: job.status, failureCode: job.failureCode, suggestionId: visible?.id ?? null, status: visible?.status ?? null });
+    }
+    return map;
   }
 
   /** One submission for grading: responses, the rubric of the answered version (with anchors), and every grade (append-only history). */
@@ -807,7 +847,15 @@ export class AssignmentsService {
     });
     if (!resource) throw new NotFoundException("Nội dung không còn khả dụng");
     const siblings = await this.db.assignmentSubmission.findMany({ where: { assignmentId, studentId: submission.studentId }, select: { id: true, submittedAt: true } });
+    const assist = assistActive(this.assessment);
+    const ai = assist ? (await this.latestAiState([submission.id])).get(submission.id) ?? null : null;
+    const suggestion = ai?.suggestionId
+      ? await this.db.aiAssessmentSuggestion.findFirst({ where: { id: ai.suggestionId, submissionId: submission.id, mode: "assist" }, select: suggestionSelect })
+      : null;
     return {
+      aiAssessment: this.aiAssessmentFlags(),
+      // Assist mode only: the latest job state (for fallback messages) and the suggestion with evidence offsets.
+      ...(assist ? { aiJob: ai ? { id: ai.jobId, status: ai.jobStatus, failureCode: ai.failureCode } : null, suggestion: suggestion ? teacherSuggestionView(suggestion as any) : null } : {}),
       submission: {
         id: submission.id,
         student: submission.student,
@@ -824,11 +872,17 @@ export class AssignmentsService {
     };
   }
 
-  /** Append-only MANUAL grade: validated against the answered rubric; 409 when the submission is not gradeable or not current. */
+  /**
+   * Append-only teacher grade: validated against the answered rubric; 409 when the submission is not gradeable or not
+   * current. `*_AI` kinds (TAI2-T6, assist mode only) reference a stored suggestion of this submission; ACCEPTED_AI must
+   * equal its points exactly. The stored points are always the teacher's, and the actor is always the teacher.
+   */
   async gradeWritten(id: string, assignmentId: string, submissionId: string, req: any, body: unknown) {
     const b = writtenGradeSchema.parse(body);
     const c = await ownedClass(this.db, id, req.user);
     if (c.status === "ARCHIVED") throw classArchived();
+    if (b.kind !== "MANUAL" && !assistActive(this.assessment))
+      throw new ConflictException({ code: "AI_ASSESSMENT_DISABLED", message: "Chế độ hỗ trợ chấm bằng AI đang tắt; hãy chấm thủ công" });
     const feedback = normalizeFeedback(b.feedback);
     const ctx = {
       actorId: req.user.sub,
@@ -848,11 +902,16 @@ export class AssignmentsService {
       const resource = await tx.classResource.findFirst({ where: { id: a.contentId, classId: id, kind: "WRITTEN_TASK" }, select: { content: true } });
       if (!resource) throw new NotFoundException("Nội dung không còn khả dụng");
       const grade = buildWrittenGrade(resource.content, b.criterionPoints);
+      if (b.kind !== "MANUAL") {
+        const suggestion = await tx.aiAssessmentSuggestion.findFirst({ where: { id: b.basedOnSuggestionId, submissionId }, select: suggestionSelect });
+        assertGradeMatchesSuggestion(b.kind, suggestion as any, submission, grade.criterionPoints);
+      }
       const row = await tx.writtenGradeDecision.create({
         data: {
           submissionId,
           actorId: req.user.sub,
-          kind: "MANUAL",
+          kind: b.kind,
+          basedOnSuggestionId: b.kind === "MANUAL" ? null : b.basedOnSuggestionId,
           criterionPoints: grade.criterionPoints,
           totalPoints: grade.totalPoints,
           maxPoints: grade.maxPoints,
@@ -867,7 +926,7 @@ export class AssignmentsService {
         action: "written_grade.create",
         targetType: "AssignmentSubmission",
         targetId: submissionId,
-        after: { submissionId, kind: "MANUAL", score: grade.score, resourceVersion: submission.resourceVersion },
+        after: { submissionId, kind: b.kind, score: grade.score, resourceVersion: submission.resourceVersion, basedOnSuggestionId: b.kind === "MANUAL" ? null : b.basedOnSuggestionId },
       });
       return { grade: row, status: "GRADED" };
     });

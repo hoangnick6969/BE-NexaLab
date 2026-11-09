@@ -1,9 +1,22 @@
 ---
 increment: TAI
 epics: TAI-01..TAI-06
-status: draft
+status: in progress (Pilot verification 2026-11-09; TAI-06 active pack/config issue remains)
 tracking: ../implementation-artifacts/sprint-status.yaml (section teacher_ai_tracking)
 ---
+
+## Completion status (2026-11-09)
+
+The implementation stories remain marked `done`, but the overall increment is in progress because the TAI-06 Pilot student attempt is blocked by an active pack/config mismatch. This is not release approval:
+
+- **Gates:** G-1 and G-5 are closed by the PO. G-2, G-3, G-4 and G-6 are closed on 2026-11-09 **by team-lead decision**, each on a stated assumption, and still need PO, lecturer, legal or reviewer confirmation before go-live. They are not approvals.
+  - G-2: PII scrubbing/anonymization (only submission text and rubric reach the provider, student identifiers never do) plus the 3-layer privacy architecture.
+  - G-3: baseline token-to-credit rate, configurable by env and PricingVersion rows; to be updated after one month of measured usage.
+  - G-4: default safe bounds from the existing `CHALLENGE_PARAMETERS`; `rangeReview` is `team-lead-default`, not `approved`.
+  - G-6: the project's existing provider port with the fake provider for golden evaluation and e2e.
+- **Evidence:** BE tsc clean, vitest 1077 passed with 4 known unrelated failures, 231 routes; FE tsc and build clean, regression 64/64, all bundle checks pass. Golden and shadow results come from SYNTHETIC sets.
+- **Pilot verification 2026-11-09:** all three new migrations applied; TAI-04 90/90, TAI-03 62/62 and TAI-02 31/31 passed with fixture cleanup. Credits PostgreSQL constraints, triggers, advisory lock and debit concurrency passed with rollback/deleted probes. TAI-06 reached student attempt, which returned 409 `SIM_PACK_CONFIG_INCOMPATIBLE` for the active Pilot circuit tuple. No live-provider run, lecturer golden labels or real shadow data.
+- **Before go-live:** resolve the active circuit pack/config mismatch and pass the full TAI-06 journey; run the full TAI-05 fault-injection script on a disposable DB; confirm the four gates, collect lecturer labels and one month of token usage.
 
 # TAI / Teacher AI Increment: Suggestion Layer for Authoring, Assessment and Evidence
 
@@ -52,11 +65,11 @@ flowchart LR
 | Gate | Decision required | Owner | Blocks |
 | --- | --- | --- | --- |
 | G-1 | **Closed 2026-10-30** (synced to fl05 2026-11-05): FR-21 activated, PRD §10 item 17 and the ARCHITECTURE-SPINE Deferred bullet amended, AD-17 added (ticket TAI-T0) | Product owner / supervising lecturer | — |
-| G-2 | Provider terms explicitly permit use in NexaLab's under-18 context; data-use/DPA terms, current-law basis, age-specific notices/consents as applicable, redaction limits, cross-border transfer and retention/deletion approved. Review Law 91/2025/QH15, Decree 356/2025/NĐ-CP and Decree 330/2026/NĐ-CP. Gemini free tier is excluded for student text; paid tier alone does not clear age eligibility. | Product owner / legal reviewer | TAI-02 suggestions; TAI-04 explanation rules |
-| G-3 | At least one month of measured TAI-01 token usage to set `PricingVersion` | Product owner | TAI-05 |
-| G-4 | PO accepts TAI-06 v1 as challenge variants on existing labs (no custom Lab builder); a named reviewer approves `CHALLENGE_PARAMETERS` ranges (Q-C2-04) for `circuit`, `chemistry`, `eye` | Product owner / reviewer | TAI-06 |
+| G-2 | Provider terms explicitly permit use in NexaLab's under-18 context; data-use/DPA terms, current-law basis, age-specific notices/consents as applicable, redaction limits, cross-border transfer and retention/deletion approved. Review Law 91/2025/QH15, Decree 356/2025/NĐ-CP and Decree 330/2026/NĐ-CP. Gemini free tier is excluded for student text; paid tier alone does not clear age eligibility. | Product owner / legal reviewer | TAI-02 suggestions; TAI-04 explanation rules. **Closed 2026-11-09 by team-lead decision (PII scrubbing assumption), pending legal/lecturer confirmation; not an approval.** |
+| G-3 | At least one month of measured TAI-01 token usage to set `PricingVersion` | Product owner | TAI-05. **Closed 2026-11-09 by team-lead decision (baseline token-to-credit rate, configurable), pending one month of measured usage; not an approval.** |
+| G-4 | PO accepts TAI-06 v1 as challenge variants on existing labs (no custom Lab builder); a named reviewer approves `CHALLENGE_PARAMETERS` ranges (Q-C2-04) for `circuit`, `chemistry`, `eye` | Product owner / reviewer | TAI-06. **Closed 2026-11-09 by team-lead decision (default bounds from `CHALLENGE_PARAMETERS`, `rangeReview` = team-lead-default), pending PO and reviewer confirmation; not an approval.** |
 | G-5 | PO approves the `insights@1` thresholds and whether `SUDDEN_UNAIDED_PASS` is shown in the pilot | Product owner / supervising lecturer | TAI-04 |
-| G-6 | Provider explicitly permits use inside NexaLab's under-18 context; lesson/instruction data boundaries, licensed-source processing rights, transfer, retention and deletion are approved. If Gemini is retained, record written interpretation of its under-18 terms; otherwise select a permitted provider. | Product owner / legal reviewer / curriculum owner | TAI-01 and TAI-06 provider calls |
+| G-6 | Provider explicitly permits use inside NexaLab's under-18 context; lesson/instruction data boundaries, licensed-source processing rights, transfer, retention and deletion are approved. If Gemini is retained, record written interpretation of its under-18 terms; otherwise select a permitted provider. | Product owner / legal reviewer / curriculum owner | TAI-01 and TAI-06 provider calls. **Closed 2026-11-09 by team-lead decision (existing provider port, fake provider for golden eval and e2e), to be confirmed by PO/lecturer before go-live; not an approval.** |
 
 Prior design choice (not current provider approval; see `.memlog.md` of TAI-01): Gemini API with model id in `GEMINI_MODEL`. No tier is approved until G-6; until then TAI-01 T1–T5 and TAI-06 run only against the fake provider. Revalidate against the current under-18 eligibility terms before any integration. The golden reviewer is the supervising lecturer; TAI-01 quota and quality thresholds are specified.
 
@@ -235,3 +248,11 @@ From TAI-02 on, each epic lists its stories as a table. The acceptance criteria 
 - A ticket moves to `ready-for-dev` only when its dependencies are `done` and its epic gate is decided. The gate decision must be appended to that spec's `.memlog.md`.
 - `review` means verified on the isolated local runtime and awaiting commit/PR and PO acceptance. `done` needs the ticket's **Accept when:** evidence recorded in `teacher_ai_tracking.story_notes`.
 - A spec changes only through its `.memlog.md` followed by re-derivation (bmad-spec). If a change alters a ticket, update this table and `sprint-status.yaml` in the same session.
+
+### Final verification — 2026-11-09
+
+2026-11-09 final verification: sprint-status.yaml parses with js-yaml after escaping apostrophes in evidence notes (including TAI4-T6). tai04-integration.mjs now adds teacher-final EXPLANATION grading and three insights@3 MCQ mismatch, evidence/privacy and replay checks (85 -> 90 on a local run, with the existing local latency check). Static checks passed: node --check, Prisma schema validate, BE build, 68 targeted Vitest tests. Real-DB migration/journey verification remains pending: Docker/Supabase CLI absent; local PostgreSQL 18 is running but postgres login requires a password not configured in this session. No remote Pilot migration/run was attempted because AGENTS.md forbids migration/test against shared Supabase. No live journey pass or DB cleanup is claimed; no new fixture was created. rangeReview remains team-lead-default, shared-library publish stays gated pending reviewer.
+
+### Pilot DB verification — 2026-11-09
+
+2026-11-09 Pilot DB verification under explicit Team Lead override: migrations 20261109120000, 20261109150000, 20261109170000 applied successfully (Prisma migrate status up to date). TAI-04 journey 90/90 checks passed including insights@3; TAI-03 62/62; TAI-02 31/31. TAI-05 PostgreSQL CHECK, append-only triggers, advisory lock contention and concurrent debit boundary passed using rollback/deleted probes; full tai05-integration.mjs was not run because it temporarily disables a trigger/constraint and is restricted to disposable DB. TAI-06 job/review/apply/publish/assign passed, but student attempt returned 409 SIM_PACK_CONFIG_INCOMPATIBLE with the Pilot active circuit pack (lightbulb model versus LED challenge); full TAI-06 DB journey remains open. Cleanup verified baseline users 10, classes 3, assignments 25, resources 7, AiJob 0, CreditAccount 0, and zero prefixed users. Sessions are 109 versus the historical 102; all remaining sessions belong to seeded users and were not deleted. rangeReview stays team-lead-default; shared-library publish still requires reviewer.

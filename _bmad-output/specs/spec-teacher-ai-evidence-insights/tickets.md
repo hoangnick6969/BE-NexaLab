@@ -24,7 +24,7 @@
 - **Accept when:** a Playwright journey covers view → drill to evidence → dismiss → new evidence reappears; no student or parent bundle imports insight code; lists show no ordering by insight count.
 - **Depends on:** TAI4-T2 (read) and TAI4-T3 (actions).
 
-## TAI4-T5 — Explanation-mismatch rules (`insights@2`)
+## TAI4-T5 — Explanation-mismatch rules (`insights@3`)
 
 - `MCQ_EXPLANATION_MISMATCH` and `SIMULATION_EXPLANATION_MISMATCH` over TAI-02 teacher-final assessments, with thresholds fixed in `insight-rules.md` first.
 - **Accept when:** boundary fixtures pass; AI `suggestedScore` is never read (test with a suggestion-only fixture); `insights@1` replay still reproduces old fingerprints.

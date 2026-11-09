@@ -10,6 +10,7 @@ export const INSIGHT_TOKENS = [
   "ruleCode", "ruleVersion", "fingerprint", "acknowledg", "insight",
   "INSUFFICIENT_EVIDENCE", "SCORE_CHANGE_UNUSUAL", "HIGH_HINT_DEPENDENCE", "OBJECTIVE_MASTERY_INCONSISTENT",
   "SUBMISSION_SIMILARITY_HIGH", "SUDDEN_UNAIDED_PASS", "SIMILARITY_MATCH", "pairCount", "latestAcknowledgement",
+  "MCQ_EXPLANATION_MISMATCH", "SIMULATION_EXPLANATION_MISMATCH", "WRITTEN_GRADE", "explanationPercent",
 ];
 
 export function findLeaks(value: unknown, tokens: string[], path = "$"): Leak[] {

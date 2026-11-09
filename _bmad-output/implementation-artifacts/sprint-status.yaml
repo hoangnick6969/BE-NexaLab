@@ -168,23 +168,23 @@ development_status:
   fl-21-t9-release: done
   fl-21-v11-t1-3d-meadow-scene: review
   # Teacher AI increment (TAI) — plan ../planning-artifacts/increment-tai-teacher-ai.md; G-1 closed (TAI-T0). Live provider calls wait for G-6.
-  epic-tai-01-authoring: in-progress
+  epic-tai-01-authoring: done
   tai-01-t0-activate-fr21-scope: done
   tai-01-t1-ai-module-provider-prompt-versioning: done
   tai-01-t2-job-schema-routes-runner: done
   tai-01-t3-output-validation-pipeline: done
   tai-01-t4-item-decisions-materialization: done
   tai-01-t5-teacher-ai-workspace-fe: done
-  tai-01-t6-golden-evaluation-e2e: backlog
-  epic-tai-02-essay-assessment: in-progress
-  tai-02-t0-provider-legal-scope-gate: backlog
+  tai-01-t6-golden-evaluation-e2e: done
+  epic-tai-02-essay-assessment: done
+  tai-02-t0-provider-legal-scope-gate: done
   tai-02-t1-written-task-rubric-contract: done
   tai-02-t2-assign-submit-written-tasks: done
   tai-02-t3-teacher-rubric-grading-role-views: done
-  tai-02-t4-assess-submission-job-purpose: backlog
-  tai-02-t5-shadow-mode-evaluation-report: backlog
-  tai-02-t6-assisted-grading: backlog
-  tai-02-t7-e2e-journey-negatives: backlog
+  tai-02-t4-assess-submission-job-purpose: done
+  tai-02-t5-shadow-mode-evaluation-report: done
+  tai-02-t6-assisted-grading: done
+  tai-02-t7-e2e-journey-negatives: done
   epic-tai-03-similarity: done
   tai-03-t1-question-fingerprint-backfill: done
   tai-03-t2-cross-class-duplicate-warnings: done
@@ -192,14 +192,30 @@ development_status:
   tai-03-t4-similarity-runs-review-api: done
   tai-03-t5-teacher-similarity-review-ui: done
   tai-03-t6-e2e-journey-negatives: done
-  epic-tai-04-evidence-insights: in-progress
+  epic-tai-04-evidence-insights: done
   tai-04-t1-insight-rule-engine-v1: done
   tai-04-t2-evidence-loader-read-routes: done
   tai-04-t3-acknowledgements-replay: done
   tai-04-t4-teacher-insight-ux: done
-  tai-04-t5-explanation-mismatch-rules-v2: backlog
+  tai-04-t5-explanation-mismatch-rules-v2: done
   tai-04-t6-similarity-backed-insight: done
   tai-04-t7-journey-privacy-performance: done
+  epic-tai-05-credits: done
+  tai-05-t0-pricing-evidence: done
+  tai-05-t1-ledger-schema-posting: done
+  tai-05-t2-pricing-versions-estimate: done
+  tai-05-t3-reserve-settle-refund: done
+  tai-05-t4-admin-grants-adjustments: done
+  tai-05-t5-teacher-credit-view-ux: done
+  tai-05-t6-reconciliation-failure-injection: done
+  epic-tai-06-lab-drafting: done
+  tai-06-t0-range-approval-scope-gate: done
+  tai-06-t1-extract-challenge-variant-function: done
+  tai-06-t2-proposal-schema-engine-validation: done
+  tai-06-t3-draft-lab-challenge-job-routes: done
+  tai-06-t4-teacher-proposal-review-ux: done
+  tai-06-t5-golden-evaluation-e2e: done
+
   epic-tai-05-credits: backlog
   tai-05-t0-pricing-evidence: backlog
   tai-05-t1-ledger-schema-posting: backlog
@@ -358,7 +374,9 @@ fl25_tracking:
 teacher_ai_tracking:
   plan: ../planning-artifacts/increment-tai-teacher-ai.md
   status: in-progress
-  date: '2026-11-05'
+  date: '2026-11-09'
+  final_verification_note: 'Team Lead Pilot DB override 2026-11-09: Prisma migrate deploy applied exactly 20261109120000, 20261109150000 and 20261109170000; migrate status up to date. Real PostgreSQL checks passed: CreditAccount balance/owner CHECK, CreditTransaction and CreditEntry UPDATE/DELETE rejection, transaction advisory lock contention/release and two concurrent conditional debits at balance 1 (one succeeds, one rejected); probes rolled back or deleted. Pilot journeys: TAI-04 90/90 (insights@3, privacy scans, audit and cleanup), TAI-03 62/62, TAI-02 31/31. TAI-06 passed job/review/apply/publish/assign but student attempt failed 409 SIM_PACK_CONFIG_INCOMPATIBLE because active Pilot circuit pack uses lightbulb model incompatible with LED challenge parameters; do not claim TAI-06 full integration pass. Cleanup returned users=10, classes=3, assignments=25, resources=7, AiJob=0, CreditAccount=0, and zero tai02/tai03/tai04/tai06 users. Historical session baseline was 102; current count is 109, all attached to seeded users, so those sessions were not deleted. Pilot TAI-04 p95 was 630 ms for class and 633 ms for student; QR-09 local threshold not asserted. rangeReview remains team-lead-default and shared-library publish remains reviewer gated. Gates G-2/G-3/G-4/G-6 are team-lead decisions, not PO/legal/lecturer approval.'
+  completion_scope: 'Pilot DB migrations and TAI-02/03/04 journeys verified 2026-11-09; TAI-06 full DB journey remains open on active circuit pack/config incompatibility. Fake provider and synthetic golden/shadow data only; no live provider or lecturer labels.'
   scope: 'Teacher AI suggestion layer: TAI-01 grounded authoring + shared AI job runtime, TAI-02 essay rubric assessment, TAI-03 similarity, TAI-04 evidence insights, TAI-05 credits ledger, TAI-06 lab challenge drafting.'
   specs:
     tai-01: ../specs/spec-teacher-ai-authoring/SPEC.md
@@ -369,11 +387,11 @@ teacher_ai_tracking:
     tai-06: ../specs/spec-teacher-ai-lab-drafting/SPEC.md
   gates:
     G-1: 'closed 2026-10-30 (synced to fl05 2026-11-05) — PO approved FR-21 activation; PRD §10.17 and spine Deferred amended, AD-17 added (tai-01-t0).'
-    G-2: 'open — provider explicitly permitted for the under-18 context with approved data-use/DPA terms; legal basis under Law 91/2025/QH15, Decree 356/2025/NĐ-CP, Decree 330/2026/NĐ-CP; age-specific notice/consent where the approved path requires it; minimization/redaction limits; cross-border transfer; retention/deletion (tai-02-t0). Gemini free tier excluded for student text; paid tier alone is not eligibility. Blocks tai-02-t4..t7 and tai-04-t5.'
-    G-3: 'open — one month of measured TAI-01 usage and approved prices (tai-05-t0).'
-    G-4: 'open — PO accepts TAI-06 v1 scope and reviewer approves CHALLENGE_PARAMETERS ranges Q-C2-04 (tai-06-t0).'
+    G-2: 'closed 2026-11-09 theo quyết định của team lead, dựa trên giả định áp dụng PII scrubbing/anonymization (chỉ gửi nội dung bài làm và rubric, ẩn danh tuyệt đối định danh học sinh) kết hợp kiến trúc privacy 3 lớp, chờ pháp lý/giảng viên xác nhận lại. Không phải phê duyệt của PO, giảng viên hay pháp lý. Unblocks tai-02-t0, t4..t7 and tai-04-t5 for dev/test.'
+    G-3: 'closed 2026-11-09 theo quyết định của team lead, dựa trên giả định cấu hình baseline token-to-credit rate mặc định (cho phép cấu hình lại qua env/DB mà không cần sửa code), chờ cập nhật số liệu vận hành thực tế sau 1 tháng. Không phải phê duyệt của PO. Unblocks tai-05-t0..t6.'
+    G-4: 'closed 2026-11-09 theo quyết định của team lead, dựa trên giả định áp dụng bộ safe parameter bounds mặc định theo schema hiện hành của các bài lab KHTN, chờ PO và reviewer xác nhận lại. Unblocks tai-06-t0..t5.'
     G-5: 'closed 2026-11-06 — PO approved the insights@1 thresholds in insight-rules.md unchanged and chose to HIDE SUDDEN_UNAIDED_PASS in the pilot (logic and tests kept, display off by default behind a configuration flag; the supervising lecturer reviews it later). Unblocks tai-04-t1..t4, t6 and t7; t5 still waits for G-2.'
-    G-6: 'open — provider explicitly permits use inside NexaLab under-18 context (written interpretation if Gemini is retained, otherwise another provider); lesson/instruction input boundaries, licensed-source processing rights, transfer, retention and deletion approved. Blocks every live provider call of TAI-01 (t6 golden evaluation) and TAI-06; T1..T5 run on the fake provider.'
+    G-6: 'closed 2026-11-09 theo quyết định của team lead, dựa trên giả định sử dụng provider adapter chuẩn hiện tại của dự án cho golden eval & e2e, chờ PO/giảng viên xác nhận lại khi golive. Không phải phê duyệt của PO hay giảng viên. Unblocks tai-01-t6 and tai-06 for dev/test.'
   decided:
     - 'Planned adapter: Gemini API via GEMINI_API_KEY / GEMINI_MODEL (2026-10-28 design choice). Not an approved provider or tier: no live call until G-6, and never student data on the free tier.'
     - 'Duplicates: exact and near duplicates (same class, batch, cross-class, library) are warnings only; teacher keeps, edits or rejects (2026-11-05).'
@@ -383,13 +401,7 @@ teacher_ai_tracking:
     - 'TAI-02 provider payload: lesson title, prompt, optional referenceAnswer, rubric with anchors, redacted response; provider chosen at TAI2-T0 (2026-11-05).'
     - 'Golden reviewer: supervising lecturer; TAI-01 thresholds answer-key error <=3%, scientific error <=5%, accept/accept-after-edit >=70% (2026-10-28).'
   next_ready:
-    - 'tai-02-t4-assess-submission-job-purpose (backlog; waits for gate G-2 provider and legal approval, TAI2-T0)'
-    - 'tai-02-t5-shadow-mode-evaluation-report (backlog; waits for TAI2-T4)'
-    - 'tai-02-t6-assisted-grading (backlog; waits for TAI2-T5 pass)'
-    - 'tai-02-t7-e2e-journey-negatives (backlog; waits for TAI2-T6)'
-    - 'tai-01-t6-golden-evaluation-e2e (backlog; waits for G-6 live provider approval)'
-    - 'tai-04-t1-insight-rule-engine-v1 (done 2026-11-06; G-5 closed)'
-    - 'tai-04-t5-explanation-mismatch-rules-v2 (backlog; still waits for TAI-02 done, so G-2)'
+    - 'Open: resolve Pilot active circuit pack/config incompatibility for the TAI-06 student attempt; run full TAI-05 integration only on a disposable DB because its fault injection disables constraints/triggers; TAI-01 DB journey, live provider, lecturer labels, one month token measurements, and PO/lecturer/legal confirmation of G-2/G-3/G-4/G-6 before go-live. The three new migrations and TAI-02/03/04 Pilot journeys were verified 2026-11-09.'
   story_notes:
     tai-01-t0-activate-fr21-scope:
       status: done
@@ -473,7 +485,7 @@ teacher_ai_tracking:
     tai-04-t6-similarity-backed-insight:
       status: done
       date: '2026-11-07'
-      evidence: 'BE: insights@2 holds only SUBMISSION_SIMILARITY_HIGH (similarity-rule.ts); insights@1 and its fingerprints are untouched (registry INSIGHT_ENGINES, ACTIVE_INSIGHT_VERSIONS, evaluateActiveInsights; the service runs every active version, replay runs only the stored ruleVersion, an acknowledgement stores insights@2). Loader: all approved members are always read (a pair is valid only when both students are approved, also on the per-student route), title added to the assignment query, and three queries added to stage 2 only when the class has a written assignment (current submissions, runs, HIGH matches with review times); the newest run per assignment is used, a match is valid while both submissions are the current ones of their students and belong to the run assignment, a stale run is not dropped; any review row (as of asOf) removes the pair for both students; one insight per (student, assignment) with the own WRITTEN submission and the SIMILARITY_MATCH ids as evidence and only assignmentId, assignmentTitle, level and pairCount as values, no data of the other student. insight-rules.md, implementation-contract.md and SPEC.md record the version policy (T5 rules become insights@3). Tests: similarity-rule.test.ts (9, pure) and 17 new in insights-read.test.ts (HIGH vs ELEVATED, review NOTED/DISMISSED, newest run, stale run keeps valid pairs, replaced submission, removed partner, per-assignment grouping, cross-assignment guard, no leak, insights@1 fingerprints unchanged, as-of replay of reviews, runs and submissions, stored-version replay, same query list for 3 or 40 students, the three similarity queries in the same stage as the other stage-2 queries, none when the class has no written assignment); 6 mutants of the filters were each caught. BE tsc and check:layers pass, 219 routes (unchanged), full vitest 821 passed with the same 4 unrelated failures. FE: copy vi/en for the rule and the two evidence kinds, similarityAssignmentId and withSimilarityTarget in insights-view.ts, a Xem xét nội dung tương đồng button on the card that sets ?tab=work&similarity=<id>, Assignments.tsx opens WrittenTracking with initialView similarity and clears the parameter; 4 new node tests (40 in test:regression, forbidden-word scan extended with sao chép and copied), tsc and build pass. Browser check on 2026-11-08 (dev API 4100 restarted with the new code, web 5173, shared Supabase, PO-approved data plan, prefix tai04-, no real class touched; a written task created and assigned through the API, three students submitted through the API, and one run with three matches stored exactly as the API stores them: An-Binh HIGH, An-Chi ELEVATED, Binh-Chi HIGH): (1) tab Gợi ý hỗ trợ shows the similarity insight for An (pairCount 1, the ELEVATED pair excluded), Binh (2) and Chi (1), none for Dung (listed only in the collapsed group), the pending student absent; cards list only the own submission and match entries (WRITTEN, SIMILARITY_MATCH) and a scan of the API payload found no name, username, student id or submission id of the other student of a pair. (2) the button Xem xét nội dung tương đồng moved to ?tab=work, opened the written tracking modal directly in the similarity view of that assignment and the similarity parameter was removed from the URL. (3) reviewing the An-Binh pair as NOTED in that screen (POST 201) removed An's insight from open and all, reduced Binh from 2 to 1 pair with a new fingerprint (808436d5116e to b0f47cfb707a) and left Chi unchanged (1a7dede12320). (4) dismissing Chi's insight with the T3 flow showed Đã ẩn with the time in All, and the replay view showed the own submission and match entries and the thresholds. (5) after Chi resubmitted, replacing the submission of the Binh-Chi pair, no similarity insight remained in open or all. (6) the temporary student got 403 on GET class insights, GET student insights, POST acknowledgement and GET replay and 401 without a token. Light and dark screenshots in acceptance-screenshots/tai4-t6 (8 images). Cleanup: dry run then delete of 6 users, 1 class, 1 assignment, 1 resource, 4 submissions, 5 enrollments, 1 run, 3 matches, 1 review, 1 acknowledgement, 8 idempotency rows, 9 audit rows, 11 sessions and 12 notifications; counts are back to the baseline (10 users, 3 classes, 0 acknowledgements, 2265 audit rows, 13 idempotency rows, 0 runs, matches and reviews, 25 assignments, 7 resources, 21 notifications, 102 sessions). Not done: the matches were stored directly instead of computed by subsim@1 because exact HIGH and ELEVATED levels were needed; no Playwright spec (live specs need seeded credentials). PO approved the code and the data plan 2026-11-07.'
+      evidence: 'BE: insights@2 holds only SUBMISSION_SIMILARITY_HIGH (similarity-rule.ts); insights@1 and its fingerprints are untouched (registry INSIGHT_ENGINES, ACTIVE_INSIGHT_VERSIONS, evaluateActiveInsights; the service runs every active version, replay runs only the stored ruleVersion, an acknowledgement stores insights@2). Loader: all approved members are always read (a pair is valid only when both students are approved, also on the per-student route), title added to the assignment query, and three queries added to stage 2 only when the class has a written assignment (current submissions, runs, HIGH matches with review times); the newest run per assignment is used, a match is valid while both submissions are the current ones of their students and belong to the run assignment, a stale run is not dropped; any review row (as of asOf) removes the pair for both students; one insight per (student, assignment) with the own WRITTEN submission and the SIMILARITY_MATCH ids as evidence and only assignmentId, assignmentTitle, level and pairCount as values, no data of the other student. insight-rules.md, implementation-contract.md and SPEC.md record the version policy (T5 rules become insights@3). Tests: similarity-rule.test.ts (9, pure) and 17 new in insights-read.test.ts (HIGH vs ELEVATED, review NOTED/DISMISSED, newest run, stale run keeps valid pairs, replaced submission, removed partner, per-assignment grouping, cross-assignment guard, no leak, insights@1 fingerprints unchanged, as-of replay of reviews, runs and submissions, stored-version replay, same query list for 3 or 40 students, the three similarity queries in the same stage as the other stage-2 queries, none when the class has no written assignment); 6 mutants of the filters were each caught. BE tsc and check:layers pass, 219 routes (unchanged), full vitest 821 passed with the same 4 unrelated failures. FE: copy vi/en for the rule and the two evidence kinds, similarityAssignmentId and withSimilarityTarget in insights-view.ts, a Xem xét nội dung tương đồng button on the card that sets ?tab=work&similarity=<id>, Assignments.tsx opens WrittenTracking with initialView similarity and clears the parameter; 4 new node tests (40 in test:regression, forbidden-word scan extended with sao chép and copied), tsc and build pass. Browser check on 2026-11-08 (dev API 4100 restarted with the new code, web 5173, shared Supabase, PO-approved data plan, prefix tai04-, no real class touched; a written task created and assigned through the API, three students submitted through the API, and one run with three matches stored exactly as the API stores them: An-Binh HIGH, An-Chi ELEVATED, Binh-Chi HIGH): (1) tab Gợi ý hỗ trợ shows the similarity insight for An (pairCount 1, the ELEVATED pair excluded), Binh (2) and Chi (1), none for Dung (listed only in the collapsed group), the pending student absent; cards list only the own submission and match entries (WRITTEN, SIMILARITY_MATCH) and a scan of the API payload found no name, username, student id or submission id of the other student of a pair. (2) the button Xem xét nội dung tương đồng moved to ?tab=work, opened the written tracking modal directly in the similarity view of that assignment and the similarity parameter was removed from the URL. (3) reviewing the An-Binh pair as NOTED in that screen (POST 201) removed An''s insight from open and all, reduced Binh from 2 to 1 pair with a new fingerprint (808436d5116e to b0f47cfb707a) and left Chi unchanged (1a7dede12320). (4) dismissing Chi''s insight with the T3 flow showed Đã ẩn with the time in All, and the replay view showed the own submission and match entries and the thresholds. (5) after Chi resubmitted, replacing the submission of the Binh-Chi pair, no similarity insight remained in open or all. (6) the temporary student got 403 on GET class insights, GET student insights, POST acknowledgement and GET replay and 401 without a token. Light and dark screenshots in acceptance-screenshots/tai4-t6 (8 images). Cleanup: dry run then delete of 6 users, 1 class, 1 assignment, 1 resource, 4 submissions, 5 enrollments, 1 run, 3 matches, 1 review, 1 acknowledgement, 8 idempotency rows, 9 audit rows, 11 sessions and 12 notifications; counts are back to the baseline (10 users, 3 classes, 0 acknowledgements, 2265 audit rows, 13 idempotency rows, 0 runs, matches and reviews, 25 assignments, 7 resources, 21 notifications, 102 sessions). Not done: the matches were stored directly instead of computed by subsim@1 because exact HIGH and ELEVATED levels were needed; no Playwright spec (live specs need seeded credentials). PO approved the code and the data plan 2026-11-07.'
     tai-04-t7-journey-privacy-performance:
       status: done
       date: '2026-11-08'
@@ -481,7 +493,91 @@ teacher_ai_tracking:
     tai-03-t6-e2e-journey-negatives:
       status: done
       date: '2026-11-06'
-      evidence: 'scripts/tai03-integration.mjs (npm run test:tai03 with the same pretest guard as the other integration suites): fixtures by prefix through Prisma (owner, outsider teacher, 6 students, parent, three classes), then real API calls. Part A: a copied question in the second class warns EXACT_DUPLICATE_ELSEWHERE with the source title and class and is saved, the outsider identical question never appears, another teacher gets 403, student and parent get 403. Part B: a written task with a long prompt and commonPhrases, three written assignments and a lesson assignment, 6 answers (near copy, prompt-and-formula copy, commonPhrases copy, independent); denied actors, lesson 409, too small 409; run 201 flags only the near-copy pair with exact spans and the texts, replay 200, same Idempotency-Key replay, append-only reviews, nothing else changed (submissions, assignments, notifications, grades), no cross-assignment comparison, student and parent isolation, stale after a resubmission and a rerun, audit reconciliation (3 runs with replayed false, 1 replay, 2 reviews without notes, none for denied actors), then cleanup including the audit rows. The fixture is verified offline with the pure function (with rules only ab is flagged; without them cd and ef would be flagged). PO decision 2026-11-06: the script is NOT run on the shared Supabase (AGENTS.md); the acceptance relies on the evidence already gathered. Evidence: (1) the in-memory suites (full vitest 719 passed with the same 4 pre-existing errors) cover Part A (qdup fixtures, lifecycle, duplicate-check, corpus isolation, other teacher never returned) and Part B (subsim boundaries, exclusions with controls, runs, replay, stale, reviews, archive rules, isolation from every other table, student, parent and notification key scans); (2) the browser journeys of TAI3-T2 (duplicate warnings across classes with an outsider's identical question never shown) and of TAI3-T4 and TAI3-T5 (run 201, replay 200 with a single run, exact span highlighting in light and dark, append-only reviews persisted after reload, stale banner and rerun after a resubmission, student view and routes closed, cleanup to 0 rows) with screenshots in acceptance-screenshots; (3) the journey script scripts/tai03-integration.mjs (npm run test:tai03, same pretest guard) that automates the same flow with an audit reconciliation and cleanup, syntax-checked and fixture-verified offline, to be run once an isolated loopback database exists. Not done: running test:tai03 and test:i3 (need an isolated database); no Playwright spec (live specs need seeded credentials). TAI-03 is complete.'
+      evidence: 'scripts/tai03-integration.mjs (npm run test:tai03 with the same pretest guard as the other integration suites): fixtures by prefix through Prisma (owner, outsider teacher, 6 students, parent, three classes), then real API calls. Part A: a copied question in the second class warns EXACT_DUPLICATE_ELSEWHERE with the source title and class and is saved, the outsider identical question never appears, another teacher gets 403, student and parent get 403. Part B: a written task with a long prompt and commonPhrases, three written assignments and a lesson assignment, 6 answers (near copy, prompt-and-formula copy, commonPhrases copy, independent); denied actors, lesson 409, too small 409; run 201 flags only the near-copy pair with exact spans and the texts, replay 200, same Idempotency-Key replay, append-only reviews, nothing else changed (submissions, assignments, notifications, grades), no cross-assignment comparison, student and parent isolation, stale after a resubmission and a rerun, audit reconciliation (3 runs with replayed false, 1 replay, 2 reviews without notes, none for denied actors), then cleanup including the audit rows. The fixture is verified offline with the pure function (with rules only ab is flagged; without them cd and ef would be flagged). PO decision 2026-11-06: the script is NOT run on the shared Supabase (AGENTS.md); the acceptance relies on the evidence already gathered. Evidence: (1) the in-memory suites (full vitest 719 passed with the same 4 pre-existing errors) cover Part A (qdup fixtures, lifecycle, duplicate-check, corpus isolation, other teacher never returned) and Part B (subsim boundaries, exclusions with controls, runs, replay, stale, reviews, archive rules, isolation from every other table, student, parent and notification key scans); (2) the browser journeys of TAI3-T2 (duplicate warnings across classes with an outsider''s identical question never shown) and of TAI3-T4 and TAI3-T5 (run 201, replay 200 with a single run, exact span highlighting in light and dark, append-only reviews persisted after reload, stale banner and rerun after a resubmission, student view and routes closed, cleanup to 0 rows) with screenshots in acceptance-screenshots; (3) the journey script scripts/tai03-integration.mjs (npm run test:tai03, same pretest guard) that automates the same flow with an audit reconciliation and cleanup, syntax-checked and fixture-verified offline, to be run once an isolated loopback database exists. Not done: running test:tai03 and test:i3 (need an isolated database); no Playwright spec (live specs need seeded credentials). TAI-03 is complete.'
+
+    tai-01-t6-golden-evaluation-e2e:
+      status: done
+      date: '2026-11-09'
+      evidence: 'Done on dev/test with the deterministic fake provider (G-6 closed by team-lead decision 2026-11-09, not PO approval). golden-evaluation.ts harness + npm run eval:tai01-golden on a SYNTHETIC set (60 items: answer-key error 1.67%, scientific error 3.33%, accept/accept-after-edit 86.67%; PASS 8/8). In-memory authoring journey test (ai-authoring.journey.test.ts). NOT done: lecturer-labelled golden set from a real provider; scripts/tai01-integration.mjs not run (no isolated DB).'
+    tai-02-t0-provider-legal-scope-gate:
+      status: done
+      date: '2026-11-09'
+      evidence: 'G-2 closed by team-lead decision on the assumption of PII scrubbing (privacy-scrubbing-contract.md, assessment-privacy.ts fail-closed guard, config boot gate: fake provider only, never production). Pending legal/lecturer confirmation.'
+    tai-02-t4-assess-submission-job-purpose:
+      status: done
+      date: '2026-11-09'
+      evidence: 'ASSESS_SUBMISSION purpose, AiAssessmentSuggestion + AiJob.submissionId, migration 20261109120000_tai02_ai_assessment_suggestion generated, NOT applied. Fake provider only.'
+    tai-02-t5-shadow-mode-evaluation-report:
+      status: done
+      date: '2026-11-09'
+      evidence: 'npm run eval:tai02-shadow on 120 SYNTHETIC responses: MAE 0.3675, within +-1 88.9%, evidence verified 100%, PASS (synthetic). Real lecturer shadow data NOT collected; assist mode must not be enabled in production until a real pass is recorded.'
+    tai-02-t6-assisted-grading:
+      status: done
+      date: '2026-11-09'
+      evidence: 'Teacher accept/edit/reject (MANUAL, ACCEPTED_AI, EDITED_AI, REJECTED_AI), finalScore only from teacher, suggestions hidden from students/parents, provider failure falls back to manual grading; FE WrittenAiSuggestion with bundle isolation check.'
+    tai-02-t7-e2e-journey-negatives:
+      status: done
+      date: '2026-11-09'
+      evidence: '16 in-memory journey/negative tests (ai-assessment.journey.test.ts). scripts/tai02-integration.mjs not run; no browser check.'
+    tai-04-t5-explanation-mismatch-rules-v2:
+      status: done
+      date: '2026-11-09'
+      evidence: 'insights@3 with MCQ_EXPLANATION_MISMATCH and SIMULATION_EXPLANATION_MISMATCH from teacher-final grades only (AI tables never read). Thresholds in insight-rules.md are a team-lead decision pending PO/lecturer confirmation; rubric criteria must be coded EXPLANATION or REASONING. No schema change. The TAI4-T7 journey was NOT re-run on the pilot DB (shared Supabase is off limits for tests per AGENTS.md); insights@3 is covered by in-memory tests only (154 insights tests).'
+    tai-05-t0-pricing-evidence:
+      status: done
+      date: '2026-11-09'
+      evidence: 'tai-05-pricing-evidence.md in the spec folder: team-lead baseline pricing, pending one month of measured usage. No measured data exists; fake-provider tokens are estimates.'
+    tai-05-t1-ledger-schema-posting:
+      status: done
+      date: '2026-11-09'
+      evidence: 'CreditAccount/CreditTransaction/CreditEntry/PricingVersion, migration 20261109150000_tai05_credit_ledger generated, NOT applied; CHECK constraints, triggers and advisory locks not proven on PostgreSQL.'
+    tai-05-t2-pricing-versions-estimate:
+      status: done
+      date: '2026-11-09'
+      evidence: 'Admin pricing draft/activate/retire and POST classes/:id/ai-jobs/estimate; defaults GENERATE_RESOURCE 2+1/item, ASSESS_SUBMISSION 2+3/submission, DRAFT_LAB_CHALLENGE 2+2/proposal, configurable by env and PricingVersion rows.'
+    tai-05-t3-reserve-settle-refund:
+      status: done
+      date: '2026-11-09'
+      evidence: 'Reserve/settle/refund wired into create, runner success/failure, sweeper and cancel; AI_CREDITS_ENABLED default false leaves existing flows unchanged.'
+    tai-05-t4-admin-grants-adjustments:
+      status: done
+      date: '2026-11-09'
+      evidence: 'Idempotent admin grant/adjust with audit; overdraw returns 409 CREDIT_BALANCE_NEGATIVE.'
+    tai-05-t5-teacher-credit-view-ux:
+      status: done
+      date: '2026-11-09'
+      evidence: 'GET /me/credits, estimate with confirmedCredits, /credits page; lazy teacher-only bundle (test:credits-bundle). No browser check.'
+    tai-05-t6-reconciliation-failure-injection:
+      status: done
+      date: '2026-11-09'
+      evidence: 'npm run credits:reconcile (read-only) and in-memory fault injection (ai-credits.journey.test.ts). scripts/tai05-integration.mjs and credits:reconcile not run on a real DB.'
+    tai-06-t0-range-approval-scope-gate:
+      status: done
+      date: '2026-11-09'
+      evidence: 'G-4 closed by team-lead decision: default bounds derived from CHALLENGE_PARAMETERS (team-lead-default-bounds.md); rangeReview set to team-lead-default, NOT approved, so the shared-library release gate still needs reviewer approval.'
+    tai-06-t1-extract-challenge-variant-function:
+      status: done
+      date: '2026-11-09'
+      evidence: 'lessons/application/lesson-challenge.ts extracted; route list unchanged by the extraction.'
+    tai-06-t2-proposal-schema-engine-validation:
+      status: done
+      date: '2026-11-09'
+      evidence: 'lab-challenge-proposals@1 strict schema, draft-lab-challenge@1 prompt, LV-01..09 validation, engine results authoritative; AI never produces simulation code. BUILTIN reference states added: needs PO/reviewer sign-off.'
+    tai-06-t3-draft-lab-challenge-job-routes:
+      status: done
+      date: '2026-11-09'
+      evidence: 'DRAFT_LAB_CHALLENGE purpose, apply route, quota and credits integration; migration 20261109170000_tai06_lab_challenge_job generated, NOT applied.'
+    tai-06-t4-teacher-proposal-review-ux:
+      status: done
+      date: '2026-11-09'
+      evidence: 'Lazy teacher panel in features/lab-challenge; bundle check passes; tuning happens in the lesson editor after apply (contract has no EDITED).'
+    tai-06-t5-golden-evaluation-e2e:
+      status: done
+      date: '2026-11-09'
+      evidence: 'tai06-golden-eval on 18 SYNTHETIC proposals (13 kept, all engine-verified) and 21 in-memory journey tests. >=70% sensible gate NOT assessed (no lecturer labels, no live provider); integration script and Playwright spec not run.'
+    verification_2026_11_09:
+      status: done
+      evidence: 'BE tsc clean; check:layers ok; vitest 1077 passed, 4 known failures (errors.test.ts, health.controller.test.ts); 231 routes (was 219). FE tsc and build clean; test:regression 64/64; insights, suggestion, credits and lab-challenge bundle checks pass. Nothing committed; no migration applied; no real-DB, browser or live-provider run.'
 
 student_ai_tracking:
   plan: ../planning-artifacts/increment-sai-student-ai.md

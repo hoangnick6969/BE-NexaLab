@@ -1,5 +1,6 @@
 import { highHintDependence, insufficientEvidence, objectiveMasteryInconsistent, scoreChangeUnusual } from "./rules";
 import { evaluateInsightsV2 } from "./similarity-rule";
+import { evaluateInsightsV3 } from "./explanation-rule";
 import { INSIGHT_MESSAGES } from "./messages";
 import type { Insight, InsightInput, InsightRuleVersion } from "./types";
 
@@ -8,6 +9,7 @@ export { insightFingerprint } from "./fingerprint";
 export { INSIGHT_MESSAGES, FORBIDDEN_INSIGHT_WORDS } from "./messages";
 export { INSIGHTS_V1_THRESHOLDS } from "./rules";
 export { SIMILARITY_V2_THRESHOLDS, evaluateInsightsV2 } from "./similarity-rule";
+export { EXPLANATION_CRITERION_CODES, EXPLANATION_V3_THRESHOLDS, evaluateInsightsV3 } from "./explanation-rule";
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -32,9 +34,10 @@ export function evaluateInsightsV1(input: InsightInput): Insight[] {
 export const INSIGHT_ENGINES: Record<InsightRuleVersion, (input: InsightInput) => Insight[]> = {
   "insights@1": evaluateInsightsV1,
   "insights@2": evaluateInsightsV2,
+  "insights@3": evaluateInsightsV3,
 };
 /** Versions evaluated by the read routes, oldest first. */
-export const ACTIVE_INSIGHT_VERSIONS: InsightRuleVersion[] = ["insights@1", "insights@2"];
+export const ACTIVE_INSIGHT_VERSIONS: InsightRuleVersion[] = ["insights@1", "insights@2", "insights@3"];
 
 /** All active versions together, sorted. */
 export function evaluateActiveInsights(input: InsightInput): Insight[] {

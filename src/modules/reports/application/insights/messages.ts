@@ -6,6 +6,8 @@ export const INSIGHT_MESSAGES = {
   SUDDEN_UNAIDED_PASS: "Lần thực hành gần nhất đạt mà không cần gợi ý, sau nhiều lần cần gợi ý ở mức cao; nên xem lại các lần làm.",
   OBJECTIVE_MASTERY_INCONSISTENT: "Kết quả ở các loại bài khác nhau cho cùng một mục tiêu chưa thống nhất; nên xem lại các bài liên quan.",
   SUBMISSION_SIMILARITY_HIGH: "Bài làm có nội dung trùng khá nhiều với bài của học sinh khác trong cùng bài giao. Đây là bằng chứng để giáo viên đối chiếu, không phải kết luận.",
+  MCQ_EXPLANATION_MISMATCH: "Điểm trắc nghiệm và phần giải thích bằng văn bản của cùng một bài học chưa tương xứng với nhau. Đây là bằng chứng để giáo viên đối chiếu, không phải kết luận.",
+  SIMULATION_EXPLANATION_MISMATCH: "Kết quả thực hành và phần giải thích bằng văn bản của cùng một bài học chưa tương xứng với nhau. Đây là bằng chứng để giáo viên đối chiếu, không phải kết luận.",
 } as const;
 
 /** Words templates and codes must never contain (Vietnamese and English equivalents). */
