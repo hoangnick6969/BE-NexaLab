@@ -89,3 +89,9 @@ the chat). See `../specs/spec-student-ai-llm/SPEC.md`. Migrations to apply to sh
 
 2026-11-08 (later): B5 shipped (dev/test only): "Hỏi AI" on a highlighted textbook passage, see the B5 section of
 `../specs/spec-student-ai-llm/SPEC.md`. One more migration for the owner: `20261108150000_b5_textbook_passage`.
+
+2026-11-09: SG-4 tooling and retention (owner: "Hoàn thiện các phần còn lại"): `npm run eval:student-ai` scores the
+safety set through the same reply path as the API and writes a lecturer CSV; `npm run retention:student-ai` applies
+the 12-month rule to tutor conversations (dry run by default). Everything else left is gated: SG-2 (provider tier,
+legal basis), SG-3 (insight thresholds, sai-02-t3, SAI-06), SG-4 (lecturer approval of the set and a real-provider
+run), lecturer marks on `hint-review-set.md` (sai-01-t6), owner applies the three Student AI migrations.

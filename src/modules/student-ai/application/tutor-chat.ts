@@ -130,10 +130,10 @@ export function guardChatReply(raw: string, grounding: string, shown = ""): { on
 }
 
 export type ContextKind = "LAB" | "LESSON" | "EBOOK";
-type Context = { kind: ContextKind; id: string; title: string; text: string };
+export type TutorContext = { kind: ContextKind; id: string; title: string; text: string };
 
 /** The Lab or lesson must be one the student can open (released shared content or an applicable assignment). */
-export async function tutorContext(db: any, studentId: string, kind: ContextKind, id: string): Promise<Context> {
+export async function tutorContext(db: any, studentId: string, kind: ContextKind, id: string): Promise<TutorContext> {
   if (kind === "EBOOK") {
     // Same rule as reading and annotating: the subject has a textbook link.
     const subject = await db.subject.findUnique({ where: { id }, select: { name: true, ebookUrl: true } });
@@ -196,6 +196,38 @@ async function assertChatWindow(db: any, studentId: string, now: Date) {
  * One student turn and the tutor's reply. The model call runs outside any transaction; both rows are written together
  * afterwards. Refusals, the kill switch, the budget and guard failures all answer with fixed text (never empty).
  */
+export type QuotedPassage = { text: string; prefix: string; suffix: string; page: number };
+export type TutorReplyDraft = { content: string; outcome: string; reason: string | null; provider: string | null; model: string | null; promptVersion: string | null };
+
+/**
+ * The reply decision without persistence: prefilter, kill switch, budget, provider call, output guard. Shared by
+ * `sendMessage` and the SG-4 evaluation runner (`npm run eval:student-ai`) so both measure the same path.
+ */
+export async function draftTutorReply(input: {
+  text: string; context: TutorContext; history: { role: "student" | "tutor"; content: string }[]; quoted: QuotedPassage | null;
+  provider: StudentAiProvider | null; config: StudentAiConfig; overBudget?: () => Promise<boolean>;
+}): Promise<TutorReplyDraft> {
+  const { text, context, history, quoted, provider, config } = input;
+  const ebook = context.kind === "EBOOK";
+  const promptVersion = ebook ? TEXTBOOK_QA_PROMPT_VERSION : TUTOR_CHAT_PROMPT_VERSION;
+  const fixed = (key: keyof typeof CHAT_REPLIES, outcome: string, reason: string | null, model: string | null = null): TutorReplyDraft =>
+    ({ content: CHAT_REPLIES[key], outcome, reason, provider: model ? "rules-fallback" : "rules", model, promptVersion: model ? promptVersion : null });
+  const refusal = prefilterMessage(text) ?? (quoted && passageInjection([quoted.prefix, quoted.text, quoted.suffix].join(" ")) ? "INJECTION" : null);
+  if (refusal) return fixed(refusal, "REFUSED", refusal);
+  if (!config.llmEnabled || !provider) return fixed("DISABLED", "DISABLED", "DISABLED");
+  if (await input.overBudget?.()) return fixed("FALLBACK", "FALLBACK", "BUDGET");
+  const user = JSON.stringify(quoted
+    ? { context: { kind: context.kind, title: context.title }, passage: quoted, history: history.slice(-4), message: text }
+    : { context: { kind: context.kind, title: context.title, text: context.text }, history, message: text });
+  const called = await callProvider(provider, config, ebook ? TEXTBOOK_QA_SYSTEM_PROMPT : TUTOR_CHAT_SYSTEM_PROMPT, user, 500);
+  if ("reason" in called) return fixed("FALLBACK", "FALLBACK", called.reason, provider.model);
+  const guarded = guardChatReply(called.raw, [context.title, context.text, text, quoted?.prefix, quoted?.text, quoted?.suffix, ...history.map((item) => item.content)].join(" "),
+    quoted ? [quoted.prefix, quoted.text, quoted.suffix].join(" ") : "");
+  if ("rule" in guarded) return fixed("FALLBACK", "FALLBACK", `GUARD:${guarded.rule}`, provider.model);
+  if (!guarded.onTopic) return { ...fixed("OFF_TOPIC", "REFUSED", "OFF_TOPIC", provider.model), provider: provider.name };
+  return { content: guarded.reply, outcome: "ANSWERED", reason: null, provider: provider.name, model: provider.model, promptVersion };
+}
+
 export async function sendMessage(db: any, studentId: string, conversationId: string, message: string, deps: ChatDeps, passage?: Passage) {
   const config = deps.config ?? studentAiConfig();
   const now = deps.now?.() ?? new Date();
@@ -211,32 +243,12 @@ export async function sendMessage(db: any, studentId: string, conversationId: st
     throw new BadRequestException({ code: "TUTOR_PASSAGE_INVALID", message: `Đoạn sách tối đa ${PASSAGE_MAX} ký tự` });
   await assertChatWindow(db, studentId, now);
   const text = message.trim();
-  const quoted = passage ? { text: passage.text.trim(), prefix: (passage.prefix ?? "").slice(-200), suffix: (passage.suffix ?? "").slice(0, 200), page: passage.pageNumber } : null;
-  const promptVersion = ebook ? TEXTBOOK_QA_PROMPT_VERSION : TUTOR_CHAT_PROMPT_VERSION;
+  const quoted: QuotedPassage | null = passage ? { text: passage.text.trim(), prefix: (passage.prefix ?? "").slice(-200), suffix: (passage.suffix ?? "").slice(0, 200), page: passage.pageNumber } : null;
 
-  let reply: { content: string; outcome: string; reason: string | null; provider: string | null; model: string | null; promptVersion: string | null };
-  const fixed = (key: keyof typeof CHAT_REPLIES, outcome: string, reason: string | null, model: string | null = null) =>
-    ({ content: CHAT_REPLIES[key], outcome, reason, provider: model ? "rules-fallback" : "rules", model, promptVersion: model ? promptVersion : null });
-  const refusal = prefilterMessage(text) ?? (quoted && passageInjection([quoted.prefix, quoted.text, quoted.suffix].join(" ")) ? "INJECTION" : null);
-  if (refusal) reply = fixed(refusal, "REFUSED", refusal);
-  else if (!config.llmEnabled || !deps.provider) reply = fixed("DISABLED", "DISABLED", "DISABLED");
-  else if ((await llmStore(db, studentId).providerCallsLast24h(now)) >= config.dailyProviderCalls) reply = fixed("FALLBACK", "FALLBACK", "BUDGET");
-  else {
-    const history = (await db.tutorMessage.findMany({ where: { conversationId }, orderBy: { createdAt: "desc" }, take: HISTORY_TURNS }))
-      .reverse().map((row: any) => ({ role: row.role === "STUDENT" ? "student" : "tutor", content: row.content }));
-    const user = JSON.stringify(quoted
-      ? { context: { kind: context.kind, title: context.title }, passage: quoted, history: history.slice(-4), message: text }
-      : { context: { kind: context.kind, title: context.title, text: context.text }, history, message: text });
-    const called = await callProvider(deps.provider, config, ebook ? TEXTBOOK_QA_SYSTEM_PROMPT : TUTOR_CHAT_SYSTEM_PROMPT, user, 500);
-    if ("reason" in called) reply = fixed("FALLBACK", "FALLBACK", called.reason, deps.provider.model);
-    else {
-      const guarded = guardChatReply(called.raw, [context.title, context.text, text, quoted?.prefix, quoted?.text, quoted?.suffix, ...history.map((item: any) => item.content)].join(" "),
-        quoted ? [quoted.prefix, quoted.text, quoted.suffix].join(" ") : "");
-      if ("rule" in guarded) reply = fixed("FALLBACK", "FALLBACK", `GUARD:${guarded.rule}`, deps.provider.model);
-      else if (!guarded.onTopic) reply = { ...fixed("OFF_TOPIC", "REFUSED", "OFF_TOPIC", deps.provider.model), provider: deps.provider.name };
-      else reply = { content: guarded.reply, outcome: "ANSWERED", reason: null, provider: deps.provider.name, model: deps.provider.model, promptVersion };
-    }
-  }
+  const overBudget = async () => (await llmStore(db, studentId).providerCallsLast24h(now)) >= config.dailyProviderCalls;
+  const history = !config.llmEnabled || !deps.provider ? [] : (await db.tutorMessage.findMany({ where: { conversationId }, orderBy: { createdAt: "desc" }, take: HISTORY_TURNS }))
+    .reverse().map((row: any) => ({ role: row.role === "STUDENT" ? "student" as const : "tutor" as const, content: row.content }));
+  const reply = await draftTutorReply({ text, context, history, quoted, provider: deps.provider, config, overBudget });
 
   const [student, tutor] = await db.$transaction(async (tx: any) => {
     const asked = await tx.tutorMessage.create({ data: { conversationId, studentId, role: "STUDENT", content: text, passage: quoted?.text ?? null, pageNumber: quoted?.page ?? null } });
@@ -251,3 +263,21 @@ export async function sendMessage(db: any, studentId: string, conversationId: st
   return { conversationId, messages: [messageView(student), messageView(tutor)] };
 }
 
+
+/** PO decision 6: interaction data is kept 12 months after last activity. */
+export const TUTOR_RETENTION_MONTHS = 12;
+
+/**
+ * Retention for tutor conversations: a conversation whose last turn (`updatedAt`, refreshed on every message) is older
+ * than 12 months is deleted with its messages (cascade). `apply: false` only counts. Run by
+ * `npm run retention:student-ai`; there is no in-process scheduler.
+ */
+export async function purgeTutorConversations(db: any, options: { now?: Date; apply: boolean }) {
+  const cutoff = new Date(options.now ?? new Date());
+  cutoff.setMonth(cutoff.getMonth() - TUTOR_RETENTION_MONTHS);
+  const where = { updatedAt: { lt: cutoff } };
+  const conversations = await db.tutorConversation.count({ where });
+  const messages = await db.tutorMessage.count({ where: { conversation: where } });
+  if (options.apply && conversations) await db.tutorConversation.deleteMany({ where });
+  return { cutoff: cutoff.toISOString(), conversations, messages, deleted: options.apply ? conversations : 0 };
+}

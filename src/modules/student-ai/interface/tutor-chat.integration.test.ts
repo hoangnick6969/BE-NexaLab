@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, describe, expect, it } from "vitest";
 import { studentAiConfig, type StudentAiProvider } from "../application/student-llm";
-import { CHAT_REPLIES, sendMessage, TUTOR_CHAT_PER_10_MIN } from "../application/tutor-chat";
+import { CHAT_REPLIES, purgeTutorConversations, sendMessage, TUTOR_CHAT_PER_10_MIN } from "../application/tutor-chat";
 import { TutorChatController } from "./tutor-chat.controller";
 
 // SAI-04 tutor chat: synthetic records in the isolated database only.
@@ -145,4 +145,26 @@ describe.skipIf(!db)("isolated tutor chat (SAI-04)", () => {
     await expect(chat.open({ contextKind: "EBOOK", contextId: `nobook-${f.suffix}` }, { user: { sub: f.student.id, role: "STUDENT" } })).rejects.toMatchObject({ response: { code: "TUTOR_CONTEXT_NOT_FOUND" } });
     expect(await chat.open({ contextKind: "EBOOK", contextId: `subject-${f.suffix}` }, { user: { sub: f.student.id, role: "STUDENT" } })).toMatchObject({ id: conversation.id, contextKind: "EBOOK" });
   }, 60000);
+
+  it("retention: deletes conversations idle for more than 12 months with their messages, keeps the rest", async () => {
+    const p = db!;
+    const f = await fixture(p);
+    const now = new Date("2027-12-01T00:00:00Z");
+    const make = (updatedAt: string) => p.tutorConversation.create({ data: { studentId: f.student.id, contextKind: "LAB", contextId: f.labId, updatedAt: new Date(updatedAt),
+      messages: { create: [{ studentId: f.student.id, role: "STUDENT", content: "Hỏi" }, { studentId: f.student.id, role: "TUTOR", content: "Đáp", outcome: "ANSWERED" }] } } });
+    const old = await make("2026-11-30T00:00:00Z");
+    const recent = await make("2026-12-02T00:00:00Z");
+    // updatedAt is @updatedAt, so set the stored value directly.
+    await p.$executeRaw`UPDATE "TutorConversation" SET "updatedAt" = '2026-11-30T00:00:00Z' WHERE id = ${old.id}`;
+    await p.$executeRaw`UPDATE "TutorConversation" SET "updatedAt" = '2026-12-02T00:00:00Z' WHERE id = ${recent.id}`;
+    const dry = await purgeTutorConversations(p, { now, apply: false });
+    expect(dry).toMatchObject({ cutoff: "2026-12-01T00:00:00.000Z", deleted: 0 });
+    expect(dry.conversations).toBeGreaterThanOrEqual(1);
+    expect(await p.tutorConversation.count({ where: { id: old.id } })).toBe(1);
+    await purgeTutorConversations(p, { now, apply: true });
+    expect(await p.tutorConversation.count({ where: { id: old.id } })).toBe(0);
+    expect(await p.tutorMessage.count({ where: { conversationId: old.id } })).toBe(0);
+    expect(await p.tutorConversation.count({ where: { id: recent.id } })).toBe(1);
+    expect(await p.tutorMessage.count({ where: { conversationId: recent.id } })).toBe(2);
+  });
 });

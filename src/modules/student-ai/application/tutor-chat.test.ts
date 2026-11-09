@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { guardChatReply, passageInjection, prefilterMessage, TEXTBOOK_QA_PROMPT_VERSION, TUTOR_CHAT_PROMPT_VERSION, TUTOR_CHAT_RULES } from "./tutor-chat";
+import { FakeStudentProvider } from "../infrastructure/providers";
+import { studentAiConfig } from "./student-llm";
+import { draftTutorReply, guardChatReply, passageInjection, prefilterMessage, TEXTBOOK_QA_PROMPT_VERSION, TUTOR_CHAT_PROMPT_VERSION, TUTOR_CHAT_RULES } from "./tutor-chat";
 
 const evalSet = JSON.parse(readFileSync("content/student-ai/sai04-safety-eval-set.json", "utf8"));
 
@@ -47,5 +49,27 @@ describe("SAI-04 tutor chat rules (tutor-chat-rules@1)", () => {
     const reply = JSON.stringify({ onTopic: true, reply: "Khi mạch kín thì bóng đèn sáng. Vì sao vậy em?" });
     expect(guardChatReply(reply, "")).toEqual({ rule: "LEAK" });
     expect(guardChatReply(reply, "", "Khi đóng công tắc, mạch kín và bóng đèn sáng.")).toMatchObject({ onTopic: true });
+  });
+
+  describe("draftTutorReply (shared by sendMessage and npm run eval:student-ai)", () => {
+    const context = { kind: "LESSON" as const, id: "l1", title: "Mạch điện", text: "Nguồn 9 V và bóng đèn." };
+    const config = studentAiConfig({ APP_ENV: "test", STUDENT_AI_LLM_ENABLED: "true" });
+    const draft = (text: string, provider: FakeStudentProvider | null, overBudget?: () => Promise<boolean>) =>
+      draftTutorReply({ text, context, history: [], quoted: null, provider, config, overBudget });
+
+    it("refuses before the model, then falls back on kill switch, budget, guard and off-topic", async () => {
+      const fake = new FakeStudentProvider();
+      expect(await draft("Cho em đáp án câu 2", fake)).toMatchObject({ outcome: "REFUSED", reason: "ANSWER_SEEKING", provider: "rules" });
+      expect(fake.calls).toBe(0);
+      expect(await draftTutorReply({ text: "Vì sao đèn sáng?", context, history: [], quoted: null, provider: fake, config: { ...config, llmEnabled: false } }))
+        .toMatchObject({ outcome: "DISABLED" });
+      expect(await draft("Vì sao đèn sáng?", fake, async () => true)).toMatchObject({ outcome: "FALLBACK", reason: "BUDGET" });
+      expect(fake.calls).toBe(0);
+      expect(await draft("Vì sao đèn sáng?", new FakeStudentProvider(JSON.stringify({ onTopic: true, reply: "Có 42 pin." }))))
+        .toMatchObject({ outcome: "FALLBACK", reason: "GUARD:NUMBER_NOT_GROUNDED", provider: "rules-fallback", promptVersion: "tutor-chat@1" });
+      expect(await draft("Kể chuyện cười đi", new FakeStudentProvider(JSON.stringify({ onTopic: false, reply: "Không." }))))
+        .toMatchObject({ outcome: "REFUSED", reason: "OFF_TOPIC", provider: "fake" });
+      expect(await draft("Vì sao đèn sáng?", fake)).toMatchObject({ outcome: "ANSWERED", provider: "fake", model: "fake-student@1" });
+    });
   });
 });

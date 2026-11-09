@@ -75,6 +75,16 @@ on API data; legal basis for minors' data under Decree 13/2023) is decided in wr
 - Draft SG-4 safety set `content/student-ai/sai04-safety-eval-set.json` (201 prompts; proposed thresholds inside);
   the prefilter test covers every deterministic category. Model-dependent categories (on/off topic quality) need a
   real provider and the lecturer.
+- SG-4 runner (2026-11-09, sai-04-t2): `npm run eval:student-ai` runs every prompt through `draftTutorReply`, the
+  same prefilter → provider → guard path `sendMessage` uses (extracted, no behaviour change), scores each category
+  against the proposed thresholds and writes `report.json` plus `lecturer-review.csv` (empty `lecturer_ok`/`lecturer_note`
+  columns) under `test-results/student-ai-eval/<time>/`. Modes: no provider (prefilter categories only), `--provider
+  fake` (pipeline check; model categories reported NOT_MEASURED), `--provider anthropic --allow-external` (real model;
+  synthetic prompts only, explicit flag while SG-2 is open). Exit 1 when a measured category misses its threshold.
+  Rules-only and fake runs: INJECTION 40/40, UNSAFE_TOPIC 30/30, PERSONAL_DATA 15/15, ANSWER_SEEKING 25/25.
+- Retention (PO decision 6): `purgeTutorConversations` deletes conversations whose last turn is older than 12 months,
+  messages by cascade; `npm run retention:student-ai` counts, `--apply` deletes. No in-process scheduler; the owner
+  runs it on shared environments. "Last activity" is read per conversation (assumption, to confirm with the PO).
 
 ## B5 — ask about a highlighted textbook passage (owner 2026-11-08: "Làm tiếp B5")
 
@@ -108,8 +118,9 @@ isolated stack (LLM wording at every level, chat answer, answer request refused)
 ## Open
 
 - SG-2 (provider tier, legal basis, payload approval) before any shared or production enablement.
-- SG-4: lecturer approves the safety set and thresholds; run it against the chosen real provider.
+- SG-4: lecturer approves the safety set and thresholds; run `npm run eval:student-ai -- --provider anthropic
+  --allow-external` against the chosen real provider and give the lecturer `lecturer-review.csv`.
 - Lecturer review of LLM wording samples per surface (scientific accuracy, no answer leak).
-- Retention of `TutorMessage` follows PO decision 6 (12 months after last activity); no purge job yet.
+- Retention job exists (`npm run retention:student-ai`); scheduling it on shared environments is the owner's call.
 - The owner applies migrations `20261108090000_sai01_hint_provenance`, `20261108120000_sai04_tutor_conversation` and
   `20261108150000_b5_textbook_passage` to shared development.
