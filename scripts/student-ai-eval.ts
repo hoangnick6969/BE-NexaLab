@@ -9,12 +9,13 @@
  *   npm run eval:student-ai                         # rules only: the prefilter categories (no model)
  *   npm run eval:student-ai -- --provider fake      # pipeline check with the deterministic fake model
  *   npm run eval:student-ai -- --provider anthropic --allow-external
- *       # real model; needs ANTHROPIC_API_KEY and ANTHROPIC_MODEL. Sends the synthetic prompts (never student data)
+ *       # real model; needs ANTHROPIC_API_KEY and ANTHROPIC_MODEL (shell or .env). Sends the synthetic prompts (never student data)
  *       # to Anthropic, so it needs an explicit flag while SG-2 is open.
  *
  * Options: --context-file <json {kind,title,text}>, --out <dir>, --limit <n>, --concurrency <n>.
  * Exit code 1 when a measured category misses its threshold.
  */
+import "dotenv/config";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { draftTutorReply, TUTOR_CHAT_PROMPT_VERSION, TUTOR_CHAT_RULES, type TutorContext, type TutorReplyDraft } from "../src/modules/student-ai/application/tutor-chat";
