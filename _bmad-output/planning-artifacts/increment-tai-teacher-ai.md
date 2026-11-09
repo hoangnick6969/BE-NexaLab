@@ -1,13 +1,13 @@
 ---
 increment: TAI
 epics: TAI-01..TAI-06
-status: in progress (Pilot verification 2026-11-09; TAI-06 active pack/config issue remains)
+status: in progress (technical completion on dev/test and Pilot 2026-11-09; go-live confirmations and disposable-DB proofs remain)
 tracking: ../implementation-artifacts/sprint-status.yaml (section teacher_ai_tracking)
 ---
 
 ## Completion status (2026-11-09)
 
-The implementation stories remain marked `done`, but the overall increment is in progress because the TAI-06 Pilot student attempt is blocked by an active pack/config mismatch. This is not release approval:
+The implementation stories remain marked `done`, but the overall increment stays in progress for the go-live items below; the TAI-06 pack mismatch is fixed (see the pack-compatibility patch). This is not release approval:
 
 - **Gates:** G-1 and G-5 are closed by the PO. G-2, G-3, G-4 and G-6 are closed on 2026-11-09 **by team-lead decision**, each on a stated assumption, and still need PO, lecturer, legal or reviewer confirmation before go-live. They are not approvals.
   - G-2: PII scrubbing/anonymization (only submission text and rubric reach the provider, student identifiers never do) plus the 3-layer privacy architecture.
@@ -15,8 +15,10 @@ The implementation stories remain marked `done`, but the overall increment is in
   - G-4: default safe bounds from the existing `CHALLENGE_PARAMETERS`; `rangeReview` is `team-lead-default`, not `approved`.
   - G-6: the project's existing provider port with the fake provider for golden evaluation and e2e.
 - **Evidence:** BE tsc clean, vitest 1077 passed with 4 known unrelated failures, 231 routes; FE tsc and build clean, regression 64/64, all bundle checks pass. Golden and shadow results come from SYNTHETIC sets.
-- **Pilot verification 2026-11-09:** all three new migrations applied; TAI-04 90/90, TAI-03 62/62 and TAI-02 31/31 passed with fixture cleanup. Credits PostgreSQL constraints, triggers, advisory lock and debit concurrency passed with rollback/deleted probes. TAI-06 reached student attempt, which returned 409 `SIM_PACK_CONFIG_INCOMPATIBLE` for the active Pilot circuit tuple. No live-provider run, lecturer golden labels or real shadow data.
-- **Before go-live:** resolve the active circuit pack/config mismatch and pass the full TAI-06 journey; run the full TAI-05 fault-injection script on a disposable DB; confirm the four gates, collect lecturer labels and one month of token usage.
+- **TAI-06 pack-compatibility patch (2026-11-09):** the Pilot 409 `SIM_PACK_CONFIG_INCOMPATIBLE` was a real defect: the active Pilot circuit pack is `circuit-bulb@1.0.0` (observation-only, no challenge parameters) but TAI-06 offered circuit-LED proposals. `selectLabContext` now offers nothing for a lab whose active pack is another model; the apply route re-validates against the same allowlist. The shared active pack was not changed. `tai06-integration.mjs --pilot` passed 31/31 on Pilot with `circuit-bulb@1.0.0` active and all table counts back to baseline; the student LED attempt is not applicable there and was not run (no compatible LED pack is active on Pilot). BE vitest 1082 passed, 0 failed.
+- **Session baseline:** `Session` has no `createdAt`, so creation time was decoded from the cuid ids; exactly the 2 `student.active` sessions created on 2026-11-09 were deleted (109 -> 107). The new baseline is **107**; the 107 older sessions (2026-11-08 and `nguyenan.8a` included) were kept.
+- **Pilot verification 2026-11-09:** all three new migrations applied; TAI-04 90/90, TAI-03 62/62 and TAI-02 31/31 passed with fixture cleanup. Credits PostgreSQL constraints, triggers, advisory lock and debit concurrency passed with rollback/deleted probes. The first TAI-06 run reached the student attempt, which returned 409 `SIM_PACK_CONFIG_INCOMPATIBLE` for the active Pilot circuit tuple (fixed by the patch above). No live-provider run, lecturer golden labels or real shadow data.
+- **Before go-live:** run the TAI-06 student LED attempt on a database whose circuit pack is `circuit@1.0.0`; run the full TAI-05 fault-injection script on a disposable DB; confirm the four gates, collect lecturer labels and one month of token usage.
 
 # TAI / Teacher AI Increment: Suggestion Layer for Authoring, Assessment and Evidence
 

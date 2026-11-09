@@ -3,8 +3,9 @@
 // apply 409), the existing publish and assign path, a student attempt evaluated by the server with the applied
 // parameters, plus the denials (outsider, student, parent, not-owned/shared/published lessons) and cancel.
 //
-// WRITTEN, NOT RUN: no isolated loopback database exists on the machine where it was written. Run it only against an
-// isolated local PostgreSQL that has the TAI-06 migration (20261109170000_tai06_lab_challenge_job) applied and the
+// Pack-aware: with circuit@1.0.0 active it runs the full LED journey; with another active circuit pack (the pilot database
+// has circuit-bulb@1.0.0) it asserts that no circuit proposal is offered and skips publish/assign/attempt.
+// Run it against an isolated local PostgreSQL that has the TAI-06 migration (20261109170000_tai06_lab_challenge_job) applied and the
 // seed loaded (it needs the seeded subject and the published `circuit` lab). The npm script is guarded by
 // assert-isolated-db, and this file refuses a non-loopback database. The API under test must run with the fake provider:
 //   AI_PROVIDER=fake AI_RUNNER_ENABLED=true AI_PROVIDER_MIN_INTERVAL_MS=0 AI_LAB_CHALLENGE_DAILY_LIMIT=100 AI_LAB_CHALLENGE_CONCURRENT_LIMIT=20
@@ -26,11 +27,14 @@ const loopback = (value) => {
     return null;
   }
 };
+const pilot = process.argv.includes("--pilot");
 const isolated = loopback(process.env.NEXALAB_ISOLATED_DATABASE_URL ?? "");
-if (!isolated || loopback(process.env.DATABASE_URL ?? "") !== isolated) {
+if (!pilot && (!isolated || loopback(process.env.DATABASE_URL ?? "") !== isolated)) {
   console.error("tai06-integration: refusing to run: DATABASE_URL must equal an isolated loopback NEXALAB_ISOLATED_DATABASE_URL.");
   process.exit(1);
 }
+// --pilot runs against the shared development database as a pilot measurement. It needs the owner's explicit approval
+// (same rule as tai04-integration.mjs), never changes the active simulation packs and removes every fixture afterwards.
 
 const db = new PrismaClient();
 const origin = process.env.TEST_API ?? "http://127.0.0.1:4100/api";
@@ -107,9 +111,19 @@ async function lesson(authorId, patch = {}) {
   return row;
 }
 
+const TABLES = ["user", "session", "lesson", "lessonStep", "stepProgress", "classroom", "enrollment", "parentLink", "assignment", "attempt", "challenge", "aiJob", "auditLog", "notification", "idempotencyRecord"];
+const counts = async () => Object.fromEntries(await Promise.all(TABLES.map(async (name) => [name, await db[name].count()])));
+const before = await counts();
+console.log("baseline counts:", JSON.stringify(before));
+
 try {
   const circuitLab = await db.lab.findUnique({ where: { id: "circuit" }, select: { status: true } });
   assert.ok(circuitLab?.status === "published", "the seeded circuit lab is published");
+  // The LED challenge only runs on the circuit@1.0.0 pack. When the active pack is another model (circuit-bulb@1.0.0 is
+  // observation-only and accepts no challenge parameters) TAI-06 must offer no circuit proposal at all.
+  const activeCircuitPack = await db.simulationPackVersion.findFirst({ where: { labId: "circuit", status: "active" }, orderBy: { version: "desc" }, select: { modelRef: true } });
+  const ledPack = !activeCircuitPack || activeCircuitPack.modelRef === "circuit@1.0.0";
+  console.log(`active circuit pack: ${activeCircuitPack?.modelRef ?? "(none)"} -> ${ledPack ? "LED journey" : "bulb-compatible journey (no circuit proposal expected)"}`);
   const owner = await user("owner", "TEACHER");
   const outsider = await user("outsider-teacher", "TEACHER");
   const student = await user("student", "STUDENT");
@@ -162,9 +176,13 @@ try {
   for (const p of done.proposals) {
     check(`proposal ${p.position} has a passing and a failing reference state and a deterministic objective`, p.engineResults.some((r) => r.verdict === "passed") && p.engineResults.some((r) => r.verdict !== "passed") && typeof p.objectivePreview === "string", p);
   }
-  const circuit = done.proposals.find((p) => p.proposal.labId === "circuit");
-  assert.ok(circuit, "the fake provider proposes a circuit challenge first");
+  const circuitProposal = done.proposals.find((p) => p.proposal.labId === "circuit");
+  if (ledPack) assert.ok(circuitProposal, "the fake provider proposes a circuit challenge first");
+  else check("the active pack is not circuit@1.0.0, so no circuit proposal is offered", circuitProposal === undefined, done.proposals.map((p) => p.proposal.labId));
+  const circuit = ledPack ? circuitProposal : done.proposals[0];
+  assert.ok(circuit, "at least one proposal can be applied");
   const other = done.proposals.find((p) => p !== circuit);
+  assert.ok(other, "a second proposal exists to reject");
   const rejected = await req(`${base}/${jobId}/items/${other.id}/decisions`, "POST", { decision: "REJECTED", reasonCode: "NOT_RELEVANT" }, owner.token);
   check("the owner rejects one proposal", rejected.status === 200 && rejected.data.proposals.find((p) => p.id === other.id).decision?.decision === "REJECTED", rejected.data);
   const accepted = await req(`${base}/${jobId}/items/${circuit.id}/decisions`, "POST", { decision: "ACCEPTED" }, owner.token);
@@ -178,41 +196,46 @@ try {
   check("apply needs an Idempotency-Key (400)", code(noKey, 400, "IDEMPOTENCY_KEY_REQUIRED"), noKey.data);
   const applyKey = key();
   const applied = await req(`${base}/${jobId}/items/${circuit.id}/apply`, "POST", undefined, owner.token, applyKey);
-  check("apply sets the lesson's lab and parameters", applied.status === 200 && applied.data.lesson.labId === "circuit" && stableStringify(applied.data.lesson.challengeParams) === stableStringify(circuit.proposal.challengeParams) && applied.data.objectivePreview === circuit.objectivePreview, applied.data);
+  check("apply sets the lesson's lab and parameters", applied.status === 200 && applied.data.lesson.labId === circuit.proposal.labId && stableStringify(applied.data.lesson.challengeParams) === stableStringify(circuit.proposal.challengeParams) && applied.data.objectivePreview === circuit.objectivePreview, applied.data);
   const replayed = await req(`${base}/${jobId}/items/${circuit.id}/apply`, "POST", undefined, owner.token, applyKey);
   check("the same apply key replays", replayed.status === 200 && stableStringify(replayed.data) === stableStringify(applied.data), replayed.data);
   const second = await req(`${base}/${jobId}/items/${circuit.id}/apply`, "POST", undefined, owner.token, key());
   check("a second apply is 409 AI_JOB_ALREADY_APPLIED", code(second, 409, "AI_JOB_ALREADY_APPLIED"), second.data);
   const row = await db.lesson.findUnique({ where: { id: draft.id }, select: { labId: true, challengeParams: true, status: true } });
-  check("the database lesson carries the applied variant and is still a draft", row.labId === "circuit" && row.status === "draft" && stableStringify(row.challengeParams) === stableStringify(circuit.proposal.challengeParams), row);
+  check("the database lesson carries the applied variant and is still a draft", row.labId === circuit.proposal.labId && row.status === "draft" && stableStringify(row.challengeParams) === stableStringify(circuit.proposal.challengeParams), row);
   check("the AI module wrote no Challenge row (a draft has none)", (await db.challenge.count({ where: { id: { startsWith: `circuit_v-${draft.id}` } } })) === 0);
   const job = await db.aiJob.findUnique({ where: { id: jobId }, select: { appliedLessonId: true, appliedItemId: true } });
   check("the job records the single apply", job.appliedLessonId === draft.id && job.appliedItemId === circuit.id, job);
 
-  // ---------- existing preview, publish, assign; student attempt evaluated by the server ----------
-  const preview = await req(`/teacher/content/${draft.id}/preview`, "GET", undefined, owner.token);
-  check("the existing teacher preview shows the deterministic objective", preview.status === 200 && JSON.stringify(preview.data).includes(applied.data.objectivePreview), preview.data);
-  const lessonBody = await db.lesson.findUnique({ where: { id: draft.id } });
-  const publish = await req(`/lessons/${draft.id}`, "PUT", {
-    title: lessonBody.title, subjectId: lessonBody.subjectId, chapter: lessonBody.chapter, grade: lessonBody.grade, topic: lessonBody.topic,
-    learningObjective: lessonBody.learningObjective, prerequisites: lessonBody.prerequisites, curriculum: lessonBody.curriculum, content: lessonBody.content,
-    labId: "circuit", challengeParams: row.challengeParams, status: "published", materials: [], questions: [], outcomeCodes: [],
-    review: { sources: "Tự biên soạn", license: "ORIGINAL", outcome: "Mô tả mạch điện đơn giản", answerKeyChecked: true, safetyChecked: true, accessibilityChecked: true },
-  }, owner.token);
-  check("the existing lesson route publishes the variant", publish.status === 200 && publish.data.status === "published", publish.data);
-  const challenge = await db.challenge.findUnique({ where: { id: `circuit_v-${draft.id}` } });
-  check("publish wrote the variant Challenge with the deterministic objective", challenge?.objective === applied.data.objectivePreview && stableStringify(challenge.constraints.params) === stableStringify(circuit.proposal.challengeParams), challenge);
-  const due = new Date(Date.now() + 2 * 24 * 3600_000).toISOString();
-  const assigned = await req(`/classes/${classA.id}/assignments`, "POST", { contentType: "lesson", contentId: draft.id, dueDate: due }, owner.token, key());
-  check("the lesson is assigned through the existing route", assigned.status === 201, assigned.data);
-  // Fixture setup: this journey targets the applied challenge, so complete its prerequisite steps first.
-  const prerequisiteSteps = await db.lessonStep.findMany({ where: { lessonId: draft.id, position: { lt: 60 } }, select: { id: true } });
-  for (const step of prerequisiteSteps) await db.stepProgress.create({ data: { studentId: student.id, stepId: step.id, assignmentId: assigned.data.assignment.id, status: "COMPLETED", progressValue: 100, startedAt: new Date(), completedAt: new Date() } });
-  const circuitState = { nodes: [{ id: "b", type: "battery", value: 9 }, { id: "r", type: "resistor", value: 470 }, { id: "l", type: "led" }], edges: [{ source: "b", target: "r" }, { source: "r", target: "l" }, { source: "l", target: "b" }] };
-  const attempt = await req("/attempts", "POST", { challengeId: challenge.id, lessonStepId: `step-${draft.id}-challenge`, assignmentId: assigned.data.assignment?.id, labState: circuitState, durationMs: 1000, idempotencyKey: randomUUID() }, student.token);
-  check("the student attempt is evaluated by the server with the applied parameters", attempt.status === 201 && (attempt.data.attempt?.verdict ?? attempt.data.verdict) === "passed", attempt.data);
-  const studentView = await req(`/lessons/${draft.id}`, "GET", undefined, student.token);
-  check("nothing the student reads carries the AI rationale", !JSON.stringify(studentView.data).includes(circuit.proposal.rationale), studentView.data);
+  if (ledPack) {
+    // ---------- existing preview, publish, assign; student attempt evaluated by the server ----------
+    const preview = await req(`/teacher/content/${draft.id}/preview`, "GET", undefined, owner.token);
+    check("the existing teacher preview shows the deterministic objective", preview.status === 200 && JSON.stringify(preview.data).includes(applied.data.objectivePreview), preview.data);
+    const lessonBody = await db.lesson.findUnique({ where: { id: draft.id } });
+    const publish = await req(`/lessons/${draft.id}`, "PUT", {
+      title: lessonBody.title, subjectId: lessonBody.subjectId, chapter: lessonBody.chapter, grade: lessonBody.grade, topic: lessonBody.topic,
+      learningObjective: lessonBody.learningObjective, prerequisites: lessonBody.prerequisites, curriculum: lessonBody.curriculum, content: lessonBody.content,
+      labId: "circuit", challengeParams: row.challengeParams, status: "published", materials: [], questions: [], outcomeCodes: [],
+      review: { sources: "Tự biên soạn", license: "ORIGINAL", outcome: "Mô tả mạch điện đơn giản", answerKeyChecked: true, safetyChecked: true, accessibilityChecked: true },
+    }, owner.token);
+    check("the existing lesson route publishes the variant", publish.status === 200 && publish.data.status === "published", publish.data);
+    const challenge = await db.challenge.findUnique({ where: { id: `circuit_v-${draft.id}` } });
+    check("publish wrote the variant Challenge with the deterministic objective", challenge?.objective === applied.data.objectivePreview && stableStringify(challenge.constraints.params) === stableStringify(circuit.proposal.challengeParams), challenge);
+    const due = new Date(Date.now() + 2 * 24 * 3600_000).toISOString();
+    const assigned = await req(`/classes/${classA.id}/assignments`, "POST", { contentType: "lesson", contentId: draft.id, dueDate: due }, owner.token, key());
+    check("the lesson is assigned through the existing route", assigned.status === 201, assigned.data);
+    // Fixture setup: this journey targets the applied challenge, so complete its prerequisite steps first.
+    const prerequisiteSteps = await db.lessonStep.findMany({ where: { lessonId: draft.id, position: { lt: 60 } }, select: { id: true } });
+    for (const step of prerequisiteSteps) await db.stepProgress.create({ data: { studentId: student.id, stepId: step.id, assignmentId: assigned.data.assignment.id, status: "COMPLETED", progressValue: 100, startedAt: new Date(), completedAt: new Date() } });
+    const circuitState = { nodes: [{ id: "b", type: "battery", value: 9 }, { id: "r", type: "resistor", value: 470 }, { id: "l", type: "led" }], edges: [{ source: "b", target: "r" }, { source: "r", target: "l" }, { source: "l", target: "b" }] };
+    const attempt = await req("/attempts", "POST", { challengeId: challenge.id, lessonStepId: `step-${draft.id}-challenge`, assignmentId: assigned.data.assignment?.id, labState: circuitState, durationMs: 1000, idempotencyKey: randomUUID() }, student.token);
+    check("the student attempt is evaluated by the server with the applied parameters", attempt.status === 201 && (attempt.data.attempt?.verdict ?? attempt.data.verdict) === "passed", attempt.data);
+    const studentView = await req(`/lessons/${draft.id}`, "GET", undefined, student.token);
+    check("nothing the student reads carries the AI rationale", !JSON.stringify(studentView.data).includes(circuit.proposal.rationale), studentView.data);
+
+  } else {
+    console.log("     bulb pack active: preview, publish, assign and the student LED attempt are skipped (not applicable to circuit-bulb@1.0.0)");
+  }
 
   // ---------- cancel ----------
   const next = await lesson(owner.id);
@@ -243,5 +266,9 @@ try {
   await db.lesson.deleteMany({ where: { id: { in: lessonIds } } });
   await db.session.deleteMany({ where: { userId: { in: createdUsers } } });
   await db.user.deleteMany({ where: { id: { in: createdUsers } } });
+  const after = await counts();
+  const drift = TABLES.filter((name) => after[name] !== before[name]).map((name) => `${name}: ${before[name]} -> ${after[name]}`);
+  console.log(drift.length ? `CLEANUP DRIFT: ${drift.join(", ")}` : "cleanup: all table counts are back to the baseline");
+  if (drift.length) process.exitCode = 1;
   await db.$disconnect();
 }

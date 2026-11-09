@@ -97,5 +97,5 @@ describe("TAI2-T5 SYNTHETIC shadow run (no real shadow data is collected)", () =
       expect(sent).not.toContain(person.username);
       expect(sent).not.toContain(person.fullName);
     }
-  });
+  }, 30_000); // runs the real pipeline over 120 responses (about 3 s alone, over 5 s under a parallel full run)
 });

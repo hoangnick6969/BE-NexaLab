@@ -162,8 +162,17 @@ describe("TAI6-T2 reference states", () => {
     expect(selectLabContext("circuit", [pack], [config])).toMatchObject({ referenceSource: "PACK", packRanges: { maxCurrentMa: { min: 6, max: 19 } }, referenceStates: [{ label: "pack state" }] });
     expect(selectLabContext("circuit", [], [config])).toMatchObject({ referenceSource: "CONFIG", packRanges: null, referenceStates: [{ label: "config state" }] });
     expect(selectLabContext("circuit", [], [])).toMatchObject({ referenceSource: "BUILTIN" });
-    expect(selectLabContext("circuit", [{ ...pack, modelRef: "circuit-bulb@1.0.0" }], [])).toMatchObject({ referenceSource: "BUILTIN", packRanges: null });
     expect(selectLabContext("nope", [], [])).toBeNull();
+  });
+  it("offers nothing for a lab whose active pack is another model, such as the observation-only circuit-bulb@1.0.0", () => {
+    const bulb = { ...pack, modelRef: "circuit-bulb@1.0.0" };
+    const context = selectLabContext("circuit", [bulb], [config]);
+    expect(context).toMatchObject({ labId: "circuit", referenceSource: null, packRanges: null, referenceStates: [] });
+    // a configuration of the LED model cannot rescue it: assignment and attempt use the active pack
+    expect(selectLabContext("circuit", [bulb], [config])?.referenceStates).toHaveLength(0);
+    const contexts = new Map([["circuit", context!], ["eye", selectLabContext("eye", [], [])!]]);
+    expect(offeredModels(contexts).map((model) => model.labId)).not.toContain("circuit");
+    expect(rangeReasons("circuit", { maxCurrentMa: 15 }, offeredModels(contexts))).toEqual(["MODEL_NOT_ALLOWED"]);
   });
   it("builds states that the engine accepts for every offered lab", () => {
     for (const labId of ["circuit", "chemistry", "eye"]) {

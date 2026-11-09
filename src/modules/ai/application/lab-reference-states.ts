@@ -51,6 +51,9 @@ export function selectLabContext(labId: string, packs: PackRow[], configs: Confi
   const spec = CHALLENGE_PARAMETERS[labId];
   if (!spec) return null;
   const pack = packs.find((row) => row.modelRef === spec.modelRef) ?? null;
+  // The lab's active pack is another model (e.g. circuit-bulb@1.0.0, which accepts no challenge parameters): a challenge
+  // for this model would fail at assignment or attempt with 409 SIM_PACK_CONFIG_INCOMPATIBLE, so the lab offers nothing.
+  if (!pack && packs.length > 0) return { labId, modelRef: spec.modelRef, packRanges: null, referenceStates: [], referenceSource: null };
   const ranges = pack?.template?.ranges && typeof pack.template.ranges === "object" ? (pack.template.ranges as Record<string, { min: number; max: number }>) : null;
   const packStates: ReferenceState[] = Array.isArray(pack?.template?.goldenCases)
     ? pack!.template.goldenCases.filter((g: any) => g && g.state !== undefined).map((g: any) => ({ label: String(g.label ?? "Ca mẫu"), state: g.state }))
