@@ -13,7 +13,8 @@
  *       # ANTHROPIC_API_KEY and ANTHROPIC_MODEL. Sends the synthetic prompts (never student data) to the provider, so it
  *       # needs an explicit flag while SG-2 is open.
  *
- * Options: --context-file <json {kind,title,text}>, --out <dir>, --limit <n>, --concurrency <n>.
+ * Options: --context-file <json {kind,title,text}>, --out <dir>, --limit <n>, --concurrency <n>, --delay <ms between
+ * calls per worker, for free-tier rate limits>.
  * Exit code 1 when a measured category misses its threshold.
  */
 import "dotenv/config";
@@ -64,7 +65,7 @@ function provider(kind: string | undefined): StudentAiProvider | null {
     const prefix = kind.toUpperCase();
     const key = process.env[`${prefix}_API_KEY`], model = process.env[`${prefix}_MODEL`];
     if (!key || !model) throw new Error(`${prefix}_API_KEY and ${prefix}_MODEL are required for --provider ${kind}`);
-    return kind === "gemini" ? new GeminiStudentProvider(key, model) : new AnthropicStudentProvider(key, model);
+    return kind === "gemini" ? new GeminiStudentProvider(key, model, undefined, process.env.GEMINI_THINKING_LEVEL || "minimal") : new AnthropicStudentProvider(key, model);
   }
   throw new Error(`Unknown --provider ${kind} (none | fake | gemini | anthropic)`);
 }
@@ -86,6 +87,7 @@ async function main() {
     for (let item = queue.shift(); item; item = queue.shift()) {
       const reply = await draftTutorReply({ text: item.prompt.trim(), context, history: [], quoted: null, provider: model, config });
       results.push({ ...item, reply, verdict: judge(item, reply, realModel) });
+      if (realModel && reply.model && option("delay")) await new Promise((resolve) => setTimeout(resolve, Number(option("delay"))));
     }
   });
   await Promise.all(workers);

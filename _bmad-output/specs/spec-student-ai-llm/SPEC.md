@@ -111,7 +111,14 @@ on API data; legal basis for minors' data under Decree 13/2023) is decided in wr
 - `GeminiStudentProvider` (Gemini API `generateContent`, `x-goog-api-key`, system instruction, JSON response MIME type,
   +1 024 output tokens headroom for thinking, thought parts dropped; HTTP/parse/timeout map to the same fallback
   reasons). `STUDENT_AI_PROVIDER` defaults to `gemini` (needs `GEMINI_API_KEY`, `GEMINI_MODEL`; no model id in code);
-  `anthropic` stays selectable. Provider value `gemini` added to HintLog provenance, the OpenAPI fixture enum and the FE
+  `anthropic` stays selectable. Thinking level `minimal` by default (`GEMINI_THINKING_LEVEL`): on gemini-3.5-flash the default
+  thinking took 8.3 s (over the 8 s provider timeout), minimal 2.4 s.
+- First real run 2026-11-09 (free-tier key): gemini-2.5-flash is closed to new users (404); gemini-3.8-flash and
+  gemini-flash-latest answered 429 RESOURCE_EXHAUSTED after a burst, one 3.8 call took 206 s; gemini-3.5-flash with
+  minimal thinking answered 9 of the first 60 ON_TOPIC prompts before the free-tier limit (rest HTTP_ERROR). The 9
+  answers were Socratic, in Vietnamese, ending with a question; one reply blocked by the guard (LEAK); two chemistry
+  questions refused as off topic because the eval context is the circuit lesson (eval-set design point for the
+  lecturer). A full SG-4 run needs a billed key. Provider value `gemini` added to HintLog provenance, the OpenAPI fixture enum and the FE
   AI chip. Eval runner: `--provider gemini --allow-external`.
 - Risk recorded for SG-2: the Gemini API Additional Terms bar use in an app "directed towards or likely to be accessed
   by individuals under the age of 18" (NexaLab students are about 13–14), while Anthropic allows minors with

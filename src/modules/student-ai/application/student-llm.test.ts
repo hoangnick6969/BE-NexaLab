@@ -118,6 +118,6 @@ describe("student-hint@1 LLM layer (owner 2026-11-08: LLM writes, rules plan and
     const sent = JSON.parse(init.body);
     expect(sent.systemInstruction.parts[0].text).toContain("gợi ý");
     expect(JSON.parse(sent.contents[0].parts[0].text)).toEqual(payload());
-    expect(sent.generationConfig.responseMimeType).toBe("application/json");
+    expect(sent.generationConfig).toMatchObject({ responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "minimal" } });
   });
 });

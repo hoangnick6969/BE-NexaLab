@@ -28,13 +28,15 @@ export class AnthropicStudentProvider implements StudentAiProvider {
 
 /**
  * Google Gemini API adapter (owner 2026-11-09: "Chuyển sang dùng Gemini Flash"). Only the allowlisted payload is sent.
- * The prompts ask for JSON, so the response MIME type is JSON. Thinking tokens count against the output limit on Flash
- * models, hence the headroom; thought parts are dropped. Note: the Gemini API Additional Terms bar apps directed to or
+ * The prompts ask for JSON, so the response MIME type is JSON. Thinking defaults to `minimal` (GEMINI_THINKING_LEVEL):
+ * measured 2026-11-09 on gemini-3.5-flash, default thinking took 8.3 s (over the 8 s timeout), minimal 2.4 s. Thinking
+ * tokens count against the output limit, hence the headroom; thought parts are dropped. Note: the Gemini API Additional Terms bar apps directed to or
  * likely used by people under 18; recorded under SG-2, dev/test only until it closes.
  */
 export class GeminiStudentProvider implements StudentAiProvider {
   readonly name = "gemini" as const;
-  constructor(private readonly apiKey: string, readonly model: string, private readonly fetchImpl: typeof fetch = (...args) => fetch(...args)) {}
+  constructor(private readonly apiKey: string, readonly model: string, private readonly fetchImpl: typeof fetch = (...args) => fetch(...args),
+    private readonly thinkingLevel = "minimal") {}
 
   async complete(input: { system: string; user: string; signal: AbortSignal; maxTokens?: number }) {
     let response: Response;
@@ -46,7 +48,7 @@ export class GeminiStudentProvider implements StudentAiProvider {
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: input.system }] },
           contents: [{ role: "user", parts: [{ text: input.user }] }],
-          generationConfig: { maxOutputTokens: (input.maxTokens ?? 300) + 1024, responseMimeType: "application/json" },
+          generationConfig: { maxOutputTokens: (input.maxTokens ?? 300) + 1024, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: this.thinkingLevel } },
         }),
       });
     } catch {
@@ -99,7 +101,7 @@ export function createStudentAiProvider(env: NodeJS.ProcessEnv = process.env): S
       throw new Error("STUDENT_AI_PROVIDER=fake is allowed only with APP_ENV development or test, never in production");
     return new FakeStudentProvider(env.STUDENT_AI_FAKE_REPLY);
   }
-  if (kind === "gemini") return env.GEMINI_API_KEY && env.GEMINI_MODEL ? new GeminiStudentProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL) : null;
+  if (kind === "gemini") return env.GEMINI_API_KEY && env.GEMINI_MODEL ? new GeminiStudentProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL, undefined, env.GEMINI_THINKING_LEVEL || "minimal") : null;
   if (kind !== "anthropic") throw new Error(`Unknown STUDENT_AI_PROVIDER: ${kind}`);
   return env.ANTHROPIC_API_KEY && env.ANTHROPIC_MODEL ? new AnthropicStudentProvider(env.ANTHROPIC_API_KEY, env.ANTHROPIC_MODEL) : null;
 }
