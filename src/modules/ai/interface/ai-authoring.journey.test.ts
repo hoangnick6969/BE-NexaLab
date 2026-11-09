@@ -245,6 +245,7 @@ function makeStore() {
     },
   });
   db.$executeRaw = async () => 0;
+  db.$queryRaw = async () => [];
   /** Serialized like the advisory locks; a throwing transaction rolls every table back to its state before it ran. */
   db.$transaction = (fn: (tx: any) => Promise<any>) => {
     const run = chain.then(async () => {

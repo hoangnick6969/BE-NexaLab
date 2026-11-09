@@ -215,22 +215,6 @@ development_status:
   tai-06-t3-draft-lab-challenge-job-routes: done
   tai-06-t4-teacher-proposal-review-ux: done
   tai-06-t5-golden-evaluation-e2e: done
-
-  epic-tai-05-credits: backlog
-  tai-05-t0-pricing-evidence: backlog
-  tai-05-t1-ledger-schema-posting: backlog
-  tai-05-t2-pricing-versions-estimate: backlog
-  tai-05-t3-reserve-settle-refund: backlog
-  tai-05-t4-admin-grants-adjustments: backlog
-  tai-05-t5-teacher-credit-view-ux: backlog
-  tai-05-t6-reconciliation-failure-injection: backlog
-  epic-tai-06-lab-drafting: backlog
-  tai-06-t0-range-approval-scope-gate: backlog
-  tai-06-t1-extract-challenge-variant-function: backlog
-  tai-06-t2-proposal-schema-engine-validation: backlog
-  tai-06-t3-draft-lab-challenge-job-routes: backlog
-  tai-06-t4-teacher-proposal-review-ux: backlog
-  tai-06-t5-golden-evaluation-e2e: backlog
   # Student AI increment (SAI) — plan ../planning-artifacts/increment-sai-student-ai.md; blocked on gate SG-1 (SAI-T0).
   epic-sai-01a-checkpoint-hints: review
   sai-01a-t1-checkpoint-hint-rules-and-misconceptions: done
@@ -578,8 +562,6 @@ teacher_ai_tracking:
     verification_2026_11_09:
       status: done
       evidence: 'BE tsc clean; check:layers ok; vitest 1082 passed, 0 failed after the 2026-11-09 patch (4 old failures were mocks missing getRequest, fixed); 231 routes (was 219). FE tsc and build clean; test:regression 64/64; insights, suggestion, credits and lab-challenge bundle checks pass. Migrations were applied and TAI-02/03/04/06 journeys run on Pilot by the team lead and in the 2026-11-09 follow-up (see final_verification_note); no browser or live-provider run.'
-
-      evidence: 'BE tsc clean; check:layers ok; vitest 1077 passed, 4 known failures (errors.test.ts, health.controller.test.ts); 231 routes (was 219). FE tsc and build clean; test:regression 64/64; insights, suggestion, credits and lab-challenge bundle checks pass. Nothing committed; no migration applied; no real-DB, browser or live-provider run.'
 
 student_ai_tracking:
   plan: ../planning-artifacts/increment-sai-student-ai.md

@@ -190,6 +190,7 @@ beforeEach(() => {
     classroom: table(), lesson: table(), lessonStep: table(), auditLog: table(), notification: table(), enrollment: table(),
     idempotencyRecord: table(), questionFingerprint: table(), classResourcePractice: table(),
     async $executeRaw() { return 0; },
+    async $queryRaw() { return []; },
     async $transaction(fn: (tx: any) => Promise<any>) { return fn(db); },
   };
   db.classroom.rows.push({ id: "class-a", teacherId: OWNER.sub, status: "ACTIVE", name: "A" });

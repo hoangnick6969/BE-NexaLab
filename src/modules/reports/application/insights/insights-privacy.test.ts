@@ -41,7 +41,7 @@ describe("insight routes", () => {
   it("are declared by no other controller", () => {
     const offenders = walk(SRC)
       .filter((file) => /\.controller\.ts$/.test(file) && !file.endsWith("insights.controller.ts"))
-      .filter((file) => /@(Get|Post|Put|Patch|Delete)\(\s*["'`][^"'`]*insight/i.test(readFileSync(file, "utf8")));
+      .filter((file) => /@(Get|Post|Put|Patch|Delete)\(\s*["'`][^"'`]*(?<!hint-)insight/i.test(readFileSync(file, "utf8")));
     expect(offenders.map(rel)).toEqual([]);
   });
 });

@@ -77,6 +77,7 @@ function makeDb() {
     enrollment: table(),
     idempotencyRecord: table(),
     async $executeRaw() { return 0; },
+    async $queryRaw() { return []; },
     async $transaction(fn: (tx: any) => Promise<any>) {
       const names = Object.keys(db).filter((k) => db[k]?.rows);
       const snapshot = Object.fromEntries(names.map((n) => [n, db[n].rows.map((r: Row) => ({ ...r }))]));

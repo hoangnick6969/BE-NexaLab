@@ -19,7 +19,8 @@ const additionalAnswersSchema = z.object({
 const gradeResponseSchema = z.object({ score: z.number().int().min(0).max(100), feedback: z.string().trim().max(2_000).optional() }).strict();
 
 const kindSchema = resourceKindSchema;
-const csvKindSchema = z.enum(["DECK", "STUDY_QUIZ", "TEST"]);
+// WRITTEN_TASK passes here so parseResourceCsv answers it with 400 IMPORT_KIND_UNSUPPORTED instead of an enum error.
+const csvKindSchema = z.enum(["DECK", "STUDY_QUIZ", "TEST", "WRITTEN_TASK"]);
 const titleSchema = z.string().trim().min(1).max(160);
 const bodySchema = z.object({ kind: kindSchema, title: titleSchema, lessonId: z.string().min(1), content: z.unknown() }).strict();
 /** TAI3-T2 duplicate-check body; `title` optionally excludes the resource's own revise lineage. */

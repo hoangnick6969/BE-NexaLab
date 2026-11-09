@@ -258,6 +258,7 @@ function makeStore() {
     },
   });
   db.$executeRaw = async () => 0;
+  db.$queryRaw = async () => [];
   db.$transaction = (fn: (tx: any) => Promise<any>) => {
     const run = chain.then(async () => {
       const before = structuredClone(tables);
