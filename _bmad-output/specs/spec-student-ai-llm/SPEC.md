@@ -106,6 +106,18 @@ on API data; legal basis for minors' data under Decree 13/2023) is decided in wr
   ask, AI chip, page and quote, axe; hidden when off). Not run on a real stack (needs a textbook PDF URL on the
   isolated database).
 
+## Provider switch to Gemini Flash (owner 2026-11-09: "Chuyển sang dùng Gemini Flash đi")
+
+- `GeminiStudentProvider` (Gemini API `generateContent`, `x-goog-api-key`, system instruction, JSON response MIME type,
+  +1 024 output tokens headroom for thinking, thought parts dropped; HTTP/parse/timeout map to the same fallback
+  reasons). `STUDENT_AI_PROVIDER` defaults to `gemini` (needs `GEMINI_API_KEY`, `GEMINI_MODEL`; no model id in code);
+  `anthropic` stays selectable. Provider value `gemini` added to HintLog provenance, the OpenAPI fixture enum and the FE
+  AI chip. Eval runner: `--provider gemini --allow-external`.
+- Risk recorded for SG-2: the Gemini API Additional Terms bar use in an app "directed towards or likely to be accessed
+  by individuals under the age of 18" (NexaLab students are about 13–14), while Anthropic allows minors with
+  safeguards. The owner chose Gemini knowing this; it does not change the dev/test-only rule. SG-2 must settle it
+  (for example Vertex AI terms, or Anthropic) before any shared or production enablement.
+
 ## Verification (2026-11-08)
 
 BE Vitest 640 passed on isolated PostgreSQL (`student-llm.test.ts` 19, `tutor-chat.test.ts` 11,
@@ -117,7 +129,7 @@ isolated stack (LLM wording at every level, chat answer, answer request refused)
 
 ## Open
 
-- SG-2 (provider tier, legal basis, payload approval) before any shared or production enablement.
+- SG-2 (provider tier, legal basis, payload approval) before any shared or production enablement; includes the Gemini under-18 terms issue.
 - SG-4: lecturer approves the safety set and thresholds; run `npm run eval:student-ai -- --provider anthropic
   --allow-external` against the chosen real provider and give the lecturer `lecturer-review.csv`.
 - Lecturer review of LLM wording samples per surface (scientific accuracy, no answer leak).

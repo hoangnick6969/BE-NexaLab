@@ -8,9 +8,10 @@
  *
  *   npm run eval:student-ai                         # rules only: the prefilter categories (no model)
  *   npm run eval:student-ai -- --provider fake      # pipeline check with the deterministic fake model
- *   npm run eval:student-ai -- --provider anthropic --allow-external
- *       # real model; needs ANTHROPIC_API_KEY and ANTHROPIC_MODEL (shell or .env). Sends the synthetic prompts (never student data)
- *       # to Anthropic, so it needs an explicit flag while SG-2 is open.
+ *   npm run eval:student-ai -- --provider gemini --allow-external
+ *       # real model; needs GEMINI_API_KEY and GEMINI_MODEL (shell or .env). `--provider anthropic` needs
+ *       # ANTHROPIC_API_KEY and ANTHROPIC_MODEL. Sends the synthetic prompts (never student data) to the provider, so it
+ *       # needs an explicit flag while SG-2 is open.
  *
  * Options: --context-file <json {kind,title,text}>, --out <dir>, --limit <n>, --concurrency <n>.
  * Exit code 1 when a measured category misses its threshold.
@@ -20,7 +21,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { draftTutorReply, TUTOR_CHAT_PROMPT_VERSION, TUTOR_CHAT_RULES, type TutorContext, type TutorReplyDraft } from "../src/modules/student-ai/application/tutor-chat";
 import { studentAiConfig, type StudentAiProvider } from "../src/modules/student-ai/application/student-llm";
-import { AnthropicStudentProvider, FakeStudentProvider } from "../src/modules/student-ai/infrastructure/providers";
+import { AnthropicStudentProvider, FakeStudentProvider, GeminiStudentProvider } from "../src/modules/student-ai/infrastructure/providers";
 
 type Category = "INJECTION" | "UNSAFE_TOPIC" | "PERSONAL_DATA" | "ANSWER_SEEKING" | "OFF_TOPIC" | "ON_TOPIC";
 type Item = { id: string; category: Category; prompt: string; expectPrefilter: string | null };
@@ -58,13 +59,14 @@ export function judge(item: Item, reply: TutorReplyDraft, realModel: boolean): V
 function provider(kind: string | undefined): StudentAiProvider | null {
   if (!kind || kind === "none") return null;
   if (kind === "fake") return new FakeStudentProvider();
-  if (kind === "anthropic") {
-    if (!flag("allow-external")) throw new Error("--provider anthropic sends the prompts to Anthropic; add --allow-external to confirm (SG-2 is open)");
-    const { ANTHROPIC_API_KEY: key, ANTHROPIC_MODEL: model } = process.env;
-    if (!key || !model) throw new Error("ANTHROPIC_API_KEY and ANTHROPIC_MODEL are required for --provider anthropic");
-    return new AnthropicStudentProvider(key, model);
+  if (kind === "anthropic" || kind === "gemini") {
+    if (!flag("allow-external")) throw new Error(`--provider ${kind} sends the prompts to an external API; add --allow-external to confirm (SG-2 is open)`);
+    const prefix = kind.toUpperCase();
+    const key = process.env[`${prefix}_API_KEY`], model = process.env[`${prefix}_MODEL`];
+    if (!key || !model) throw new Error(`${prefix}_API_KEY and ${prefix}_MODEL are required for --provider ${kind}`);
+    return kind === "gemini" ? new GeminiStudentProvider(key, model) : new AnthropicStudentProvider(key, model);
   }
-  throw new Error(`Unknown --provider ${kind} (none | fake | anthropic)`);
+  throw new Error(`Unknown --provider ${kind} (none | fake | gemini | anthropic)`);
 }
 
 const csvCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -74,7 +76,7 @@ async function main() {
   const context: TutorContext = option("context-file") ? JSON.parse(readFileSync(option("context-file")!, "utf8")) : DEFAULT_CONTEXT;
   const items = set.items.slice(0, Number(option("limit") ?? set.items.length));
   const model = provider(option("provider"));
-  const realModel = model?.name === "anthropic";
+  const realModel = Boolean(model) && model!.name !== "fake";
   // The runner is an offline tool: the kill switch and environment gate apply to the API, not to this measurement.
   const config = { ...studentAiConfig({ ...process.env, APP_ENV: "test", STUDENT_AI_LLM_ENABLED: "true" }), providerTimeoutMs: 20_000 };
 

@@ -50,7 +50,7 @@ export class StudentAiProviderError extends Error {
 
 /** Port implemented in student-ai/infrastructure (anthropic, fake). Returns the model's raw text. */
 export interface StudentAiProvider {
-  readonly name: "anthropic" | "fake";
+  readonly name: "gemini" | "anthropic" | "fake";
   readonly model: string;
   complete(input: { system: string; user: string; signal: AbortSignal; maxTokens?: number }): Promise<string>;
 }
@@ -134,7 +134,7 @@ export function hintCacheKey(payload: HintPayload, model: string) {
 
 export type PhraseOutcome = {
   content: string;
-  provider: "rules" | "rules-fallback" | "anthropic" | "fake" | "cache";
+  provider: "rules" | "rules-fallback" | "gemini" | "anthropic" | "fake" | "cache";
   model: string | null;
   promptVersion: string | null;
   fallbackReason: FallbackReason | null;

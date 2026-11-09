@@ -9,7 +9,7 @@ export const labHintOpenApiSchemas = {
       level: { type: "integer", minimum: 1, maximum: 4 },
       content: { type: "string" },
       escalated: { type: "boolean", nullable: true },
-      provider: { type: "string", enum: ["rules", "rules-fallback", "anthropic", "fake", "cache"] },
+      provider: { type: "string", enum: ["rules", "rules-fallback", "gemini", "anthropic", "fake", "cache"] },
       createdAt: { type: "string", format: "date-time" },
     },
     additionalProperties: false,
@@ -18,7 +18,7 @@ export const labHintOpenApiSchemas = {
     type: "object",
     required: ["provider", "llmEnabled", "ruleVersion"],
     properties: {
-      provider: { type: "string", enum: ["rules", "anthropic", "fake"] },
+      provider: { type: "string", enum: ["rules", "gemini", "anthropic", "fake"] },
       llmEnabled: { type: "boolean" },
       ruleVersion: { type: "string" },
     },

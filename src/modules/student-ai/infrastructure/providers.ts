@@ -27,6 +27,42 @@ export class AnthropicStudentProvider implements StudentAiProvider {
 }
 
 /**
+ * Google Gemini API adapter (owner 2026-11-09: "Chuyển sang dùng Gemini Flash"). Only the allowlisted payload is sent.
+ * The prompts ask for JSON, so the response MIME type is JSON. Thinking tokens count against the output limit on Flash
+ * models, hence the headroom; thought parts are dropped. Note: the Gemini API Additional Terms bar apps directed to or
+ * likely used by people under 18; recorded under SG-2, dev/test only until it closes.
+ */
+export class GeminiStudentProvider implements StudentAiProvider {
+  readonly name = "gemini" as const;
+  constructor(private readonly apiKey: string, readonly model: string, private readonly fetchImpl: typeof fetch = (...args) => fetch(...args)) {}
+
+  async complete(input: { system: string; user: string; signal: AbortSignal; maxTokens?: number }) {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent`, {
+        method: "POST",
+        signal: input.signal,
+        headers: { "content-type": "application/json", "x-goog-api-key": this.apiKey },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: input.system }] },
+          contents: [{ role: "user", parts: [{ text: input.user }] }],
+          generationConfig: { maxOutputTokens: (input.maxTokens ?? 300) + 1024, responseMimeType: "application/json" },
+        }),
+      });
+    } catch {
+      throw new StudentAiProviderError(input.signal.aborted ? "TIMEOUT" : "HTTP_ERROR");
+    }
+    if (!response.ok) throw new StudentAiProviderError("HTTP_ERROR");
+    let data: any;
+    try { data = await response.json(); } catch { throw new StudentAiProviderError(input.signal.aborted ? "TIMEOUT" : "PARSE"); }
+    const parts = data?.candidates?.[0]?.content?.parts;
+    const text = Array.isArray(parts) ? parts.filter((part: any) => typeof part?.text === "string" && !part.thought).map((part: any) => part.text).join("") : null;
+    if (typeof text !== "string" || !text) throw new StudentAiProviderError("PARSE");
+    return text;
+  }
+}
+
+/**
  * Deterministic adapter for development and tests. Hints: rewrites the rule text (and turns it into a question when
  * asked). Chat: answers from `STUDENT_AI_FAKE_REPLY` or a fixed Socratic question. `calls` counts provider calls.
  */
@@ -52,16 +88,18 @@ export class FakeStudentProvider implements StudentAiProvider {
 }
 
 /**
- * Chooses the adapter from env. `STUDENT_AI_PROVIDER=fake` refuses to start outside APP_ENV development/test;
- * `anthropic` needs ANTHROPIC_API_KEY and ANTHROPIC_MODEL (no default model in code). Null when nothing is configured.
+ * Chooses the adapter from env (default `gemini`). `STUDENT_AI_PROVIDER=fake` refuses to start outside APP_ENV
+ * development/test; `gemini` needs GEMINI_API_KEY and GEMINI_MODEL, `anthropic` needs ANTHROPIC_API_KEY and
+ * ANTHROPIC_MODEL (no default model in code). Null when the chosen provider has no credentials.
  */
 export function createStudentAiProvider(env: NodeJS.ProcessEnv = process.env): StudentAiProvider | null {
-  const kind = env.STUDENT_AI_PROVIDER ?? "anthropic";
+  const kind = env.STUDENT_AI_PROVIDER ?? "gemini";
   if (kind === "fake") {
     if (env.NODE_ENV === "production" || !["development", "test"].includes(env.APP_ENV ?? ""))
       throw new Error("STUDENT_AI_PROVIDER=fake is allowed only with APP_ENV development or test, never in production");
     return new FakeStudentProvider(env.STUDENT_AI_FAKE_REPLY);
   }
+  if (kind === "gemini") return env.GEMINI_API_KEY && env.GEMINI_MODEL ? new GeminiStudentProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL) : null;
   if (kind !== "anthropic") throw new Error(`Unknown STUDENT_AI_PROVIDER: ${kind}`);
   return env.ANTHROPIC_API_KEY && env.ANTHROPIC_MODEL ? new AnthropicStudentProvider(env.ANTHROPIC_API_KEY, env.ANTHROPIC_MODEL) : null;
 }

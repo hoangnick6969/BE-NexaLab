@@ -182,7 +182,7 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       expect((await p.progress.findFirst({ where: { studentId: student.id, contentId: labId } }))?.lastHintLevel).toBe(3);
 
       // B2: the verdict explanation reads the stored result only; unmet steps carry no wording, nothing is written.
-      const hintRows = await p.hintLog.count();
+      const hintRows = await p.hintLog.count({ where: { studentId: student.id } });
       const why: any = await labs.explanation(w1.id, req);
       expect(why).toMatchObject({ attemptId: w1.id, verdict: "not_passed", provider: "rules", ruleVersion: "verdict-explanations@1" });
       expect(why.items.filter((item: any) => !item.met)).toEqual([
@@ -193,7 +193,7 @@ describe.skipIf(!db)("isolated checkpoint hints (SAI-01A, FL-21)", () => {
       const whyPassed: any = await labs.explanation(passed.id, req);
       expect(whyPassed.verdict).toBe("passed");
       expect(whyPassed.items.every((item: any) => item.met && item.why)).toBe(true);
-      expect(await p.hintLog.count()).toBe(hintRows);
+      expect(await p.hintLog.count({ where: { studentId: student.id } })).toBe(hintRows);
       expect(await p.attempt.findUniqueOrThrow({ where: { id: w1.id } })).toEqual(before);
       await expect(labs.explanation(w1.id, { user: { sub: outsider.id, sid: session.id, role: "STUDENT" } })).rejects.toMatchObject({ status: 404 });
 

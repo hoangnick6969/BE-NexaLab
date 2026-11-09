@@ -3,7 +3,7 @@ import {
   guardHint, hintCacheKey, phraseHint, STUDENT_HINT_PROMPT_VERSION, studentAiConfig, studentHintPromptDigest,
   type HintPayload, type LlmStore,
 } from "./student-llm";
-import { AnthropicStudentProvider, createStudentAiProvider, FakeStudentProvider } from "../infrastructure/providers";
+import { AnthropicStudentProvider, createStudentAiProvider, FakeStudentProvider, GeminiStudentProvider } from "../infrastructure/providers";
 
 const payload = (over: Partial<HintPayload> = {}): HintPayload => ({
   surface: "lab-checkpoint", context: { title: "Lưới thức ăn", step: "Khi mất rắn" }, level: 2, levelType: "Gợi ý khái niệm",
@@ -97,7 +97,27 @@ describe("student-hint@1 LLM layer (owner 2026-11-08: LLM writes, rules plan and
     expect(() => createStudentAiProvider({ STUDENT_AI_PROVIDER: "fake", APP_ENV: "development", NODE_ENV: "production" } as any)).toThrow(/never in production/);
     expect(() => createStudentAiProvider({ STUDENT_AI_PROVIDER: "fake", APP_ENV: "pilot" } as any)).toThrow();
     expect(createStudentAiProvider({ STUDENT_AI_PROVIDER: "fake", APP_ENV: "test" } as any)?.name).toBe("fake");
-    expect(createStudentAiProvider({ ANTHROPIC_API_KEY: "k" } as any)).toBeNull();
-    expect(createStudentAiProvider({ ANTHROPIC_API_KEY: "k", ANTHROPIC_MODEL: "m" } as any)).toMatchObject({ name: "anthropic", model: "m" });
+    expect(createStudentAiProvider({ STUDENT_AI_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "k" } as any)).toBeNull();
+    expect(createStudentAiProvider({ STUDENT_AI_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "k", ANTHROPIC_MODEL: "m" } as any)).toMatchObject({ name: "anthropic", model: "m" });
+    // Gemini is the default provider (owner 2026-11-09).
+    expect(createStudentAiProvider({ GEMINI_API_KEY: "k" } as any)).toBeNull();
+    expect(createStudentAiProvider({ GEMINI_API_KEY: "k", GEMINI_MODEL: "g" } as any)).toMatchObject({ name: "gemini", model: "g" });
+    expect(() => createStudentAiProvider({ STUDENT_AI_PROVIDER: "openai" } as any)).toThrow(/Unknown/);
+  });
+
+  it("Gemini adapter: system instruction, JSON output, thought parts dropped, failures mapped", async () => {
+    const run = (fetchImpl: any) => phraseHint({ provider: new GeminiStudentProvider("gkey", "gemini-flash-x", fetchImpl), config: on, store: store(), payload: payload() });
+    expect((await run(async () => new Response("{}", { status: 429 }))).fallbackReason).toBe("HTTP_ERROR");
+    expect((await run(async () => new Response("not json", { status: 200 }))).fallbackReason).toBe("PARSE");
+    expect((await run(async () => new Response(JSON.stringify({ candidates: [{ finishReason: "SAFETY" }] }), { status: 200 }))).fallbackReason).toBe("PARSE");
+    const ok = vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "nghĩ...", thought: true }, { text: '{"hint":"Rắn là gì đối với ếch?"}' }] } }] }), { status: 200 }));
+    expect(await run(ok)).toMatchObject({ provider: "gemini", model: "gemini-flash-x", content: "Rắn là gì đối với ếch?" });
+    const [url, init] = ok.mock.calls[0] as any;
+    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-x:generateContent");
+    expect(init.headers["x-goog-api-key"]).toBe("gkey");
+    const sent = JSON.parse(init.body);
+    expect(sent.systemInstruction.parts[0].text).toContain("gợi ý");
+    expect(JSON.parse(sent.contents[0].parts[0].text)).toEqual(payload());
+    expect(sent.generationConfig.responseMimeType).toBe("application/json");
   });
 });
