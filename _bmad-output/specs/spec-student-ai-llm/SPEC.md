@@ -74,7 +74,11 @@ on API data; legal basis for minors' data under Decree 13/2023) is decided in wr
   as an overview, then the sentences ranked against the message plus the previous student question, in lesson order
   with "…" for gaps; no match → the start of the lesson. Number grounding uses the full study text. On the shared-dev
   lesson "Phản ứng hoá học" (10 486 chars, previously only the first 14 % was seen) a question on fossil fuels now gets
-  the closing passage and Gemini answered from it),
+  the closing passage and Gemini answered from it). `tutor-chat-rules@4` (owner: "làm cách gửi cả bài"): budget
+  `TUTOR_STUDY_MAX` = 12 000 characters, so a lesson of that size after dropping citations and repeats is sent whole
+  and only longer ones are cut by ranking. Measured with gemini-3.5-flash on that lesson: "tóm tắt cả bài" 3.7 s
+  (all three main ideas), "sao đốt cồn lại thấy nóng" 2.4 s (answered as an exothermic reaction although the
+  wording shares few words with the book),
   returns `{onTopic, reply}`; off topic → fixed redirect. Output guard as above (all catalog answer patterns except
   digit-only ones, grounded numbers, ≤ 600 chars).
 - 500 chars per message, 20 messages per 10 minutes (`429 TUTOR_RATE_LIMITED`, `details.retryAfterSeconds`).

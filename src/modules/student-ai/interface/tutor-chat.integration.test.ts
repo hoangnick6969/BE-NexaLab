@@ -71,7 +71,7 @@ describe.skipIf(!db)("isolated tutor chat (SAI-04)", () => {
         const refused: any = await chat.send(conversation.id, { message }, req);
         expect(refused.messages[1]).toMatchObject({ outcome: "REFUSED", ai: false });
         const row = await p.tutorMessage.findUniqueOrThrow({ where: { id: refused.messages[1].id } });
-        expect(row).toMatchObject({ reason, ruleVersion: "tutor-chat-rules@3", model: null });
+        expect(row).toMatchObject({ reason, ruleVersion: "tutor-chat-rules@4", model: null });
       }
       expect(provider.calls).toHaveLength(1);
       // Off topic (model decides) → fixed redirect; a reply that states an answer → fallback.
@@ -124,7 +124,7 @@ describe.skipIf(!db)("isolated tutor chat (SAI-04)", () => {
     expect(asked.messages[1]).toMatchObject({ outcome: "ANSWERED", ai: true });
     expect(JSON.parse(provider.calls[0])).toMatchObject({ context: { kind: "EBOOK" }, passage: { text: passage.text, page: 93 }, message: "Đoạn này nghĩa là gì ạ?" });
     expect(provider.systems[0]).toContain("đọc hiểu sách giáo khoa");
-    expect(await p.tutorMessage.findUniqueOrThrow({ where: { id: asked.messages[1].id } })).toMatchObject({ promptVersion: "textbook-qa@1", ruleVersion: "tutor-chat-rules@3" });
+    expect(await p.tutorMessage.findUniqueOrThrow({ where: { id: asked.messages[1].id } })).toMatchObject({ promptVersion: "textbook-qa@1", ruleVersion: "tutor-chat-rules@4" });
     // A number from the passage is grounded; one that is not falls back.
     provider.reply = JSON.stringify({ onTopic: true, reply: "Nguồn 3 V cung cấp năng lượng cho đèn. Nếu tháo nguồn thì sao?" });
     expect((await sendMessage(p, f.student.id, conversation.id, "Nguồn làm gì?", deps, passage)).messages[1]).toMatchObject({ outcome: "ANSWERED" });

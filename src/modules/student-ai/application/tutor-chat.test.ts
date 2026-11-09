@@ -8,7 +8,7 @@ const evalSet = JSON.parse(readFileSync("content/student-ai/sai04-safety-eval-se
 
 describe("SAI-04 tutor chat rules (tutor-chat-rules@1)", () => {
   it("versions and a draft safety set of at least 200 prompts (SG-4)", () => {
-    expect([TUTOR_CHAT_RULES, TUTOR_CHAT_PROMPT_VERSION]).toEqual(["tutor-chat-rules@3", "tutor-chat@1"]);
+    expect([TUTOR_CHAT_RULES, TUTOR_CHAT_PROMPT_VERSION]).toEqual(["tutor-chat-rules@4", "tutor-chat@1"]);
     expect(evalSet.items.length).toBeGreaterThanOrEqual(200);
     expect(new Set(evalSet.items.map((item: any) => item.id)).size).toBe(evalSet.items.length);
   });
@@ -73,7 +73,7 @@ describe("SAI-04 tutor chat rules (tutor-chat-rules@1)", () => {
     });
   });
 
-  describe("tutor-chat-rules@3: the lesson text chosen per question", () => {
+  describe("tutor-chat-rules@3/@4: the lesson text chosen per question", () => {
     const filler = Array.from({ length: 40 }, (_, i) => `Đoạn mở đầu số ${i + 1} nói về an toàn trong phòng thí nghiệm và cách quan sát cẩn thận.`).join(" ");
     const sources = [
       { kind: "READING" as const, stepId: "r1", text: `Bài này giới thiệu mạch điện đơn giản. ${filler}` },
@@ -98,15 +98,32 @@ describe("SAI-04 tutor chat rules (tutor-chat-rules@1)", () => {
       expect(studyTextFor("Kể chuyện cười đi", sources)).toBe(context.text.slice(0, 1500));
     });
 
+    it("sends a lesson up to 12 000 characters whole; a longer one is cut to the relevant part", async () => {
+      const users: string[] = [];
+      const provider = { name: "fake" as const, model: "fake-student@1", complete: async ({ user }: { user: string }) => { users.push(user); return JSON.stringify({ onTopic: true, reply: "Em nghĩ sao?" }); } };
+      const config = studentAiConfig({ APP_ENV: "test", STUDENT_AI_LLM_ENABLED: "true" });
+      await draftTutorReply({ text: "Kể chuyện cười đi", context, quoted: null, provider, config, history: [] });
+      expect(JSON.parse(users[0]).context.text).toBe(context.text);
+      const long = Array.from({ length: 200 }, (_, i) => `Câu dài thứ ${i + 1} kể về an toàn khi làm thí nghiệm và giữ gọn bàn học sạch sẽ.`).join(" ");
+      const big = [{ kind: "READING" as const, stepId: "r1", text: long }, sources[1]];
+      await draftTutorReply({ text: "LED cho dòng điện đi theo mấy chiều?", context: { ...context, text: big.map((s) => s.text).join(" "), sources: big }, quoted: null, provider, config, history: [] });
+      const cut = JSON.parse(users[1]).context.text;
+      expect(cut.length).toBeLessThanOrEqual(12_000);
+      expect(cut).toContain("LED chỉ cho dòng điện đi qua theo một chiều");
+    });
+
     it("sends the chosen part to the model, using the previous question for a follow-up", async () => {
       const users: string[] = [];
       const provider = { name: "fake" as const, model: "fake-student@1", complete: async ({ user }: { user: string }) => { users.push(user); return JSON.stringify({ onTopic: true, reply: "Em thử nghĩ xem chiều dòng điện quan trọng thế nào?" }); } };
       const config = studentAiConfig({ APP_ENV: "test", STUDENT_AI_LLM_ENABLED: "true" });
-      await draftTutorReply({ text: "Còn cái đó thì sao ạ?", context, quoted: null, provider, config,
+      // A lesson over the 12 000-character budget, so the excerpt depends on the ranking query.
+      const long = Array.from({ length: 200 }, (_, i) => `Câu dài thứ ${i + 1} kể về an toàn khi làm thí nghiệm và giữ gọn bàn học sạch sẽ.`).join(" ");
+      const big = [{ kind: "READING" as const, stepId: "r1", text: long }, sources[1]];
+      await draftTutorReply({ text: "Còn cái đó thì sao ạ?", context: { ...context, text: big.map((s) => s.text).join(" "), sources: big }, quoted: null, provider, config,
         history: [{ role: "student", content: "LED cho dòng điện đi theo mấy chiều?" }, { role: "tutor", content: "Em nghĩ sao?" }] });
       const sent = JSON.parse(users[0]);
       expect(sent.context.text).toContain("LED chỉ cho dòng điện đi qua theo một chiều");
-      expect(sent.context.text.length).toBeLessThanOrEqual(1500);
+      expect(sent.context.text.length).toBeLessThanOrEqual(12_000);
     });
   });
 });

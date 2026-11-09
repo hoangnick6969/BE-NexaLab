@@ -17,8 +17,11 @@ import {
  * logged (BR-13); parents never see conversations (BR-11).
  */
 /** @2 (B5): adds the injection check on a highlighted passage; message rules unchanged from @1.
- * @3: a lesson's study text is chosen per question (`studyTextFor`) instead of its first 1 500 characters. */
-export const TUTOR_CHAT_RULES = "tutor-chat-rules@3";
+ * @3: a lesson's study text is chosen per question (`studyTextFor`) instead of its first 1 500 characters.
+ * @4: budget 12 000 characters, so a lesson of that size (after dropping citations and repeats) is sent whole. */
+export const TUTOR_CHAT_RULES = "tutor-chat-rules@4";
+/** @4: study text budget per question. A lesson up to this size is sent whole (owner 2026-11-09: "gửi cả bài"). */
+export const TUTOR_STUDY_MAX = 12_000;
 export const TUTOR_CHAT_PROMPT_VERSION = "tutor-chat@1";
 /** B5: questions about a highlighted textbook passage. */
 export const TEXTBOOK_QA_PROMPT_VERSION = "textbook-qa@1";
@@ -221,7 +224,7 @@ export async function draftTutorReply(input: {
   if (await input.overBudget?.()) return fixed("FALLBACK", "FALLBACK", "BUDGET");
   // The last student turn joins the ranking query so a follow-up ("còn LED thì sao?") keeps its topic.
   const lastAsked = [...history].reverse().find((item) => item.role === "student")?.content ?? "";
-  const study = context.sources ? studyTextFor(`${text} ${lastAsked}`, context.sources) : context.text.slice(0, 1500);
+  const study = context.sources ? studyTextFor(`${text} ${lastAsked}`, context.sources, TUTOR_STUDY_MAX) : context.text.slice(0, 1500);
   const user = JSON.stringify(quoted
     ? { context: { kind: context.kind, title: context.title }, passage: quoted, history: history.slice(-4), message: text }
     : { context: { kind: context.kind, title: context.title, text: study }, history, message: text });
