@@ -146,3 +146,46 @@ function tokensPrefix(sentence: string, n: number) {
   const parts = sentence.split(/\s+/);
   return parts.slice(0, n).join(" ").replace(/[,.;:!?…]+$/, "");
 }
+
+/** Source citations ("Nguồn: sgk-…") carry no content for the model. */
+const CITATION = /Nguồn:\s*[\w.-]+/gu;
+const cleanSentence = (sentence: string) => sentence.replace(CITATION, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * SAI-04 (`tutor-chat-rules@3`): the part of a lesson the tutor model sees for one question. Citations are dropped and
+ * repeated sentences (a summary shown in both Reading and study cards) kept once. A lesson that then fits in `max`
+ * characters is sent whole. Otherwise: the opening sentences as an overview (about a fifth of the budget), then the
+ * sentences that best match the question (same ranking as quiz hints), in lesson order, with "…" where text was
+ * skipped. A question that matches nothing gets the start of the lesson, so the model can still judge whether it is
+ * on topic.
+ */
+export function studyTextFor(question: string, sources: readonly HintSource[], max = 1500): string {
+  const seen = new Set<string>();
+  const all: { sentence: string; order: number }[] = [];
+  sources.forEach((source, sourceIndex) => sentencesOf(source.text).forEach((raw, index) => {
+    const sentence = cleanSentence(raw);
+    const key = lower(sentence).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    all.push({ sentence, order: sourceIndex * 10000 + index });
+  }));
+  const whole = all.map((item) => item.sentence).join(" ");
+  if (whole.length <= max) return whole;
+  const kept = new Map(all.map((item) => [item.order, item.sentence]));
+  const ranked = rankPassages(question, sources).filter((item) => kept.has(item.order));
+  if (!ranked.length) return whole.slice(0, max);
+  const chosen = new Set<number>();
+  let used = 0;
+  const take = (order: number) => {
+    const sentence = kept.get(order)!;
+    if (chosen.has(order) || used + sentence.length + 2 > max) return false;
+    chosen.add(order);
+    used += sentence.length + 2;
+    return true;
+  };
+  for (const item of all) { if (used >= max * 0.2 || !take(item.order)) break; }
+  for (const item of ranked) take(item.order);
+  const position = new Map(all.map((item, index) => [item.order, index]));
+  const orders = [...chosen].sort((a, b) => position.get(a)! - position.get(b)!);
+  return orders.map((order, index) => (index && position.get(order)! !== position.get(orders[index - 1])! + 1 ? "… " : "") + kept.get(order)).join(" ");
+}

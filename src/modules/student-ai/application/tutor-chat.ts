@@ -1,7 +1,7 @@
 import { BadRequestException, HttpException, HttpStatus, NotFoundException } from "@nestjs/common";
 import { applicableAssignmentWhere } from "../../classes/application/class-access";
 import { CHECKPOINT_HINT_CATALOGS } from "../../labs/application/checkpoint-hint-rules";
-import { lessonSources } from "../../learning/application/lesson-question-hints";
+import { lessonSources, studyTextFor, type HintSource } from "../../learning/application/lesson-question-hints";
 import {
   BLOCKED_TOPIC_TERMS, callProvider, llmStore, studentAiConfig, VERDICT_TERMS,
   type StudentAiConfig, type StudentAiProvider,
@@ -16,8 +16,9 @@ import {
  * and replies with one guided step, never an answer to a scored item. The reply passes an output guard. Every turn is
  * logged (BR-13); parents never see conversations (BR-11).
  */
-/** @2 (B5): adds the injection check on a highlighted passage; message rules unchanged from @1. */
-export const TUTOR_CHAT_RULES = "tutor-chat-rules@2";
+/** @2 (B5): adds the injection check on a highlighted passage; message rules unchanged from @1.
+ * @3: a lesson's study text is chosen per question (`studyTextFor`) instead of its first 1 500 characters. */
+export const TUTOR_CHAT_RULES = "tutor-chat-rules@3";
 export const TUTOR_CHAT_PROMPT_VERSION = "tutor-chat@1";
 /** B5: questions about a highlighted textbook passage. */
 export const TEXTBOOK_QA_PROMPT_VERSION = "textbook-qa@1";
@@ -130,7 +131,8 @@ export function guardChatReply(raw: string, grounding: string, shown = ""): { on
 }
 
 export type ContextKind = "LAB" | "LESSON" | "EBOOK";
-export type TutorContext = { kind: ContextKind; id: string; title: string; text: string };
+/** `text` is the full study text (number grounding); `sources` lets each question pick the relevant part. */
+export type TutorContext = { kind: ContextKind; id: string; title: string; text: string; sources?: HintSource[] };
 
 /** The Lab or lesson must be one the student can open (released shared content or an applicable assignment). */
 export async function tutorContext(db: any, studentId: string, kind: ContextKind, id: string): Promise<TutorContext> {
@@ -152,7 +154,8 @@ export async function tutorContext(db: any, studentId: string, kind: ContextKind
   const assigned = lesson && !open ? await db.assignment.findFirst({ where: { ...applicableAssignmentWhere(studentId), contentId: id, contentType: "lesson" }, select: { id: true } }) : null;
   if (!lesson || (!open && !assigned)) throw new NotFoundException({ code: "TUTOR_CONTEXT_NOT_FOUND", message: "Không tìm thấy bài để hỏi gia sư" });
   const steps = await db.lessonStep.findMany({ where: { lessonId: id }, orderBy: { position: "asc" }, select: { id: true, type: true, config: true } });
-  return { kind, id, title: lesson.title, text: lessonSources(steps).map((source) => source.text).join(" ").slice(0, 1500) };
+  const sources = lessonSources(steps);
+  return { kind, id, title: lesson.title, text: sources.map((source) => source.text).join(" ").slice(0, 50_000), sources };
 }
 
 export type ChatDeps = { provider: StudentAiProvider | null; config?: StudentAiConfig; now?: () => Date };
@@ -216,9 +219,12 @@ export async function draftTutorReply(input: {
   if (refusal) return fixed(refusal, "REFUSED", refusal);
   if (!config.llmEnabled || !provider) return fixed("DISABLED", "DISABLED", "DISABLED");
   if (await input.overBudget?.()) return fixed("FALLBACK", "FALLBACK", "BUDGET");
+  // The last student turn joins the ranking query so a follow-up ("còn LED thì sao?") keeps its topic.
+  const lastAsked = [...history].reverse().find((item) => item.role === "student")?.content ?? "";
+  const study = context.sources ? studyTextFor(`${text} ${lastAsked}`, context.sources) : context.text.slice(0, 1500);
   const user = JSON.stringify(quoted
     ? { context: { kind: context.kind, title: context.title }, passage: quoted, history: history.slice(-4), message: text }
-    : { context: { kind: context.kind, title: context.title, text: context.text }, history, message: text });
+    : { context: { kind: context.kind, title: context.title, text: study }, history, message: text });
   const called = await callProvider(provider, config, ebook ? TEXTBOOK_QA_SYSTEM_PROMPT : TUTOR_CHAT_SYSTEM_PROMPT, user, 500);
   if ("reason" in called) return fixed("FALLBACK", "FALLBACK", called.reason, provider.model);
   const guarded = guardChatReply(called.raw, [context.title, context.text, text, quoted?.prefix, quoted?.text, quoted?.suffix, ...history.map((item) => item.content)].join(" "),

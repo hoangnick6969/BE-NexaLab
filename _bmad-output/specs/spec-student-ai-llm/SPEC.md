@@ -69,6 +69,12 @@ on API data; legal basis for minors' data under Decree 13/2023) is decided in wr
 - `tutor-chat-rules@1` refuses before any model call: prompt injection, unsafe topics, personal data (phone, email,
   password, address), answer seeking ("đáp án", "làm hộ", "A hay B", tests). Fixed, versioned replies.
 - `tutor-chat@1`: the model gets context title and up to 1 500 chars of study text, the last 6 turns and the message,
+  (`tutor-chat-rules@3`, 2026-11-09: for a lesson the 1 500 chars are chosen per question by `studyTextFor` in
+  `learning/application/lesson-question-hints.ts`: citations dropped, repeated sentences kept once, opening sentences
+  as an overview, then the sentences ranked against the message plus the previous student question, in lesson order
+  with "…" for gaps; no match → the start of the lesson. Number grounding uses the full study text. On the shared-dev
+  lesson "Phản ứng hoá học" (10 486 chars, previously only the first 14 % was seen) a question on fossil fuels now gets
+  the closing passage and Gemini answered from it),
   returns `{onTopic, reply}`; off topic → fixed redirect. Output guard as above (all catalog answer patterns except
   digit-only ones, grounded numbers, ≤ 600 chars).
 - 500 chars per message, 20 messages per 10 minutes (`429 TUTOR_RATE_LIMITED`, `details.retryAfterSeconds`).
