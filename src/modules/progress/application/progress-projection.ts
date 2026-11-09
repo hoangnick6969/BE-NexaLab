@@ -58,7 +58,7 @@ async function expectedLessonRow(db: Client, studentId: string, lessonId: string
 }
 
 async function expectedLabRow(db: Client, studentId: string, labId: string) {
-  const attempts = await db.attempt.findMany({ where: { studentId, challenge: { labId } }, select: attemptSelect });
+  const attempts = await db.attempt.findMany({ where: { studentId, challenge: { labId }, OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }] }, select: attemptSelect });
   return labProjection(studentId, labId, attempts.map(toPractical));
 }
 

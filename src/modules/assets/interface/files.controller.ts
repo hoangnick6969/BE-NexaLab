@@ -40,7 +40,17 @@ export class FilesController {
   async upload(@UploadedFile() file: any, @Req() req: any) {
     if (!file) throw new BadRequestException({ code: "FILE_REQUIRED", message: "Chọn tệp để tải lên" });
     const bytes = file.buffer as Buffer;
-    const fileName = String(file.originalname ?? "").slice(0, 200);
+    const rawName = String(file.originalname ?? "");
+    let fileName = rawName;
+    try {
+      const decoded = Buffer.from(rawName, "latin1").toString("utf8");
+      if (!decoded.includes("\ufffd") && decoded !== rawName) {
+        fileName = decoded;
+      }
+    } catch {
+      fileName = rawName;
+    }
+    fileName = fileName.slice(0, 200);
     const type = mediaTypes().find((t) => t.extensions.includes(extname(fileName).toLowerCase()) && t.signature(bytes));
     if (!type)
       throw new BadRequestException({

@@ -50,7 +50,7 @@ export class FoundationalProgressService {
         : Promise.resolve([]),
       labIds.length
         ? this.db.attempt.findMany({
-            where: { studentId, assignmentId: null, lessonStepId: null, challenge: { labId: { in: labIds } } },
+            where: { studentId, assignmentId: null, lessonStepId: null, challenge: { labId: { in: labIds } }, OR: [{ labRunId: null }, { labRun: { context: "FOUNDATIONAL" } }] },
             select: { id: true, challenge: { select: { labId: true } }, verdict: true, createdAt: true },
             orderBy: { createdAt: "desc" },
           })

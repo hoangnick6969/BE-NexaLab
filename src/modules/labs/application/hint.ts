@@ -8,6 +8,7 @@ import {
   type HintPayload, type PhraseOutcome, type StudentAiConfig, type StudentAiProvider,
 } from "../../student-ai/application/student-llm";
 import { buildContext } from "./tutor";
+import { assertClassPracticeRun } from "../../classes/application/class-lab-resource";
 import { decideTutorLevel, labDigest, renderTutorTemplate, TUTOR_RULES, tutorKey, variantName } from "./tutor-rules";
 import {
   CHECKPOINT_HINT_CATALOGS, CheckpointHintInputError, evaluateOneCheckpoint, hasCheckpointHints, hasRunHints, hasRunReflections, planCheckpointHint, planRunHint, runHintSteps,
@@ -31,7 +32,11 @@ export function providerDelayMs(env: NodeJS.ProcessEnv = process.env) {
 }
 
 /** Authorization that must still hold when the provider returns. */
-async function assertStillAuthorized(db: any, actor: Actor, attempt: { id: string; assignmentId: string | null }) {
+async function assertStillAuthorized(db: any, actor: Actor, attempt: { id: string; assignmentId: string | null; labRunId?: string | null }) {
+  if (attempt.labRunId) {
+    const run = await db.labRun.findUnique({ where: { id: attempt.labRunId } });
+    if (run?.context === "CLASS_PRACTICE") await assertClassPracticeRun(db, run, actor.sub);
+  }
   const session = await db.session.findFirst({
     where: { id: actor.sid, userId: actor.sub, kind: "refresh", expiresAt: { gt: new Date() } },
     select: { user: { select: { status: true, role: true } } },
@@ -122,6 +127,7 @@ export async function requestHint(db: any, actor: Actor, attemptId: string, deps
     include: { challenge: true, hints: true },
   });
   if (!attempt) throw new NotFoundException();
+  await assertStillAuthorized(db, actor, attempt);
   const rubricRef = attempt.labRunId
     ? ((await db.labRun.findUnique({ where: { id: attempt.labRunId }, select: { execution: true } }))?.execution as any)?.rubricRef
     : null;
@@ -425,7 +431,7 @@ export async function requestRunHint(db: any, actor: Actor, runId: string, reque
   const view = await db.$transaction(
     async (tx: any) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${actor.sub}))`;
-      await assertStillAuthorized(tx, actor, { id: run.id, assignmentId: run.assignmentId });
+      await assertStillAuthorized(tx, actor, { id: run.id, assignmentId: run.assignmentId, labRunId: run.id });
       if (!samePlan(await runPlan(tx, run.id, rubricRef, request, observation), plan))
         throw new ConflictException({ code: "HINT_CONTEXT_CHANGED", message: "Lượt làm đã thay đổi; hãy yêu cầu gợi ý lại" });
       const hint = await tx.hintLog.create({

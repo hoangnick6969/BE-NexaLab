@@ -43,7 +43,7 @@ export class ProgressController {
         where: { studentId, ...(owned && { contentId: { in: owned.map((a) => a.contentId) } }) },
       }),
       this.db.attempt.findMany({
-        where: { studentId, ...(owned && { assignmentId: { in: owned.map((a) => a.id) } }) },
+        where: { studentId, OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }], ...(owned && { assignmentId: { in: owned.map((a) => a.id) } }) },
         select: {
           id: true,
           verdict: true,
@@ -82,14 +82,14 @@ export class ProgressController {
         select: { id: true, stepId: true, lessonId: true, assignmentId: true, score: true, passed: true, createdAt: true },
       }),
       this.db.attempt.findMany({
-        where: { studentId, lessonStepId: { not: null } },
+        where: { studentId, lessonStepId: { not: null }, OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }] },
         select: { id: true, challengeId: true, lessonStepId: true, assignmentId: true, verdict: true, createdAt: true },
       }),
       this.db.quizAttempt.count({ where: { studentId } }),
-      this.db.attempt.count({ where: { studentId } }),
-      this.db.attempt.count({ where: { studentId, verdict: "passed" } }),
+      this.db.attempt.count({ where: { studentId, OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }] } }),
+      this.db.attempt.count({ where: { studentId, verdict: "passed", OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }] } }),
       this.db.quizAttempt.findFirst({ where: { studentId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { createdAt: true } }),
-      this.db.attempt.findFirst({ where: { studentId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { createdAt: true } }),
+      this.db.attempt.findFirst({ where: { studentId, OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { createdAt: true } }),
     ]);
     const derivedByAssignment = new Map<string, ReturnType<typeof deriveLesson> | null>();
     for (const assignment of assignments) {
@@ -237,7 +237,7 @@ export class ProgressController {
       q.kind === "QUIZ"
         ? []
         : this.db.attempt.findMany({
-            where: { studentId, ...(q.stepId ? { lessonStepId: q.stepId } : {}), ...before },
+            where: { studentId, ...(q.stepId ? { lessonStepId: q.stepId } : {}), ...before, AND: [{ OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }] }] },
             orderBy,
             take: q.limit + 1,
             select: {

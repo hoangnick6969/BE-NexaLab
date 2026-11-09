@@ -111,13 +111,11 @@ export async function resolvePinnedAssignmentLab(tx: any, assignment: { labExecu
         digest(releaseSnapshot) !== release.digest || !releaseSnapshot?.lab || releaseSnapshot.lab.id !== labId ||
         !releasedExecution.success || release.status === "QUARANTINED" || release.status === "DRAFT" || release.status === "APPROVED")
       throw new ConflictException({ code: release?.status === "QUARANTINED" ? "RUN_REVOKED" : "LAB_RELEASE_INVALID" });
-    if (releasedExecution.data.packVersionId !== snapshot.packVersionId ||
-        releasedExecution.data.configVersionId !== snapshot.configVersionId ||
-        releasedExecution.data.activityVersionId !== snapshot.activityVersionId ||
-        releasedExecution.data.modelRef !== snapshot.modelRef ||
-        releasedExecution.data.engineVersion !== snapshot.engineVersion ||
-        canonical(releasedExecution.data.effectiveParams) !== canonical(snapshot.effectiveParams))
-      throw new ConflictException({ code: "LAB_RELEASE_INVALID" });
+    const { releaseId: _releasedId, releaseDigest: _releasedDigest, selectedChallengeId: _releasedChallenge, ...releasedTuple } = releasedExecution.data;
+    const { releaseId: _pinId, releaseDigest: _pinDigest, selectedChallengeId: _pinChallenge, customParams, ...pinnedTuple } = snapshot;
+    const expectedTuple = customParams ? { ...releasedTuple, effectiveParams: { ...releasedTuple.effectiveParams,
+      [challengeId]: { ...(releasedTuple.effectiveParams[challengeId] ?? {}), ...customParams } } } : releasedTuple;
+    if (canonical(expectedTuple) !== canonical(pinnedTuple)) throw new ConflictException({ code: "LAB_RELEASE_INVALID" });
   }
   const [config, pack, activity] = await Promise.all([
     tx.simulationConfigVersion.findUnique({ where: { id: snapshot.configVersionId } }),
@@ -134,6 +132,10 @@ export async function resolvePinnedAssignmentLab(tx: any, assignment: { labExecu
     throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID" });
   if (!Object.prototype.hasOwnProperty.call(snapshot.effectiveParams, challengeId))
     throw new ConflictException({ code: "ASSIGNMENT_CHALLENGE_NOT_PINNED" });
+  if (snapshot.customParams && (Object.keys(snapshot.customParams).length > 10 ||
+      Object.keys(snapshot.customParams).some((key) => !/^[A-Za-z][A-Za-z0-9_]*$/.test(key) || !Object.prototype.hasOwnProperty.call((snapshot.template as any)?.ranges ?? {}, key)) ||
+      packConfigurationErrors(labId, pack, config, snapshot.effectiveParams[challengeId] as any).length))
+    throw new ConflictException({ code: "PINNED_EVIDENCE_INVALID" });
   let model: ReturnType<typeof resolveModel>;
   try { model = resolveModel(snapshot.modelRef); }
   catch { throw new ConflictException({ code: "PINNED_MODEL_UNAVAILABLE" }); }

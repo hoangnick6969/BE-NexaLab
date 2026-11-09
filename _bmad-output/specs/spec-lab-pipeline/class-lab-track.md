@@ -39,3 +39,15 @@ The test uses synthetic local release data and is technical evidence only. It do
 | Assignment results | own class | own result only | own result only | denied | authorized child summary only |
 
 A later assignment update or teacher edit never rewrites attempts, snapshots or past progress. A Class Lab result never contributes to Foundational course progress. The matrix is a target contract and must be verified against actual implementation before release.
+
+## Class resources implementation evidence — 2026-11-05
+
+Class Space supports versioned private LAB, DOCUMENT, REPORT_TEMPLATE and LINK resources alongside cards/quizzes/tests. LAB authoring supplements an approved release with teacher objectives, instructions and report prompts; the server constructs and pins the scientific execution. Published versions and assignment/run pedagogical snapshots are immutable. Revisions create drafts; source upgrades are explicit. Assignment identity remains contentType=lab and contentId=source.labId.
+
+Approved active members may launch unscored CLASS_PRACTICE runs with a 24-hour lifetime. Resource/class archival or membership withdrawal blocks new practice access; issued assignments retain their independent eligibility lifecycle. Class practice is excluded from Foundational and official Lab projections. Documents/templates use owned READY PDF/PNG/JPEG/MP4 versions or HTTPS links. Native Office uploads, URL fetching, Google OAuth, new report grading and public release changes are excluded. Drive permissions remain external.
+
+Both additive migrations were applied to dedicated loopback PostgreSQL. Focused class/asset/progress/event suites passed (54 tests, including synthetic lifecycle integration); BE and FE lint/build passed. These establish contract mechanics, not scientific approval, production scanning/storage readiness, deployment or rendered mobile/keyboard acceptance. Teacher private preview renders the compatible pinned source activity and teacher content without a student run or simulation request. Full-file Hallmark lint identifies existing committed CSS failures outside the added resource styles; browser verification remains a separate gate.
+
+This evidence extends the prior assignment-only slice described above; earlier statements excluding standalone class practice describe that earlier slice.
+
+Local browser verification also completed against TEST ONLY loopback fixtures: teacher created/published a Drive-linked report template, forked a customized Circuit activity and assigned it; a student launched and completed CLASS_PRACTICE with server receipt and persisted passed attempt without assignmentId. At 390x844, inspected Class Lab and practice pages had no horizontal overflow; Space operated the switch. This is local technical evidence, not representative-device or production acceptance.

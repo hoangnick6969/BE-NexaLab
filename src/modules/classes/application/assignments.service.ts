@@ -11,6 +11,7 @@ import { currentDeadlines, testStates } from "./assignment-test-state";
 import { notify } from "../../notifications/application/notify";
 import { snapshotAssignmentLab } from "../../labs/application/assignment-lab-execution";
 import { digest as labExecutionDigest } from "../../labs/application/lab-run";
+import { resolveClassLabResource } from "./class-lab-resource";
 
 type ContentType = "lesson" | "lab" | "test";
 
@@ -20,6 +21,7 @@ function assignmentView(a: any, now = new Date()) {
     classId: a.classId,
     title: a.title,
     contentId: a.contentId,
+    classLabSnapshot: a.classLabSnapshot ?? null,
     contentType: a.contentType,
     dueDate: a.dueDate,
     overdue: isOverdue(a.dueDate, now),
@@ -38,6 +40,7 @@ export const assignmentInput = z
     contentId: text,
     labReleaseId: text.optional(),
     labChallengeId: text.optional(),
+    classLabResourceId: text.optional(),
     title: text.optional(),
     dueDate: z.string().datetime().nullable().optional(),
     studentIds: z.array(text).max(200).default([]),
@@ -45,9 +48,9 @@ export const assignmentInput = z
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.contentType === "lab" && (!value.labReleaseId || !value.labChallengeId))
+    if (value.contentType === "lab" && !value.classLabResourceId && (!value.labReleaseId || !value.labChallengeId))
       context.addIssue({ code: z.ZodIssueCode.custom, path: [!value.labReleaseId ? "labReleaseId" : "labChallengeId"], message: "Chọn một Foundational Release đang hoạt động và thử thách được duyệt." });
-    if (value.contentType !== "lab" && (value.labReleaseId || value.labChallengeId))
+    if ((value.classLabResourceId && (value.labReleaseId || value.labChallengeId)) || (value.contentType !== "lab" && (value.classLabResourceId || value.labReleaseId || value.labChallengeId)))
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["contentType"], message: "Cấu hình Lab chỉ áp dụng cho bài Lab." });
     if (value.audience === "SUBSET" && value.studentIds.length === 0)
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["studentIds"], message: "Hãy chọn ít nhất một học sinh." });
@@ -84,7 +87,7 @@ export class AssignmentsService {
     const studentIds = [...new Set(tests.flatMap((a) => a.targets.map((t) => t.studentId)))];
     const { states, key } = await testStates(this.db, tests, studentIds);
     return rows.map(({ targets, ...a }) => {
-      if (a.contentType !== TEST_CONTENT_TYPE) return assignmentView(a);
+      if (a.contentType !== TEST_CONTENT_TYPE) return { ...assignmentView(a), ...(a.contentType === "lab" ? { targetStudentIds: a.audience === "SUBSET" ? targets.map((target) => target.studentId) : [] } : {}) };
       const counts = { SUBMITTED: 0, LATE_REVIEW_PENDING: 0, REJECTED: 0, OVERDUE_UNSUBMITTED: 0, NOT_SUBMITTED: 0 };
       let revision = 1;
       for (const t of targets) {
@@ -325,6 +328,7 @@ export class AssignmentsService {
           grade: true,
           chapter: true,
           topic: true,
+          labId: true,
           scope: true,
           synthetic: true,
           subject: { select: { id: true, name: true } },
@@ -372,11 +376,16 @@ export class AssignmentsService {
       return [{
         id: lab.id, title: lab.title, grade: lab.grade, topic: lab.topic, subject: lab.subject,
         release: { id: release.id, version: release.version, digest: release.digest },
+        ranges: (execution.template as any)?.ranges ?? {},
+        previewConfig: (execution.template as any)?.buoyancy ?? null,
+        effectiveParams: execution.effectiveParams,
+        lessonIds: lessons.filter((lesson: any) => lesson.labId === lab.id).map((lesson: any) => lesson.id),
         challenges: lab.challenges.filter((challenge: any) => challengeIds.includes(challenge.id)),
       }].filter((entry: any) => entry.challenges.length > 0);
     });
     return {
       classGrade: c.grade,
+      classLabs: await this.db.classResource.findMany({ where: { classId: id, kind: "LAB", status: "PUBLISHED" }, select: { id: true, title: true, version: true, content: true }, orderBy: { createdAt: "desc" } }),
       lessons,
       labs: eligibleLabs,
       tests: tests.map(({ content, ...test }) => ({ ...test, questionCount: (content as any)?.questions?.length ?? 0 })),
@@ -514,9 +523,11 @@ export class AssignmentsService {
     };
     return idempotent(this.db, ctx, async (tx) => {
       await lock(tx, "class-assign:" + id);
-      const content = await this.assignableContentOrThrow(tx, id, b.contentType, b.contentId, req.user.sub);
-      const labExecution = b.contentType === "lab" ? await snapshotAssignmentLab(tx, b.contentId, b.labReleaseId!, b.labChallengeId!) : null;
-      const contentVersion = labExecution?.releaseDigest ?? content.version;
+      const privateLab = b.classLabResourceId ? await resolveClassLabResource(tx, b.classLabResourceId, undefined, id) : null;
+      if (privateLab && privateLab.content.source.labId !== b.contentId) throw new BadRequestException({ code: "CLASS_LAB_SOURCE_MISMATCH" });
+      const content = privateLab ? { title: privateLab.resource.title, version: privateLab.snapshot.contentDigest } : await this.assignableContentOrThrow(tx, id, b.contentType, b.contentId, req.user.sub);
+      const labExecution = privateLab?.content.execution ?? (b.contentType === "lab" ? await snapshotAssignmentLab(tx, b.contentId, b.labReleaseId!, b.labChallengeId!) : null);
+      const contentVersion = privateLab?.snapshot.contentDigest ?? labExecution?.releaseDigest ?? content.version;
       const targets = await this.resolveTargets(tx, id, b.studentIds);
       const hash = targetHash(targets);
       await this.assertNotDuplicate(tx, {
@@ -539,6 +550,7 @@ export class AssignmentsService {
           targetHash: hash,
           contentVersion,
           ...(labExecution ? { labExecution, labExecutionDigest: labExecutionDigest(labExecution) } : {}),
+          ...(privateLab ? { classLabSnapshot: privateLab.snapshot } : {}),
           // Deprecated mirror for older deployments: [] meant "whole class".
           studentIds: audience === "SUBSET" ? targets : [],
           createdById: req.user.sub,

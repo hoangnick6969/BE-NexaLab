@@ -231,7 +231,7 @@ export const packInputSchema = z
       .object({
         units: z.record(z.string().max(40), z.string().max(20)),
         /** Teacher-adjustable ranges; must lie within the model's allowlisted ranges. */
-        ranges: z.record(z.string().max(40), z.object({ min: z.number(), max: z.number() }).strict()),
+        ranges: z.record(z.string().max(40), z.object({ min: z.number(), max: z.number(), step: z.number().positive().optional(), unit: z.string().max(20).optional() }).strict()),
         initialState: z.unknown(),
         limitations: text(1000),
         buoyancy: buoyancyConfigSchema.optional(),

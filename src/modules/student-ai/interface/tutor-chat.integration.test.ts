@@ -49,7 +49,8 @@ describe.skipIf(!db)("isolated tutor chat (SAI-04)", () => {
     const env = { APP_ENV: process.env.APP_ENV, STUDENT_AI_LLM_ENABLED: process.env.STUDENT_AI_LLM_ENABLED };
     const chat = new TutorChatController(p as any, undefined, provider);
     const req = { user: { sub: f.student.id, role: "STUDENT" } };
-    // Kill switch off: a fixed DISABLED reply, no model call.
+    // Kill switch off: a fixed DISABLED reply, no model call (set explicitly: a developer .env may turn it on).
+    process.env.STUDENT_AI_LLM_ENABLED = "false";
     const conversation: any = await chat.open({ contextKind: "LAB", contextId: f.labId }, req);
     const off: any = await chat.send(conversation.id, { message: "Điện trở để làm gì ạ?" }, req);
     expect(off.messages[1]).toMatchObject({ role: "TUTOR", outcome: "DISABLED", content: CHAT_REPLIES.DISABLED, ai: false });
