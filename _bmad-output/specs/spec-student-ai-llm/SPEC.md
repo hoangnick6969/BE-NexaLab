@@ -116,6 +116,40 @@ on API data; legal basis for minors' data under Decree 13/2023) is decided in wr
   ask, AI chip, page and quote, axe; hidden when off). Not run on a real stack (needs a textbook PDF URL on the
   isolated database).
 
+## Lesson passage Q&A — highlight in a lesson, then ask (owner 2026-11-10: "học sinh bôi đen phần mà họ đang thắc mắc")
+
+- In the lesson Reading tab a student highlights up to 2 000 characters; a floating **Hỏi AI về đoạn này** button
+  appears below the selection (above it when there is no room). Pressing it opens the lesson tutor chat docked at the
+  bottom right (full width on phones), quotes the passage, and sends it with the next question only; the student can
+  remove the quote. Plain questions keep working in the same conversation. Students only, while the chat is enabled.
+- Same routes, `contextKind: "LESSON"`; `passage { text ≤ 2000, prefix ≤ 400, suffix ≤ 400 }`, `pageNumber` now
+  optional (still required for EBOOK; a passage is still refused for LAB). FE takes prefix/suffix from the paragraph
+  (or list item, heading…) around each end only.
+- `tutor-chat-rules@5`: the server checks the passage belongs to that lesson (`passageInLesson`, against title,
+  objective, content, structured `learningContent` strings and step texts; letters and digits only: exact match, or
+  ≥ 90 % of the words known plus a run of up to 6 in lesson order, for rendered math or swept-in labels); otherwise
+  `400 TUTOR_PASSAGE_NOT_IN_LESSON`, no model call. The passage injection check of @2 applies.
+- `lesson-passage-qa@1`: answer the question about the highlighted passage, using the lesson text ranked by passage +
+  question (`studyTextFor`, 12 000-char budget) for its surroundings; no answers to scored items; ends with a
+  check-understanding question. Same output guard (the passage counts as shown text and as number grounding).
+- Logged as `TutorMessage.passage` with `pageNumber` null. No migration.
+- Fix 2026-11-10 (owner screenshot, structured lesson "Acid": a highlight over the acid table was refused as not in the
+  lesson): `Range.toString()` returned KaTeX's hidden MathML and TeX annotation besides the visible formula
+  (H⁺ → "H+H^{+}H+"), the "SGK, PDF trang 37" button label, and joined blocks ("acidTên"), pushing word coverage under
+  90 %. FE `readableText` now sends each formula as its TeX source in `$…$` (as stored in the lesson), drops chrome
+  (buttons, notes, source links, Lab cards, `[data-ask-ignore]`) and puts blocks on separate lines; the BE also
+  accepts the headings the lesson page adds (Tóm tắt bài học, Công thức, Bảng…). Checked read-only against the shared
+  dev lesson `pack-structured-fa3fd242…-v1`: the old text → false, the cleaned text → true. Playwright structured-lesson
+  case with real KaTeX added (lesson-passage-ask 4/4).
+- Verified 2026-11-10: BE Vitest 664 passed (isolated PostgreSQL 18 on 127.0.0.1:55432, throwaway, stopped), incl.
+  `passageInLesson` unit cases, draftTutorReply lesson-passage payload, `tutor-chat.integration` @5 case (rendered text
+  accepted, prompt and versions logged, plain follow-up uses tutor-chat@1, foreign text → 400 without a call, injected
+  suffix refused); lint, build, check:layers. FE lint, build; Playwright `lesson-passage-ask.spec.ts` 3/3 (desktop and
+  phone: highlight, button, docked chat, payload, quote removal, axe, no horizontal scroll; no button while off) plus
+  `student-ai-llm` and `textbook-ask` unchanged (7/7 together). Fixed on the way: the scrollable message list was not
+  keyboard-focusable (axe scrollable-region-focusable). Not run: a live Gemini answer on shared dev (API :4000 still
+  runs the previous build).
+
 ## Provider switch to Gemini Flash (owner 2026-11-09: "Chuyển sang dùng Gemini Flash đi")
 
 - `GeminiStudentProvider` (Gemini API `generateContent`, `x-goog-api-key`, system instruction, JSON response MIME type,

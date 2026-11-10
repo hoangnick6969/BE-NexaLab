@@ -1,7 +1,7 @@
 ---
 increment: SAI
 epics: SAI-01..SAI-06
-status: draft
+status: in-progress
 tracking: ../implementation-artifacts/sprint-status.yaml (section student_ai_tracking)
 ---
 
@@ -33,7 +33,7 @@ Delegate one ticket per task, as a vertical BE/FE/API/schema slice. Keep NestJS/
 | SAI-01 Lab hint tutor | `../specs/spec-student-ai-tutor/` | Versioned 4-level hints, real-retry escalation, provider guard, cache, budget, full HintLog | Existing labs tutor | SG-1 (rules path); SG-1 + SG-2 (provider in production) |
 | SAI-02 Teacher hint insights | `../specs/spec-student-ai-teacher-insight/` (SAI-02A descriptive part); threshold rule in TAI-04 | Class summary, trace, disagreement (UC-AI-05 to 07) | SAI-01, TAI-04 alignment | SG-1, SG-3 |
 | SAI-03 Lesson and quiz hints | `../specs/spec-student-ai-lesson-hints/` (SAI-03A quiz questions) | Hints outside labs, never revealing keys | SAI-01 | SG-1 |
-| SAI-04 Socratic free-text tutor | roadmap only | Typed questions with curriculum lock (UC-AI-08) | SAI-01 | SG-1, SG-2, SG-4 |
+| SAI-04 Socratic free-text tutor | `../specs/spec-student-ai-llm/` (SAI-04 and B5 sections; dev/test only) | Typed questions with curriculum lock (UC-AI-08) | SAI-01 | SG-1, SG-2, SG-4 |
 | SAI-05 Parent help-seeking summary | `../specs/spec-student-ai-checkpoint-hints/` (section SAI-05) | Hint counts by level (BR-11) | SAI-01A | SG-1 (rules part, D1) |
 | SAI-06 Personalised wording | roadmap only | Variant choice from level and misconceptions | SAI-02 | SG-2, SG-3 |
 
@@ -95,3 +95,18 @@ safety set through the same reply path as the API and writes a lecturer CSV; `np
 the 12-month rule to tutor conversations (dry run by default). Everything else left is gated: SG-2 (provider tier,
 legal basis), SG-3 (insight thresholds, sai-02-t3, SAI-06), SG-4 (lecturer approval of the set and a real-provider
 run), lecturer marks on `hint-review-set.md` (sai-01-t6), owner applies the three Student AI migrations.
+
+2026-11-09 (later): Gemini Flash became the default provider (owner: "Chuyển sang dùng Gemini Flash đi"; its terms
+bar under-18 apps, so SG-2 stays open). The owner applied the three Student AI migrations to shared development;
+the tutor chat answers there with Gemini in `APP_ENV=development`. `origin/main` merged into `research/student-ai`
+(BE, FE). Tutor chat reads the relevant lesson part (`tutor-chat-rules@3`), then the whole lesson up to 12 000
+characters (`tutor-chat-rules@4`).
+
+2026-11-10 — progress: 30 of 33 SAI tickets built (3 done, 27 review), 2 in progress (sai-01-t6 lecturer marks,
+sai-04-t2 lecturer approval and a real-provider eval), 1 backlog (sai-02-t3, waits for SG-3). SAI-06 not started.
+No production enablement until SG-2 closes. Details: `student_ai_tracking` in `sprint-status.yaml`.
+
+2026-11-10 (later): sai-04-t3 lesson passage Q&A (owner: "bôi đen phần đang thắc mắc ... Ok làm đi"): highlight in
+the lesson Reading tab, "Hỏi AI về đoạn này", the docked tutor chat sends the passage with the question; the server
+checks the passage is in the lesson (`tutor-chat-rules@5`, `lesson-passage-qa@1`). No migration; dev/test only. See
+the lesson passage section of `../specs/spec-student-ai-llm/SPEC.md`. Now 31 of 34 tickets built.

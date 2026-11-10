@@ -48,8 +48,8 @@ export class TutorChatController {
     this.limiter?.rate("tutor-message:" + req.user.sub, 10);
     const { message, passage } = z.object({
       message: z.string().min(1).max(TUTOR_CHAT_MAX_MESSAGE),
-      // B5: the highlighted textbook passage (EBOOK conversations only).
-      passage: z.object({ text: z.string().min(1).max(PASSAGE_MAX), prefix: z.string().max(400).optional(), suffix: z.string().max(400).optional(), pageNumber: z.number().int().min(1).max(2000) }).strict().optional(),
+      // B5: the highlighted textbook passage (EBOOK, with its page); @5: or a passage highlighted in a lesson (no page).
+      passage: z.object({ text: z.string().min(1).max(PASSAGE_MAX), prefix: z.string().max(400).optional(), suffix: z.string().max(400).optional(), pageNumber: z.number().int().min(1).max(2000).optional() }).strict().optional(),
     }).strict().parse(body);
     return sendMessage(this.db, req.user.sub, id, message, { provider: this.provider }, passage);
   }
