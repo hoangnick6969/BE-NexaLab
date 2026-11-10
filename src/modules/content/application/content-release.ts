@@ -5,7 +5,6 @@ import { storageEnv } from "../../storage/infrastructure/storage";
 import { sourcePolicySchema } from "./ingestion";
 import { GateContext, PackManifest, digestOf, lessonFromPack, packGateErrors, packManifestSchema } from "./content-pack";
 import { structuredLessonSchema } from "./structured-lesson-import";
-import { syncLibraryLessonFingerprints } from "../../ai/application/question-fingerprints";
 
 /**
  * Content Release Importer (CF-T3). The only path for baseline content and
@@ -229,10 +228,7 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
         const previous = await tx.contentPackVersion.findFirst({ where: { packKey: m.key, status: "released" } });
         if (previous) {
           await tx.contentPackVersion.update({ where: { id: previous.id }, data: { status: "retired", retiredAt: new Date() } });
-          if (previous.lessonId) {
-            await tx.lesson.update({ where: { id: previous.lessonId }, data: { status: "archived" } });
-            await syncLibraryLessonFingerprints(tx, previous.lessonId);
-          }
+          if (previous.lessonId) await tx.lesson.update({ where: { id: previous.lessonId }, data: { status: "archived" } });
           await item("pack-version", previous.id, "superseded");
         }
         let version = await tx.contentPackVersion.findUnique({ where: { packKey_digest: { packKey: m.key, digest: step.digest } } });
@@ -241,10 +237,7 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
             where: { id: version.id },
             data: { status: "released", retiredAt: null, releasedAt: new Date(), releaseId: release.id },
           });
-          if (version.lessonId) {
-            await tx.lesson.update({ where: { id: version.lessonId }, data: { status: "published" } });
-            await syncLibraryLessonFingerprints(tx, version.lessonId);
-          }
+          if (version.lessonId) await tx.lesson.update({ where: { id: version.lessonId }, data: { status: "published" } });
         } else {
           version = await tx.contentPackVersion.create({
             data: {
@@ -261,7 +254,6 @@ export async function applyRelease(db: any, raw: unknown, options: { target: str
           });
           const lessonId = await materialize(tx, m, step.version, version.id, approver.id, reviewerIds);
           await tx.contentPackVersion.update({ where: { id: version.id }, data: { lessonId } });
-          await syncLibraryLessonFingerprints(tx, lessonId);
           await item("lesson", lessonId, "created");
         }
         await item("pack-version", version.id, "created");
@@ -493,7 +485,6 @@ export async function applyAdminDirectDraftRelease(db: any, raw: unknown, option
         publishedAt: new Date(),
       } });
       await tx.lessonStep.create({ data: { id: `step-${createdLesson.id}-reading`, lessonId: createdLesson.id, type: "READING", position: 10, required: true, config: { html } } });
-      await syncLibraryLessonFingerprints(tx, createdLesson.id);
       await tx.contentPackVersion.update({ where: { id: row.id }, data: { status: "released", synthetic: false, outcomeCodes: [], lessonId: createdLesson.id, releaseId: release.id, releasedAt: new Date(), retiredAt: null } });
       await tx.contentPack.update({ where: { key: row.packKey }, data: { namespace: "baseline" } });
       await tx.contentReleaseItem.create({ data: { releaseId: release.id, kind: "lesson", refId: createdLesson.id, action: "created" } });
@@ -515,17 +506,11 @@ export async function retireRelease(db: any, releaseId: string, actor: { sub: st
     const superseded = release.items.filter((i: any) => i.kind === "pack-version" && i.action === "superseded").map((i: any) => i.refId);
     for (const id of created) {
       const v = await tx.contentPackVersion.update({ where: { id }, data: { status: "retired", retiredAt: new Date() } });
-      if (v.lessonId) {
-        await tx.lesson.update({ where: { id: v.lessonId }, data: { status: "archived" } });
-        await syncLibraryLessonFingerprints(tx, v.lessonId);
-      }
+      if (v.lessonId) await tx.lesson.update({ where: { id: v.lessonId }, data: { status: "archived" } });
     }
     for (const id of superseded) {
       const v = await tx.contentPackVersion.update({ where: { id }, data: { status: "released", retiredAt: null } });
-      if (v.lessonId) {
-        await tx.lesson.update({ where: { id: v.lessonId }, data: { status: "published" } });
-        await syncLibraryLessonFingerprints(tx, v.lessonId);
-      }
+      if (v.lessonId) await tx.lesson.update({ where: { id: v.lessonId }, data: { status: "published" } });
     }
     const retired = await tx.contentRelease.update({ where: { id: releaseId }, data: { status: "RETIRED", retiredAt: new Date() } });
     await audit(tx, {

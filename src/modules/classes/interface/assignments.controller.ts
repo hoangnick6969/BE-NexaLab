@@ -25,27 +25,6 @@ export class AssignmentsController {
   }
 
   @Roles("TEACHER")
-  @Get("classes/:id/assignments/:assignmentId/written-status")
-  @ApiOperation({ summary: "Written task board: per recipient status and current grade (owner only)" })
-  writtenStatus(@Param("id") id: string, @Param("assignmentId") assignmentId: string, @Req() req: any) {
-    return this.service.writtenStatus(id, assignmentId, req);
-  }
-
-  @Roles("TEACHER")
-  @Get("classes/:id/assignments/:assignmentId/submissions/:submissionId")
-  @ApiOperation({ summary: "Written submission for grading: responses, rubric with anchors, grade history (owner only)" })
-  writtenSubmission(@Param("id") id: string, @Param("assignmentId") assignmentId: string, @Param("submissionId") submissionId: string, @Req() req: any) {
-    return this.service.writtenSubmission(id, assignmentId, submissionId, req);
-  }
-
-  @Roles("TEACHER")
-  @Post("classes/:id/assignments/:assignmentId/submissions/:submissionId/grades")
-  @ApiOperation({ summary: "Append a manual rubric grade to a gradeable written submission (owner only)" })
-  gradeWritten(@Param("id") id: string, @Param("assignmentId") assignmentId: string, @Param("submissionId") submissionId: string, @Req() req: any, @Body() body: unknown) {
-    return this.service.gradeWritten(id, assignmentId, submissionId, req, body);
-  }
-
-  @Roles("TEACHER")
   @Get("classes/:id/late-queue")
   @ApiOperation({ summary: "Latest late submissions awaiting the owning teacher's decision in one class" })
   lateQueue(@Param("id") id: string, @Req() req: any) {

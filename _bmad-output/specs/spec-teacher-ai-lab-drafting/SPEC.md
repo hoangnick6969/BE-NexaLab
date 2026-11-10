@@ -32,7 +32,7 @@ Setting a practical challenge requires a teacher to pick a lab model and paramet
 - The engine is authoritative. Proposal verification uses `evaluate()` from `labs/application/simulation-versions.ts` on the server. Preview results are never attempts and never evidence.
 - Only models with `rangeReview: "approved"` are offered (gate Q-C2-04). Today every model is `pending`, so no proposal can pass until ranges are approved.
 - Scope stays owner-only. The lesson must be authored by the caller, `TEACHER_PRIVATE`, `draft`, not structure-locked, and linked to the class used in the route. It reaches students only through the existing class assignment path.
-- Input is lesson text, outcome statements and the model allowlist. No student-record field is sent, but this does not make any provider or tier acceptable: provider calls wait for gate G-6 (written provider/legal approval for NexaLab's under-18 context, input boundaries, source rights, transfer, retention and deletion), exactly as TAI-01 (`../spec-teacher-ai-authoring/provider-and-data-flow.md`). Until then only the fake provider runs.
+- Input is lesson text, outcome statements and the model allowlist. No student data is sent, so the Gemini free tier is acceptable.
 
 ## Non-goals
 

@@ -71,7 +71,6 @@ type WrittenTaskContent = {
     id: string;                  // server-generated
     prompt: string;              // 1–2000 chars
     maxChars: number;            // 100–5000
-    referenceAnswer?: string;    // 0–2000; teacher-only; sent to the provider as grading guidance
     commonPhrases?: string[];    // 0–20, each 1–200; teacher-only; excluded by TAI-03 similarity
     criteria: Array<{
       code: string;              // /^[A-Z][A-Z0-9_]{1,31}$/, unique within prompt
@@ -83,39 +82,7 @@ type WrittenTaskContent = {
 };
 ```
 
-Teacher-only fields are `anchors`, `referenceAnswer` and `commonPhrases`. Every student- or parent-facing projection builds written content with one allowlist helper, `studentWrittenTaskContent(content)` in `classes/application`, returning only `{ prompts: [{ id, prompt, maxChars, criteria: [{ code, description, maxPoints }] }] }`. Stripping by denylist is not allowed, because `studentResource` currently returns non-TEST content unchanged. The helper is the only source for:
-
-- `studentResource("WRITTEN_TASK", …)` (class resource reads by members).
-- The student assignment detail and submit response in `learning.controller.ts` (the written counterpart of `studentTestContent`).
-- The student `AWAITING_GRADE` / `GRADED` view, which shows score and teacher feedback against the graded resource version.
-- Parent views, which return status only and no content.
-
-A contract test serializes every student and parent response for a written assignment and asserts that the keys `referenceAnswer`, `anchors` and `commonPhrases` appear nowhere in the body.
-
-CSV import does not support `WRITTEN_TASK` (`IMPORT_KIND_UNSUPPORTED`).
-
-**TAI2-T1 decisions (2026-11-06):**
-
-- Migration is only `ALTER TYPE "ClassResourceKind" ADD VALUE IF NOT EXISTS 'WRITTEN_TASK'`; `schema.prisma` adds only `WRITTEN_TASK`. The shared dev database also carries `LAB`, `DOCUMENT`, `REPORT_TEMPLATE` and `LINK` from another branch; they are not added here.
-- Members of the class read a published `WRITTEN_TASK` through `studentWrittenTaskContent` (as specified). Submitting before an assignment exists is prevented by `contentType: "written"` in TAI2-T2.
-- `savePractice` rejects `WRITTEN_TASK` like `TEST`; written tasks are not practice.
-- `qdup@1` fingerprints and `duplicateWarnings` exclude `WRITTEN_TASK` explicitly (empty list).
-- Item counts (audit, views, FE) use `content.prompts.length` for `WRITTEN_TASK`.
-- Rubric rules beyond the type above: anchor `points` are multiples of 0.5 within `[0, maxPoints]` and strictly ascending, first 0 and last `maxPoints`; anchor `description` 1–300 chars; `maxChars` is an integer. Violations return `400 RUBRIC_INVALID` with `details: [{ path, message }]`.
-- CSV preview and import return `400 IMPORT_KIND_UNSUPPORTED` for `WRITTEN_TASK`, and the FE import tab does not offer it. Assignments, submissions and the Teacher AI panel are unchanged in T1.
-
-**TAI2-T2 decisions (2026-11-06):**
-
-- Migration (one idempotent SQL file): create enum `GradingMode`, add `gradingMode GradingMode NOT NULL DEFAULT 'AUTO'` (existing rows backfill to `AUTO` through the default), a `DO $$` preflight that raises when any `AUTO` row has a null `score` or `correctCount`, the CHECK constraint, and only then `DROP NOT NULL` on `score`/`correctCount`. `WrittenGradeDecision` comes in TAI2-T3.
-- `autoScore(row)` returns `{ score, correctCount }` for `AUTO` rows and throws for `TEACHER` rows; every TEST path reads scores through it, so TEST types and responses do not change.
-- The owner late flows (`rejectLate`, `reviseDeadline`, `lateQueue`) accept `test` and `written` assignments under the same `assignment-deadline:<id>` lock. The `test-status` route stays TEST-only; `written-status` comes in TAI2-T3.
-- `contentType: "written"` accepts only a `PUBLISHED` `WRITTEN_TASK` of the same class (otherwise `400 CONTENT_NOT_PUBLISHED`), requires `dueDate`, writes deadline revision 1, keeps targets and due date immutable (`TEST_ASSIGNMENT_IMMUTABLE`), and pins `contentVersion` to the resource version. `assignable-content` also returns `writtenTasks` with `promptCount`.
-- Response length: trim, normalize to NFC, then count Unicode code points (`[...text].length`); the FE counter uses the same rule. Violations return `400 WRITTEN_RESPONSES_INVALID`. Stored rows have `gradingMode: TEACHER`, null `score`/`correctCount` and `questionCount = prompts.length`.
-- Resubmission is allowed as specified: the latest submission is current and its status returns to `AWAITING_GRADE`.
-- Student written statuses in T2: `UPCOMING`, `DUE_SOON`, `OVERDUE_UNSUBMITTED`, `AWAITING_GRADE`, `LATE_REVIEW_PENDING`, `REJECTED` (score 0). `GRADED` comes in TAI2-T3. Submission history shows only the student's own responses, never the rubric.
-- Every student response for a written assignment builds content through `studentWrittenTaskContent` and is covered by a recursive key-scan test. Parent views do not list written assignments in T2 (status-only parent view in TAI2-T3); a test asserts the parent responses carry no written data.
-- Class progress and assignment support report the written state with `score: null` and count `AWAITING_GRADE` as submitted for support flags; the teacher assignment list returns `writtenSummary` counts; due-soon reminders include written assignments.
-- Audit `assignment.submit` adds `gradingMode` (also `AUTO` for TEST). `test:i3` needs an isolated loopback database that is not available on this machine; T2 is verified with the full vitest suite and in-memory fixtures, and `test:i3` stays pending until an isolated database exists.
+The student view (`studentResource`) strips `anchors` and `commonPhrases`. CSV import does not support `WRITTEN_TASK` (`IMPORT_KIND_UNSUPPORTED`).
 
 ## Student answer contract
 
@@ -141,7 +108,7 @@ Gradeable means `ON_TIME` or `ACCEPTED_BY_EXTENSION`. The latest submission rema
 
 ## HTTP contract
 
-All teacher routes require owner (`ownedClass`): a missing or not-owned class returns the same 403 `CLASS_ACCESS_DENIED`; a missing or foreign row inside an owned class (assignment, submission, job, suggestion) returns 404. Every mutation requires `Idempotency-Key`.
+All teacher routes require owner (`ownedClass`) and return the same 404 for missing or unauthorized rows. Every mutation requires `Idempotency-Key`.
 
 | Operation | Contract |
 | --- | --- |
@@ -174,7 +141,7 @@ type AssessmentSuggestionV1 = {
 };
 ```
 
-Mapping and verification rules are in `assessment-validation-and-evaluation.md`. The prompt (`assess-submission@1`), provider JSON Schema and KaTeX/backslash rule `KX-01` are in `prompt-spec.md`.
+Mapping and verification rules are in `assessment-validation-and-evaluation.md`.
 
 ## Error codes
 
@@ -205,25 +172,3 @@ Mapping and verification rules are in `assessment-validation-and-evaluation.md`.
 - **Teacher:** a rubric editor in the resource editor (prompts, criteria, anchors, live max-points total). A written-status board per assignment. A grading sheet: response text beside the rubric with anchors, grade history, and in assist mode a suggestion panel with highlighted evidence quotes, invalidated criteria shown as "AI không đưa ra gợi ý hợp lệ", and accept / edit / reject actions. A "Gợi ý AI" bulk request with skipped reasons.
 - **Student:** a written answer form with a per-prompt character counter, the late-reason form, and status `AWAITING_GRADE` / `GRADED` with teacher feedback only.
 - **Parent:** existing read-only status, with no responses or feedback.
-
-**TAI2-T3 decisions (2026-11-06):**
-
-- pass threshold: no hard threshold yet; a written task with a teacher grade (GRADED) counts as passed on the progress and evidence views, while REJECTED (zero) work never does.
-- student view: total score 0-100, each criterion's code, description and points awarded against its maximum, and the teacher's comment. Anchors, referenceAnswer, commonPhrases and internal grading notes are never returned.
-- score conversion: score = Math.round(total / max * 100), Int, as in the contract; criterion points are stored in the decision row.
-- regrade: WrittenGradeDecision is append-only; the student sees only the latest decision of the current submission; the teacher sees the full decision history. A resubmission returns the status to AWAITING_GRADE.
-- grading archived work: allowed for existing submissions when the assignment or resource is archived; only an archived class blocks grading with 409 CLASS_ARCHIVED.
-- feedback: written by the teacher by hand, at most 2000 characters after trim and NFC; no AI drafting.
-- parent view: status only (AWAITING_GRADE, GRADED and the other existing written statuses); no score, criterion points, comment or response text.
-- migration: WrittenGradeDecision is a new table (append-only, index on submissionId and createdAt); the full WrittenGradeKind enum (MANUAL, ACCEPTED_AI, EDITED_AI, REJECTED_AI) is declared now; T3 writes MANUAL only.
-- TAI2-T3 error code added: 400 GRADE_FEEDBACK_INVALID when the teacher comment exceeds 2000 characters after trim and NFC. Routes added: GET classes/:id/assignments/:aid/written-status, GET classes/:id/assignments/:aid/submissions/:sid, POST classes/:id/assignments/:aid/submissions/:sid/grades (owner only).
-
-**TAI2-T0, T4–T7 implementation notes (2026-11-09, team-lead decisions; not PO, lecturer or legal approval):**
-
-- G-2 closed for dev/test only under policy `g2-pii-scrub@1` (`privacy-scrubbing-contract.md`): fake provider only, never production, `consentRequired: false`; boot check in `src/config/ai-assessment.ts`. Skip reasons used: `NOT_GRADEABLE`, `NOT_CURRENT`, `ALREADY_SUGGESTED`, `AI_POLICY_INELIGIBLE` (+ `detail`), `CONSENT_REQUIRED` (only for a consent policy), `LESSON_UNAVAILABLE` (the written task lost its lesson, so there is no topic). `AI_MODE_OFF` is not a per-item reason: mode off answers `409 AI_ASSESSMENT_DISABLED` for the whole request.
-- Migration `20261109120000_tai02_ai_assessment_suggestion` (written offline from `prisma migrate diff`, idempotent, NOT applied): enum `AiSuggestionStatus`, nullable `AiJob.submissionId` FK with cascade, table `AiAssessmentSuggestion` (adds `promptVersion` for the per-version report), indexes.
-- `AiJob.request = { purpose, submissionId, mode, resourceVersion }`; one blocking job (PENDING, RUNNING, SUCCEEDED) per submission, prompt version and mode; FAILED or CANCELLED jobs allow a new request. Daily limit per teacher and purpose (`AI_DAILY_ASSESSMENT_LIMIT`, no concurrency limit for this purpose); a bulk request that would exceed it is refused as a whole with 429.
-- A suggestion with no valid criterion is stored `SUPPRESSED` and the job is `SUCCEEDED` (the teacher sees "AI không đưa ra gợi ý hợp lệ"), same as an injection match. A stored payload that fails the privacy guard at run time fails the job with `PRIVACY_GUARD_REJECTED` (non-retryable, nothing sent).
-- Teacher views: `written-status` and the submission detail return `aiAssessment: { available, assist }`; only in assist mode they add the latest assist-mode job state (`aiSuggestion` per student, `aiJob` and `suggestion` on the detail). Shadow suggestions stay hidden even after the switch to assist and cannot back an `*_AI` grade. `GET classes/:id/ai-jobs` lists `GENERATE_RESOURCE` jobs only; `GET classes/:id/ai-jobs/:jobId` for an assessment job adds the suggestion in assist mode only.
-- Grade route: `kind` `MANUAL | ACCEPTED_AI | EDITED_AI | REJECTED_AI`; `basedOnSuggestionId` required for `*_AI`, forbidden for `MANUAL`; `*_AI` outside assist mode is `409 AI_ASSESSMENT_DISABLED`; the suggestion must belong to the submission, be an assist-mode suggestion of the same resource version and not be `SUPPRESSED`; `ACCEPTED_AI` needs `VALID` and exactly the suggested points. Audit `written_grade.create` adds `basedOnSuggestionId`.
-- T5: `GET /admin/ai-assessment/evaluation?promptVersion=&model=` (ADMIN) computes the report from shadow suggestions and the latest MANUAL grade of the same rubric version. Real shadow data is not collected; `_bmad-output/implementation-artifacts/tai-02-shadow-evaluation.md` records a SYNTHETIC run (`npm run eval:tai02-shadow`), which the boot check accepts for assist mode outside production only.

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, HttpCode, Inject, NotFoundException, Param, Post, Put, Query, Req } from "@nestjs/common";
+import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Put, Query, Req } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../../common/decorators";
 import { ClassResourcesService } from "../application/class-resources.service";
@@ -57,14 +57,6 @@ export class ClassResourcesController {
   @Post("classes/:id/resources/:resourceId/archive")
   archive(@Param("id") classId: string, @Param("resourceId") resourceId: string, @Req() req: any) {
     return this.service.archive(classId, resourceId, req);
-  }
-
-  @Roles("TEACHER")
-  @Post("classes/:id/resources/duplicate-check")
-  @HttpCode(200)
-  @ApiOperation({ summary: "qdup@1 duplicate warnings against the teacher's classes and the shared library (read-only)" })
-  duplicateCheck(@Param("id") classId: string, @Req() req: any, @Body() body: unknown) {
-    return this.service.duplicateCheck(classId, req, body);
   }
 
   @Roles("TEACHER")

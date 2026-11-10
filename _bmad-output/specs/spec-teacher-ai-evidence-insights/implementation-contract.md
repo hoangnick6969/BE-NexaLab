@@ -2,7 +2,7 @@
 
 ## Current evidence and required delta
 
-B2 computes support flags on read with the pure `supportFlags()` in `src/modules/reports/application/evidence-support.ts`. It serves them from `GET classes/:classId/assignments/:assignmentId/support` and evidence detail routes in `class-evidence.controller.ts`, applying owner (`ownedClass`, 403 `CLASS_ACCESS_DENIED` for a missing or not-owned class) and approved-enrollment checks, and returning 404 for missing evidence inside an owned class. `labs/application/tutor.ts misconceptions()` is a separate, teacher-report heuristic and stays unchanged. TAI-04 adds `src/modules/reports/application/insights/` (rules, evidence loader, fingerprint), new read routes and an acknowledgement table. No existing table, flag or route changes.
+B2 computes support flags on read with the pure `supportFlags()` in `src/modules/reports/application/evidence-support.ts`. It serves them from `GET classes/:classId/assignments/:assignmentId/support` and evidence detail routes in `class-evidence.controller.ts`, applying owner and approved-enrollment checks and returning the same 404 for missing and unauthorized. `labs/application/tutor.ts misconceptions()` is a separate, teacher-report heuristic and stays unchanged. TAI-04 adds `src/modules/reports/application/insights/` (rules, evidence loader, fingerprint), new read routes and an acknowledgement table. No existing table, flag or route changes.
 
 ## Data contract
 
@@ -13,9 +13,7 @@ enum InsightAckAction { ACKNOWLEDGED DISMISSED }
 model InsightAcknowledgement {
   id          String           @id @default(cuid())
   classId     String
-  classroom   Classroom        @relation(fields: [classId], references: [id], onDelete: Cascade)
   studentId   String
-  student     User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
   fingerprint String
   ruleVersion String
   ruleCode    String
@@ -31,11 +29,11 @@ model InsightAcknowledgement {
 ```
 
 - The latest row per fingerprint is current. A later `ACKNOWLEDGED` after `DISMISSED` reopens nothing. Open means no row exists.
-- Rows are never updated or deleted, and they cascade only through class deletion or deletion of the student. `classId` references `Classroom` and `studentId` references `User`, both `onDelete: Cascade`; `actorId` is a plain string. Append-only is enforced in code, not by a trigger.
+- Rows are never updated or deleted, and they cascade only through class deletion.
 
 ## HTTP contract
 
-All routes use `@Roles("TEACHER")` and the existing owned-class check. A missing or unowned class returns 403 `CLASS_ACCESS_DENIED` (same body). A non-member student or an unknown fingerprint inside an owned class returns 404 `NOT_FOUND`. An archived class returns an empty `insights` list with `classArchived: true`.
+All routes use `@Roles("TEACHER")` and the existing owned-class check. A missing or unowned class, a non-member student or an unknown fingerprint returns 404 `NOT_FOUND`. An archived class returns an empty `insights` list with `classArchived: true`.
 
 | Operation | Contract |
 | --- | --- |
@@ -52,9 +50,7 @@ All routes use `@Roles("TEACHER")` and the existing owned-class check. A missing
 | --- | --- | --- |
 | 400 | `VALIDATION_FAILED` | Bad `status` or body, or note over 500 chars |
 | 400 | `IDEMPOTENCY_KEY_REQUIRED` | Acknowledgement without key |
-| 403 | `CLASS_ACCESS_DENIED` | Missing or not-owned class |
-| 404 | `NOT_FOUND` | Student or fingerprint not visible inside an owned class |
-| 409 | `CLASS_ARCHIVED` | Acknowledgement in an archived class (checked before the fingerprint) |
+| 404 | `NOT_FOUND` | Class, student or fingerprint not visible to caller |
 | 409 | `INSIGHT_STALE` | Fingerprint no longer computed (new evidence changed it) |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | Existing helper |
 
@@ -73,55 +69,3 @@ The evidence loader issues a bounded number of queries per class: one per eviden
 ## Frontend contract
 
 `FE-NexaLab/src/features/classes/` teacher evidence board gains an "Insights" tab and a per-student section in the evidence sheet. Each card shows the message, status chip (neutral colors only; no red/green), thresholds, evidence links into the existing B2 sheet, and Acknowledge/Dismiss with an optional note. Empty, loading, error and `NEEDS_MORE_EVIDENCE` states are explicit. The student and parent apps have no route or component for insights.
-
-## TAI4-T2 decisions (PO, 2026-11-06)
-
-- **No schema change in T2.** `status=open|all` both return the full computed list and `acknowledgements` is `[]` until TAI4-T3 adds `InsightAcknowledgement` and filters `open`.
-- **Evidence scope.** Every assignment of the class counts, including `ARCHIVED` ones (results are immutable evidence). Only students whose enrollment is `approved` are listed and counted. Rows with a null `assignmentId` (free practice) and other classes never count.
-- **TEST rows.** Every `AssignmentSubmission` with `gradingMode=AUTO` and a non-null `score` is one evidence item (resubmissions included, like each `QuizAttempt`). Rows whose status is `LATE_REVIEW_PENDING` or `REJECTED_ZERO` are dropped; `SCORED` and `ACCEPTED_BY_EXTENSION` count.
-- **Outcome codes.** QUIZ through `QuizAttempt.lessonId`; PRACTICAL through `lessonStepId` → `LessonStep.lessonId`; TEST through `Assignment.contentId` → `ClassResource.lessonId`. All read `Lesson.outcomeCodes`.
-- **Students without evidence** stay in the list with `INSUFFICIENT_EVIDENCE` (fewer than 3 scored items); collapsing that group is a T4 concern.
-- **Archived class.** Approved students are listed with `insights: []` and `classArchived: true`; no evidence is loaded. The per-student route returns `insights: []` and `classArchived: true`.
-- **Denial.** `@Roles("TEACHER")`; `ownedClass` returns 403 `CLASS_ACCESS_DENIED` for a missing or not-owned class; a student who is not an approved member returns 404 `NOT_FOUND`. B2's older evidence routes keep their `EVIDENCE_NOT_FOUND` code.
-- **Visibility flag.** `INSIGHTS_SHOW_SUDDEN_UNAIDED_PASS` (`true` or `false`, default `false`, any other value stops boot) is parsed by `parseInsightsConfig` and applied by the service through `applyPatternVisibility`.
-- **Loader cost.** At most two sequential stages of parallel queries (plus one lesson lookup only if a lesson is not already known), independent of the number of students. Measured in memory for 40 students × 6 steps; shared-database latency is not measured in T2.
-
-## TAI4-T3 decisions (PO, 2026-11-07)
-
-- **Repeated acknowledgement.** The same fingerprint may be acknowledged again with a different `Idempotency-Key`; each call appends one row and the newest row is current. There is no route to reopen an insight; it reopens only when new evidence produces a new fingerprint.
-- **`status=open`** drops every insight whose fingerprint has at least one row, and the student route returns `acknowledgements: []`. **`status=all`** returns every insight with `latestAcknowledgement: { action, createdAt } | null`, and the student route returns all rows of the fingerprints in the response, newest first (fields `id, fingerprint, ruleVersion, ruleCode, action, note, createdAt`, no `actorId`).
-- **POST checks, in order:** class owner (403), archived class (409 `CLASS_ARCHIVED`), `Idempotency-Key` present (400 `IDEMPOTENCY_KEY_REQUIRED`), strict body and 64-hex fingerprint (400 `VALIDATION_FAILED`), approved student (404 `NOT_FOUND`), then inside the idempotent callback the fingerprint must be in the student's current set after `applyPatternVisibility` (409 `INSIGHT_STALE`). A replayed key returns the stored row even if the insight has since changed.
-- **Body** `{ action: "ACKNOWLEDGED" | "DISMISSED", note? }`, strict; `note` is trimmed and NFC-normalized, at most 500 characters, empty becomes `null`. The 201 body is the row without `actorId`.
-- **Replay** uses the earliest row of `(classId, studentId, fingerprint)` as the instant. No row, an unknown `ruleVersion` or a fingerprint that is not reproduced returns 404 `NOT_FOUND`. The current pattern visibility flag applies as on the GET routes.
-- **As-of evidence.** The loader takes `asOf` and keeps only evidence with `at <= asOf`, late-submission decisions with `createdAt <= asOf` (a later decision counts as absent) and hint levels from `HintLog.createdAt <= asOf`.
-- **Cost.** The acknowledgement query joins stage 1 of the loader; still two stages, independent of the number of students.
-- **Audit** `insight.acknowledge` with `classId, studentId, ruleCode, ruleVersion, action` (allowlist extended with `ruleCode, ruleVersion, action`); the note is never audited.
-- **Migration** `20261107100000_tai04_insight_acknowledgement` is expand-only and idempotent; it is validated and generated but not deployed to the shared database until the PO approves.
-
-## TAI4-T4 decisions (PO, 2026-11-07)
-
-- **Placement.** A class tab "Gợi ý hỗ trợ" (`?tab=insights`) after "Theo dõi", hidden for an archived class, and a lazily loaded "insights for this student" section inside the open evidence block of the progress board. The list keeps the order the API returns; no per-student count is shown.
-- **Filter and groups.** `open` is the default, `all` also shows handled insights with "Đã ghi nhận" or "Đã ẩn" and the time. Students whose insight is `INSUFFICIENT_EVIDENCE` are listed in one collapsed group; students without insights are not listed.
-- **Card and copy.** Neutral wording per `ruleCode` in vi and en, neutral badge tones, thresholds, key values, evidence list and Acknowledge/Dismiss with an optional note (500 characters, counter). An unknown rule code shows the API `message`.
-- **Submit flow.** One `Idempotency-Key` per opened note form. `409 INSIGHT_STALE` and `409 CLASS_ARCHIVED` show a notice and reload the list; after success the card leaves the `open` list.
-- **Evidence.** QUIZ and PRACTICAL open the existing B2 detail routes and show only score or result and time. TEST has no B2 detail route: it shows kind and time and is not clickable. No backend route is added in T4.
-- **Replay.** In `all`, a handled card has "Xem lại lúc ghi nhận" calling the replay route.
-- **Verification.** Node tests for the pure view logic, the vi/en vocabulary scan and import isolation; browser verification on a temporary class after a separate PO approval of the data plan. No Playwright spec while live specs need seeded credentials.
-
-## TAI4-T6 decisions (PO, 2026-11-07)
-
-- **Versions.** `insights@1` keeps its four rules unchanged; `insights@2` holds only `SUBMISSION_SIMILARITY_HIGH`; the T5 rules will be `insights@3`. The service evaluates every active version and sorts the union by rule code then outcome code; replay evaluates only the stored `ruleVersion`, so existing acknowledgements keep their fingerprints.
-- **Rule inputs.** `InsightInput` gains optional `similarity` facts. The loader adds three queries to stage 2 (current submissions of the written assignments, their similarity runs, and `HIGH` matches with review times), only when the class has a written assignment, and `title` to the assignment query. Stage 1 and the number of sequential stages do not change, and the query count does not depend on the number of students.
-- **As-of.** Runs need `createdAt <= asOf`, submissions `submittedAt <= asOf`, and a match counts as reviewed only through a review with `createdAt <= asOf`.
-- **Evidence kinds** `WRITTEN` and `SIMILARITY_MATCH` have no B2 detail route; the UI shows their label and time only.
-- **Frontend.** The card offers "Xem xét nội dung tương đồng", which opens `?tab=work&similarity=<assignmentId>`; the assignment list opens the written tracking modal in the similarity view.
-
-## TAI4-T7 decisions (PO, 2026-11-08)
-
-- **Journey.** `scripts/tai04-integration.mjs` runs the SPEC success signal on temporary `tai04-` fixtures (never `class-pilot-a`): three stable quiz attempts and a fourth 30 points higher give `SCORE_CHANGE_UNUSUAL`, each linked attempt opens through the B2 route, the insight is dismissed with a note, a fifth attempt produces a new fingerprint, the old fingerprint answers `409 INSIGHT_STALE` and replays, then the TAI4-T6 part (two near-identical written answers, a real `subsim@1` run, an `insights@2` acknowledgement, a pair review that removes the insight for both students and a replay of the acknowledged `insights@2` insight). The command `npm run test:tai04` is guarded like the other integration suites (`pretest:tai04` needs an isolated loopback database). It cleans up in `finally`; `--dry-cleanup` counts, deletes inside a transaction and rolls back; `--cleanup-only` removes leftovers.
-- **Byte-for-byte.** Before and after the insight reads and writes, the script compares the SHA-256 of the canonical JSON of the student progress, the teacher progress board, the B2 support flags, the student evidence, the parent progress and the written board, the SHA-256 of every row of attempts, hint logs, step progress, submissions, targets and grades of the fixture students, and the notification counts of the student, classmate, parent and teacher. Routes that differ between two identical reads are reported and left out.
-- **Privacy, three layers.** (1) Runtime: after insights and acknowledgements exist, every GET route that the student, the classmate or the parent can reach (from the route manifest, parameters filled with fixture ids) is called and every `200` body is scanned recursively for insight words, rule codes, the note text and another student's id, name, username or submission id; the four insight routes answer `403` to the outside teacher, student, classmate and parent with a body that carries none of those. (2) Static (vitest): the four routes are teacher-only and declared nowhere else, no module outside `reports` imports the insight code, the insight code imports nothing about notifications, mail, exports or parents, the audit row never holds the note, and an acknowledgement touches only the acknowledgement, audit and idempotency tables. (3) Frontend: the teacher screens are a separate lazy chunk (`Classes.tsx` loads `TeacherClasses` on demand) and `npm run test:insights-bundle` proves on the built files that the insight code is not in the entry chunk or in the student class chunk closure.
-- **QR-09.** `insights-benchmark.test.ts` measures the loader, both rule versions and the service on an in-memory database (40 students x 6 steps; also 200 students) and asserts p95 below 500 ms; it also pins the loader query shape: 3 stage-1 queries, 9 stage-2 queries issued together and one lesson lookup, identical for 3, 40 and 200 students. Latency on a remote database is recorded separately as a pilot measurement and is not a production claim; QR-09 is asserted against the real database only when it is an isolated local one.
-- **Playwright.** No live spec exists because the live specs need seeded credentials; the interface evidence is the manual screenshot sets of TAI4-T4 and TAI4-T6 plus the node tests.
-- **Rerun.** The journey is to be run again when TAI4-T5 lands.
-

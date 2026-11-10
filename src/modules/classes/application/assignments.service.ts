@@ -1,7 +1,5 @@
-import { Injectable, BadRequestException, Body, ConflictException, Controller, Get, Inject, NotFoundException, Optional, Param, Post, Put, Query, Req, } from "@nestjs/common";
+import { Injectable, BadRequestException, Body, ConflictException, Controller, Get, Inject, NotFoundException, Param, Post, Put, Query, Req, } from "@nestjs/common";
 import { z } from "zod";
-import { AI_ASSESSMENT_CONFIG, assistActive, parseAiAssessmentConfig, type AiAssessmentConfig } from "../../../config/ai-assessment";
-import { assertGradeMatchesSuggestion, suggestionSelect, teacherSuggestionView } from "./assignment-written-ai";
 import { isOverdue, ownedClass, targetHash } from "./class-access";
 import { MSG, classArchived, lock, reason, text } from "./class-common";
 import { audit } from "../../../common/audit";
@@ -9,15 +7,13 @@ import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { Db } from "../../../db/db";
 import { labVersion, lessonVersion } from "../../lessons/application/lesson-content";
 import { assertTestAssignmentUpdate, deadlineRevisionSchema, latestSubmission, rejectLateSchema, requireTestDueDate, submissionStatus, TEST_CONTENT_TYPE, } from "./assignment-test-contract";
-import { currentDeadlines, deadlineStates, writtenGradeSelect } from "./assignment-test-state";
-import { assertGradeable, buildWrittenGrade, DEADLINE_CONTENT_TYPES, normalizeFeedback, WRITTEN_CONTENT_TYPE, writtenGradeSchema, writtenSubmissionStatus } from "./assignment-written-contract";
-
+import { currentDeadlines, testStates } from "./assignment-test-state";
 import { notify } from "../../notifications/application/notify";
 import { snapshotAssignmentLab } from "../../labs/application/assignment-lab-execution";
 import { digest as labExecutionDigest } from "../../labs/application/lab-run";
 import { resolveClassLabResource } from "./class-lab-resource";
 
-type ContentType = "lesson" | "lab" | "test" | "written";
+type ContentType = "lesson" | "lab" | "test";
 
 function assignmentView(a: any, now = new Date()) {
   return {
@@ -40,7 +36,7 @@ function assignmentView(a: any, now = new Date()) {
 
 export const assignmentInput = z
   .object({
-    contentType: z.enum(["lesson", "lab", "test", "written"]),
+    contentType: z.enum(["lesson", "lab", "test"]),
     contentId: text,
     labReleaseId: text.optional(),
     labChallengeId: text.optional(),
@@ -74,15 +70,7 @@ const assignmentUpdate = z
 /** Use cases behind AssignmentsController (moved from the controller unchanged; repository ports are the next step). */
 @Injectable()
 export class AssignmentsService {
-  private assessment: AiAssessmentConfig;
-
-  constructor(
-    @Inject(Db) private db: Db,
-    @Optional() @Inject(AI_ASSESSMENT_CONFIG) assessment?: AiAssessmentConfig,
-  ) {
-    // TAI2-T6: suggestions are shown and *_AI grades accepted only in assist mode; default (no config) is off.
-    this.assessment = assessment ?? parseAiAssessmentConfig({});
-  }
+  constructor(@Inject(Db) private db: Db) {}
 
   async classAssignments(id: string, req: any, query: unknown) {
     const q = z.object({ status: z.enum(["ACTIVE", "ARCHIVED", "ALL"]).default("ALL") }).parse(query);
@@ -95,23 +83,10 @@ export class AssignmentsService {
       include: { _count: { select: { targets: true } }, targets: { select: { studentId: true } } },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     });
-    const deadlined = rows.filter((a) => (DEADLINE_CONTENT_TYPES as readonly string[]).includes(a.contentType));
-    const studentIds = [...new Set(deadlined.flatMap((a) => a.targets.map((t) => t.studentId)))];
-    const { states, key } = await deadlineStates(this.db, deadlined, studentIds);
+    const tests = rows.filter((a) => a.contentType === TEST_CONTENT_TYPE);
+    const studentIds = [...new Set(tests.flatMap((a) => a.targets.map((t) => t.studentId)))];
+    const { states, key } = await testStates(this.db, tests, studentIds);
     return rows.map(({ targets, ...a }) => {
-      if (a.contentType === WRITTEN_CONTENT_TYPE) {
-        // TAI2-T2: written work waits for the teacher grade instead of being scored.
-        const counts = { AWAITING_GRADE: 0, GRADED: 0, LATE_REVIEW_PENDING: 0, REJECTED: 0, OVERDUE_UNSUBMITTED: 0, NOT_SUBMITTED: 0 };
-        let revision = 1;
-        for (const t of targets) {
-          const state = states.get(key(a.id, t.studentId));
-          if (!state) continue;
-          revision = state.revision;
-          if (state.status in counts) counts[state.status as keyof typeof counts]++;
-          else counts.NOT_SUBMITTED++;
-        }
-        return { ...assignmentView(a), writtenSummary: { revision, extended: revision > 1, counts } };
-      }
       if (a.contentType !== TEST_CONTENT_TYPE) return { ...assignmentView(a), ...(a.contentType === "lab" ? { targetStudentIds: a.audience === "SUBSET" ? targets.map((target) => target.studentId) : [] } : {}) };
       const counts = { SUBMITTED: 0, LATE_REVIEW_PENDING: 0, REJECTED: 0, OVERDUE_UNSUBMITTED: 0, NOT_SUBMITTED: 0 };
       let revision = 1;
@@ -127,10 +102,9 @@ export class AssignmentsService {
   }
 
   // ---------- I3 assigned-test lifecycle ----------
-  /** TAI2-T2: late decisions and deadline revisions apply to test and written assignments alike. */
-  private async ownedTestAssignment(db: any, classId: string, assignmentId: string, contentTypes: readonly string[] = DEADLINE_CONTENT_TYPES) {
+  private async ownedTestAssignment(db: any, classId: string, assignmentId: string) {
     const assignment = await db.assignment.findFirst({
-      where: { id: assignmentId, classId, contentType: { in: [...contentTypes] } },
+      where: { id: assignmentId, classId, contentType: TEST_CONTENT_TYPE },
       include: { targets: { include: { student: { select: { id: true, fullName: true, username: true } } } }, classroom: { select: { status: true } } },
     });
     if (!assignment)
@@ -143,9 +117,9 @@ export class AssignmentsService {
 
   async testStatus(id: string, assignmentId: string, req: any) {
     await ownedClass(this.db, id, req.user);
-    const a = await this.ownedTestAssignment(this.db, id, assignmentId, [TEST_CONTENT_TYPE]);
+    const a = await this.ownedTestAssignment(this.db, id, assignmentId);
     const [{ states, key }, revisions] = await Promise.all([
-      deadlineStates(this.db, [a], a.targets.map((t: any) => t.studentId)),
+      testStates(this.db, [a], a.targets.map((t: any) => t.studentId)),
       this.db.assignmentDeadlineRevision.findMany({
         where: { assignmentId },
         orderBy: { revision: "asc" },
@@ -163,7 +137,7 @@ export class AssignmentsService {
   async lateQueue(id: string, req: any) {
     await ownedClass(this.db, id, req.user);
     const pending = await this.db.assignmentSubmission.findMany({
-      where: { assignment: { classId: id, contentType: { in: [...DEADLINE_CONTENT_TYPES] } }, timing: "LATE", decision: null },
+      where: { assignment: { classId: id, contentType: TEST_CONTENT_TYPE }, timing: "LATE", decision: null },
       select: { id: true, assignmentId: true, studentId: true },
     });
     if (!pending.length) return [];
@@ -171,7 +145,7 @@ export class AssignmentsService {
       where: { id: { in: [...new Set(pending.map((p) => p.assignmentId))] } },
       include: { targets: { include: { student: { select: { id: true, fullName: true, username: true } } } }, classroom: { select: { status: true } } },
     });
-    const { states, key } = await deadlineStates(this.db, assignments, [...new Set(pending.map((p) => p.studentId))]);
+    const { states, key } = await testStates(this.db, assignments, [...new Set(pending.map((p) => p.studentId))]);
     const items: any[] = [];
     for (const a of assignments)
       for (const t of a.targets) {
@@ -182,7 +156,6 @@ export class AssignmentsService {
           assignmentId: a.id,
           assignmentTitle: a.title,
           assignmentStatus: a.status,
-          contentType: a.contentType,
           student: t.student,
           submissionId: state.current.id,
           submittedAt: state.current.submittedAt,
@@ -343,7 +316,7 @@ export class AssignmentsService {
 
   async assignableContent(id: string, req: any) {
     const c = await ownedClass(this.db, id, req.user);
-    const [lessons, labs, tests, writtenTasks] = await Promise.all([
+    const [lessons, labs, tests] = await Promise.all([
       this.db.lesson.findMany({
         where: {
           status: "published",
@@ -383,11 +356,6 @@ export class AssignmentsService {
         select: { id: true, title: true, version: true, lessonId: true, content: true, publishedAt: true },
         orderBy: [{ title: "asc" }, { version: "desc" }],
       }),
-      this.db.classResource.findMany({
-        where: { classId: id, kind: "WRITTEN_TASK", status: "PUBLISHED" },
-        select: { id: true, title: true, version: true, lessonId: true, content: true, publishedAt: true },
-        orderBy: [{ title: "asc" }, { version: "desc" }],
-      }),
     ]);
     const releaseRows = labs.flatMap((lab: any) => {
       const release = lab.releases?.[0];
@@ -421,16 +389,14 @@ export class AssignmentsService {
       lessons,
       labs: eligibleLabs,
       tests: tests.map(({ content, ...test }) => ({ ...test, questionCount: (content as any)?.questions?.length ?? 0 })),
-      // TAI2-T2: the rubric never leaves this route; only the prompt count is listed.
-      writtenTasks: writtenTasks.map(({ content, ...task }) => ({ ...task, promptCount: (content as any)?.prompts?.length ?? 0 })),
     };
   }
 
   private async assignableContentOrThrow(tx: any, classId: string, contentType: ContentType, contentId: string, teacherId: string) {
-    if (contentType === TEST_CONTENT_TYPE || contentType === WRITTEN_CONTENT_TYPE) {
-      // Only an explicit assignment makes a shared class test scored (I3 / 3.1); a written task (TAI2-T2) likewise.
+    if (contentType === TEST_CONTENT_TYPE) {
+      // Only an explicit assignment makes a shared class test scored (I3 / 3.1).
       const test = await tx.classResource.findFirst({
-        where: { id: contentId, classId, kind: contentType === TEST_CONTENT_TYPE ? "TEST" : "WRITTEN_TASK", status: "PUBLISHED" },
+        where: { id: contentId, classId, kind: "TEST", status: "PUBLISHED" },
         select: { id: true, title: true, version: true },
       });
       if (!test)
@@ -548,7 +514,7 @@ export class AssignmentsService {
     if (c.status === "ARCHIVED") throw classArchived();
     const now = new Date();
     const dueDate = this.assertDueDate(b.dueDate, now);
-    if (b.contentType === TEST_CONTENT_TYPE || b.contentType === WRITTEN_CONTENT_TYPE) requireTestDueDate(dueDate);
+    if (b.contentType === TEST_CONTENT_TYPE) requireTestDueDate(dueDate);
     const ctx = {
       actorId: req.user.sub,
       key: readIdempotencyKey(req),
@@ -606,7 +572,7 @@ export class AssignmentsService {
           dedupKey: `assignment:${assignment.id}`,
         })),
       );
-      if (b.contentType === TEST_CONTENT_TYPE || b.contentType === WRITTEN_CONTENT_TYPE)
+      if (b.contentType === TEST_CONTENT_TYPE)
         await tx.assignmentDeadlineRevision.create({
           data: { assignmentId: assignment.id, revision: 1, dueAt: dueDate!, actorId: req.user.sub },
         });
@@ -655,7 +621,7 @@ export class AssignmentsService {
           code: "ASSIGNMENT_ARCHIVED",
           message: "Bài đã lưu trữ; hãy giao bài mới",
         });
-      if (existing.contentType === TEST_CONTENT_TYPE || existing.contentType === WRITTEN_CONTENT_TYPE) assertTestAssignmentUpdate(b, existing.dueDate);
+      if (existing.contentType === TEST_CONTENT_TYPE) assertTestAssignmentUpdate(b, existing.dueDate);
       const dueDate =
         b.dueDate === undefined
           ? existing.dueDate
@@ -761,174 +727,6 @@ export class AssignmentsService {
         after: { status: "ARCHIVED" },
       });
       return { assignment: assignmentView(updated), alreadyArchived: false };
-    });
-  }
-
-  // ---------- TAI2-T3 written grading (owner only; an archived assignment or resource stays gradeable) ----------
-  private async ownedWrittenAssignment(db: any, classId: string, assignmentId: string) {
-    const assignment = await db.assignment.findFirst({
-      where: { id: assignmentId, classId, contentType: WRITTEN_CONTENT_TYPE },
-      include: {
-        targets: { include: { student: { select: { id: true, fullName: true, username: true } } } },
-        classroom: { select: { status: true } },
-      },
-    });
-    if (!assignment)
-      throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài tự luận đã giao" });
-    return assignment;
-  }
-
-  /** written-status board: per recipient, the server-derived state and the current grade (teacher only). */
-  async writtenStatus(id: string, assignmentId: string, req: any) {
-    await ownedClass(this.db, id, req.user);
-    const a = await this.ownedWrittenAssignment(this.db, id, assignmentId);
-    const [{ states, key }, revisions] = await Promise.all([
-      deadlineStates(this.db, [a], a.targets.map((t: any) => t.studentId), new Date(), { withGrade: true }),
-      this.db.assignmentDeadlineRevision.findMany({
-        where: { assignmentId },
-        orderBy: { revision: "asc" },
-        select: { revision: true, dueAt: true, note: true, createdAt: true, triggeredBySubmissionId: true },
-      }),
-    ]);
-    const students = a.targets.map((t: any) => ({ student: t.student, ...states.get(key(a.id, t.studentId))! }));
-    const assist = assistActive(this.assessment);
-    // TAI2-T6: in assist mode each current submission carries its latest AI job state and suggestion summary.
-    // In shadow mode nothing about suggestions (content or existence) is returned.
-    const aiByCurrent = assist ? await this.latestAiState(students.map((s: any) => s.current?.id).filter(Boolean)) : new Map();
-    return {
-      assignment: assignmentView({ ...a, _count: { targets: a.targets.length } }),
-      deadlines: revisions,
-      permittedDecisions: this.permittedDecisions(a),
-      aiAssessment: this.aiAssessmentFlags(),
-      students: assist ? students.map((s: any) => ({ ...s, aiSuggestion: (s.current && aiByCurrent.get(s.current.id)) ?? null })) : students,
-    };
-  }
-
-  /** What the teacher UI may offer: requests in shadow or assist mode, suggestions in assist mode only. */
-  private aiAssessmentFlags() {
-    const available = this.assessment.enabled && this.assessment.mode !== "off";
-    return { available, assist: assistActive(this.assessment) };
-  }
-
-  /** Latest ASSESS_SUBMISSION job per submission with its assist-mode suggestion summary (assist mode only). */
-  private async latestAiState(submissionIds: string[]) {
-    const map = new Map<string, { jobId: string; jobStatus: string; failureCode: string | null; suggestionId: string | null; status: string | null }>();
-    if (!submissionIds.length) return map;
-    const jobs = await this.db.aiJob.findMany({
-      where: { submissionId: { in: submissionIds }, purpose: "ASSESS_SUBMISSION", promptVersion: this.assessment.promptVersion },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, submissionId: true, status: true, failureCode: true, request: true, suggestion: { select: { id: true, status: true, mode: true } } },
-    });
-    for (const job of jobs as any[]) {
-      // Jobs created in shadow mode stay hidden after the switch to assist (their suggestions belong to the evaluation).
-      if (map.has(job.submissionId) || job.request?.mode !== "assist") continue;
-      const visible = job.suggestion && job.suggestion.mode === "assist" ? job.suggestion : null;
-      map.set(job.submissionId, { jobId: job.id, jobStatus: job.status, failureCode: job.failureCode, suggestionId: visible?.id ?? null, status: visible?.status ?? null });
-    }
-    return map;
-  }
-
-  /** One submission for grading: responses, the rubric of the answered version (with anchors), and every grade (append-only history). */
-  async writtenSubmission(id: string, assignmentId: string, submissionId: string, req: any) {
-    await ownedClass(this.db, id, req.user);
-    const a = await this.ownedWrittenAssignment(this.db, id, assignmentId);
-    const submission = await this.db.assignmentSubmission.findFirst({
-      where: { id: submissionId, assignmentId },
-      include: {
-        gradeDecisions: { orderBy: { createdAt: "desc" }, select: writtenGradeSelect },
-        student: { select: { id: true, fullName: true, username: true } },
-      },
-    });
-    if (!submission)
-      throw new NotFoundException({ code: "SUBMISSION_NOT_FOUND", message: "Không tìm thấy bài nộp" });
-    const resource = await this.db.classResource.findFirst({
-      where: { id: a.contentId, classId: id, kind: "WRITTEN_TASK" },
-      select: { id: true, title: true, version: true, content: true },
-    });
-    if (!resource) throw new NotFoundException("Nội dung không còn khả dụng");
-    const siblings = await this.db.assignmentSubmission.findMany({ where: { assignmentId, studentId: submission.studentId }, select: { id: true, submittedAt: true } });
-    const assist = assistActive(this.assessment);
-    const ai = assist ? (await this.latestAiState([submission.id])).get(submission.id) ?? null : null;
-    const suggestion = ai?.suggestionId
-      ? await this.db.aiAssessmentSuggestion.findFirst({ where: { id: ai.suggestionId, submissionId: submission.id, mode: "assist" }, select: suggestionSelect })
-      : null;
-    return {
-      aiAssessment: this.aiAssessmentFlags(),
-      // Assist mode only: the latest job state (for fallback messages) and the suggestion with evidence offsets.
-      ...(assist ? { aiJob: ai ? { id: ai.jobId, status: ai.jobStatus, failureCode: ai.failureCode } : null, suggestion: suggestion ? teacherSuggestionView(suggestion as any) : null } : {}),
-      submission: {
-        id: submission.id,
-        student: submission.student,
-        timing: submission.timing,
-        lateReason: submission.lateReason,
-        submittedAt: submission.submittedAt,
-        resourceVersion: submission.resourceVersion,
-        status: writtenSubmissionStatus(submission as any),
-        isCurrent: latestSubmission(siblings)?.id === submission.id,
-        responses: Array.isArray(submission.answers) ? submission.answers : [],
-      },
-      rubric: { id: resource.id, title: resource.title, version: resource.version, prompts: (resource.content as any)?.prompts ?? [] },
-      grades: submission.gradeDecisions,
-    };
-  }
-
-  /**
-   * Append-only teacher grade: validated against the answered rubric; 409 when the submission is not gradeable or not
-   * current. `*_AI` kinds (TAI2-T6, assist mode only) reference a stored suggestion of this submission; ACCEPTED_AI must
-   * equal its points exactly. The stored points are always the teacher's, and the actor is always the teacher.
-   */
-  async gradeWritten(id: string, assignmentId: string, submissionId: string, req: any, body: unknown) {
-    const b = writtenGradeSchema.parse(body);
-    const c = await ownedClass(this.db, id, req.user);
-    if (c.status === "ARCHIVED") throw classArchived();
-    if (b.kind !== "MANUAL" && !assistActive(this.assessment))
-      throw new ConflictException({ code: "AI_ASSESSMENT_DISABLED", message: "Chế độ hỗ trợ chấm bằng AI đang tắt; hãy chấm thủ công" });
-    const feedback = normalizeFeedback(b.feedback);
-    const ctx = {
-      actorId: req.user.sub,
-      key: readIdempotencyKey(req),
-      scope: "POST classes/:id/assignments/:aid/submissions/:sid/grades:" + submissionId,
-      payload: b,
-    };
-    return idempotent(this.db, ctx, async (tx) => {
-      await lock(tx, "assignment-deadline:" + assignmentId);
-      const a = await this.ownedWrittenAssignment(tx, id, assignmentId);
-      const submission = await tx.assignmentSubmission.findFirst({ where: { id: submissionId, assignmentId }, include: { decision: true } });
-      if (!submission)
-        throw new NotFoundException({ code: "SUBMISSION_NOT_FOUND", message: "Không tìm thấy bài nộp" });
-      const siblings = await tx.assignmentSubmission.findMany({ where: { assignmentId, studentId: submission.studentId }, select: { id: true, submittedAt: true } });
-      assertGradeable(submission as any, siblings);
-      // The assignment pins the resource row it was created from; that row is immutable once published.
-      const resource = await tx.classResource.findFirst({ where: { id: a.contentId, classId: id, kind: "WRITTEN_TASK" }, select: { content: true } });
-      if (!resource) throw new NotFoundException("Nội dung không còn khả dụng");
-      const grade = buildWrittenGrade(resource.content, b.criterionPoints);
-      if (b.kind !== "MANUAL") {
-        const suggestion = await tx.aiAssessmentSuggestion.findFirst({ where: { id: b.basedOnSuggestionId, submissionId }, select: suggestionSelect });
-        assertGradeMatchesSuggestion(b.kind, suggestion as any, submission, grade.criterionPoints);
-      }
-      const row = await tx.writtenGradeDecision.create({
-        data: {
-          submissionId,
-          actorId: req.user.sub,
-          kind: b.kind,
-          basedOnSuggestionId: b.kind === "MANUAL" ? null : b.basedOnSuggestionId,
-          criterionPoints: grade.criterionPoints,
-          totalPoints: grade.totalPoints,
-          maxPoints: grade.maxPoints,
-          score: grade.score,
-          feedback,
-          resourceVersion: submission.resourceVersion,
-        },
-        select: writtenGradeSelect,
-      });
-      await audit(tx, {
-        actor: req.user,
-        action: "written_grade.create",
-        targetType: "AssignmentSubmission",
-        targetId: submissionId,
-        after: { submissionId, kind: b.kind, score: grade.score, resourceVersion: submission.resourceVersion, basedOnSuggestionId: b.kind === "MANUAL" ? null : b.basedOnSuggestionId },
-      });
-      return { grade: row, status: "GRADED" };
     });
   }
 }

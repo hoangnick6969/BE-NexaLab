@@ -7,8 +7,8 @@ paradigm: layered server-authoritative domain with a contract-driven client
 scope: Shared Foundation and Release 1 Increments A, B, and C across nexalab-be and nexalab-fe
 status: draft
 created: 2026-10-12
-updated: 2026-10-30
-binds: [FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-24]
+updated: 2026-10-18
+binds: [FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-24]
 sources:
   - docs/product/prd.md
   - ../nexalab-fe/docs/design/08-STUDENT-P0-UX-DEFINITION.md
@@ -165,7 +165,6 @@ flowchart LR
 | Classes and assignments | Prisma domain and backend routes; frontend operator/student views | AD-3, AD-4, AD-5 |
 | Student learning path | Backend content/progress APIs and frontend Student routes/pages | AD-4, AD-5, AD-6 |
 | Open Curriculum and Class Space | Released curriculum catalog/progress; membership-scoped class resources; class lessons/decks/custom Labs; assignment-target-scoped scored work | AD-3, AD-4, AD-5, AD-6, AD-11, AD-12, AD-13, AD-14, AD-15, AD-16 |
-| Teacher AI | `src/modules/ai` job runtime, provider port, validation; owner-only Class Space AI panel | AD-3, AD-5, AD-15, AD-17 |
 | Labs and attempts | `packages/sim`, allowlisted model registry, versioned topic simulation packs, backend attempt routes, frontend labs | AD-7, AD-8, AD-9, AD-14 |
 | Parent/Admin envelopes | Backend ownership/admin routes; assignment-overdue notice for explicitly linked/approved children; other dedicated UX deferred | AD-2, AD-3, AD-4, AD-16 |
 | Supabase/Prisma operations | Supabase project configuration, Prisma schema/migrations/seed, deployment secret store | AD-9, AD-10 |
@@ -178,7 +177,7 @@ flowchart LR
 - Paid Supabase plan, final region, production RPO/RTO, and backup/PITR policy must be selected before pilot launch and verified by restore rehearsal.
 - Teacher, Parent, and Admin screen architecture waits for their increments; shared identity and ownership invariants do not.
 - Exact R2 bucket names, signed-URL TTLs, media size limits, connector schedules, and source-specific parsers are epic/spec configuration under AD-13 rather than initiative-level architecture decisions.
-- AI-generated Class Space content is no longer deferred: it is activated as the Teacher AI increment under AD-17, specified in `../../specs/spec-teacher-ai-authoring/SPEC.md`. The general-purpose AI assistant and student tutor changes remain future capabilities.
+- AI-generated Class Space content is deferred to a later sprint. Provider, prompt/output schema, safety/evaluation, failure/fallback behavior, and AI-generated content UX are outside this change. The general-purpose AI assistant and student tutor remain future capabilities.
 - Full Teacher and Parent product UX remain deferred; only the assignment lifecycle surfaces for Teacher and explicitly linked/approved Parent are included in this change.
 
 
@@ -186,16 +185,10 @@ flowchart LR
 
 - **Binds:** FR-11, FR-13, FR-17, FR-24
 - **Prevents:** partial/unvalidated imports, mutable attempt history, deadline changes that silently alter recipients, and custom-Lab access through guessed IDs or stale links.
-- **Rule:** direct authoring and validated structured-file import create teacher-owned drafts; file import is limited to decks, study quizzes, and tests, with confirmation persisting atomically. Lab creation uses a separate guided 3D authoring workflow, not generic file import. Assigned-test deadlines and late decisions are server-authoritative. Rejection records zero for the late submission; expiry without submission does not auto-score zero. Approval revises the due date of the same assignment for all its assigned recipients in its owning Class Space and records an immutable deadline revision. Every custom-Lab operation checks active, approved membership in the owning class; scored writes additionally check the assignment target snapshot. Details live in `../../specs/spec-open-learning-catalog/class-space-assignment-contract.md`. AI generation enters only through AD-17 and creates the same teacher-owned drafts.
+- **Rule:** direct authoring and validated structured-file import create teacher-owned drafts; file import is limited to decks, study quizzes, and tests, with confirmation persisting atomically. Lab creation uses a separate guided 3D authoring workflow, not generic file import. Assigned-test deadlines and late decisions are server-authoritative. Rejection records zero for the late submission; expiry without submission does not auto-score zero. Approval revises the due date of the same assignment for all its assigned recipients in its owning Class Space and records an immutable deadline revision. Every custom-Lab operation checks active, approved membership in the owning class; scored writes additionally check the assignment target snapshot. Details live in `../../specs/spec-open-learning-catalog/class-space-assignment-contract.md`. AI generation is excluded from this delivery.
 
 ### AD-16 — Cross-role assignment status and notifications
 
 - **Binds:** FR-08, FR-15, FR-17, FR-18, FR-25
 - **Prevents:** conflicting deadline/status displays, unauthorized parent visibility, automatic zero scoring at expiry, and notifications sent from stale client state.
 - **Rule:** the backend derives assignment status, deadline revisions, recipient eligibility, and notification events from assignment/attempt state. Student surfaces include due-soon and overdue states; teacher surfaces include upcoming/overdue recipients and late-review decisions; parent surfaces may notify only explicitly linked/approved parents about their child's overdue unsubmitted work and remain read-only. Parent notices expose no answers or teacher-only decision controls. Generate/deliver notification events idempotently and retain the in-app channel unless another channel is approved. Reminder timing/cadence is an epic-level policy decision.
-
-### AD-17 — Teacher AI is a versioned suggestion layer
-
-- **Binds:** FR-11, FR-21
-- **Prevents:** AI output reaching students without human review, unreplayable AI results, provider calls holding database transactions, and any data reaching a provider that is not approved for NexaLab's under-18 context.
-- **Rule:** AI output is a suggestion. It never writes, publishes or edits official records (`ClassResource`, attempts, scores, verdicts, progress, assignments); only an authenticated owner decision materializes accepted items into a normal DRAFT through the existing content contract. Every job pins its input snapshot digest, prompt version, output schema version and model, and its output must parse against that schema. Jobs run asynchronously in the shared `AiJob` runtime with PostgreSQL lease claims; no provider call runs inside a transaction and no new queue infrastructure is added. Usage is bounded by per-teacher, per-purpose quota and concurrency. No provider call of any kind (including TAI-01 lesson text and teacher instructions) runs until gate G-6 records written provider/legal approval for NexaLab's under-18 context, approved input boundaries, source rights, cross-border transfer, retention and deletion; until then only the non-production fake provider runs. Student data additionally requires gate G-2: a documented legal basis under current law (Law 91/2025/QH15, Decree 356/2025/NĐ-CP, Decree 330/2026/NĐ-CP), age-specific notice/consent where required, and minimization/redaction. A free or paid tier alone does not establish eligibility, and the Gemini free tier never receives student data. Details live in `../../specs/spec-teacher-ai-authoring/` (`provider-and-data-flow.md`).

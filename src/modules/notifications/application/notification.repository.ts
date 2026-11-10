@@ -5,8 +5,7 @@ export const NOTIFICATION_REPOSITORY = Symbol("NOTIFICATION_REPOSITORY");
 
 export type NotificationView = { id: string; type: string; title: string; body: string | null; link: string | null; readAt: Date | null; createdAt: Date };
 /** An assigned test with its current state for one student, as the time-based sync needs it. */
-/** `contentType` is "test" or "written" (TAI2-T2); parents get no written notices until TAI2-T3. */
-export type AssignedTestState = { assignmentId: string; title: string; className: string; status: string; revision: number; contentType?: string };
+export type AssignedTestState = { assignmentId: string; title: string; className: string; status: string; revision: number };
 
 export interface NotificationRepository {
   list(recipientId: string, limit: number): Promise<NotificationView[]>;

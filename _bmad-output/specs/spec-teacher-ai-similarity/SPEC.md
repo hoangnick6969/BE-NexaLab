@@ -1,6 +1,6 @@
 ---
 id: SPEC-teacher-ai-similarity
-status: draft-part-a-shipped-part-b-in-progress
+status: draft-blocked-on-tai-01-and-tai2-t2
 companions:
   - implementation-contract.md
   - similarity-algorithms.md
@@ -54,4 +54,4 @@ On `class-pilot-a`, the owner teacher creates a TEST containing a question copie
 
 ## Open Questions
 
-- Should teacher-declared common phrases per prompt live in the WRITTEN_TASK rubric content (TAI-02 contract) or in a separate similarity setting? This spec assumes an optional `commonPhrases` field per prompt. **Resolved 2026-11-06:** `commonPhrases` (0-20 entries per prompt, 1-200 characters each) is part of the WRITTEN_TASK rubric content since TAI2-T1; `subsim@1` reads it from there.
+- Should teacher-declared common phrases per prompt live in the WRITTEN_TASK rubric content (TAI-02 contract) or in a separate similarity setting? This spec assumes an optional `commonPhrases` field per prompt.

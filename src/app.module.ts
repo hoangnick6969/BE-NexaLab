@@ -17,7 +17,6 @@ import { AssetsModule } from "./modules/assets/assets.module";
 import { ContentModule } from "./modules/content/content.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
-import { AiModule } from "./modules/ai/ai.module";
 
 /**
  * Composition root. DbModule and CommonModule are global (Db, RequestRateLimiter); every feature module under
@@ -44,7 +43,6 @@ import { AiModule } from "./modules/ai/ai.module";
     ContentModule,
     AdminModule,
     NotificationsModule,
-    AiModule,
   ],
 })
 export class AppModule {}

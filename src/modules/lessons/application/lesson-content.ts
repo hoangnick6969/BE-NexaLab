@@ -36,20 +36,9 @@ export const domainSchema = z.enum(Object.keys(DOMAINS) as [Domain, ...Domain[]]
  */
 type NumberParam = { kind: "number"; label: string; unit: string; min: number; max: number; step: number; default: number };
 type ChoiceParam = { kind: "choice"; label: string; options: Array<{ value: string; label: string }>; default: string };
-/**
- * "pending": no reviewed ranges (private self-reviewed variants only). "team-lead-default" (TAI-06 T0, 2026-11-09): the
- * ranges below were confirmed as safe defaults by the team lead from the current schema and engine, pending PO and
- * named-reviewer confirmation; they are NOT a Q-C2-04 approval, so the shared-library release gate still needs
- * "approved". "approved": a named reviewer approved the ranges (Q-C2-04).
- */
-export type RangeReview = "pending" | "team-lead-default" | "approved";
-/** Range reviews under which Teacher AI may propose a model's challenge variants (TAI-06). Shared release still needs "approved". */
-export const AI_OFFERED_RANGE_REVIEWS: readonly RangeReview[] = ["approved", "team-lead-default"];
-export const TEAM_LEAD_BOUNDS_REF =
-  "team-lead default bounds 2026-11-09, pending PO/reviewer confirmation (_bmad-output/specs/spec-teacher-ai-lab-drafting/team-lead-default-bounds.md)";
 export const CHALLENGE_PARAMETERS: Record<
   string,
-  { modelRef: string; rangeReview: RangeReview; boundsRef?: string; params: Record<string, NumberParam | ChoiceParam> }
+  { modelRef: string; rangeReview: "pending" | "approved"; params: Record<string, NumberParam | ChoiceParam> }
 > = {
   "thermal-energy": { modelRef: "thermal-bench@1.0.0", rangeReview: "pending", params: {} },
   "lever-equilibrium": {
@@ -70,8 +59,7 @@ export const CHALLENGE_PARAMETERS: Record<
   },
   circuit: {
     modelRef: "circuit@1.0.0",
-    rangeReview: "team-lead-default",
-    boundsRef: TEAM_LEAD_BOUNDS_REF,
+    rangeReview: "pending",
     params: {
       maxCurrentMa: { kind: "number", label: "Dòng tối đa qua mỗi nhánh LED", unit: "mA", min: 5, max: 20, step: 1, default: 20 },
       minLitLeds: { kind: "number", label: "Số LED tối thiểu phải sáng", unit: "LED", min: 1, max: 3, step: 1, default: 1 },
@@ -79,8 +67,7 @@ export const CHALLENGE_PARAMETERS: Record<
   },
   chemistry: {
     modelRef: "chemistry@1.0.0",
-    rangeReview: "team-lead-default",
-    boundsRef: TEAM_LEAD_BOUNDS_REF,
+    rangeReview: "pending",
     params: {
       experiment: {
         kind: "choice",
@@ -113,8 +100,7 @@ export const CHALLENGE_PARAMETERS: Record<
   "eye-optics": { modelRef: "eye-optics@1.0.0", rangeReview: "pending", params: {} },
   eye: {
     modelRef: "eye@1.0.0",
-    rangeReview: "team-lead-default",
-    boundsRef: TEAM_LEAD_BOUNDS_REF,
+    rangeReview: "pending",
     params: {
       minScore: { kind: "number", label: "Điểm tối thiểu để đạt", unit: "%", min: 50, max: 100, step: 10, default: 100 },
     },
@@ -139,11 +125,6 @@ export const CHALLENGE_PARAMETERS: Record<
   },
 };
 export type ChallengeParams = Record<string, number | string>;
-
-/** Labs whose parameter bounds Teacher AI may use: reviewed (or team-lead default) ranges and at least one parameter. */
-export function aiOfferedLabs() {
-  return Object.entries(CHALLENGE_PARAMETERS).filter(([, spec]) => AI_OFFERED_RANGE_REVIEWS.includes(spec.rangeReview) && Object.keys(spec.params).length > 0);
-}
 
 /** Every out-of-range or unknown parameter; empty means valid. */
 export function challengeParamErrors(labId: string | null | undefined, params: unknown): string[] {

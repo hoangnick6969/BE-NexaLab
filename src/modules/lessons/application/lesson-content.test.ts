@@ -163,36 +163,3 @@ describe("content versions and attribution (B1-T4/T5)", () => {
     });
   });
 });
-
-describe("TAI6-T0 team-lead default bounds", () => {
-  it("offers exactly circuit, chemistry and eye to Teacher AI and records them as team-lead defaults, never approved", async () => {
-    const { AI_OFFERED_RANGE_REVIEWS, CHALLENGE_PARAMETERS, TEAM_LEAD_BOUNDS_REF, aiOfferedLabs } = await import("./lesson-content");
-    expect(aiOfferedLabs().map(([labId]) => labId).sort()).toEqual(["chemistry", "circuit", "eye"]);
-    for (const labId of ["circuit", "chemistry", "eye"]) {
-      expect(CHALLENGE_PARAMETERS[labId].rangeReview).toBe("team-lead-default");
-      expect(CHALLENGE_PARAMETERS[labId].boundsRef).toBe(TEAM_LEAD_BOUNDS_REF);
-    }
-    expect(TEAM_LEAD_BOUNDS_REF).toMatch(/pending PO\/reviewer confirmation/);
-    // No model is claimed as reviewer-approved, and every other model stays pending and is never offered.
-    expect(Object.values(CHALLENGE_PARAMETERS).filter((spec) => spec.rangeReview === "approved")).toEqual([]);
-    expect(Object.entries(CHALLENGE_PARAMETERS).filter(([labId]) => !["circuit", "chemistry", "eye"].includes(labId)).every(([, spec]) => spec.rangeReview === "pending")).toBe(true);
-    expect(AI_OFFERED_RANGE_REVIEWS).toEqual(["approved", "team-lead-default"]);
-  });
-
-  it("keeps the shared-library release gate: a team-lead default is not an approved range", () => {
-    const lesson = {
-      title: "t", content: "<p>x</p>", materials: [], questions: [], labId: "circuit", challengeParams: { maxCurrentMa: 10 }, outcomeCodes: ["KHTN8.E1"],
-      releaseReview: { editorial: { reviewerId: "a" }, subject: { reviewerId: "b" }, rights: { reviewerId: "c" }, safety: { reviewerId: "d" }, model: { reviewerId: "e" } },
-    } as any;
-    expect(publishBlockers(lesson, "SHARED_LIBRARY").some((item) => /Q-C2-04/.test(item))).toBe(true);
-  });
-
-  it("validates the bound edges through the single source: min, max, off-step, below min, above max", () => {
-    expect(challengeParamErrors("circuit", { maxCurrentMa: 5 })).toEqual([]);
-    expect(challengeParamErrors("circuit", { maxCurrentMa: 20 })).toEqual([]);
-    expect(challengeParamErrors("circuit", { maxCurrentMa: 4 })).not.toEqual([]);
-    expect(challengeParamErrors("circuit", { maxCurrentMa: 21 })).not.toEqual([]);
-    expect(challengeParamErrors("circuit", { maxCurrentMa: 12.5 })).not.toEqual([]);
-    expect(challengeParamErrors("eye", { minScore: 55 })).not.toEqual([]);
-  });
-});

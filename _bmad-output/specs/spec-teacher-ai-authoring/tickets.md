@@ -3,8 +3,7 @@
 ## TAI-T0 — Activate FR-21 scope (documentation only)
 
 - Product owner approves activating FR-21 as a new increment. Amend PRD §10 item 17 and the ARCHITECTURE-SPINE "Deferred" bullet so they point to this spec instead of excluding AI work. Add `AD-17 — Teacher AI is a versioned suggestion layer` summarizing the SPEC constraints.
-- Already decided in `.memlog.md`: the golden reviewer is the supervising lecturer, and the quota and quality thresholds stay as specified. The earlier Gemini free-tier choice is design history only: the planned adapter reads `GEMINI_API_KEY` / `GEMINI_MODEL`, but no live provider call (any tier) is approved until gate G-6 records provider eligibility for the under-18 context, input boundaries, source rights, transfer, retention and deletion (`provider-and-data-flow.md`). T1–T5 use the fake provider.
-- **Done 2026-10-30** (approval), synced to `fl05` 2026-11-05 with AD-17 reworded to the G-6/G-2 standard.
+- Already decided in `.memlog.md`: provider is the Gemini API free tier (model id set in `GEMINI_MODEL`), the golden reviewer is the supervising lecturer, and the quota and quality thresholds stay as specified.
 - **Accept when:** PRD, spine and this SPEC no longer contradict each other, and the scope approval is recorded in `.memlog.md`.
 
 ## TAI-T1 — AI module, provider port and prompt versioning
@@ -16,10 +15,9 @@
 ## TAI-T2 — Job schema, create/list/get/cancel, runner
 
 - Migration for `AiJob`, `AiJobItem`, `AiItemDecision` and the enums (expand-only). Snapshot builder with deterministic passages and digest.
-- Extract the private `assertLesson` into an exported `classes/application` lesson check (same query, 400 `LESSON_NOT_AVAILABLE`) used by both `ClassResourcesService` and the AI module.
-- Routes `POST/GET classes/:id/ai-jobs`, `GET …/:jobId`, `POST …/:jobId/cancel`, `GET /me/ai-quota` per contract. Create body is a `.strict()` Zod discriminated union on `purpose` (only `GENERATE_RESOURCE` in TAI-01). Quota filtered by actor and `purpose`, under a per-actor/per-purpose advisory lock in the create transaction.
+- Routes `POST/GET classes/:id/ai-jobs`, `GET …/:jobId`, `POST …/:jobId/cancel`, `GET /me/ai-quota` per contract. Quota under advisory lock in the create transaction.
 - Runner with lease claim, conditional persist and sweeper per `job-runtime-and-failure-modes.md`.
-- **Accept when:** integration tests (fake provider) cover replay of the same key, key reuse 409, outsider teacher and unknown class 403 `CLASS_ACCESS_DENIED` (same body), student 403, inaccessible lesson 400 `LESSON_NOT_AVAILABLE`, job of another class 404, missing or unknown `purpose` 400, archived class 409, a job of another purpose not counted against `GENERATE_RESOURCE` quota, quota 20/21 and concurrency 2/3 boundaries, two concurrent creates at limit (only one passes), cancel during run discards the result, lease expiry requeues once then fails, and the persist-after-reclaim race writes items once.
+- **Accept when:** integration tests (fake provider) cover replay of the same key, key reuse 409, outsider teacher 404, student 403, archived class 409, quota 20/21 and concurrency 2/3 boundaries, two concurrent creates at limit (only one passes), cancel during run discards the result, lease expiry requeues once then fails, and the persist-after-reclaim race writes items once.
 
 ## TAI-T3 — Output parsing and validation pipeline
 

@@ -69,8 +69,7 @@ export class NotificationsService {
     for (const child of children) {
       for (const test of await this.repo.assignedTestStates(child.id)) {
         if (viewer.role === "STUDENT" && test.status === "DUE_SOON") items.push(dueSoonNotice(viewer.sub, test));
-        // TAI2-T2: parent views do not cover written assignments until TAI2-T3.
-        if (viewer.role === "PARENT" && test.status === "OVERDUE_UNSUBMITTED" && test.contentType !== "written") items.push(overdueNotice(viewer.sub, child, test));
+        if (viewer.role === "PARENT" && test.status === "OVERDUE_UNSUBMITTED") items.push(overdueNotice(viewer.sub, child, test));
       }
     }
     await this.repo.insert(items);

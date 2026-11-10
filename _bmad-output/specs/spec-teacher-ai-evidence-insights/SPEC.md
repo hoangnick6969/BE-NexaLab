@@ -1,6 +1,6 @@
 ---
 id: SPEC-teacher-ai-evidence-insights
-status: approved-g5-2026-11-06
+status: draft-blocked-on-po-threshold-approval
 companions:
   - implementation-contract.md
   - insight-rules.md
@@ -30,7 +30,7 @@ Teachers want to know whether a result reflects what a student can actually do. 
 
 - Insights are computed on read by pure functions under an explicit `ruleVersion` (`insights@1`) over immutable evidence. Only teacher acknowledgements persist. A rule change requires a new `ruleVersion`, and the old version stays callable for replay.
 - Scope matches B2. Only evidence whose `assignmentId` belongs to the class counts, and only for currently approved members. Free practice, other classes and removed students are excluded.
-- Visible only to the owning teacher. A missing or not-owned class returns the same 403 `CLASS_ACCESS_DENIED` as B2 (`ownedClass`); a missing student or fingerprint inside an owned class returns 404, as B2 evidence detail does. Never shown to students or parents, and never included in parent reports, exports or notifications.
+- Visible only to the owning teacher. Missing and unauthorized requests return the same 404 as B2 evidence detail. Never shown to students or parents, and never included in parent reports, exports or notifications.
 - Insights never change score, verdict, progress, gates, overrides or B2 flags.
 - No LLM or provider call. A future model may run only in shadow mode, under a separate spec.
 - No ranking. Lists are ordered by student display name, then rule code. There is no severity score, insight count leaderboard or "weak/strong" label. Rule codes and messages never say cheating, ability or talent.
@@ -50,9 +50,7 @@ On seeded fixtures, the owner teacher of `class-pilot-a` sees `SCORE_CHANGE_UNUS
 ## Assumptions
 
 - Quiz pass follows the existing schema-bound threshold of 50. A practical counts as passing only with verdict `passed`.
-- The `insights@1` thresholds in `insight-rules.md` were approved by the PO on 2026-11-06 (gate G-5).
-- Rule versions are additive: `insights@2` adds `SUBMISSION_SIMILARITY_HIGH` (TAI4-T6) and leaves `insights@1` fingerprints untouched.
-- Acknowledgement rows are append-only and keyed by fingerprint. In the `all` view an acknowledged insight carries `latestAcknowledgement`; replay reads evidence as of the first acknowledgement (TAI4-T3, 2026-11-07).
+- The `insights@1` thresholds in `insight-rules.md` are product defaults pending approval.
 
 ## Open Questions
 

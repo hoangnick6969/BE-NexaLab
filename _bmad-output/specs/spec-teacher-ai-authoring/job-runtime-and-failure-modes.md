@@ -21,7 +21,7 @@ stateDiagram-v2
 
 | From | To | Trigger | Guard |
 | --- | --- | --- | --- |
-| — | PENDING | `POST /classes/:id/ai-jobs` | owner (else 403 `CLASS_ACCESS_DENIED`), class ACTIVE, lesson accessible (else 400 `LESSON_NOT_AVAILABLE`), provider configured, quota for the purpose available, idempotency key claimed in same tx |
+| — | PENDING | `POST /classes/:id/ai-jobs` | owner, class ACTIVE, lesson accessible, provider configured, quota available, idempotency key claimed in same tx |
 | PENDING | RUNNING | runner `UPDATE … SET status=RUNNING, leaseUntil=now()+90s, attemptCount=attemptCount+1, startedAt=coalesce(startedAt, now()) WHERE id=? AND status=PENDING` | update count = 1 (otherwise another instance won) |
 | RUNNING | SUCCEEDED | validation leaves ≥1 item | `WHERE status=RUNNING AND attemptCount=<claimed>`; on 0 rows the result is discarded (cancelled or reclaimed) |
 | RUNNING | PENDING | `PROVIDER_UNAVAILABLE`, `PROVIDER_TIMEOUT`, `OUTPUT_SCHEMA_INVALID`, or expired lease | `attemptCount < 2` |
@@ -55,11 +55,10 @@ interface AiProvider {
 
 ## Quota
 
-Checked inside the create transaction while holding a per-actor, per-purpose advisory lock (`pg_advisory_xact_lock(hashtext('ai-quota:'||actorId||':'||purpose))`), so concurrent creates cannot both pass. Both counts filter on `purpose` from the first implementation (TAI-T2), so TAI-02 `ASSESS_SUBMISSION` and TAI-06 `DRAFT_LAB_CHALLENGE` keep their own limits and never consume `GENERATE_RESOURCE` quota. Limits are read per purpose (`AI_DAILY_JOB_LIMIT` / `AI_CONCURRENT_JOB_LIMIT` for `GENERATE_RESOURCE`; later purposes define their own variables):
+Checked inside the create transaction while holding a per-actor advisory lock (`pg_advisory_xact_lock(hashtext('ai-quota:'||actorId))`), so concurrent creates cannot both pass:
 
-- `count(AiJob where actorId and purpose and createdAt > now()-24h and not (status=FAILED and failureCode in provider-side codes))` < `AI_DAILY_JOB_LIMIT` (default 20). Jobs failed by the provider do not consume quota.
-- `count(AiJob where actorId and purpose and status in (PENDING, RUNNING))` < `AI_CONCURRENT_JOB_LIMIT` (default 2).
-- The `@@index([actorId, createdAt])` becomes `@@index([actorId, purpose, createdAt])` so both counts stay index-backed.
+- `count(AiJob where actorId and createdAt > now()-24h and not (status=FAILED and failureCode in provider-side codes))` < `AI_DAILY_JOB_LIMIT` (default 20). Jobs failed by the provider do not consume quota.
+- `count(AiJob where actorId and status in (PENDING, RUNNING))` < `AI_CONCURRENT_JOB_LIMIT` (default 2).
 
 ## Failure modes
 

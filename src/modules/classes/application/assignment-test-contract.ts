@@ -89,26 +89,14 @@ export type StudentTestStatus = "UPCOMING" | "DUE_SOON" | "OVERDUE_UNSUBMITTED" 
 type SubmissionRow = {
   id: string;
   timing: string;
-  /** Null only for TEACHER-graded (TAI-02 written) rows; read through `autoScore`. */
-  score: number | null;
-  correctCount: number | null;
-  gradingMode?: string | null;
+  score: number;
+  correctCount: number;
   questionCount: number;
   lateReason: string | null;
   submittedAt: Date;
   deadlineRevision?: { revision: number } | null;
   decision?: { decision: string; note?: string | null; createdAt: Date } | null;
 };
-
-/**
- * TAI-02: the only reader of a server-scored submission's score. A TEACHER-graded row has no
- * auto score, so mixing kinds fails loudly here instead of rendering `null` as a TEST score.
- */
-export function autoScore(row: { gradingMode?: string | null; score: number | null; correctCount: number | null }) {
-  if (row.gradingMode === "TEACHER" || row.score === null || row.correctCount === null)
-    throw new Error("autoScore: submission is not server-scored (gradingMode TEACHER or missing score)");
-  return { score: row.score, correctCount: row.correctCount };
-}
 
 export function submissionStatus(row: Pick<SubmissionRow, "timing" | "decision">): SubmissionStatus {
   if (row.timing === "ON_TIME") return "SCORED";
@@ -119,15 +107,14 @@ export function submissionStatus(row: Pick<SubmissionRow, "timing" | "decision">
 /** A pending late score is never shown; a rejected one is zero. */
 export function submissionView(row: SubmissionRow) {
   const status = submissionStatus(row);
-  const scored = status === "SCORED" || status === "ACCEPTED_BY_EXTENSION";
   return {
     id: row.id,
     submittedAt: row.submittedAt,
     timing: row.timing,
     lateReason: row.lateReason,
     status,
-    score: status === "LATE_REVIEW_PENDING" ? null : status === "REJECTED_ZERO" ? 0 : autoScore(row).score,
-    correctCount: scored ? autoScore(row).correctCount : null,
+    score: status === "LATE_REVIEW_PENDING" ? null : status === "REJECTED_ZERO" ? 0 : row.score,
+    correctCount: status === "SCORED" || status === "ACCEPTED_BY_EXTENSION" ? row.correctCount : null,
     questionCount: row.questionCount,
     deadlineRevision: row.deadlineRevision?.revision ?? null,
     decision: row.decision ? { decision: row.decision.decision, note: row.decision.note ?? null, decidedAt: row.decision.createdAt } : null,

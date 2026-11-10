@@ -19,7 +19,6 @@ import { audit } from "../../../common/audit";
 import { Db } from "../../../db/db";
 import { publishBlockers } from "../application/lesson-content";
 import { lessonOperationData } from "../application/lesson-moderation";
-import { syncLibraryLessonFingerprints } from "../../ai/application/question-fingerprints";
 
 /**
  * Epic C2 admin console API. Every route is ADMIN-only (other roles get 403 from
@@ -133,7 +132,6 @@ export class AdminLessonsController {
           details: { activeAssignments },
         });
       const updated = await tx.lesson.update({ where: { id }, data: lessonOperationData(lesson, b.action, b.reason, b.newOwnerId) });
-      await syncLibraryLessonFingerprints(tx, id);
       await audit(tx, {
         actor: req.user,
         action: `lesson.${b.action}`,

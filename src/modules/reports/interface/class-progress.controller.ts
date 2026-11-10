@@ -11,8 +11,7 @@ import { MISCONCEPTION_LABELS } from "../../labs/application/misconception-label
 import { buildHintInsight } from "../application/hint-insight";
 import { deriveLesson } from "../../progress/application/progress";
 import { TEST_CONTENT_TYPE } from "../../classes/application/assignment-test-contract";
-import { deadlineStates } from "../../classes/application/assignment-test-state";
-import { WRITTEN_CONTENT_TYPE } from "../../classes/application/assignment-written-contract";
+import { testStates } from "../../classes/application/assignment-test-state";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -51,19 +50,16 @@ export class ClassProgressController {
       });
     }
     const studentIds = assignment.targets.map((target) => target.studentId);
-    if (assignment.contentType === TEST_CONTENT_TYPE || assignment.contentType === WRITTEN_CONTENT_TYPE) {
-      // Test and written (TAI2-T2) submissions are not Attempt rows; report the server-derived state.
-      // A written submission has no score until the teacher grades it (TAI2-T3), so `passed` stays false.
-      // TAI2-T3: the teacher board shows the current grade of a graded written task.
-      const { states, key } = await deadlineStates(this.db, [assignment], studentIds, new Date(), { withGrade: true });
+    if (assignment.contentType === TEST_CONTENT_TYPE) {
+      // Test submissions are not Attempt rows; report the server-derived test state.
+      const { states, key } = await testStates(this.db, [assignment], studentIds);
       return assignment.targets.map(({ student }) => {
         const state = states.get(key(assignment.id, student.id));
         return {
           student,
           attempts: state?.history.length ?? 0,
           latestVerdict: null,
-          // TAI2-T3: a written task counts as passed once it is graded (rejected zero work never does).
-          passed: assignment.contentType === WRITTEN_CONTENT_TYPE ? state?.status === "GRADED" : state?.status === "SUBMITTED",
+          passed: state?.status === "SUBMITTED",
           testStatus: state?.status ?? null,
           score: state?.current?.score ?? null,
         };

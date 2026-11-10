@@ -69,7 +69,7 @@ TAI-01 spec đề xuất worker polling DB (2 giây), lease 90 giây, timeout pr
 
 | Ưu tiên | Vấn đề | Hiện trạng và việc cần chốt |
 | --- | --- | --- |
-| **Đã xử lý** | AI chưa được duyệt trong product scope | TAI-T0 đã duyệt 30/10/2026 và đồng bộ lên fl05 05/11/2026: PRD §10.17, architecture spine và AD-17 đã sửa. Duyệt phạm vi **không** phải duyệt provider; provider call vẫn chờ G-6 (và G-2 với dữ liệu học sinh). |
+| **P0** | AI chưa được duyệt trong product scope | PRD §10 và architecture spine còn loại Teacher AI khỏi delivery hiện tại. Cần TAI-T0 phê duyệt/amend trước khi coi AI là increment đã được giao. Core Teacher UX/import có thể tiếp tục độc lập. |
 | **P0** | Provider và người dưới 18 tuổi | Gemini free tier là lựa chọn cũ trong TAI-01, không phải provider đã duyệt. Xác nhận eligibility cho ứng dụng hướng tới trẻ vị thành niên hoặc chọn provider khác trước provider call. |
 | **P0** | Dữ liệu lesson và prompt tự do | Snapshot chứa text thật; giáo viên có thể dán thông tin học sinh vào chỉ dẫn. Chốt input policy, giảm dữ liệu, retention/xóa và transfer. Detection không bảo đảm xóa sạch dữ liệu cá nhân. |
 | **P1** | Câu trùng | Spec cũ khóa accept với `EXACT_DUPLICATE`, trái yêu cầu giáo viên tự quyết. Đã đồng bộ TAI-01/03/tickets: exact/near duplicate chỉ cảnh báo; giáo viên giữ, sửa hoặc bỏ. |
@@ -91,7 +91,7 @@ TAI-01 spec đề xuất worker polling DB (2 giây), lease 90 giây, timeout pr
 
 ### TAI-01 — soạn bài
 
-- [x] PO duyệt TAI-T0 (30/10/2026; đồng bộ fl05 05/11/2026).
+- [ ] PO duyệt TAI-T0 vì PRD hiện vẫn defer AI.
 - [ ] Duyệt provider terms cho ứng dụng có người dưới 18 tuổi; Gemini chưa được coi là duyệt.
 - [ ] Chốt giới hạn dữ liệu lesson/instruction gửi ra ngoài, prompt safety, retention/xóa và provenance câu được publish.
 - [ ] Chỉ dùng bài học đã chọn; mỗi câu có source ref; server validate output trước khi giáo viên xem.
