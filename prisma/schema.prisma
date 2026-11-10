@@ -44,6 +44,8 @@ enum ClassResourceKind {
   DOCUMENT
   REPORT_TEMPLATE
   LINK
+  /// TAI-02 written task with a versioned rubric (graded by the teacher).
+  WRITTEN_TASK
 }
 
 enum ClassResourceStatus {
@@ -115,6 +117,8 @@ model User {
   ebookAnnotations           EbookAnnotation[]
   labReviewAssignments       LabReviewerAuthorization[] @relation("LabReviewerAuthorizationUser")
   labReleaseReviews          LabReleaseReview[]         @relation("LabReleaseReviewer")
+  /// TAI-04 (TAI4-T3): acknowledgements that concern this student as the subject (cascade on user deletion).
+  insightAcknowledgements    InsightAcknowledgement[]
 }
 
 model Session {
@@ -196,6 +200,8 @@ model Classroom {
   enrollments       Enrollment[]
   assignments       Assignment[]
   resources         ClassResource[]
+  /// TAI-04 (TAI4-T3): teacher responses to insights of this class (cascade on class deletion).
+  insightAcknowledgements InsightAcknowledgement[]
 
   @@index([teacherId, status])
 }
@@ -724,6 +730,8 @@ model Assignment {
   targets              AssignmentTarget[]
   deadlineRevisions    AssignmentDeadlineRevision[]
   submissions          AssignmentSubmission[]
+  /// TAI-03 (TAI3-T4): immutable similarity runs over this assignment's current submissions.
+  similarityRuns       SubmissionSimilarityRun[]
   stepProgress         StepProgress[]
   classLabAdditionalResponses ClassLabAdditionalResponse[]
   insightDisagreements HintInsightDisagreement[]
@@ -762,6 +770,12 @@ model AssignmentDeadlineRevision {
   @@unique([assignmentId, revision])
 }
 
+/// TAI-02: how an AssignmentSubmission is scored.
+enum GradingMode {
+  AUTO
+  TEACHER
+}
+
 /// Immutable test submission (I3 / 3.2). The server scores every submission; a late one stays
 /// pending until a LateDecision exists. The latest submission per student is current.
 model AssignmentSubmission {
@@ -776,18 +790,112 @@ model AssignmentSubmission {
   /// Resource version answered, so later test revisions never rescore history.
   resourceVersion    Int
   answers            Json
-  score              Int
-  correctCount       Int
+  /// Non-null when gradingMode = AUTO (DB CHECK AssignmentSubmission_auto_score_check); null for TEACHER (TAI-02 written).
+  score              Int?
+  correctCount       Int?
   questionCount      Int
+  /// AUTO = server-scored TEST; TEACHER = WRITTEN_TASK graded by the owning teacher (TAI-02).
+  gradingMode        GradingMode                @default(AUTO)
   /// ON_TIME (submittedAt <= dueAt) or LATE.
   timing             String
   lateReason         String?
   submittedAt        DateTime                   @default(now())
   decision           LateDecision?
+  /// TAI-02 (TAI2-T3): append-only teacher grades; the latest row is the current grade.
+  gradeDecisions     WrittenGradeDecision[]
+  /// TAI-03 (TAI3-T4): matches that name this submission on either side (cascade on delete).
+  similarityMatchesA SubmissionSimilarityMatch[] @relation("SimilarityMatchA")
+  similarityMatchesB SubmissionSimilarityMatch[] @relation("SimilarityMatchB")
+  /// TAI-02 (TAI2-T4): ASSESS_SUBMISSION jobs and their suggestions die with the submission (redacted snapshot included).
+  aiJobs             AiJob[]
+  aiSuggestions      AiAssessmentSuggestion[]
 
   @@index([assignmentId, studentId, submittedAt])
   @@index([studentId, submittedAt])
   @@index([deadlineRevisionId])
+}
+
+/// TAI-02 (TAI2-T3): how a written submission was graded.
+enum WrittenGradeKind {
+  MANUAL
+  ACCEPTED_AI
+  EDITED_AI
+  REJECTED_AI
+}
+
+/// TAI-02 (TAI2-T3): append-only teacher grade for one written submission. Only MANUAL is written in T3.
+model WrittenGradeDecision {
+  id                  String               @id @default(cuid())
+  submissionId        String
+  submission          AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  actorId             String
+  kind                WrittenGradeKind
+  basedOnSuggestionId String?
+  /// [{ promptId, criterionCode, points }]
+  criterionPoints     Json
+  totalPoints         Float
+  maxPoints           Float
+  /// round(totalPoints / maxPoints * 100), the same 0-100 scale as TEST.
+  score               Int
+  feedback            String?
+  resourceVersion     Int
+  createdAt           DateTime             @default(now())
+
+  @@index([submissionId, createdAt])
+}
+
+/// TAI-03 (TAI3-T4): immutable result of one subsim@1 run over one written assignment.
+model SubmissionSimilarityRun {
+  id               String                      @id @default(cuid())
+  assignmentId     String
+  assignment       Assignment                  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  actorId          String
+  algorithmVersion String
+  /// sha256 of the sorted "submissionId:resourceVersion" lines of the current submissions.
+  inputDigest      String
+  submissionCount  Int
+  /// [{ submissionId, promptId, reason: "SHORT_RESPONSE" }]
+  skipped          Json
+  createdAt        DateTime                    @default(now())
+  matches          SubmissionSimilarityMatch[]
+
+  @@unique([assignmentId, algorithmVersion, inputDigest])
+  @@index([assignmentId, createdAt])
+}
+
+model SubmissionSimilarityMatch {
+  id             String                  @id @default(cuid())
+  runId          String
+  run            SubmissionSimilarityRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  /// Lexicographically smaller submission id.
+  submissionAId  String
+  submissionA    AssignmentSubmission    @relation("SimilarityMatchA", fields: [submissionAId], references: [id], onDelete: Cascade)
+  submissionBId  String
+  submissionB    AssignmentSubmission    @relation("SimilarityMatchB", fields: [submissionBId], references: [id], onDelete: Cascade)
+  /// "HIGH" | "ELEVATED"
+  level          String
+  maxContainment Float
+  /// [{ promptId, containment, shared, level, spansA[], spansB[] }]
+  perPrompt      Json
+  reviews        SimilarityMatchReview[]
+
+  @@unique([runId, submissionAId, submissionBId])
+  @@index([submissionAId])
+  @@index([submissionBId])
+}
+
+/// Append-only teacher review of one match; the newest row is current. The note is teacher-only.
+model SimilarityMatchReview {
+  id        String                    @id @default(cuid())
+  matchId   String
+  match     SubmissionSimilarityMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  actorId   String
+  /// "NOTED" | "DISMISSED"
+  status    String
+  note      String?
+  createdAt DateTime                  @default(now())
+
+  @@index([matchId, createdAt])
 }
 
 /// Owning teacher's decision on one late submission (I3 / 3.3): REJECT_ZERO, or
@@ -1338,4 +1446,273 @@ model HintInsightDisagreement {
 
   @@unique([assignmentId, rubricRef, criterion, misconception])
   @@index([teacherId])
+}
+
+// ---------------------------------------------------------------------------
+// Teacher AI job runtime (TAI-01, spec-teacher-ai-authoring). Shared by every Teacher AI purpose; later specs only add
+// expand-only nullable columns. AI output never writes ClassResource directly: items become a DRAFT only through an
+// owner materialization (TAI-T4).
+enum AiJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum AiItemDecisionKind {
+  ACCEPTED
+  EDITED
+  REJECTED
+}
+
+model AiJob {
+  id                     String            @id @default(cuid())
+  classId                String
+  actorId                String
+  /// "GENERATE_RESOURCE" in TAI-01, "ASSESS_SUBMISSION" (TAI-02), "DRAFT_LAB_CHALLENGE" (TAI-06); quota is counted per actor and purpose.
+  purpose                String
+  /// Resource kind of a GENERATE_RESOURCE job; null for purposes that do not create a class resource (TAI-06).
+  targetKind             ClassResourceKind?
+  lessonId               String
+  /// Normalized request body (instruction included). Written once at creation.
+  request                Json
+  /// Passages and outcome statements actually sent. Written once at creation.
+  inputSnapshot          Json
+  /// sha256 of stableStringify(inputSnapshot).
+  inputDigest            String
+  promptVersion          String
+  outputSchemaVersion    String
+  /// "gemini" | "fake"
+  provider               String
+  model                  String
+  status                 AiJobStatus       @default(PENDING)
+  failureCode            String?
+  attemptCount           Int               @default(0)
+  leaseUntil             DateTime?
+  inputTokens            Int?
+  outputTokens           Int?
+  /// [{ position, reasonCodes[] }]
+  droppedItems           Json              @default("[]")
+  materializedResourceId String?           @unique
+  /// TAI-06: the lesson a DRAFT_LAB_CHALLENGE proposal was applied to, and the one applied item (one apply per job).
+  appliedLessonId        String?
+  appliedItemId          String?           @unique
+  /// TAI-02 (TAI2-T4): set only for purpose ASSESS_SUBMISSION; cascade so the redacted snapshot dies with the submission.
+  submissionId           String?
+  submission             AssignmentSubmission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  createdAt              DateTime          @default(now())
+  startedAt              DateTime?
+  completedAt            DateTime?
+  cancelledAt            DateTime?
+  /// TAI-05: credit columns, null for a job created while AI_CREDITS_ENABLED=false. A job with estimatedCredits set is
+  /// always settled or refunded in its terminal transition, whatever the flag says later.
+  pricingVersionId       String?
+  estimatedCredits       Int?
+  chargedCredits         Int?
+  items                  AiJobItem[]
+  suggestion             AiAssessmentSuggestion?
+
+  @@index([actorId, purpose, createdAt])
+  @@index([status, leaseUntil])
+  @@index([classId, createdAt])
+  @@index([submissionId, promptVersion])
+}
+
+/// TAI-02 (TAI2-T4): verification outcome of one assessment suggestion.
+enum AiSuggestionStatus {
+  VALID
+  PARTIAL
+  SUPPRESSED
+}
+
+/// TAI-02 (TAI2-T4): immutable AI rubric suggestion produced by one ASSESS_SUBMISSION job. Teacher-only; never part of
+/// a student, parent, rollup or notification read model. In shadow mode only the evaluation report reads it.
+model AiAssessmentSuggestion {
+  id               String               @id @default(cuid())
+  jobId            String               @unique
+  job              AiJob                @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  submissionId     String
+  submission       AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  resourceVersion  Int
+  promptVersion    String
+  /// "shadow" | "assist": AI_ASSESSMENT_MODE when the job was created.
+  mode             String
+  status           AiSuggestionStatus
+  /// [{ promptId, criterionCode, valid, reasonCode, suggestedPoints, rationale, uncertainty, evidence[{ quote, start, end }], returnedQuotes, verifiedQuotes }]
+  criterionResults Json
+  /// e.g. ["INJECTION_SUSPECTED"]
+  flags            Json                 @default("[]")
+  createdAt        DateTime             @default(now())
+
+  @@index([submissionId, createdAt])
+  @@index([promptVersion, mode])
+}
+
+/// Immutable validated item, written in the transaction that moves its job to SUCCEEDED.
+model AiJobItem {
+  id        String           @id @default(cuid())
+  jobId     String
+  job       AiJob            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  position  Int
+  /// Item per the output schema, sourceRefs included.
+  payload   Json
+  /// Warning codes (validation-rules.md).
+  flags     Json             @default("[]")
+  createdAt DateTime         @default(now())
+  decisions AiItemDecision[]
+
+  @@unique([jobId, position])
+}
+
+/// Append-only; the latest row per item is the current decision.
+model AiItemDecision {
+  id            String             @id @default(cuid())
+  itemId        String
+  item          AiJobItem          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  actorId       String
+  decision      AiItemDecisionKind
+  /// Required for EDITED, forbidden otherwise.
+  editedPayload Json?
+  /// Required for REJECTED.
+  reasonCode    String?
+  createdAt     DateTime           @default(now())
+
+  @@index([itemId, createdAt])
+}
+
+/// TAI-03 Part A (qdup@1): one row per live question/card of a class resource or a released shared-library lesson.
+/// Rebuilt inside the transaction of every change of its source; never edited by hand.
+model QuestionFingerprint {
+  id             String   @id @default(cuid())
+  /// "CLASS_RESOURCE" | "LIBRARY_LESSON"
+  sourceKind     String
+  /// ClassResource.id or Lesson.id
+  sourceId       String
+  /// Resource version; 1 for lessons (rebuilt on every lesson change)
+  sourceVersion  Int
+  /// Question/card id inside the source; "<stepId>:<questionId>" for lessons
+  itemId         String
+  /// Class owner (Classroom.teacherId); null for library rows
+  ownerTeacherId String?
+  classId        String?
+  normalizedText String
+  normalizedHash String
+  /// "qdup@1"
+  algorithm      String
+  createdAt      DateTime @default(now())
+
+  @@unique([sourceKind, sourceId, sourceVersion, itemId, algorithm])
+  @@index([ownerTeacherId, normalizedHash])
+  @@index([sourceKind, normalizedHash])
+}
+
+enum InsightAckAction {
+  ACKNOWLEDGED
+  DISMISSED
+}
+
+/// TAI-04 (TAI4-T3): append-only teacher response to one insight fingerprint. Insights themselves are never stored.
+/// The latest row per fingerprint is current; rows are never updated or deleted by the application.
+model InsightAcknowledgement {
+  id          String           @id @default(cuid())
+  classId     String
+  classroom   Classroom        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fingerprint String
+  ruleVersion String
+  ruleCode    String
+  /// Sorted evidence ids, kept for replay.
+  evidenceIds Json
+  action      InsightAckAction
+  /// At most 500 characters, teacher-only, never audited.
+  note        String?
+  actorId     String
+  createdAt   DateTime         @default(now())
+
+  @@index([classId, studentId, createdAt])
+  @@index([fingerprint, createdAt])
+}
+
+/// TAI-05: ledger account kinds. Teacher accounts are per teacher, system accounts are singletons (ownerId null).
+enum CreditAccountKind {
+  TEACHER_AVAILABLE
+  TEACHER_RESERVED
+  SYSTEM_ISSUANCE
+  SYSTEM_CONSUMED
+}
+
+enum CreditTxKind {
+  GRANT
+  ADJUST
+  RESERVE
+  SETTLE
+  REFUND
+}
+
+/// TAI-05: `balance` is a cached projection of the entries, updated in the posting transaction. A DB CHECK (migration)
+/// keeps teacher accounts >= 0, and a partial unique index (migration) keeps each system account a singleton.
+model CreditAccount {
+  id        String            @id @default(cuid())
+  kind      CreditAccountKind
+  ownerId   String?
+  balance   Int               @default(0)
+  createdAt DateTime          @default(now())
+  entries   CreditEntry[]
+
+  @@unique([kind, ownerId])
+}
+
+/// TAI-05: immutable header of one posting. No route or code path updates or deletes it.
+model CreditTransaction {
+  id               String        @id @default(cuid())
+  kind             CreditTxKind
+  aiJobId          String?
+  pricingVersionId String?
+  /// Admin for GRANT/ADJUST, teacher for RESERVE, null (system) for SETTLE/REFUND.
+  actorId          String?
+  /// Required for GRANT/ADJUST.
+  reason           String?
+  idempotencyKey   String?
+  createdAt        DateTime      @default(now())
+  entries          CreditEntry[]
+
+  @@unique([aiJobId, kind])
+  @@unique([actorId, idempotencyKey])
+  @@index([createdAt])
+}
+
+/// TAI-05: immutable signed amount; the entries of one transaction sum to zero.
+model CreditEntry {
+  id            String            @id @default(cuid())
+  transactionId String
+  transaction   CreditTransaction @relation(fields: [transactionId], references: [id])
+  accountId     String
+  account       CreditAccount     @relation(fields: [accountId], references: [id])
+  amount        Int
+
+  @@index([accountId])
+  @@index([transactionId])
+}
+
+/// TAI-05: versioned price of one AI purpose. A job pins the version used at reserve. Active rows are never edited.
+model PricingVersion {
+  id                       String    @id @default(cuid())
+  purpose                  String
+  version                  Int
+  baseCredits              Int
+  perItemCredits           Int
+  creditsPer1kInputTokens  Int
+  creditsPer1kOutputTokens Int
+  /// Path to the pricing evidence note.
+  evidenceRef              String
+  /// draft | active | retired
+  status                   String    @default("draft")
+  createdById              String
+  createdAt                DateTime  @default(now())
+  activatedAt              DateTime?
+  retiredAt                DateTime?
+
+  @@unique([purpose, version])
 }

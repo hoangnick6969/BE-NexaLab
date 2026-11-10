@@ -5,12 +5,13 @@ Part A (T1–T2) can ship right after TAI-01. Part B (T3–T5) waits for TAI2-T2
 ## TAI3-T1 — Question fingerprint store and backfill
 
 - `QuestionFingerprint` migration, `qdup@1` pure function, lifecycle hooks in the ClassResource transactions and shared-library publish/quarantine, and the backfill script.
-- **Accept when:** the `qdup` fixtures in `similarity-algorithms.md` pass; create, revise and archive change fingerprints atomically (a rollback fixture leaves none); a backfill rerun is a no-op with matching counts; the route manifest only adds the new route.
+- **Accept when:** the `qdup` fixtures in `similarity-algorithms.md` pass; create, revise and archive change fingerprints atomically (a rollback fixture leaves none); a backfill rerun is a no-op with matching counts; the route manifest is unchanged (the `duplicate-check` route belongs to TAI3-T2).
 - **Depends on:** TAI-T3 (TAI-01 `normalize` and validation pipeline).
 
 ## TAI3-T2 — Cross-class duplicate warnings
 
 - `duplicate-check` route, `duplicateWarnings` on create, update and import preview, TAI-01 corpus switch with `*_ELSEWHERE` flags, and FE warnings and badges.
+- Matches exclude the item's own version chain: after `revise`, the published source and its new draft both keep fingerprints (TAI3-T1), so checks for a resource ignore rows of resources in the same class with the same `kind` and `title` (the revise lineage).
 - **Accept when:** a copy from the teacher's other class and a library copy both warn with source title; `teacher.outsider`'s identical item never appears in matches or counts; direct authoring and TAI-01 review are never blocked by duplicate warnings.
 - **Depends on:** TAI3-T1, TAI-T4.
 

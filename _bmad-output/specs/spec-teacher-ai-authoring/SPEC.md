@@ -1,6 +1,6 @@
 ---
 id: SPEC-teacher-ai-authoring
-status: draft-awaiting-tai-t0-scope-approval
+status: approved
 companions:
   - implementation-contract.md
   - job-runtime-and-failure-modes.md
@@ -39,11 +39,11 @@ Teachers spend most authoring time writing study cards, practice questions and t
 - The planned pilot adapter is Gemini (`GEMINI_API_KEY` / `GEMINI_MODEL`), but provider selection is not approved for live use. Google's current Gemini API terms include an age-related restriction for services directed to or likely to be accessed by people under 18. NexaLab's child-facing context requires written provider/legal review before any API call, including TAI-01; a paid tier alone must not be assumed to resolve this restriction. The free tier also allows submitted content to be used to improve Google products, so it must not receive personal data. See `provider-and-data-flow.md`.
 - The request does not contain student-record fields by design, but lesson passages and the teacher's free-text instruction can still contain personal or confidential material. The claim “no student data is sent” is not verified until the input policy, safeguards and provider eligibility are approved.
 - If a provider-approved free-tier pilot is ever used, its rate limits may change. The planned runner spaces calls (`AI_PROVIDER_MIN_INTERVAL_MS`) and treats provider quota exhaustion as `PROVIDER_UNAVAILABLE`, without consuming the teacher's daily quota.
-- Only the owning teacher of the class can use AI routes. Missing and unauthorized resources return the same 404, matching existing Class Space denial. Students, parents and outsider teachers have no AI route.
+- Only the owning teacher of the class can use AI routes. A missing or not-owned class returns the same 403 `CLASS_ACCESS_DENIED` as existing Class Space routes (`ownedClass`); a missing job or item inside an owned class returns 404 `NOT_FOUND`; an inaccessible lesson returns 400 `LESSON_NOT_AVAILABLE` like `POST classes/:id/resources`. Students and parents are rejected by the role guard (403). Students, parents and outsider teachers have no AI route.
 - Output must parse against the pinned output schema. Free text is never stored as an item. The raw provider response is not persisted.
 - Prompt templates live in code with explicit versions. A pinned-digest test fails when template text changes without a version bump.
 - Item types are limited to what the existing contract supports: single-choice questions with 2–6 options and study cards. Multi-select, short-answer, essay and simulation items are excluded.
-- Quota defaults: 20 jobs per teacher per rolling 24 h, 2 concurrent active jobs, and a maximum of 20 questions or 30 cards per job. All are env-configurable.
+- Quota is counted per teacher **and per `purpose`** (`GENERATE_RESOURCE` here), so later purposes such as TAI-02 `ASSESS_SUBMISSION` keep separate limits. Defaults: 20 jobs per teacher per rolling 24 h, 2 concurrent active jobs, and a maximum of 20 questions or 30 cards per job. All are env-configurable.
 - The golden-evaluation reviewer is the supervising lecturer. Release thresholds are fixed in `validation-rules.md`.
 - No new infrastructure (queue, Redis, vector store). The runner uses PostgreSQL lease claims and must stay correct with more than one API instance.
 
@@ -68,7 +68,7 @@ On `class-pilot-a`, the owner teacher generates a 10-question TEST from `lesson-
 
 ## Open Questions
 
-- PRD §10 item 17 and the ARCHITECTURE-SPINE Deferred section exclude AI from the current delivery. Does the product owner approve activating FR-21 as a new increment (TAI-T0) before implementation?
+- Scope is approved (TAI-T0, 2026-10-30): PRD FR-21 and §10 item 17 and the ARCHITECTURE-SPINE Deferred section point here, and AD-17 records the constraints. The questions below remain open under gate G-6 and block only live provider calls; T1–T5 are built and tested with the fake provider.
 - Does Google confirm in writing that the planned Gemini API use is eligible when called by teachers inside an application directed to or likely to be accessed by under-18 students? If not, select a provider whose terms permit this context.
 - Which safeguards prevent lesson passages or teacher instructions from carrying personal/confidential data to a provider, and who approves retention, deletion and cross-border processing?
 - How is `sourceRefs` and AI-origin provenance retained after accepted items are materialized, published, edited, reused or removed under retention policy? Who confirms the source license permits provider processing?

@@ -1,0 +1,1838 @@
+{
+ "synthetic": true,
+ "description": "SYNTHETIC golden set for the TAI-T6 harness: hand-written stand-ins for lesson-circuit, lesson-chemistry and lesson-eye (not the seeded lesson text), a scripted provider output per lesson returned by the existing FakeAiProvider, and invented labels. Not real provider output and not a lecturer review.",
+ "reviewer": "SYNTHETIC (no human reviewer; written by the TAI-T6 developer to exercise the harness)",
+ "labelledAt": "2026-11-09",
+ "lessons": [
+  {
+   "lessonId": "lesson-circuit",
+   "source": {
+    "title": "Mạch điện đơn giản",
+    "grade": 8,
+    "domain": "ENERGY",
+    "topic": "Dòng điện và mạch điện",
+    "learningObjective": "Mô tả mạch điện đơn giản, nêu được tác dụng của dòng điện và cách đo cường độ dòng điện, hiệu điện thế.",
+    "content": "<p>Dòng điện là dòng các hạt mang điện dịch chuyển có hướng. Trong kim loại, hạt mang điện là các electron tự do.</p><p>Chiều dòng điện quy ước đi từ cực dương qua dây dẫn và các dụng cụ điện tới cực âm của nguồn điện.</p><p>Mạch điện đơn giản gồm nguồn điện (pin, acquy), dây nối, công tắc và thiết bị tiêu thụ điện như bóng đèn. Sơ đồ mạch điện dùng các kí hiệu quy ước.</p><p>Vật dẫn điện cho dòng điện chạy qua, ví dụ đồng, nhôm. Vật cách điện không cho dòng điện chạy qua, ví dụ nhựa, sứ, cao su.</p><p>Ampe kế đo cường độ dòng điện, đơn vị ampe (A), được mắc nối tiếp với dụng cụ cần đo, chốt dương nối về phía cực dương của nguồn.</p><p>Dòng điện có tác dụng nhiệt, tác dụng phát sáng, tác dụng từ, tác dụng hóa học và tác dụng sinh lí. Bàn là, bóng đèn sợi đốt dùng tác dụng nhiệt; nam châm điện dùng tác dụng từ; mạ điện dùng tác dụng hóa học.</p>",
+    "outcomeCodes": [
+     "KHTN8.E1"
+    ],
+    "readingSteps": [
+     {
+      "position": 1,
+      "html": "<p>Vôn kế đo hiệu điện thế, đơn vị vôn (V), được mắc song song với dụng cụ cần đo. Khi công tắc mở, mạch hở và đèn không sáng; khi công tắc đóng, mạch kín và có dòng điện chạy qua đèn.</p>"
+     }
+    ]
+   },
+   "outcomeStatements": {
+    "KHTN8.E1": "Mô tả được mạch điện đơn giản và các tác dụng của dòng điện"
+   },
+   "request": {
+    "itemCount": 20,
+    "difficulty": null,
+    "instruction": null
+   },
+   "providerOutput": {
+    "items": [
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Dòng điện là gì?",
+      "options": [
+       "Dòng các hạt mang điện dịch chuyển có hướng",
+       "Dòng các phân tử nước chuyển động",
+       "Sự nóng lên của dây dẫn",
+       "Ánh sáng phát ra từ bóng đèn"
+      ],
+      "correctOption": 0,
+      "explanation": "Dòng điện là dòng các hạt mang điện dịch chuyển có hướng.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Trong kim loại, hạt mang điện tạo thành dòng điện là hạt nào?",
+      "options": [
+       "Ion dương",
+       "Electron tự do",
+       "Proton",
+       "Neutron"
+      ],
+      "correctOption": 1,
+      "explanation": "Trong kim loại, các electron tự do dịch chuyển có hướng tạo thành dòng điện.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Chiều dòng điện quy ước trong mạch đi như thế nào?",
+      "options": [
+       "Từ cực âm qua dây dẫn tới cực dương",
+       "Từ cực dương qua dây dẫn và dụng cụ điện tới cực âm",
+       "Theo cả hai chiều cùng lúc",
+       "Không có chiều xác định"
+      ],
+      "correctOption": 1,
+      "explanation": "Chiều quy ước đi từ cực dương qua dây dẫn và các dụng cụ điện tới cực âm của nguồn.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Dụng cụ nào dùng để đo cường độ dòng điện?",
+      "options": [
+       "Vôn kế",
+       "Ampe kế",
+       "Nhiệt kế",
+       "Lực kế"
+      ],
+      "correctOption": 1,
+      "explanation": "Ampe kế dùng để đo cường độ dòng điện.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Ampe kế được mắc như thế nào với dụng cụ cần đo cường độ dòng điện?",
+      "options": [
+       "Song song",
+       "Nối tiếp",
+       "Mắc ở ngoài mạch",
+       "Mắc vào một cực của nguồn"
+      ],
+      "correctOption": 1,
+      "explanation": "Ampe kế được mắc nối tiếp với dụng cụ cần đo.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Vôn kế được mắc như thế nào để đo hiệu điện thế giữa hai đầu bóng đèn?",
+      "options": [
+       "Nối tiếp với bóng đèn",
+       "Song song với bóng đèn",
+       "Thay cho bóng đèn",
+       "Nối với một đầu của bóng đèn"
+      ],
+      "correctOption": 1,
+      "explanation": "Vôn kế được mắc song song với dụng cụ cần đo hiệu điện thế.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P3"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Đơn vị đo hiệu điện thế là gì?",
+      "options": [
+       "Ampe",
+       "Vôn",
+       "Ôm",
+       "Oát"
+      ],
+      "correctOption": 1,
+      "explanation": "Hiệu điện thế đo bằng vôn.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Đơn vị đo cường độ dòng điện là gì?",
+      "options": [
+       "Ampe",
+       "Vôn",
+       "Jun"
+      ],
+      "correctOption": 0,
+      "explanation": "Cường độ dòng điện đo bằng ampe.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [],
+      "sourceRefs": [
+       "P9"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Vật nào sau đây là vật dẫn điện?",
+      "options": [
+       "Dây đồng",
+       "Thước nhựa",
+       "Cốc sứ",
+       "Găng tay cao su"
+      ],
+      "correctOption": 0,
+      "explanation": "Đồng là kim loại cho dòng điện chạy qua.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Vật liệu nào thường dùng làm vỏ bọc cách điện cho dây nối?",
+      "options": [
+       "Nhựa",
+       "Đồng",
+       "Nhôm",
+       "Sắt"
+      ],
+      "correctOption": 0,
+      "explanation": "Nhựa là vật cách điện nên được dùng làm vỏ bọc dây nối.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Mạch điện đơn giản gồm những bộ phận nào?",
+      "options": [
+       "Nguồn điện, dây nối, công tắc và thiết bị tiêu thụ điện",
+       "Chỉ có bóng đèn và pin",
+       "Chỉ có dây nối",
+       "Nguồn điện và vôn kế"
+      ],
+      "correctOption": 0,
+      "explanation": "Mạch điện đơn giản gồm nguồn điện, dây nối, công tắc và thiết bị tiêu thụ điện.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Khi công tắc mở, điều gì xảy ra với bóng đèn trong mạch?",
+      "options": [
+       "Đèn sáng hơn",
+       "Đèn tắt vì mạch hở",
+       "Đèn sáng bình thường",
+       "Đèn nhấp nháy"
+      ],
+      "correctOption": 1,
+      "explanation": "Công tắc mở làm mạch hở nên không có dòng điện qua đèn.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P3"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Bóng đèn sợi đốt sáng lên là biểu hiện của tác dụng nào của dòng điện?",
+      "options": [
+       "Tác dụng phát sáng và tác dụng nhiệt",
+       "Tác dụng hóa học",
+       "Tác dụng từ",
+       "Tác dụng sinh lí"
+      ],
+      "correctOption": 0,
+      "explanation": "Sợi đốt nóng lên và phát sáng khi có dòng điện chạy qua.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Nam châm điện hoạt động dựa trên tác dụng nào của dòng điện?",
+      "options": [
+       "Tác dụng nhiệt",
+       "Tác dụng từ",
+       "Tác dụng sinh lí",
+       "Tác dụng phát sáng"
+      ],
+      "correctOption": 1,
+      "explanation": "Nam châm điện dựa trên tác dụng từ của dòng điện.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Mạ điện là ứng dụng của tác dụng nào của dòng điện?",
+      "options": [
+       "Tác dụng hóa học",
+       "Tác dụng nhiệt",
+       "Tác dụng từ",
+       "Tác dụng phát sáng"
+      ],
+      "correctOption": 0,
+      "explanation": "Mạ điện dựa trên tác dụng hóa học của dòng điện.",
+      "difficulty": "ADVANCED",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Thiết bị nào là nguồn điện?",
+      "options": [
+       "Pin",
+       "Acquy",
+       "Tất cả các đáp án trên"
+      ],
+      "correctOption": 2,
+      "explanation": "Pin và acquy đều là nguồn điện.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Nguồn điện nào thường dùng trong mạch điện đơn giản ở phòng thí nghiệm?",
+      "options": [
+       "Pin",
+       "Bóng đèn",
+       "Công tắc",
+       "Ampe kế"
+      ],
+      "correctOption": 0,
+      "explanation": "Pin là nguồn điện thường dùng trong mạch điện đơn giản.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Sơ đồ mạch điện được vẽ bằng gì?",
+      "options": [
+       "Các kí hiệu quy ước của bộ phận mạch",
+       "Hình chụp thật của dụng cụ",
+       "Chữ viết mô tả",
+       "Màu sắc của dây"
+      ],
+      "correctOption": 0,
+      "explanation": "Sơ đồ mạch điện dùng kí hiệu quy ước cho từng bộ phận.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Công tắc trong mạch điện có tác dụng gì?",
+      "options": [
+       "Đóng hoặc ngắt mạch điện",
+       "Tạo ra dòng điện",
+       "Đo hiệu điện thế",
+       "Làm nóng dây dẫn"
+      ],
+      "correctOption": 0,
+      "explanation": "Công tắc dùng để đóng hoặc ngắt mạch.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Chốt dương của ampe kế được nối về phía nào của nguồn điện?",
+      "options": [
+       "Phía cực dương",
+       "Phía cực âm",
+       "Không cần phân biệt",
+       "Nối với vỏ nhựa"
+      ],
+      "correctOption": 0,
+      "explanation": "Chốt dương của ampe kế nối về phía cực dương của nguồn.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Số chỉ của vôn kế mắc vào hai cực của pin cho biết điều gì?",
+      "options": [
+       "Cường độ dòng điện qua pin",
+       "Hiệu điện thế giữa hai cực của pin",
+       "Điện trở của pin",
+       "Công suất của pin"
+      ],
+      "correctOption": 1,
+      "explanation": "Vôn kế mắc vào hai cực của pin chỉ hiệu điện thế giữa hai cực.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P3"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Tác dụng nào của dòng điện được dùng trong bàn là?",
+      "options": [
+       "Tác dụng từ",
+       "Tác dụng nhiệt",
+       "Tác dụng hóa học",
+       "Tác dụng sinh lí"
+      ],
+      "correctOption": 0,
+      "explanation": "Bàn là dùng tác dụng từ của dòng điện.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Kí hiệu đơn vị của cường độ dòng điện là gì?",
+      "options": [
+       "A",
+       "V",
+       "Ω",
+       "W"
+      ],
+      "correctOption": 0,
+      "explanation": "Cường độ dòng điện có đơn vị ampe, kí hiệu A.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.E1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     }
+    ]
+   },
+   "labels": [
+    {
+     "position": 0,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 1,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 2,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 3,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 4,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 5,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 6,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 8,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 9,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT_AFTER_EDIT",
+     "note": "Thêm sứ, cao su vào giải thích"
+    },
+    {
+     "position": 10,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT_AFTER_EDIT",
+     "note": "Rút gọn phương án đúng để bỏ gợi ý độ dài"
+    },
+    {
+     "position": 11,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 12,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 13,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 14,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 16,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 17,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "REJECT",
+     "note": "Trùng ý với câu khác trong đề"
+    },
+    {
+     "position": 18,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 19,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "REJECT",
+     "note": "Quá vụn, không cần cho đề kiểm tra"
+    },
+    {
+     "position": 20,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 21,
+     "expectedOption": 1,
+     "scientificallyAccurate": false,
+     "grounded": true,
+     "decision": "REJECT",
+     "note": "Đáp án và giải thích sai: bàn là dùng tác dụng nhiệt"
+    }
+   ]
+  },
+  {
+   "lessonId": "lesson-chemistry",
+   "source": {
+    "title": "Phản ứng hóa học",
+    "grade": 8,
+    "domain": "MATTER",
+    "topic": "Biến đổi chất",
+    "learningObjective": "Phân biệt biến đổi vật lí và biến đổi hóa học, nêu được khái niệm phản ứng hóa học và định luật bảo toàn khối lượng.",
+    "content": "<p>Biến đổi vật lí: chất chỉ thay đổi trạng thái hoặc hình dạng, không tạo thành chất mới, ví dụ nước đá tan, cồn bay hơi.</p><p>Biến đổi hóa học: có chất mới tạo thành, ví dụ đốt cháy than, sắt bị gỉ.</p><p>Phản ứng hóa học là quá trình biến đổi từ chất này thành chất khác. Chất ban đầu là chất phản ứng (chất tham gia), chất mới sinh ra là sản phẩm. Trong phản ứng, liên kết giữa các nguyên tử thay đổi, còn số nguyên tử của mỗi nguyên tố giữ nguyên.</p><p>Dấu hiệu có phản ứng hóa học: xuất hiện chất kết tủa, chất khí, thay đổi màu sắc, tỏa nhiệt hoặc phát sáng.</p><p>Định luật bảo toàn khối lượng: tổng khối lượng các sản phẩm bằng tổng khối lượng các chất phản ứng.</p><p>Phản ứng tỏa nhiệt giải phóng năng lượng (đốt cháy cồn, than); phản ứng thu nhiệt cần cung cấp năng lượng (nung đá vôi).</p>",
+    "outcomeCodes": [
+     "KHTN8.M1"
+    ],
+    "readingSteps": [
+     {
+      "position": 1,
+      "html": "<p>Phương trình hóa học biểu diễn phản ứng bằng công thức hóa học của các chất, ví dụ 2H2 + O2 → 2H2O.</p>"
+     }
+    ]
+   },
+   "outcomeStatements": {
+    "KHTN8.M1": "Nêu được khái niệm phản ứng hóa học và định luật bảo toàn khối lượng"
+   },
+   "request": {
+    "itemCount": 20,
+    "difficulty": null,
+    "instruction": null
+   },
+   "providerOutput": {
+    "items": [
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Biến đổi nào sau đây là biến đổi vật lí?",
+      "options": [
+       "Nước đá tan thành nước lỏng",
+       "Đốt cháy than",
+       "Sắt bị gỉ",
+       "Gỗ cháy thành than"
+      ],
+      "correctOption": 0,
+      "explanation": "Nước đá tan chỉ đổi thể, không tạo chất mới.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Biến đổi nào sau đây là biến đổi hóa học?",
+      "options": [
+       "Cồn bay hơi",
+       "Sắt bị gỉ",
+       "Nước đá tan",
+       "Bẻ đôi viên phấn"
+      ],
+      "correctOption": 1,
+      "explanation": "Sắt bị gỉ tạo thành chất mới là gỉ sắt.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Dấu hiệu chính để nhận biết biến đổi hóa học là gì?",
+      "options": [
+       "Có chất mới tạo thành",
+       "Chất thay đổi hình dạng",
+       "Chất chuyển sang thể lỏng",
+       "Chất bị chia nhỏ"
+      ],
+      "correctOption": 0,
+      "explanation": "Biến đổi hóa học luôn có chất mới tạo thành.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Phản ứng hóa học là gì?",
+      "options": [
+       "Quá trình biến đổi từ chất này thành chất khác",
+       "Quá trình chất chuyển thể",
+       "Quá trình hòa tan muối vào nước",
+       "Quá trình nghiền nhỏ chất rắn"
+      ],
+      "correctOption": 0,
+      "explanation": "Phản ứng hóa học là quá trình biến đổi từ chất này thành chất khác.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Trong phản ứng hóa học, chất ban đầu được gọi là gì?",
+      "options": [
+       "Sản phẩm",
+       "Chất phản ứng",
+       "Chất xúc tác",
+       "Dung môi"
+      ],
+      "correctOption": 1,
+      "explanation": "Chất ban đầu là chất phản ứng (chất tham gia).",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Trong phản ứng hóa học, chất mới sinh ra được gọi là gì?",
+      "options": [
+       "Chất phản ứng",
+       "Sản phẩm",
+       "Nguyên tố",
+       "Hỗn hợp"
+      ],
+      "correctOption": 1,
+      "explanation": "Chất mới sinh ra là sản phẩm.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Trong phản ứng hóa học, điều gì thay đổi?",
+      "options": [
+       "Số nguyên tử của mỗi nguyên tố",
+       "Liên kết giữa các nguyên tử",
+       "Khối lượng của mỗi nguyên tử",
+       "Loại nguyên tố"
+      ],
+      "correctOption": 1,
+      "explanation": "Liên kết giữa các nguyên tử thay đổi, số nguyên tử mỗi nguyên tố giữ nguyên.",
+      "difficulty": "ADVANCED",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Khi đốt cháy than, sản phẩm chính là khí nào?",
+      "options": [
+       "Khí carbon dioxide",
+       "Khí oxygen",
+       "Khí nitrogen"
+      ],
+      "correctOption": 0,
+      "explanation": "Than cháy tạo ra khí carbon dioxide.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN9.X1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Hiện tượng nào cho thấy có phản ứng hóa học xảy ra?",
+      "options": [
+       "Xuất hiện chất kết tủa",
+       "Nước sôi",
+       "Muối tan trong nước",
+       "Băng tan"
+      ],
+      "correctOption": 0,
+      "explanation": "Xuất hiện kết tủa là dấu hiệu có chất mới.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Định luật bảo toàn khối lượng phát biểu điều gì?",
+      "options": [
+       "Tổng khối lượng sản phẩm bằng tổng khối lượng chất phản ứng",
+       "Khối lượng sản phẩm luôn lớn hơn",
+       "Khối lượng chất phản ứng luôn lớn hơn",
+       "Khối lượng không liên quan đến phản ứng"
+      ],
+      "correctOption": 0,
+      "explanation": "Tổng khối lượng sản phẩm bằng tổng khối lượng các chất phản ứng.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Vì sao khối lượng được bảo toàn trong phản ứng hóa học?",
+      "options": [
+       "Vì số nguyên tử của mỗi nguyên tố không đổi",
+       "Vì có thêm nguyên tử mới",
+       "Vì nguyên tử bị phá hủy",
+       "Vì liên kết không thay đổi"
+      ],
+      "correctOption": 0,
+      "explanation": "Số nguyên tử mỗi nguyên tố giữ nguyên nên khối lượng được bảo toàn.",
+      "difficulty": "ADVANCED",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Đốt cháy cồn là phản ứng tỏa nhiệt hay thu nhiệt?",
+      "options": [
+       "Tỏa nhiệt",
+       "Thu nhiệt",
+       "Không trao đổi nhiệt",
+       "Vừa tỏa vừa thu nhiệt như nhau"
+      ],
+      "correctOption": 0,
+      "explanation": "Phản ứng đốt cháy tỏa nhiệt.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Nung đá vôi là ví dụ của loại phản ứng nào?",
+      "options": [
+       "Phản ứng thu nhiệt",
+       "Phản ứng tỏa nhiệt",
+       "Biến đổi vật lí",
+       "Sự hòa tan"
+      ],
+      "correctOption": 0,
+      "explanation": "Nung đá vôi cần cung cấp nhiệt liên tục nên là phản ứng thu nhiệt.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Phương trình hóa học dùng gì để biểu diễn phản ứng?",
+      "options": [
+       "Công thức hóa học của các chất",
+       "Hình vẽ dụng cụ",
+       "Tên thương mại",
+       "Màu của chất"
+      ],
+      "correctOption": 0,
+      "explanation": "Phương trình hóa học biểu diễn phản ứng bằng công thức hóa học.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P3"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Trong phương trình 2H2 + O2 → 2H2O, sản phẩm là chất nào?",
+      "options": [
+       "H2",
+       "O2",
+       "H2O",
+       "H2 và O2"
+      ],
+      "correctOption": 2,
+      "explanation": "Chất mới tạo thành là nước, H2O.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P3"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Dấu hiệu nào cho biết có phản ứng hóa học?",
+      "options": [
+       "Có khí thoát ra",
+       "Có kết tủa",
+       "Cả A và B"
+      ],
+      "correctOption": 2,
+      "explanation": "Cả hai đều là dấu hiệu.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Sắt để lâu trong không khí ẩm bị gỉ là biến đổi gì?",
+      "options": [
+       "Biến đổi hóa học",
+       "Biến đổi vật lí",
+       "Sự bay hơi",
+       "Sự nóng chảy"
+      ],
+      "correctOption": 0,
+      "explanation": "Gỉ sắt là chất mới nên đây là biến đổi hóa học.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Cồn để trong lọ hở bị hao hụt dần là biến đổi gì?",
+      "options": [
+       "Biến đổi vật lí do cồn bay hơi",
+       "Biến đổi hóa học",
+       "Phản ứng tỏa nhiệt",
+       "Phản ứng thu nhiệt"
+      ],
+      "correctOption": 0,
+      "explanation": "Cồn bay hơi tạo thành chất mới nên là biến đổi vật lí.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Khi phản ứng xảy ra, sự thay đổi màu sắc của chất có ý nghĩa gì?",
+      "options": [
+       "Có thể là dấu hiệu có chất mới tạo thành",
+       "Chứng tỏ chất bị chia nhỏ",
+       "Chứng tỏ chất chuyển thể",
+       "Không có ý nghĩa gì"
+      ],
+      "correctOption": 0,
+      "explanation": "Đổi màu có thể là dấu hiệu của phản ứng hóa học.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Đốt cháy 3 g than cần 8 g khí oxygen. Khối lượng khí carbon dioxide tạo thành là bao nhiêu?",
+      "options": [
+       "11 g",
+       "5 g",
+       "24 g",
+       "8 g"
+      ],
+      "correctOption": 0,
+      "explanation": "Theo định luật bảo toàn khối lượng: 3 g + 8 g = 11 g.",
+      "difficulty": "ADVANCED",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Hòa tan đường vào nước là biến đổi gì?",
+      "options": [
+       "Biến đổi vật lí",
+       "Biến đổi hóa học",
+       "Phản ứng tỏa nhiệt",
+       "Phản ứng thu nhiệt"
+      ],
+      "correctOption": 0,
+      "explanation": "Đường tan vào nước không tạo chất mới.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Trong phản ứng hóa học, số nguyên tử của mỗi nguyên tố thay đổi như thế nào?",
+      "options": [
+       "Giữ nguyên",
+       "Tăng lên",
+       "Giảm đi",
+       "Có thể tăng hoặc giảm"
+      ],
+      "correctOption": 0,
+      "explanation": "Số nguyên tử của mỗi nguyên tố được giữ nguyên.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Sản phẩm của phản ứng đốt cháy than là gì?",
+      "options": [
+       "Khí carbon dioxide",
+       "Nước đá",
+       "Muối ăn",
+       "Sắt"
+      ],
+      "correctOption": 0,
+      "explanation": "Than cháy tạo ra khí carbon dioxide.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.M1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     }
+    ]
+   },
+   "labels": [
+    {
+     "position": 0,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 1,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 2,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 3,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 4,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 5,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 6,
+     "expectedOption": 1,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "REJECT",
+     "note": "Phương án nhiễu A dễ gây hiểu nhầm, giáo viên viết lại câu khác"
+    },
+    {
+     "position": 8,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 9,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 10,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 11,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 12,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 13,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 14,
+     "expectedOption": 2,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 16,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 17,
+     "expectedOption": 0,
+     "scientificallyAccurate": false,
+     "grounded": true,
+     "decision": "ACCEPT_AFTER_EDIT",
+     "note": "Giải thích sai: bay hơi không tạo chất mới"
+    },
+    {
+     "position": 18,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "REJECT",
+     "note": "Câu hỏi mơ hồ"
+    },
+    {
+     "position": 19,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT_AFTER_EDIT",
+     "note": "Đổi đơn vị gam cho rõ"
+    },
+    {
+     "position": 20,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": false,
+     "decision": "ACCEPT_AFTER_EDIT",
+     "note": "Ví dụ đường không có trong bài; đổi sang nước đá tan"
+    },
+    {
+     "position": 21,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    }
+   ]
+  },
+  {
+   "lessonId": "lesson-eye",
+   "source": {
+    "title": "Mắt và sự nhìn",
+    "grade": 8,
+    "domain": "LIVING",
+    "topic": "Giác quan ở người",
+    "learningObjective": "Nêu được cấu tạo và chức năng của mắt, một số tật của mắt và cách bảo vệ mắt.",
+    "content": "<p>Mắt là cơ quan thị giác. Cầu mắt gồm màng cứng, màng giác (giác mạc), lòng đen, đồng tử, thể thủy tinh và màng lưới. Màng cứng bảo vệ phần bên trong cầu mắt; giác mạc trong suốt ở phía trước.</p><p>Ánh sáng từ vật đi qua giác mạc, đồng tử, thể thủy tinh và tạo ảnh trên màng lưới. Đồng tử thu nhỏ khi ánh sáng mạnh và dãn rộng khi ánh sáng yếu.</p><p>Màng lưới chứa tế bào que tiếp nhận ánh sáng yếu và tế bào nón tiếp nhận ánh sáng mạnh và màu sắc. Dây thần kinh thị giác dẫn xung thần kinh từ màng lưới về vùng thị giác ở não.</p><p>Người cận thị chỉ nhìn rõ vật ở gần, khắc phục bằng kính phân kì. Người viễn thị nhìn rõ vật ở xa, khắc phục bằng kính hội tụ (kính lão).</p><p>Bảo vệ mắt: đọc sách đúng khoảng cách, đủ ánh sáng, nghỉ ngơi hợp lí khi nhìn màn hình, khám mắt định kì.</p>",
+    "outcomeCodes": [
+     "KHTN8.L1"
+    ],
+    "readingSteps": [
+     {
+      "position": 1,
+      "html": "<p>Điểm mù là nơi đi ra của dây thần kinh thị giác, không có tế bào thụ cảm thị giác.</p>"
+     }
+    ]
+   },
+   "outcomeStatements": {
+    "KHTN8.L1": "Nêu được cấu tạo, chức năng của mắt và cách bảo vệ mắt"
+   },
+   "request": {
+    "itemCount": 20,
+    "difficulty": null,
+    "instruction": null
+   },
+   "providerOutput": {
+    "items": [
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Bộ phận nào của mắt là nơi ảnh của vật được tạo ra?",
+      "options": [
+       "Màng lưới",
+       "Giác mạc",
+       "Lòng đen",
+       "Màng cứng"
+      ],
+      "correctOption": 0,
+      "explanation": "Ảnh của vật hiện trên màng lưới.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Bộ phận nào điều chỉnh lượng ánh sáng đi vào mắt?",
+      "options": [
+       "Đồng tử",
+       "Màng lưới",
+       "Dây thần kinh thị giác",
+       "Điểm mù"
+      ],
+      "correctOption": 0,
+      "explanation": "Đồng tử thu nhỏ hoặc dãn rộng để điều chỉnh lượng ánh sáng.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Khi ánh sáng mạnh, đồng tử thay đổi như thế nào?",
+      "options": [
+       "Thu nhỏ",
+       "Dãn rộng",
+       "Không thay đổi",
+       "Biến mất"
+      ],
+      "correctOption": 0,
+      "explanation": "Ánh sáng mạnh làm đồng tử thu nhỏ.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Tế bào nào ở màng lưới tiếp nhận kích thích ánh sáng yếu?",
+      "options": [
+       "Tế bào que",
+       "Tế bào nón",
+       "Tế bào biểu bì",
+       "Tế bào cơ"
+      ],
+      "correctOption": 0,
+      "explanation": "Tế bào que tiếp nhận ánh sáng yếu.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Tế bào nón giúp mắt nhận biết điều gì?",
+      "options": [
+       "Ánh sáng mạnh và màu sắc",
+       "Âm thanh",
+       "Mùi vị",
+       "Nhiệt độ"
+      ],
+      "correctOption": 0,
+      "explanation": "Tế bào nón tiếp nhận ánh sáng mạnh và màu sắc.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Dây thần kinh thị giác có chức năng gì?",
+      "options": [
+       "Dẫn xung thần kinh từ màng lưới về não",
+       "Điều chỉnh độ cong thể thủy tinh",
+       "Tiết nước mắt",
+       "Bảo vệ cầu mắt"
+      ],
+      "correctOption": 0,
+      "explanation": "Dây thần kinh thị giác dẫn xung thần kinh về vùng thị giác ở não.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Điểm mù là nơi như thế nào?",
+      "options": [
+       "Không có tế bào thụ cảm thị giác",
+       "Có nhiều tế bào nón nhất",
+       "Có nhiều tế bào que nhất",
+       "Là nơi ảnh rõ nhất"
+      ],
+      "correctOption": 0,
+      "explanation": "Điểm mù là nơi đi ra của dây thần kinh thị giác, không có tế bào thụ cảm.",
+      "difficulty": "ADVANCED",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P3"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Thể thủy tinh có hình dạng gì?",
+      "options": [
+       "Hai mặt lồi",
+       "Hình cầu đặc",
+       "Hình trụ"
+      ],
+      "correctOption": 0,
+      "explanation": "Thể thủy tinh giống thấu kính hai mặt lồi.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [],
+      "sourceRefs": []
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Người cận thị nhìn rõ vật ở vị trí nào?",
+      "options": [
+       "Ở gần",
+       "Ở xa",
+       "Ở gần và ở xa như nhau",
+       "Không nhìn rõ vật nào"
+      ],
+      "correctOption": 0,
+      "explanation": "Người cận thị chỉ nhìn rõ vật ở gần.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Kính dùng để khắc phục tật cận thị là loại kính nào?",
+      "options": [
+       "Kính phân kì",
+       "Kính hội tụ",
+       "Kính râm",
+       "Kính phẳng"
+      ],
+      "correctOption": 0,
+      "explanation": "Kính cận là kính phân kì.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Người viễn thị cần đeo loại kính nào?",
+      "options": [
+       "Kính hội tụ",
+       "Kính phân kì",
+       "Kính bơi",
+       "Kính phẳng"
+      ],
+      "correctOption": 0,
+      "explanation": "Người viễn thị đeo kính hội tụ.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Thói quen nào giúp phòng tránh tật cận thị?",
+      "options": [
+       "Đọc sách đúng khoảng cách và đủ ánh sáng",
+       "Đọc sách nơi thiếu ánh sáng",
+       "Nhìn màn hình liên tục nhiều giờ",
+       "Nằm đọc sách"
+      ],
+      "correctOption": 0,
+      "explanation": "Đọc đúng khoảng cách, đủ ánh sáng giúp phòng cận thị.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Ánh sáng từ vật đi vào mắt lần lượt qua các bộ phận nào trước khi tới màng lưới?",
+      "options": [
+       "Giác mạc, đồng tử, thể thủy tinh",
+       "Màng lưới, đồng tử, giác mạc",
+       "Thể thủy tinh, giác mạc, màng cứng",
+       "Dây thần kinh, đồng tử, giác mạc"
+      ],
+      "correctOption": 0,
+      "explanation": "Ánh sáng đi qua giác mạc, đồng tử, thể thủy tinh rồi tới màng lưới.",
+      "difficulty": "ADVANCED",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Vùng nào của não xử lí thông tin thị giác?",
+      "options": [
+       "Vùng thị giác",
+       "Vùng thính giác",
+       "Vùng vị giác",
+       "Tủy sống"
+      ],
+      "correctOption": 0,
+      "explanation": "Xung thần kinh được dẫn về vùng thị giác ở não.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Vì sao nên khám mắt định kì?",
+      "options": [
+       "Để phát hiện sớm các tật và bệnh về mắt",
+       "Để mắt nhìn được trong bóng tối",
+       "Để thay đổi màu mắt",
+       "Để đồng tử luôn dãn"
+      ],
+      "correctOption": 0,
+      "explanation": "Khám định kì giúp phát hiện sớm tật khúc xạ.",
+      "difficulty": "FOUNDATION",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Bộ phận nào thuộc cầu mắt?",
+      "options": [
+       "Giác mạc",
+       "Màng lưới",
+       "Không có đáp án nào đúng"
+      ],
+      "correctOption": 0,
+      "explanation": "Giác mạc thuộc cầu mắt.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Màng cứng của mắt có vai trò gì?",
+      "options": [
+       "Bảo vệ phần bên trong cầu mắt",
+       "Tạo ảnh của vật",
+       "Tiếp nhận màu sắc",
+       "Dẫn truyền xung thần kinh"
+      ],
+      "correctOption": 0,
+      "explanation": "Màng cứng bảo vệ phần trong của cầu mắt.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Khi vào phòng tối, đồng tử thay đổi như thế nào?",
+      "options": [
+       "Dãn rộng",
+       "Thu nhỏ",
+       "Không đổi",
+       "Đóng lại hoàn toàn"
+      ],
+      "correctOption": 0,
+      "explanation": "Ánh sáng yếu làm đồng tử dãn rộng để nhận thêm ánh sáng.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Tế bào thụ cảm thị giác nằm ở đâu?",
+      "options": [
+       "Màng lưới",
+       "Giác mạc",
+       "Màng cứng",
+       "Lòng đen"
+      ],
+      "correctOption": 0,
+      "explanation": "Tế bào que và tế bào nón nằm ở màng lưới.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Kính lão thường dùng cho tật nào?",
+      "options": [
+       "Viễn thị",
+       "Cận thị",
+       "Loạn sắc",
+       "Điểm mù"
+      ],
+      "correctOption": 0,
+      "explanation": "Kính lão là kính hội tụ dùng cho người viễn thị.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Màu của lòng đen ở mỗi người do yếu tố nào quyết định?",
+      "options": [
+       "Sắc tố",
+       "Ánh sáng trong phòng",
+       "Kính đeo",
+       "Nhiệt độ"
+      ],
+      "correctOption": 0,
+      "explanation": "Màu lòng đen do sắc tố quyết định.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Vì sao nên ngắt quãng thời gian nhìn màn hình liên tục?",
+      "options": [
+       "Để mắt được nghỉ ngơi hợp lí",
+       "Để đồng tử dãn ra",
+       "Để tăng số tế bào nón",
+       "Để thể thủy tinh dày lên"
+      ],
+      "correctOption": 0,
+      "explanation": "Nghỉ ngơi hợp lí giúp giảm mỏi mắt.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     },
+     {
+      "type": "SINGLE_CHOICE",
+      "prompt": "Bộ phận nào trong suốt nằm phía trước cầu mắt?",
+      "options": [
+       "Giác mạc",
+       "Màng cứng",
+       "Màng lưới",
+       "Dây thần kinh thị giác"
+      ],
+      "correctOption": 0,
+      "explanation": "Giác mạc trong suốt nằm phía trước cầu mắt.",
+      "difficulty": "STANDARD",
+      "outcomeCodes": [
+       "KHTN8.L1"
+      ],
+      "sourceRefs": [
+       "P2"
+      ]
+     }
+    ]
+   },
+   "labels": [
+    {
+     "position": 0,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 1,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 2,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 3,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 4,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 5,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 6,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 8,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT_AFTER_EDIT",
+     "note": "Sửa phương án nhiễu C cho rõ"
+    },
+    {
+     "position": 9,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 10,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 11,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT_AFTER_EDIT",
+     "note": "Bỏ gợi ý độ dài ở đáp án"
+    },
+    {
+     "position": 12,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 13,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "REJECT",
+     "note": "Ngoài trọng tâm bài"
+    },
+    {
+     "position": 14,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 16,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 17,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 18,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 19,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "ACCEPT"
+    },
+    {
+     "position": 20,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": false,
+     "decision": "REJECT",
+     "note": "Không có trong bài học"
+    },
+    {
+     "position": 21,
+     "expectedOption": 0,
+     "scientificallyAccurate": true,
+     "grounded": true,
+     "decision": "REJECT",
+     "note": "Trùng ý câu 11"
+    }
+   ]
+  }
+ ]
+}
