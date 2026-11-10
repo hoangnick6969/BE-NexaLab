@@ -37,6 +37,7 @@ import {
   resolutionsSchema,
 } from "../application/admin-policy";
 import { lessonOperationData } from "../../lessons/application/lesson-moderation";
+import { reassignClassFingerprints, syncLibraryLessonFingerprints } from "../../ai/application/question-fingerprints";
 
 const email = z
   .string()
@@ -305,7 +306,10 @@ export class AdminUsersController {
     const applied: Array<{ kind: string; id: string; action: string; newOwnerId?: string }> = [];
     const now = new Date();
     for (const r of resolutions.classes) {
-      if (r.action === "reassign") await tx.classroom.update({ where: { id: r.id }, data: { teacherId: r.newOwnerId } });
+      if (r.action === "reassign") {
+        await tx.classroom.update({ where: { id: r.id }, data: { teacherId: r.newOwnerId } });
+        await reassignClassFingerprints(tx, r.id, r.newOwnerId!);
+      }
       else await tx.classroom.update({ where: { id: r.id }, data: { status: "ARCHIVED", archivedAt: now } });
       await audit(tx, {
         actor,
@@ -321,6 +325,7 @@ export class AdminUsersController {
     for (const r of resolutions.lessons) {
       const lesson = await tx.lesson.findUniqueOrThrow({ where: { id: r.id } });
       await tx.lesson.update({ where: { id: r.id }, data: lessonOperationData(lesson, r.action, why, r.newOwnerId) });
+      await syncLibraryLessonFingerprints(tx, r.id);
       await audit(tx, {
         actor,
         action: `lesson.${r.action}`,

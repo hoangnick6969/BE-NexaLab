@@ -110,3 +110,8 @@ No production enablement until SG-2 closes. Details: `student_ai_tracking` in `s
 the lesson Reading tab, "Hỏi AI về đoạn này", the docked tutor chat sends the passage with the question; the server
 checks the passage is in the lesson (`tutor-chat-rules@5`, `lesson-passage-qa@1`). No migration; dev/test only. See
 the lesson passage section of `../specs/spec-student-ai-llm/SPEC.md`. Now 31 of 34 tickets built.
+
+2026-11-10 (later): owner decision "Đồng ý release với LLM tắt trước": Student AI goes to main with the provider off
+in production (rules path only; chat, B5 and passage Q&A hidden). Live Gemini check of the lesson passage Q&A passed
+on shared dev. `origin/main` (Teacher AI, PR #63) merged into `research/student-ai`; G-5 closed on 2026-11-06 with
+the `insights@1` thresholds, so SG-3 is closed and sai-02-t3 is delivered by tai-04-t1. 32 of 34 tickets built.

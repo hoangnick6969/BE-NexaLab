@@ -10,7 +10,8 @@ import { email } from "../../../common/validation";
 import { StudentAccessService } from "../../progress/application/student-access.service";
 import { applicableAssignmentWhere, assignmentQueueOrder } from "../../classes/application/class-access";
 import { TEST_CONTENT_TYPE } from "../../classes/application/assignment-test-contract";
-import { testStates } from "../../classes/application/assignment-test-state";
+import { deadlineStates } from "../../classes/application/assignment-test-state";
+import { WRITTEN_CONTENT_TYPE } from "../../classes/application/assignment-written-contract";
 import { notify } from "../../notifications/application/notify";
 import { overdueNotice } from "../../notifications/application/time-based-notices";
 import { PARENT_CONSENT_HASH, PARENT_CONSENT_VERSION, parentCode, parentCodeHash } from "../application/parent-codes";
@@ -158,15 +159,16 @@ export class ParentsController {
   /** Read-only status and deadline for a linked child's assigned test; no answers, scores or actions (I3 / 3.6). */
   private async childTestStates(studentId: string, assignmentId?: string) {
     const rows = await this.db.assignment.findMany({
-      where: { ...applicableAssignmentWhere(studentId), contentType: TEST_CONTENT_TYPE, ...(assignmentId ? { id: assignmentId } : {}) },
+      where: { ...applicableAssignmentWhere(studentId), contentType: { in: [TEST_CONTENT_TYPE, WRITTEN_CONTENT_TYPE] }, ...(assignmentId ? { id: assignmentId } : {}) },
       include: { classroom: { select: { name: true } } },
       orderBy: assignmentQueueOrder,
     });
-    const { states, key } = await testStates(this.db, rows, [studentId]);
+    const { states, key } = await deadlineStates(this.db, rows, [studentId]);
     return rows.map((a) => {
       const state = states.get(key(a.id, studentId));
       return {
         assignmentId: a.id,
+        contentType: a.contentType,
         title: a.title,
         className: a.classroom.name,
         status: state?.status ?? null,
@@ -181,7 +183,7 @@ export class ParentsController {
     // The panel shows the parent's stored overdue notifications (D-ACC-02 replaces the derived I3 notice), limited to
     // the ones still current: an extension changes the revision, so the old notice drops out of the panel but stays
     // in the notification history. Reading it here or from the bell marks the same row.
-    const current = (await this.childTestStates(studentId)).filter((item) => item.status === "OVERDUE_UNSUBMITTED");
+    const current = (await this.childTestStates(studentId)).filter((item) => item.status === "OVERDUE_UNSUBMITTED" && item.contentType === TEST_CONTENT_TYPE);
     if (!current.length) return [];
     const child = await this.db.user.findUnique({ where: { id: studentId }, select: { id: true, fullName: true } });
     const notices = current.map((item) => overdueNotice(req.user.sub, child!, item));

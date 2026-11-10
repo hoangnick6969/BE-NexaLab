@@ -72,11 +72,11 @@ The kept item's `flags` holds `engineResults: [{ label, verdict }]`, the `object
 
 ## HTTP contract
 
-Routes reuse the TAI-01 job routes (`GET`, `cancel`) and their owner and 404 rules.
+Routes reuse the TAI-01 job routes (`GET`, `cancel`) and their denial rules (403 `CLASS_ACCESS_DENIED` for a missing or not-owned class, 404 for a missing job inside an owned class).
 
 | Operation | Contract |
 | --- | --- |
-| `POST classes/:id/ai-jobs` | Body `{ purpose: "DRAFT_LAB_CHALLENGE", lessonId, proposalCount (1–3), instruction? }`. The lesson must be caller-authored, `TEACHER_PRIVATE`, `draft`, not structure-locked, and pass the TAI-01 class-lesson check. Otherwise 404 or 409 `LESSON_NOT_EDITABLE`. Credits and quota follow TAI-01 and TAI-05. |
+| `POST classes/:id/ai-jobs` | Body `{ purpose: "DRAFT_LAB_CHALLENGE", lessonId, proposalCount (1–3), instruction? }`. The lesson must be caller-authored, `TEACHER_PRIVATE`, `draft`, not structure-locked, and pass the TAI-01 class-lesson check. Otherwise 400 `LESSON_NOT_AVAILABLE` or 409 `LESSON_NOT_EDITABLE`. This is the `DRAFT_LAB_CHALLENGE` branch of the TAI-01 discriminated-union create body. Quota is counted for this purpose only; credits follow TAI-05. |
 | `POST classes/:id/ai-jobs/:jobId/items/:itemId/decisions` | `{ decision: "REJECTED", reasonCode }` only. Apply uses the route below. |
 | `POST classes/:id/ai-jobs/:jobId/items/:itemId/apply` | `Idempotency-Key` required. In one transaction: re-check that the lesson is editable, re-run LV-01..LV-03 against the current allowlist, set the lesson's `labId` and `challengeParams` through the lessons application function, record an `ACCEPTED` decision, and set `appliedLessonId` and `appliedItemId`. Returns the updated lesson summary and `objectivePreview`. A second apply returns 409 `AI_JOB_ALREADY_APPLIED`. |
 
