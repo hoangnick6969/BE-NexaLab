@@ -115,3 +115,8 @@ the lesson passage section of `../specs/spec-student-ai-llm/SPEC.md`. Now 31 of 
 in production (rules path only; chat, B5 and passage Q&A hidden). Live Gemini check of the lesson passage Q&A passed
 on shared dev. `origin/main` (Teacher AI, PR #63) merged into `research/student-ai`; G-5 closed on 2026-11-06 with
 the `insights@1` thresholds, so SG-3 is closed and sai-02-t3 is delivered by tai-04-t1. 32 of 34 tickets built.
+
+2026-11-13 — pre-push check: branches level with origin/main; every buildable SAI ticket is built (left: sai-01-t6 lecturer
+marks, sai-04-t2 lecturer approval + real-provider run, gates SG-2 and SG-4; SAI-06 Release 2). Fixed the time-bomb
+quota test (credits-test-kit fixed 2026-11-09 clock vs real-clock 24-hour window). Local: BE Vitest 1250 passed, 0
+failed; FE Student AI Playwright 17/17 (mocked API); eval rules-only prefilter categories 110/110.
