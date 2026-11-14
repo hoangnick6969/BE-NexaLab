@@ -47,7 +47,10 @@ async function fixture(p: PrismaClient) {
   await p.subject.create({ data: { id: `subject-${suffix}`, name: "Isolated fixture" } });
   const labId = `circuit-tutor-${suffix}`, challengeId = `circuit-tutor-${suffix}-001`;
   await p.lab.create({ data: { id: labId, subjectId: `subject-${suffix}`, title: "Circuit tutor fixture", topic: "fixture", learningObjective: "fixture", status: "published", scope: "CLASS_PRIVATE", releaseCleared: false, synthetic: true, simulationModelRef: "circuit@1.0.0" } });
-  await p.challenge.create({ data: { id: challengeId, labId, objective: `Làm LED sáng mà không quá dòng (fixture ${suffix})`, constraints: {} } });
+  // The objective is hint context, so the guard treats its numbers as grounded: keep the per-run tag (it isolates the
+  // wording cache between runs) but digit-free, or a random "9" would ground the unsafe "9 V" reply below.
+  const tag = suffix.replace(/\d/g, (d) => "ghijklmnop"[Number(d)]);
+  await p.challenge.create({ data: { id: challengeId, labId, objective: `Làm LED sáng mà không quá dòng (fixture ${tag})`, constraints: {} } });
   const student = async (name: string) => {
     const user = await p.user.create({ data: { username: `${name}-${suffix}`, fullName: "Fixture student", passwordHash: "fixture", role: "STUDENT" } });
     const session = await p.session.create({ data: { userId: user.id, tokenHash: randomUUID(), kind: "refresh", expiresAt: new Date(Date.now() + 3600_000) } });
