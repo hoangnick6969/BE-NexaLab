@@ -10,6 +10,8 @@ companions:
   - lab-pipeline-phase-plan.md
   - lab-catalog-and-shared-kits-khtn8-9.md
   - lab-portfolio-20-slots-v1.md
+  - lab-space-shared-ui-spec.md
+  - lab-kit-assets-and-class-lab-spec.md
   - fl-05-buoyancy-k3-plan.md
   - fl-10-mass-conservation-draft.md
   - fl-10-k2-implementation-spec.md
