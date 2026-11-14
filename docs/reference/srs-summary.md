@@ -1,9 +1,26 @@
-# SRS NexaLab v1.1 — tóm tắt để tra cứu
+# SRS NexaLab v1.2 — tóm tắt để tra cứu
 
-- **Bản gốc:** `SRS Report NexaLab (1).pdf`, 136 trang, ngày 08/10/2026, bản nháp v1.1, tác giả @Suong.
-- **Bản text trích từ PDF:** `srs-nexalab-v1.1.txt`. Dùng file này để `grep` theo ID (UC-, BR-, MSG-, SC-, NS-, CR-).
-- **Quan hệ với tài liệu khác:** SRS bám theo PRD (`docs/product/prd.md`). **Khi hai tài liệu khác nhau thì PRD thắng.** Các SPEC của epic A1–A5 là hợp đồng chuẩn cho phạm vi của từng epic; SRS chỉ đi theo các SPEC đó.
+- **Bản hiện hành:** `SRS Report NexaLab v1.2.docx`, bản nháp v1.2, ngày 14/11/2026, theo template SRS của capstone (Report 3). Người cập nhật: Võ Hà Đông.
+- **Bản text để grep:** `srs-nexalab-v1.2.txt`, trích từ file docx: heading có `#`, mỗi hàng bảng một dòng, các ô cách nhau bằng ` | `. Dùng file này để `grep` theo ID (UC-, BR-, MSG-, SC-, NS-, CR-).
+- **Bản cũ giữ làm lịch sử:** `SRS Report NexaLab (1).pdf` và `srs-nexalab-v1.1.txt` (v1.1, 136 trang, 08/10/2026, tác giả @Suong). Các SPEC viết trước 14/11/2026 trỏ tới v1.1; nội dung v1.1 vẫn đúng cho phạm vi Foundation, A, B, C.
+- **Quan hệ với tài liệu khác:** SRS bám theo PRD (`docs/product/prd.md`). **Khi hai tài liệu khác nhau thì PRD thắng.** SPEC của từng epic là hợp đồng chuẩn cho phạm vi epic đó; SRS chỉ đi theo các SPEC.
 - **Lưu ý:** bản tóm tắt này không phải bằng chứng là tính năng đã được làm.
+
+## Thay đổi trong v1.2 (14/11/2026)
+
+Đối chiếu với code trên `main` và nhánh `research/student-ai` ngày 14/11/2026.
+
+| Mục SRS | Thay đổi |
+| --- | --- |
+| Document Information | Version 1.2; điền tên thành viên (Đoàn Trọng Lực – Leader, Võ Hà Đông, Nguyễn Vũ Hoàng) và GVHD Lê Thiện Nhật Quang |
+| Release increments, 1 | Thêm I1–I3 (Open Learning, Class Space, Assigned Test), R2 (Account và Notifications), CF (Content Foundation), FL (Foundational Labs), TAI (Teacher AI), SAI (Student AI). Mắt 3D: đã có lab FL-16 Eye Optics, nhưng viewer có nhãn bộ phận vẫn là R1-later. Hoá học: đã có lab pH quỳ tím, 6 phản ứng cố định vẫn là R1-later |
+| 2.2.2 Use case catalogue | UC-AI-01..05, 08, 09 chuyển sang SAI; UC-AI-06, 07 chuyển sang SAI, TAI |
+| 3.1.2, 3.1.3 | SC-05 thêm avatar, theme, ngôn ngữ; thêm SC-36..SC-53 kèm phân quyền |
+| 3.1.4 | Thêm NS-18..NS-27: lab run pinning, evaluator registry, textbook ingest, notification sync, parent overdue notice, AI job runner, AI credit ledger, insight rule engine, Student AI provider guard, tutor retention |
+| 3.1.5 | Thêm khoảng 20 nhóm entity theo `prisma/schema.prisma` (curriculum, ebook, class resource, submission/late, notification, content pack, lab release/run, HintLog, tutor, AI job, similarity, credit) |
+| 3.10 | Teacher AI, Student AI, Teacher AI insights chuyển từ Future sang đã làm |
+| 3.11–3.16 (mới) | Open Curriculum và Ebooks; Class Space, Assigned Tests và Class Labs; Foundational Labs (danh mục 10 lab); Account, Notifications và Settings; Teacher AI (TAI-01..06); Student AI (SAI). Mỗi chức năng có Function trigger / description / details |
+| 5.3, 5.4.5 | Thêm MSG-48..MSG-54 và các hàng truy vết cho 3.11–3.16 |
 
 ## Quy ước ID
 
@@ -13,18 +30,20 @@
 | FS-Lx-nn | Feature spec |
 | BR-nn | Business rule (01–29) |
 | CR-nn | Common requirement (01–13) |
-| MSG-nn | Thông báo (01–47) |
-| SC-nn | Màn hình (01–35) |
-| NS-nn | Chức năng không có màn hình (01–17, F1–F3) |
+| MSG-nn | Thông báo (01–54; 48–54 thêm ở v1.2) |
+| SC-nn | Màn hình (01–53; 36–53 thêm ở v1.2) |
+| NS-nn | Chức năng không có màn hình (01–27, F1–F3; 18–27 thêm ở v1.2) |
 | NFR-nn | Yêu cầu phi chức năng (theo Use Case Specs) |
 
 **Module:** AUTH, LRN, CNT, CLS, PRG, PAR, ADM, LAB, 3D, CV, AI.
 
 **Mức ưu tiên:** P0 không bao giờ cắt; P1 cắt từ dưới lên; P2 cắt đầu tiên.
 
-**Increment:** Foundation, A, A-min (thao tác tối thiểu), B, C, R1-later (mắt 3D, lab hoá học), Future.
+**Increment:** Foundation, A, A-min (thao tác tối thiểu), B, C, R1-later (viewer mắt 3D, 6 phản ứng hoá học), Future; từ v1.2 thêm I1–I3, R2, CF, FL, TAI, SAI.
 
-**Số lượng:** 59 use case. Trong đó 3 Foundation, 14 A, 11 A-min, 3 B, 5 C, 8 R1-later, 15 Future.
+**Số lượng:** 59 use case. Trong đó 3 Foundation, 14 A, 11 A-min, 3 B, 5 C, 8 R1-later, 7 SAI, 2 SAI và TAI, 6 Future (v1.1: 15 Future).
+
+Các phần bên dưới tóm tắt phạm vi B và C từ v1.1 và vẫn đúng ở v1.2.
 
 ## Phạm vi Increment B (Teacher)
 
