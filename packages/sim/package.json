@@ -1,6 +1,6 @@
 {
   "name": "@nexalab/sim",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
@@ -13,7 +13,16 @@
     "thermal-bench.ts",
     "buoyancy.ts",
     "eye-optics.ts",
-    "food-web.ts"
+    "food-web.ts",
+    "wet-bench/index.ts",
+    "wet-bench/contracts.ts",
+    "wet-bench/species.ts",
+    "wet-bench/reagents.ts",
+    "wet-bench/fl13-acid-base.data.ts",
+    "wet-bench/reactions.ts",
+    "wet-bench/acid-base.ts",
+    "wet-bench/engine.ts",
+    "wet-bench/validate-config.ts"
   ],
   "dependencies": {
     "zod": "^3.25.0"
