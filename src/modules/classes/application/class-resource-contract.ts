@@ -23,6 +23,7 @@ export const labResourceInputSchema = z.object({
   learningObjective: z.string().trim().min(1).max(1000),
   instructions: z.string().trim().min(1).max(10000),
   reportPrompts: z.array(z.string().trim().min(1).max(1000)).max(20),
+  thumbnailUrl: httpsUrlSchema.optional(),
   customParams: z.record(z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/).max(80), z.number().finite()).refine((value) => Object.keys(value).length <= 10).optional(),
 }).strict();
 export const labResourceContentSchema = labResourceInputSchema.extend({ execution: assignmentExecutionSchema, executionDigest: z.string().regex(/^[0-9a-f]{64}$/) }).strict();
@@ -39,7 +40,8 @@ export const classLabSnapshotSchema = z.object({
 export function classLabSnapshot(resource: any) {
   const content = labResourceContentSchema.parse(resource.content);
   const fields = { resourceId: resource.id, version: resource.version, title: resource.title, lessonId: resource.lessonId,
-    source: content.source, learningObjective: content.learningObjective, instructions: content.instructions, reportPrompts: content.reportPrompts };
+    source: content.source, learningObjective: content.learningObjective, instructions: content.instructions, reportPrompts: content.reportPrompts,
+    ...(content.thumbnailUrl ? { thumbnailUrl: content.thumbnailUrl } : {}) };
   return classLabSnapshotSchema.parse({ ...fields, contentDigest: digest(fields) });
 }
 export function verifyClassLabSnapshot(value: unknown) {
@@ -154,12 +156,12 @@ export function normalizeResourceContent(kind: ResourceKind, raw: unknown) {
       ? z.object({ cards: z.array(cardSchema).min(1).max(200) }).strict().parse(raw)
       : kind === "STUDY_QUIZ"
         ? z.object({ questions: z.array(questionSchema).min(1).max(100) }).strict().parse(raw)
-        : z.object({ questions: z.array(testQuestionSchema).min(1).max(100) }).strict().parse(raw);
+        : z.object({ questions: z.array(testQuestionSchema).min(1).max(100), thumbnailUrl: httpsUrlSchema.optional() }).strict().parse(raw);
   if (kind === "DECK") return { cards: parsed.cards.map((card: any) => ({ id: randomUUID(), ...card })) };
   for (const question of parsed.questions) {
     if (kind === "TEST" && question.correctOption >= question.options.length) throw new BadRequestException({ code: "TEST_ANSWER_INVALID", message: "Đáp án đúng phải trỏ tới phương án có nội dung" });
   }
-  return { questions: parsed.questions.map((question: any) => ({
+  return { ...(kind === "TEST" && parsed.thumbnailUrl ? { thumbnailUrl: parsed.thumbnailUrl } : {}), questions: parsed.questions.map((question: any) => ({
     id: randomUUID(), prompt: question.prompt, explanation: question.explanation ?? null,
     options: question.options.map((text: string) => ({ id: randomUUID(), text })),
     ...(kind === "TEST" ? { correctOption: question.correctOption } : {}),

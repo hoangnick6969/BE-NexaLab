@@ -365,12 +365,14 @@ export class AssignmentsService {
       this.db.lab.findMany({
         where: {
           status: "published", scope: "SHARED_LIBRARY", releaseCleared: true, synthetic: false,
+          grade: c.grade,
           topicCode: { not: null }, releases: { some: { status: "ACTIVE" } },
         },
         select: {
           id: true,
           title: true,
           grade: true,
+          topicCode: true,
           topic: true,
           subject: { select: { id: true, name: true } },
           challenges: { where: { NOT: { id: { contains: "_v-" } } }, select: { id: true, objective: true }, orderBy: { id: "asc" } },
@@ -380,7 +382,7 @@ export class AssignmentsService {
       }),
       this.db.classResource.findMany({
         where: { classId: id, kind: "TEST", status: "PUBLISHED" },
-        select: { id: true, title: true, version: true, lessonId: true, content: true, publishedAt: true },
+        select: { id: true, title: true, version: true, lessonId: true, lesson: { select: { grade: true, subject: { select: { id: true, name: true } } } }, content: true, publishedAt: true },
         orderBy: [{ title: "asc" }, { version: "desc" }],
       }),
       this.db.classResource.findMany({
@@ -406,7 +408,7 @@ export class AssignmentsService {
       const execution = (release.snapshot as any).execution;
       if (revokedIds.has(execution.packVersionId)) return [];
       return [{
-        id: lab.id, title: lab.title, grade: lab.grade, topic: lab.topic, subject: lab.subject,
+        id: lab.id, title: lab.title, grade: lab.grade, topic: lab.topic, topicCode: lab.topicCode, subject: lab.subject,
         release: { id: release.id, version: release.version, digest: release.digest },
         ranges: (execution.template as any)?.ranges ?? {},
         previewConfig: (execution.template as any)?.buoyancy ?? null,
@@ -420,24 +422,26 @@ export class AssignmentsService {
       classLabs: await this.db.classResource.findMany({ where: { classId: id, kind: "LAB", status: "PUBLISHED" }, select: { id: true, title: true, version: true, content: true }, orderBy: { createdAt: "desc" } }),
       lessons,
       labs: eligibleLabs,
-      tests: tests.map(({ content, ...test }) => ({ ...test, questionCount: (content as any)?.questions?.length ?? 0 })),
+      tests: tests.map(({ content, lesson, ...test }) => ({ ...test, grade: lesson?.grade ?? null, subject: lesson?.subject ?? null, questionCount: (content as any)?.questions?.length ?? 0 })),
       // TAI2-T2: the rubric never leaves this route; only the prompt count is listed.
       writtenTasks: writtenTasks.map(({ content, ...task }) => ({ ...task, promptCount: (content as any)?.prompts?.length ?? 0 })),
     };
   }
 
-  private async assignableContentOrThrow(tx: any, classId: string, contentType: ContentType, contentId: string, teacherId: string) {
+  private async assignableContentOrThrow(tx: any, classId: string, contentType: ContentType, contentId: string, teacherId: string, classGrade: number) {
     if (contentType === TEST_CONTENT_TYPE || contentType === WRITTEN_CONTENT_TYPE) {
       // Only an explicit assignment makes a shared class test scored (I3 / 3.1); a written task (TAI2-T2) likewise.
       const test = await tx.classResource.findFirst({
         where: { id: contentId, classId, kind: contentType === TEST_CONTENT_TYPE ? "TEST" : "WRITTEN_TASK", status: "PUBLISHED" },
-        select: { id: true, title: true, version: true },
+        select: { id: true, title: true, version: true, lesson: { select: { grade: true } } },
       });
       if (!test)
         throw new BadRequestException({
           code: "CONTENT_NOT_PUBLISHED",
           message: MSG.publishFirst,
         });
+      if (test.lesson && test.lesson.grade !== classGrade)
+        throw new BadRequestException({ code: "ASSIGNMENT_GRADE_MISMATCH", message: `Bài kiểm tra thuộc khối ${test.lesson.grade}, lớp này thuộc khối ${classGrade}.` });
       return { id: test.id as string, title: test.title as string, version: String(test.version) };
     }
     const content = contentType === "lesson"
@@ -447,20 +451,22 @@ export class AssignmentsService {
               status: "published",
               OR: [{ scope: "SHARED_LIBRARY" }, { authorId: teacherId }],
             },
-            select: { id: true, title: true, content: true, materials: true, questions: true, labId: true, challengeParams: true },
+            select: { id: true, title: true, grade: true, content: true, materials: true, questions: true, labId: true, challengeParams: true },
           })
         : await tx.lab.findFirst({
             where: {
               id: contentId, status: "published", scope: "SHARED_LIBRARY", releaseCleared: true,
               synthetic: false, topicCode: { not: null }, releases: { some: { status: "ACTIVE" } },
             },
-            select: { id: true, title: true, simulationModelRef: true, config: true },
+            select: { id: true, title: true, grade: true, simulationModelRef: true, config: true },
           });
     if (!content)
       throw new BadRequestException({
         code: "CONTENT_NOT_PUBLISHED",
         message: MSG.publishFirst,
       });
+    if (contentType === "lab" && content.grade !== classGrade)
+      throw new BadRequestException({ code: "ASSIGNMENT_GRADE_MISMATCH", message: `Nội dung thuộc khối ${content.grade}, lớp này thuộc khối ${classGrade}.` });
     // D7 keeps an in-use lesson's structure immutable, so this hash names the version students receive.
     return {
       id: content.id as string,
@@ -559,7 +565,12 @@ export class AssignmentsService {
       await lock(tx, "class-assign:" + id);
       const privateLab = b.classLabResourceId ? await resolveClassLabResource(tx, b.classLabResourceId, undefined, id) : null;
       if (privateLab && privateLab.content.source.labId !== b.contentId) throw new BadRequestException({ code: "CLASS_LAB_SOURCE_MISMATCH" });
-      const content = privateLab ? { title: privateLab.resource.title, version: privateLab.snapshot.contentDigest } : await this.assignableContentOrThrow(tx, id, b.contentType, b.contentId, req.user.sub);
+      const content = privateLab ? { title: privateLab.resource.title, version: privateLab.snapshot.contentDigest } : await this.assignableContentOrThrow(tx, id, b.contentType, b.contentId, req.user.sub, c.grade);
+      if (privateLab) {
+        const source = await tx.lab.findUnique({ where: { id: b.contentId }, select: { grade: true } });
+        if (!source || source.grade !== c.grade)
+          throw new BadRequestException({ code: "ASSIGNMENT_GRADE_MISMATCH", message: `Lab nguồn phải thuộc khối ${c.grade} của lớp.` });
+      }
       const labExecution = privateLab?.content.execution ?? (b.contentType === "lab" ? await snapshotAssignmentLab(tx, b.contentId, b.labReleaseId!, b.labChallengeId!) : null);
       const contentVersion = privateLab?.snapshot.contentDigest ?? labExecution?.releaseDigest ?? content.version;
       const targets = await this.resolveTargets(tx, id, b.studentIds);

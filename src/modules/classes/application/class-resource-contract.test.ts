@@ -16,6 +16,12 @@ describe("Class Space resource contract", () => {
     expect(studentResource("TEST", content).questions[0]).not.toHaveProperty("correctOption");
   });
 
+  it("keeps optional custom covers and rejects insecure image links", () => {
+    const questions = [{ prompt: "q", options: ["a", "b"], correctOption: 1 }];
+    expect(normalizeResourceContent("TEST", { questions, thumbnailUrl: "https://example.test/cover.webp" }).thumbnailUrl).toBe("https://example.test/cover.webp");
+    expect(() => normalizeResourceContent("TEST", { questions, thumbnailUrl: "http://example.test/cover.webp" })).toThrow();
+  });
+
   it("rejects test keys that point past the available options", () => {
     expect(() => normalizeResourceContent("TEST", { questions: [{ prompt: "q", options: ["a", "b"], correctOption: 2 }] })).toThrow(BadRequestException);
   });
