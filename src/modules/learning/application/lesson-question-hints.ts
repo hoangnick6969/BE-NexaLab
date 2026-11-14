@@ -9,6 +9,8 @@
  */
 export const LESSON_HINT_RULES = "lesson-hints@1";
 export const LESSON_HINT_KIND = "lesson-question-hint";
+/** SAI-03-T3: same rules on an Open Curriculum basic exercise question. */
+export const EXERCISE_HINT_KIND = "exercise-question-hint";
 export const MASK = "___";
 
 export type HintSourceKind = "READING" | "STUDY_CARDS" | "VIDEO";
@@ -20,6 +22,8 @@ export type QuestionHint = {
   variant: "a" | "b";
   content: string;
   passage: { stepId: string; kind: HintSourceKind; sentence: number } | null;
+  /** The quoted lesson sentence with every option masked (level 3 only), for the LLM payload. */
+  masked: string | null;
 };
 
 // Vietnamese function syllables that carry no topic (kept small and explicit; versioned with the rules).
@@ -134,11 +138,54 @@ export function planQuestionHint(input: { question: HintQuestion; sources: reado
       : masked.includes(MASK) ? `Đọc lại câu này trong ${WHERE[pick.source.kind]}: “${masked}”. Chỗ “${MASK}” là ý em cần tự nhớ ra; sau đó so với các lựa chọn.`
       : `Đọc lại câu này trong ${WHERE[pick.source.kind]}: “${masked}”. Câu đó áp dụng thế nào vào trường hợp trong câu hỏi?`;
   }
-  return { level, variant, content, passage };
+  return { level, variant, content, passage, masked: level === 3 && pick ? masked : null };
 }
 
 /** The first `n` words of a sentence, keeping its own spacing and the mask. */
 function tokensPrefix(sentence: string, n: number) {
   const parts = sentence.split(/\s+/);
   return parts.slice(0, n).join(" ").replace(/[,.;:!?…]+$/, "");
+}
+
+/** Source citations ("Nguồn: sgk-…") carry no content for the model. */
+const CITATION = /Nguồn:\s*[\w.-]+/gu;
+const cleanSentence = (sentence: string) => sentence.replace(CITATION, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * SAI-04 (`tutor-chat-rules@3`): the part of a lesson the tutor model sees for one question. Citations are dropped and
+ * repeated sentences (a summary shown in both Reading and study cards) kept once. A lesson that then fits in `max`
+ * characters is sent whole. Otherwise: the opening sentences as an overview (about a fifth of the budget), then the
+ * sentences that best match the question (same ranking as quiz hints), in lesson order, with "…" where text was
+ * skipped. A question that matches nothing gets the start of the lesson, so the model can still judge whether it is
+ * on topic.
+ */
+export function studyTextFor(question: string, sources: readonly HintSource[], max = 1500): string {
+  const seen = new Set<string>();
+  const all: { sentence: string; order: number }[] = [];
+  sources.forEach((source, sourceIndex) => sentencesOf(source.text).forEach((raw, index) => {
+    const sentence = cleanSentence(raw);
+    const key = lower(sentence).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    all.push({ sentence, order: sourceIndex * 10000 + index });
+  }));
+  const whole = all.map((item) => item.sentence).join(" ");
+  if (whole.length <= max) return whole;
+  const kept = new Map(all.map((item) => [item.order, item.sentence]));
+  const ranked = rankPassages(question, sources).filter((item) => kept.has(item.order));
+  if (!ranked.length) return whole.slice(0, max);
+  const chosen = new Set<number>();
+  let used = 0;
+  const take = (order: number) => {
+    const sentence = kept.get(order)!;
+    if (chosen.has(order) || used + sentence.length + 2 > max) return false;
+    chosen.add(order);
+    used += sentence.length + 2;
+    return true;
+  };
+  for (const item of all) { if (used >= max * 0.2 || !take(item.order)) break; }
+  for (const item of ranked) take(item.order);
+  const position = new Map(all.map((item, index) => [item.order, index]));
+  const orders = [...chosen].sort((a, b) => position.get(a)! - position.get(b)!);
+  return orders.map((order, index) => (index && position.get(order)! !== position.get(orders[index - 1])! + 1 ? "… " : "") + kept.get(order)).join(" ");
 }

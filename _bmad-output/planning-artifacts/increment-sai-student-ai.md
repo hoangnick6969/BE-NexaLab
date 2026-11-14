@@ -1,7 +1,7 @@
 ---
 increment: SAI
 epics: SAI-01..SAI-06
-status: draft
+status: in-progress
 tracking: ../implementation-artifacts/sprint-status.yaml (section student_ai_tracking)
 ---
 
@@ -33,7 +33,7 @@ Delegate one ticket per task, as a vertical BE/FE/API/schema slice. Keep NestJS/
 | SAI-01 Lab hint tutor | `../specs/spec-student-ai-tutor/` | Versioned 4-level hints, real-retry escalation, provider guard, cache, budget, full HintLog | Existing labs tutor | SG-1 (rules path); SG-1 + SG-2 (provider in production) |
 | SAI-02 Teacher hint insights | `../specs/spec-student-ai-teacher-insight/` (SAI-02A descriptive part); threshold rule in TAI-04 | Class summary, trace, disagreement (UC-AI-05 to 07) | SAI-01, TAI-04 alignment | SG-1, SG-3 |
 | SAI-03 Lesson and quiz hints | `../specs/spec-student-ai-lesson-hints/` (SAI-03A quiz questions) | Hints outside labs, never revealing keys | SAI-01 | SG-1 |
-| SAI-04 Socratic free-text tutor | roadmap only | Typed questions with curriculum lock (UC-AI-08) | SAI-01 | SG-1, SG-2, SG-4 |
+| SAI-04 Socratic free-text tutor | `../specs/spec-student-ai-llm/` (SAI-04 and B5 sections; dev/test only) | Typed questions with curriculum lock (UC-AI-08) | SAI-01 | SG-1, SG-2, SG-4 |
 | SAI-05 Parent help-seeking summary | `../specs/spec-student-ai-checkpoint-hints/` (section SAI-05) | Hint counts by level (BR-11) | SAI-01A | SG-1 (rules part, D1) |
 | SAI-06 Personalised wording | roadmap only | Variant choice from level and misconceptions | SAI-02 | SG-2, SG-3 |
 
@@ -72,3 +72,51 @@ summary with misconception hypotheses and teacher disagreement (migration `20261
 2026-11-06: B3 rules part shipped on `research/student-ai` (owner: "làm B3 bằng luật trước"): "Nếu… thì sao?" in
 FL-21 and FL-20 free explore, answered from the pinned models (`what-if@1`, FE only), see
 `../specs/spec-student-ai-what-if/SPEC.md`. SAI-04 (typed questions) still waits for SG-2.
+
+2026-11-08: SAI-03-T3 shipped on `research/student-ai`: the same answer-blind hints on Open Curriculum basic
+exercise questions (`POST /open-curriculum/lessons/:lessonId/exercises/:stepId/hints`, no migration), see the
+SAI-03-T3 section of `../specs/spec-student-ai-lesson-hints/SPEC.md`. B5 (free-text textbook Q&A) still needs SG-2.
+
+2026-11-08 (later): SAI-T0 approved by the product owner ("Tôi duyệt tiếp tục làm đi"), SG-1 closed (PRD §10.17,
+AD-18, spine Deferred, FE Student P0 UX). SAI-01 T1–T5 built on `research/student-ai` with the provider path off
+by default (fake adapter in tests only); T6 review set `../specs/spec-student-ai-tutor/hint-review-set.md` waits for
+the lecturer. Migration `20261108090000_sai01_hint_provenance` must be applied to shared development by the owner.
+
+2026-11-08 (later): owner decision "bỏ Human Rule Base mà sử dụng LLM" → LLM chính, luật dự phòng, for Lab hints,
+quiz/exercise hints, B2/B3 explanations and the SAI-04 tutor chat, enabled only in dev/test until SG-2 (and SG-4 for
+the chat). See `../specs/spec-student-ai-llm/SPEC.md`. Migrations to apply to shared development by the owner:
+`20261108090000_sai01_hint_provenance`, `20261108120000_sai04_tutor_conversation`.
+
+2026-11-08 (later): B5 shipped (dev/test only): "Hỏi AI" on a highlighted textbook passage, see the B5 section of
+`../specs/spec-student-ai-llm/SPEC.md`. One more migration for the owner: `20261108150000_b5_textbook_passage`.
+
+2026-11-09: SG-4 tooling and retention (owner: "Hoàn thiện các phần còn lại"): `npm run eval:student-ai` scores the
+safety set through the same reply path as the API and writes a lecturer CSV; `npm run retention:student-ai` applies
+the 12-month rule to tutor conversations (dry run by default). Everything else left is gated: SG-2 (provider tier,
+legal basis), SG-3 (insight thresholds, sai-02-t3, SAI-06), SG-4 (lecturer approval of the set and a real-provider
+run), lecturer marks on `hint-review-set.md` (sai-01-t6), owner applies the three Student AI migrations.
+
+2026-11-09 (later): Gemini Flash became the default provider (owner: "Chuyển sang dùng Gemini Flash đi"; its terms
+bar under-18 apps, so SG-2 stays open). The owner applied the three Student AI migrations to shared development;
+the tutor chat answers there with Gemini in `APP_ENV=development`. `origin/main` merged into `research/student-ai`
+(BE, FE). Tutor chat reads the relevant lesson part (`tutor-chat-rules@3`), then the whole lesson up to 12 000
+characters (`tutor-chat-rules@4`).
+
+2026-11-10 — progress: 30 of 33 SAI tickets built (3 done, 27 review), 2 in progress (sai-01-t6 lecturer marks,
+sai-04-t2 lecturer approval and a real-provider eval), 1 backlog (sai-02-t3, waits for SG-3). SAI-06 not started.
+No production enablement until SG-2 closes. Details: `student_ai_tracking` in `sprint-status.yaml`.
+
+2026-11-10 (later): sai-04-t3 lesson passage Q&A (owner: "bôi đen phần đang thắc mắc ... Ok làm đi"): highlight in
+the lesson Reading tab, "Hỏi AI về đoạn này", the docked tutor chat sends the passage with the question; the server
+checks the passage is in the lesson (`tutor-chat-rules@5`, `lesson-passage-qa@1`). No migration; dev/test only. See
+the lesson passage section of `../specs/spec-student-ai-llm/SPEC.md`. Now 31 of 34 tickets built.
+
+2026-11-10 (later): owner decision "Đồng ý release với LLM tắt trước": Student AI goes to main with the provider off
+in production (rules path only; chat, B5 and passage Q&A hidden). Live Gemini check of the lesson passage Q&A passed
+on shared dev. `origin/main` (Teacher AI, PR #63) merged into `research/student-ai`; G-5 closed on 2026-11-06 with
+the `insights@1` thresholds, so SG-3 is closed and sai-02-t3 is delivered by tai-04-t1. 32 of 34 tickets built.
+
+2026-11-13 — pre-push check: branches level with origin/main; every buildable SAI ticket is built (left: sai-01-t6 lecturer
+marks, sai-04-t2 lecturer approval + real-provider run, gates SG-2 and SG-4; SAI-06 Release 2). Fixed the time-bomb
+quota test (credits-test-kit fixed 2026-11-09 clock vs real-clock 24-hour window). Local: BE Vitest 1250 passed, 0
+failed; FE Student AI Playwright 17/17 (mocked API); eval rules-only prefilter categories 110/110.

@@ -1,5 +1,7 @@
 # Student AI Roadmap (future specs)
 
+> 2026-11-08: SAI-04 is built (dev/test only) and every surface is LLM-first with rules as fallback — see `../spec-student-ai-llm/SPEC.md`.
+
 SAI-01 is the first slice. Each later entry gets its own spec folder when its preconditions hold, and is tracked in `../../planning-artifacts/increment-sai-student-ai.md`. Every entry inherits these invariants:
 
 - AI is advisory (FR-22). It never calculates or overrides a result, verdict, score, assignment status or progress.

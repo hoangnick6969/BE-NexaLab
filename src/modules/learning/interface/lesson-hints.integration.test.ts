@@ -116,7 +116,7 @@ describe.skipIf(!db)("isolated lesson quiz hints (SAI-03A)", () => {
     const stored = await p.hintLog.findUniqueOrThrow({ where: { id: h3.id } });
     expect(stored).toMatchObject({ studentId: student.id, lessonStepId: quizStep.id, attemptId: null, labRunId: null, level: 3 });
     expect(Object.keys(stored.contextSnapshot as object).sort()).toEqual(
-      ["assignmentId", "escalated", "kind", "lessonId", "level", "passage", "provider", "questionId", "repeatReason", "ruleVersion", "stepId", "variant"]);
+      ["assignmentId", "escalated", "kind", "lessonId", "level", "passage", "provider", "questionId", "repeatReason", "ruleHint", "ruleVersion", "stepId", "variant"]);
     expect(JSON.stringify(stored.contextSnapshot)).not.toContain(q1.answerOptionId);
 
     // FR-22: the attempt and step progress are unchanged by hints.

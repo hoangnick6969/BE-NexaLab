@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "forbiddenResponseProperties": ["contextSnapshot", "contextDigest", "labDigest", "fallbackReason", "model", "studentLevel"],
+  "schemas": {
+    "StudentLabHint": ["id", "attemptId", "level", "content", "escalated", "provider", "createdAt"],
+    "TutorStatus": ["provider", "llmEnabled", "ruleVersion"]
+  },
+  "paths": {
+    "/api/attempts/{id}/hint": {
+      "post": { "201": "StudentLabHint", "400": "ApiErrorEnvelope", "401": "ApiErrorEnvelope", "404": "ApiErrorEnvelope", "409": "ApiErrorEnvelope", "429": "ApiErrorEnvelope" }
+    },
+    "/api/tutor/status": {
+      "get": { "200": "TutorStatus" }
+    }
+  }
+}

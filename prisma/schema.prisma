@@ -73,52 +73,55 @@ enum EbookAnnotationKind {
 }
 
 model User {
-  id                         String                     @id @default(cuid())
-  username                   String?                    @unique
-  email                      String?                    @unique
-  passwordHash               String
-  fullName                   String
-  role                       Role
+  id                          String                       @id @default(cuid())
+  username                    String?                      @unique
+  email                       String?                      @unique
+  passwordHash                String
+  fullName                    String
+  role                        Role
   /// SAI-03A lesson question hints (attempt- and run-less HintLog rows).
-  lessonHints                HintLog[]                  @relation("lessonHintStudent")
-  grade                      Int                        @default(8)
-  studentLevel               String                     @default("beginner")
-  status                     String                     @default("active")
-  mustChangePassword         Boolean                    @default(false)
-  temporaryPasswordExpiresAt DateTime?
-  consentAt                  DateTime?
-  emailVerifiedAt            DateTime?
-  linkCode                   String?                    @unique
+  lessonHints                 HintLog[]                    @relation("lessonHintStudent")
+  /// SAI-04 tutor conversations (dev/test only until SG-2 / SG-4).
+  tutorConversations          TutorConversation[]
+  tutorMessages               TutorMessage[]
+  grade                       Int                          @default(8)
+  studentLevel                String                       @default("beginner")
+  status                      String                       @default("active")
+  mustChangePassword          Boolean                      @default(false)
+  temporaryPasswordExpiresAt  DateTime?
+  consentAt                   DateTime?
+  emailVerifiedAt             DateTime?
+  linkCode                    String?                      @unique
   /// Set when an admin disables the account (C2-T1); cleared on reactivation.
-  disabledAt                 DateTime?
+  disabledAt                  DateTime?
   /// Private avatar object key in object storage (D-ACC-03); read only through short presigned URLs.
-  avatarKey                  String?
-  avatarUpdatedAt            DateTime?
+  avatarKey                   String?
+  avatarUpdatedAt             DateTime?
   /// UI preferences (acc-4, acc-5): { theme?: "system" | "light" | "dark", locale?: "vi" | "en" }; read through users/preferences.ts.
-  preferences                Json                       @default("{}")
-  createdAt                  DateTime                   @default(now())
-  updatedAt                  DateTime                   @updatedAt
-  sessions                   Session[]
-  attempts                   Attempt[]
-  enrollments                Enrollment[]
-  classes                    Classroom[]
-  lessons                    Lesson[]
-  progress                   Progress[]
-  stepProgress               StepProgress[]
-  quizAttempts               QuizAttempt[]
-  basicExerciseAttempts      BasicExerciseAttempt[]
-  saved                      SavedExperiment[]
-  parents                    ParentLink[]               @relation("student")
-  children                   ParentLink[]               @relation("parent")
-  assignmentTargets          AssignmentTarget[]
-  assignmentSubmissions      AssignmentSubmission[]
+  preferences                 Json                         @default("{}")
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  sessions                    Session[]
+  attempts                    Attempt[]
+  enrollments                 Enrollment[]
+  classes                     Classroom[]
+  lessons                     Lesson[]
+  progress                    Progress[]
+  stepProgress                StepProgress[]
+  quizAttempts                QuizAttempt[]
+  basicExerciseAttempts       BasicExerciseAttempt[]
+  saved                       SavedExperiment[]
+  parents                     ParentLink[]                 @relation("student")
+  children                    ParentLink[]                 @relation("parent")
+  assignmentTargets           AssignmentTarget[]
+  assignmentSubmissions       AssignmentSubmission[]
   classLabAdditionalResponses ClassLabAdditionalResponse[]
-  notifications              Notification[]
-  ebookAnnotations           EbookAnnotation[]
-  labReviewAssignments       LabReviewerAuthorization[] @relation("LabReviewerAuthorizationUser")
-  labReleaseReviews          LabReleaseReview[]         @relation("LabReleaseReviewer")
+  notifications               Notification[]
+  ebookAnnotations            EbookAnnotation[]
+  labReviewAssignments        LabReviewerAuthorization[]   @relation("LabReviewerAuthorizationUser")
+  labReleaseReviews           LabReleaseReview[]           @relation("LabReleaseReviewer")
   /// TAI-04 (TAI4-T3): acknowledgements that concern this student as the subject (cascade on user deletion).
-  insightAcknowledgements    InsightAcknowledgement[]
+  insightAcknowledgements     InsightAcknowledgement[]
 }
 
 model Session {
@@ -181,25 +184,25 @@ model ParentConsent {
 }
 
 model Classroom {
-  id                String          @id @default(cuid())
-  teacherId         String
-  teacher           User            @relation(fields: [teacherId], references: [id])
-  name              String
-  grade             Int             @default(8)
-  status            ClassroomStatus @default(ACTIVE)
-  archivedAt        DateTime?
-  joinCodeEnabled   Boolean         @default(true)
-  requiresApproval  Boolean         @default(false)
+  id                      String                   @id @default(cuid())
+  teacherId               String
+  teacher                 User                     @relation(fields: [teacherId], references: [id])
+  name                    String
+  grade                   Int                      @default(8)
+  status                  ClassroomStatus          @default(ACTIVE)
+  archivedAt              DateTime?
+  joinCodeEnabled         Boolean                  @default(true)
+  requiresApproval        Boolean                  @default(false)
   /// Opaque 6-character Crockford Base32 locator; the secret is stored only as an HMAC.
-  joinLocator       String?         @unique
-  joinSecretHash    String?
-  joinKeyVersion    Int?
-  joinCodeRotatedAt DateTime?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @default(now()) @updatedAt
-  enrollments       Enrollment[]
-  assignments       Assignment[]
-  resources         ClassResource[]
+  joinLocator             String?                  @unique
+  joinSecretHash          String?
+  joinKeyVersion          Int?
+  joinCodeRotatedAt       DateTime?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @default(now()) @updatedAt
+  enrollments             Enrollment[]
+  assignments             Assignment[]
+  resources               ClassResource[]
   /// TAI-04 (TAI4-T3): teacher responses to insights of this class (cascade on class deletion).
   insightAcknowledgements InsightAcknowledgement[]
 
@@ -208,22 +211,22 @@ model Classroom {
 
 /// Immutable class-owned authoring unit. Published records are never edited in place.
 model ClassResource {
-  id          String                  @id @default(cuid())
-  classId     String
-  classroom   Classroom               @relation(fields: [classId], references: [id], onDelete: Cascade)
-  kind        ClassResourceKind
-  title       String
-  lessonId    String?
-  lesson      Lesson?                 @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  version     Int                     @default(1)
-  status      ClassResourceStatus     @default(DRAFT)
-  content     Json
-  createdById String
-  createdAt   DateTime                @default(now())
-  publishedAt DateTime?
-  archivedAt  DateTime?
-  practice    ClassResourcePractice[]
-  labRuns     LabRun[]
+  id                  String                       @id @default(cuid())
+  classId             String
+  classroom           Classroom                    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  kind                ClassResourceKind
+  title               String
+  lessonId            String?
+  lesson              Lesson?                      @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  version             Int                          @default(1)
+  status              ClassResourceStatus          @default(DRAFT)
+  content             Json
+  createdById         String
+  createdAt           DateTime                     @default(now())
+  publishedAt         DateTime?
+  archivedAt          DateTime?
+  practice            ClassResourcePractice[]
+  labRuns             LabRun[]
   additionalResponses ClassLabAdditionalResponse[]
 
   @@unique([classId, kind, title, version])
@@ -703,38 +706,38 @@ model Challenge {
 }
 
 model Assignment {
-  id                   String                       @id @default(cuid())
-  classId              String
-  classroom            Classroom                    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  contentId            String
-  contentType          String
-  title                String
-  dueDate              DateTime?
+  id                          String                       @id @default(cuid())
+  classId                     String
+  classroom                   Classroom                    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  contentId                   String
+  contentType                 String
+  title                       String
+  dueDate                     DateTime?
   /// Deprecated mirror of the target snapshot; AssignmentTarget is authoritative.
-  studentIds           Json                         @default("[]")
+  studentIds                  Json                         @default("[]")
   /// CLASS (approved members at creation) or SUBSET (selected approved members).
-  audience             String                       @default("CLASS")
+  audience                    String                       @default("CLASS")
   /// sha256 of the sorted target student IDs, used by the active-duplicate rule.
-  targetHash           String?
+  targetHash                  String?
   /// Immutable content version at assignment time (lesson structure or lab model/config hash).
-  contentVersion       String?
+  contentVersion              String?
   /// Null for legacy assignments; never backfilled from current active versions.
-  labExecution         Json?
-  labExecutionDigest   String?
-  classLabSnapshot     Json?
-  status               String                       @default("ACTIVE")
-  createdById          String?
-  archivedAt           DateTime?
-  createdAt            DateTime                     @default(now())
-  updatedAt            DateTime                     @updatedAt
-  targets              AssignmentTarget[]
-  deadlineRevisions    AssignmentDeadlineRevision[]
-  submissions          AssignmentSubmission[]
+  labExecution                Json?
+  labExecutionDigest          String?
+  classLabSnapshot            Json?
+  status                      String                       @default("ACTIVE")
+  createdById                 String?
+  archivedAt                  DateTime?
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  targets                     AssignmentTarget[]
+  deadlineRevisions           AssignmentDeadlineRevision[]
+  submissions                 AssignmentSubmission[]
   /// TAI-03 (TAI3-T4): immutable similarity runs over this assignment's current submissions.
-  similarityRuns       SubmissionSimilarityRun[]
-  stepProgress         StepProgress[]
+  similarityRuns              SubmissionSimilarityRun[]
+  stepProgress                StepProgress[]
   classLabAdditionalResponses ClassLabAdditionalResponse[]
-  insightDisagreements HintInsightDisagreement[]
+  insightDisagreements        HintInsightDisagreement[]
 
   @@index([classId, status, dueDate])
   @@index([contentType, contentId, status])
@@ -779,14 +782,14 @@ enum GradingMode {
 /// Immutable test submission (I3 / 3.2). The server scores every submission; a late one stays
 /// pending until a LateDecision exists. The latest submission per student is current.
 model AssignmentSubmission {
-  id                 String                     @id @default(cuid())
+  id                 String                      @id @default(cuid())
   assignmentId       String
-  assignment         Assignment                 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment         Assignment                  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   studentId          String
-  student            User                       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student            User                        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   /// Deadline revision in force when the server received the submission.
   deadlineRevisionId String
-  deadlineRevision   AssignmentDeadlineRevision @relation(fields: [deadlineRevisionId], references: [id])
+  deadlineRevision   AssignmentDeadlineRevision  @relation(fields: [deadlineRevisionId], references: [id])
   /// Resource version answered, so later test revisions never rescore history.
   resourceVersion    Int
   answers            Json
@@ -795,11 +798,11 @@ model AssignmentSubmission {
   correctCount       Int?
   questionCount      Int
   /// AUTO = server-scored TEST; TEACHER = WRITTEN_TASK graded by the owning teacher (TAI-02).
-  gradingMode        GradingMode                @default(AUTO)
+  gradingMode        GradingMode                 @default(AUTO)
   /// ON_TIME (submittedAt <= dueAt) or LATE.
   timing             String
   lateReason         String?
-  submittedAt        DateTime                   @default(now())
+  submittedAt        DateTime                    @default(now())
   decision           LateDecision?
   /// TAI-02 (TAI2-T3): append-only teacher grades; the latest row is the current grade.
   gradeDecisions     WrittenGradeDecision[]
@@ -943,7 +946,7 @@ model LabPackRevocation {
 
 /// Server-created, immutable launch tuple. Revocation never deletes historical evidence.
 model LabRun {
-  id               String        @id @default(cuid())
+  id               String         @id @default(cuid())
   studentId        String
   labId            String
   challengeId      String
@@ -954,7 +957,7 @@ model LabRun {
   context          String
   execution        Json
   executionDigest  String
-  createdAt        DateTime      @default(now())
+  createdAt        DateTime       @default(now())
   expiresAt        DateTime?
   revokedAt        DateTime?
   revokedById      String?
@@ -1031,11 +1034,35 @@ model HintLog {
   contextSnapshot Json
   triggeredBy     String      @default("student")
   createdAt       DateTime    @default(now())
+  /// SAI-01 provenance (legacy Lab hints). Null on older rows; readers treat a null ruleVersion as legacy.
+  contextDigest   String?
+  labDigest       String?
+  ruleVersion     String?
+  promptVersion   String?
+  /// rules | rules-fallback | anthropic | fake | cache
+  provider        String?
+  model           String?
+  fallbackReason  String?
+  escalated       Boolean?
+  variant         String?
 
   @@unique([attemptId, level])
   @@index([labRunId, createdAt])
   @@index([studentId, lessonStepId, createdAt])
   @@index([lessonStepId])
+  @@index([createdAt])
+}
+
+/// SAI-01: validated provider observations only. No student data in key or value.
+model HintObservationCache {
+  key           String   @id
+  observation   String
+  promptVersion String
+  model         String
+  createdAt     DateTime @default(now())
+  expiresAt     DateTime
+
+  @@index([expiresAt])
 }
 
 model Progress {
@@ -1448,6 +1475,48 @@ model HintInsightDisagreement {
   @@index([teacherId])
 }
 
+/// SAI-04: one tutoring conversation of a student inside a Lab or a lesson. Never shown to parents (BR-11).
+model TutorConversation {
+  id          String         @id @default(cuid())
+  studentId   String
+  student     User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  /// LAB | LESSON | EBOOK (B5: contextId is the subject whose textbook is read)
+  contextKind String
+  contextId   String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  messages    TutorMessage[]
+
+  @@index([studentId, contextKind, contextId, createdAt])
+}
+
+/// SAI-04: one turn. STUDENT rows keep the typed text; TUTOR rows keep the reply and its provenance (BR-13).
+model TutorMessage {
+  id             String            @id @default(cuid())
+  conversationId String
+  conversation   TutorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        User              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  /// STUDENT | TUTOR
+  role           String
+  content        String
+  /// B5: the textbook passage the student highlighted (STUDENT rows of EBOOK conversations).
+  passage        String?           @db.Text
+  pageNumber     Int?
+  /// ANSWERED | REFUSED | DISABLED | FALLBACK (TUTOR rows only)
+  outcome        String?
+  /// Why a turn was refused or fell back: INJECTION, UNSAFE_TOPIC, PERSONAL_DATA, ANSWER_SEEKING, OFF_TOPIC, GUARD:<rule>, BUDGET, ...
+  reason         String?
+  ruleVersion    String?
+  promptVersion  String?
+  provider       String?
+  model          String?
+  createdAt      DateTime          @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([studentId, createdAt])
+}
+
 // ---------------------------------------------------------------------------
 // Teacher AI job runtime (TAI-01, spec-teacher-ai-authoring). Shared by every Teacher AI purpose; later specs only add
 // expand-only nullable columns. AI output never writes ClassResource directly: items become a DRAFT only through an
@@ -1467,7 +1536,7 @@ enum AiItemDecisionKind {
 }
 
 model AiJob {
-  id                     String            @id @default(cuid())
+  id                     String                  @id @default(cuid())
   classId                String
   actorId                String
   /// "GENERATE_RESOURCE" in TAI-01, "ASSESS_SUBMISSION" (TAI-02), "DRAFT_LAB_CHALLENGE" (TAI-06); quota is counted per actor and purpose.
@@ -1486,22 +1555,22 @@ model AiJob {
   /// "gemini" | "fake"
   provider               String
   model                  String
-  status                 AiJobStatus       @default(PENDING)
+  status                 AiJobStatus             @default(PENDING)
   failureCode            String?
-  attemptCount           Int               @default(0)
+  attemptCount           Int                     @default(0)
   leaseUntil             DateTime?
   inputTokens            Int?
   outputTokens           Int?
   /// [{ position, reasonCodes[] }]
-  droppedItems           Json              @default("[]")
-  materializedResourceId String?           @unique
+  droppedItems           Json                    @default("[]")
+  materializedResourceId String?                 @unique
   /// TAI-06: the lesson a DRAFT_LAB_CHALLENGE proposal was applied to, and the one applied item (one apply per job).
   appliedLessonId        String?
-  appliedItemId          String?           @unique
+  appliedItemId          String?                 @unique
   /// TAI-02 (TAI2-T4): set only for purpose ASSESS_SUBMISSION; cascade so the redacted snapshot dies with the submission.
   submissionId           String?
-  submission             AssignmentSubmission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  createdAt              DateTime          @default(now())
+  submission             AssignmentSubmission?   @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  createdAt              DateTime                @default(now())
   startedAt              DateTime?
   completedAt            DateTime?
   cancelledAt            DateTime?

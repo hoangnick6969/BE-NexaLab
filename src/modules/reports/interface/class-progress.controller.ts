@@ -87,7 +87,8 @@ export class ClassProgressController {
           include: {
             progress: true,
             attempts: {
-              include: { hints: true },
+              // SAI-01 read-side: level, content, provider and escalated only; no context snapshot.
+              include: { hints: { select: { id: true, level: true, content: true, provider: true, escalated: true, createdAt: true }, orderBy: { createdAt: "asc" } } },
               orderBy: { createdAt: "desc" },
               take: 100,
             },

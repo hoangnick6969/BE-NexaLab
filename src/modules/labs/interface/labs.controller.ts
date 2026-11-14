@@ -1,5 +1,5 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Req } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Optional, Param, Post, Req } from "@nestjs/common";
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
 import { access } from "../../auth/interface/auth";
 import { Roles } from "../../../common/decorators";
@@ -8,7 +8,8 @@ import { Db } from "../../../db/db";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { text } from "../../../common/validation";
 import { checkRunPrediction, explainAttempt, listRunHintSteps, requestHint, requestRunHint } from "../application/hint";
-import { explain } from "../infrastructure/llm";
+import { STUDENT_AI_PROVIDER, studentAiConfig, type StudentAiProvider } from "../../student-ai/application/student-llm";
+import { TUTOR_RULES } from "../application/tutor-rules";
 import { resolveModel } from "../application/sim-packs";
 import { evaluate, packConfigurationErrors, versionParams } from "../application/simulation-versions";
 import { FL10_RUBRIC, FL06_RUBRIC, FL07_RUBRIC } from "../application/lab-run";
@@ -38,7 +39,13 @@ function rendererKeyFor(rubricRef: string): string | null {
 @ApiBearerAuth()
 @Controller()
 export class LabsController {
-  constructor(@Inject(Db) private db: Db, @Inject(StudentAccessService) private access: StudentAccessService, @Inject(RequestRateLimiter) private limiter: RequestRateLimiter) {}
+  constructor(
+    @Inject(Db) private db: Db,
+    @Inject(StudentAccessService) private access: StudentAccessService,
+    @Inject(RequestRateLimiter) private limiter: RequestRateLimiter,
+    /** Student AI LLM adapter (StudentAiModule); null means rules-only wording. */
+    @Optional() @Inject(STUDENT_AI_PROVIDER) private tutorProvider: StudentAiProvider | null = null,
+  ) {}
   private async fl10Run(tx: any, studentId: string, runId: string) {
     const run = await tx.labRun.findFirst({ where: { id: runId, studentId } });
     if (!run) throw new NotFoundException({ code: "LAB_RUN_NOT_FOUND" });
@@ -199,13 +206,11 @@ export class LabsController {
       orderBy: assignmentQueueOrder,
     });
   }
+  @ApiOperation({ summary: "Student tutor mode: provider, kill switch and rule version" })
+  @ApiResponse({ status: 200, schema: { $ref: "#/components/schemas/TutorStatus" } })
   @Get("tutor/status") tutorStatus() {
-    return {
-      provider:
-        process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_MODEL
-          ? "anthropic"
-          : "rules",
-    };
+    const llmEnabled = studentAiConfig().llmEnabled && Boolean(this.tutorProvider);
+    return { provider: llmEnabled ? this.tutorProvider!.name : "rules", llmEnabled, ruleVersion: TUTOR_RULES };
   }
   private async assertPracticalGate(labId: string, studentId: string, db: any) {
     const lessons = await db.lesson.findMany({
@@ -663,7 +668,8 @@ export class LabsController {
   @Roles("STUDENT") @Get("attempts") attempts(@Req() req: any) {
     return this.db.attempt.findMany({
       where: { studentId: req.user.sub },
-      include: { challenge: true, hints: true },
+      // SAI-01: own hints with content, never the context snapshot or provider internals.
+      include: { challenge: true, hints: { select: { id: true, level: true, content: true, provider: true, escalated: true, createdAt: true }, orderBy: { createdAt: "asc" } } },
       orderBy: { createdAt: "desc" },
       take: 100,
     });
@@ -701,20 +707,30 @@ export class LabsController {
       state: z.unknown().refine((value) => value === undefined || JSON.stringify(value).length <= 20000).optional(),
       prediction: z.unknown().refine((value) => value === undefined || JSON.stringify(value).length <= 2000).optional(),
     }).strict().parse(body);
-    return requestRunHint(this.db, req.user, runId, request);
+    return requestRunHint(this.db, req.user, runId, request, { provider: this.tutorProvider });
   }
   /** B2: rules-only explanation of an attempt's verdict, from its stored evaluator result. No write. */
   @Roles("STUDENT") @Get("attempts/:id/explanation") explanation(@Param("id") id: string, @Req() req: any) {
     this.limiter.rate("explanation:" + req.user.sub, 60);
-    return explainAttempt(this.db, req.user, id);
+    return explainAttempt(this.db, req.user, id, { provider: this.tutorProvider });
   }
+  @ApiOperation({ summary: "Get a versioned, traceable hint for the student's latest Lab attempt (empty body)" })
+  @ApiResponse({ status: 201, schema: { $ref: "#/components/schemas/StudentLabHint" } })
+  @ApiResponse({ status: 400, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 401, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 404, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 409, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
+  @ApiResponse({ status: 429, schema: { $ref: "#/components/schemas/ApiErrorEnvelope" } })
   @Roles("STUDENT") @Post("attempts/:id/hint") async hint(
     @Param("id") id: string,
     @Req() req: any,
+    @Body() body: unknown,
   ) {
     this.limiter.rate("hint:" + req.user.sub, 8);
+    // SAI-01 CAP-7: no student free text reaches the tutor; any body field is rejected.
+    z.object({}).strict().parse(body ?? {});
     // B0P-T4: provider call outside the transaction; authorization rechecked before persisting.
-    return requestHint(this.db, req.user, id, explain);
+    return requestHint(this.db, req.user, id, { provider: this.tutorProvider });
   }
   @Roles("STUDENT") @Post("saved") async save(
     @Req() req: any,

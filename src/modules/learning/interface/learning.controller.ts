@@ -19,7 +19,8 @@ import { audit } from "../../../common/audit";
 import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { notify } from "../../notifications/application/notify";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
-import { requestLessonQuestionHint } from "../application/lesson-hint";
+import { requestBasicExerciseHint, requestLessonQuestionHint } from "../application/lesson-hint";
+import { STUDENT_AI_PROVIDER, type StudentAiProvider } from "../../student-ai/application/student-llm";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -29,6 +30,8 @@ export class LearningController {
     @Inject(Db) private db: Db,
     @Inject(StudentAccessService) private access: StudentAccessService,
     @Optional() @Inject(RequestRateLimiter) private limiter?: RequestRateLimiter,
+    /** Student AI LLM adapter (StudentAiModule); null means rules-only wording. */
+    @Optional() @Inject(STUDENT_AI_PROVIDER) private tutorProvider: StudentAiProvider | null = null,
   ) {}
   private async applicableAssignment(id: string, studentId: string) {
     const assignment = await this.db.assignment.findFirst({
@@ -173,6 +176,21 @@ export class LearningController {
       return { id: attempt.id, score: attempt.score, passThreshold: attempt.passThreshold, passed: attempt.passed, createdAt: attempt.createdAt.toISOString() };
     }
   }
+  /** SAI-03-T3: rules-only hint on one basic exercise question; never the answer key, never the student's draft. */
+  @Roles("STUDENT")
+  @Post("open-curriculum/lessons/:lessonId/exercises/:stepId/hints")
+  @ApiOperation({ summary: "Get a rules-only hint for one question of an Open Curriculum basic exercise" })
+  @ApiBody({ schema: { type: "object", required: ["questionId"], properties: { questionId: { type: "string" } } } })
+  async basicExerciseHint(
+    @Param("lessonId") lessonId: string,
+    @Param("stepId") stepId: string,
+    @Body() body: unknown,
+    @Req() req: any,
+  ) {
+    this.limiter?.rate("lesson-hint:" + req.user.sub, 30);
+    const { questionId } = z.object({ questionId: z.string().min(1).max(80) }).strict().parse(body);
+    return requestBasicExerciseHint(this.db, { studentId: req.user.sub, lessonId, stepId, questionId }, { provider: this.tutorProvider });
+  }
   @Roles("STUDENT")
   @Put("open-curriculum/lessons/:lessonId/steps/:stepId/progress")
   @ApiOperation({ summary: "Persist reading or video evidence for released curriculum outside assignments" })
@@ -241,7 +259,7 @@ export class LearningController {
     this.limiter?.rate("lesson-hint:" + req.user.sub, 30);
     const assignmentId = parseAssignmentIdQuery(rawQuery);
     const { questionId } = z.object({ questionId: z.string().min(1).max(80) }).strict().parse(body);
-    return requestLessonQuestionHint(this.db, this.access, { studentId: req.user.sub, lessonId, assignmentId, questionId });
+    return requestLessonQuestionHint(this.db, this.access, { studentId: req.user.sub, lessonId, assignmentId, questionId }, { provider: this.tutorProvider });
   }
   @Roles("STUDENT")
   @Get("lessons/:lessonId/quiz-attempts")

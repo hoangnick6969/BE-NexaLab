@@ -17,6 +17,7 @@ import { AssetsModule } from "./modules/assets/assets.module";
 import { ContentModule } from "./modules/content/content.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { StudentAiModule } from "./modules/student-ai/student-ai.module";
 import { AiModule } from "./modules/ai/ai.module";
 
 /**
@@ -30,6 +31,7 @@ import { AiModule } from "./modules/ai/ai.module";
     HealthModule,
     StorageModule,
     CommonModule,
+    StudentAiModule,
     AuthModule,
     UsersModule,
     CurriculumModule,

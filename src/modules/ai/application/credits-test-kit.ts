@@ -12,8 +12,12 @@ export type Row = Record<string, any>;
 let seq = 0;
 let tick = 0;
 export const nextId = (prefix: string) => `${prefix}-${String(++seq).padStart(8, "0")}`;
-/** Strictly increasing timestamps, so "newest first" orderings are deterministic. */
-const stamp = () => new Date(Date.UTC(2026, 10, 9, 8, 0, 0) + ++tick * 1000);
+/**
+ * Strictly increasing timestamps, so "newest first" orderings are deterministic. Anchored one hour before the run
+ * starts (not a fixed date) so rows stay inside the services' real-clock 24-hour quota window.
+ */
+const STAMP_BASE = Date.now() - 3600_000;
+const stamp = () => new Date(STAMP_BASE + ++tick * 1000);
 
 const isPlain = (value: unknown): value is Row => !!value && typeof value === "object" && !(value instanceof Date) && !Array.isArray(value);
 const time = (value: any) => (value instanceof Date ? value.getTime() : value);

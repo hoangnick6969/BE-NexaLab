@@ -30,6 +30,8 @@
     "ingest:khtn8:ui-test-seed": "tsx tools/nexalab-ingest/seed_chapter_ui_test.ts --apply",
     "lint": "tsc --noEmit",
     "check:layers": "tsx scripts/check-layers.ts",
+    "eval:student-ai": "tsx scripts/student-ai-eval.ts",
+    "retention:student-ai": "tsx scripts/student-ai-retention.ts",
     "pretest:integration": "node scripts/assert-isolated-db.mjs integration tests",
     "test:integration": "tsx scripts/integration.mjs",
     "pretest:a5:db-interruption": "node scripts/assert-isolated-db.mjs database interruption test",

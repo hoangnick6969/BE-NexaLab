@@ -1,16 +1,25 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { createHash } from "node:crypto";
+import { stableStringify } from "../../../common/idempotency";
 import { applicableAssignmentWhere } from "../../classes/application/class-access";
 import { projectLab, projectLesson } from "../../progress/application/progress-projection";
+import {
+  LEVEL_TYPES, llmStore, phraseHint, provenance, studentAiConfig, writeHintCache,
+  type HintPayload, type PhraseOutcome, type StudentAiConfig, type StudentAiProvider,
+} from "../../student-ai/application/student-llm";
 import { buildContext } from "./tutor";
 import { assertClassPracticeRun } from "../../classes/application/class-lab-resource";
+import { decideTutorLevel, labDigest, renderTutorTemplate, TUTOR_RULES, tutorKey, variantName } from "./tutor-rules";
 import {
   CHECKPOINT_HINT_CATALOGS, CheckpointHintInputError, evaluateOneCheckpoint, hasCheckpointHints, hasRunHints, hasRunReflections, planCheckpointHint, planRunHint, runHintSteps,
-  type PreviousCheckpointHint, type PreviousRunHint, type RunHintMoment,
+  type CheckpointHintPlan, type PreviousCheckpointHint, type PreviousRunHint, type RunHintMoment, type RunHintPlan,
 } from "./checkpoint-hint-rules";
 import { explainVerdict } from "./verdict-explanation";
 
-type Provider = (context: any) => Promise<{ content: string; provider: string }>;
 type Actor = { sub: string; sid: string };
+/** LLM wiring for every Lab hint (owner 2026-11-08: LLM writes the wording, rules plan it and are the fallback). */
+export type HintDeps = { provider: StudentAiProvider | null; config?: StudentAiConfig; now?: () => Date };
+const NO_LLM: HintDeps = { provider: null };
 
 /**
  * Test-only provider delay (B0P-T4 verification). Honoured only in an explicit
@@ -43,13 +52,75 @@ async function assertStillAuthorized(db: any, actor: Actor, attempt: { id: strin
   }
 }
 
+/** The LLM call (or rules) outside any transaction, after the optional test delay. */
+async function phrase(db: any, studentId: string, deps: HintDeps, payload: HintPayload, forbidden: readonly RegExp[] = []) {
+  const delay = providerDelayMs();
+  if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+  return phraseHint({ provider: deps.provider, config: deps.config ?? studentAiConfig(), store: llmStore(db, studentId), payload, forbidden, now: deps.now?.() });
+}
+
+const contextDigest = (snapshot: Record<string, unknown>) => {
+  const { provider: _provider, ...rest } = snapshot;
+  return createHash("sha256").update(stableStringify(rest)).digest("hex");
+};
+
+/** API shape of a legacy Lab hint: never the snapshot, digests, model or fallback reason (SAI-01 contract). */
+export function legacyHintView(hint: any) {
+  return {
+    id: hint.id,
+    attemptId: hint.attemptId,
+    level: hint.level,
+    content: hint.content,
+    escalated: hint.escalated ?? null,
+    provider: hint.provider ?? hint.contextSnapshot?.provider ?? "rules",
+    createdAt: hint.createdAt,
+  };
+}
+
+const WINDOW_MS = 10 * 60 * 1000;
+
+/** SAI-01 CAP-6: hints per student in a rolling 10 minutes, counted from HintLog so every API instance agrees. */
+async function assertHintWindow(db: any, studentId: string, config: StudentAiConfig, now: Date) {
+  const rows = await db.hintLog.findMany({
+    where: { attempt: { studentId }, ruleVersion: { startsWith: "tutor-rules@" }, createdAt: { gt: new Date(now.getTime() - WINDOW_MS) } },
+    select: { createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (rows.length < config.hintsPer10Min) return;
+  const leaving = rows[rows.length - config.hintsPer10Min].createdAt.getTime() + WINDOW_MS;
+  const retryAfterSeconds = Math.max(1, Math.ceil((leaving - now.getTime()) / 1000));
+  throw new HttpException({
+    code: "HINT_RATE_LIMITED",
+    message: `Em đã xin nhiều gợi ý trong ít phút. Hãy thử lại sau ${retryAfterSeconds} giây.`,
+    details: { retryAfterSeconds },
+  }, HttpStatus.TOO_MANY_REQUESTS);
+}
+
+/** The escalation decision for the latest attempt from the challenge history (pure; reused by the recheck). */
+function legacyDecision(history: any[], attempt: any) {
+  const key = tutorKey(attempt.simulationResult);
+  const currentDigest = labDigest(attempt.labState);
+  const hinted = history.flatMap((item: any) => item.hints.map((hint: any) => ({ hint, item })))
+    .sort((a: any, b: any) => a.hint.createdAt.getTime() - b.hint.createdAt.getTime());
+  const last = hinted.at(-1);
+  const decision = decideTutorLevel({
+    key,
+    currentDigest,
+    previous: last ? { level: last.hint.level, labDigest: last.hint.labDigest ?? labDigest(last.item.labState) } : null,
+    sameLevelRepeats: (level) => hinted.filter(({ hint }: any) => hint.level === level).length,
+  });
+  return { key, currentDigest, decision };
+}
+
 /**
- * B0P-T4: the optional provider runs with no database transaction or advisory
- * lock held. Context is read first, the provider is called, then a short
- * transaction rechecks authorization and context before persisting.
+ * SAI-01: a versioned, traceable hint for the student's latest legacy Lab attempt (circuit, chemistry, eye).
+ * Rules pick the level and write the fallback; the LLM writes the wording (B0P-T4: outside any transaction), then a
+ * short transaction rechecks authorization and the whole escalation decision before persisting one HintLog.
+ * FR-22: only HintLog and the lastHintLevel projection are written.
  */
-/** `provider` is the explanation port; the interface layer passes the LLM adapter (infrastructure/llm.ts). */
-export async function requestHint(db: any, actor: Actor, attemptId: string, provider: Provider) {
+export async function requestHint(db: any, actor: Actor, attemptId: string, deps: HintDeps = NO_LLM) {
+  const config = deps.config ?? studentAiConfig();
+  const now = () => deps.now?.() ?? new Date();
   // 1. Read context (no transaction, no lock).
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, studentId: actor.sub },
@@ -60,27 +131,47 @@ export async function requestHint(db: any, actor: Actor, attemptId: string, prov
   const rubricRef = attempt.labRunId
     ? ((await db.labRun.findUnique({ where: { id: attempt.labRunId }, select: { execution: true } }))?.execution as any)?.rubricRef
     : null;
-  if (hasCheckpointHints(rubricRef)) return requestCheckpointHint(db, actor, attempt, rubricRef);
-  if (attempt.hints.length) return attempt.hints[0];
+  if (hasCheckpointHints(rubricRef)) return requestCheckpointHint(db, actor, attempt, rubricRef, deps);
+  if (attempt.hints.length) return legacyHintView(attempt.hints[0]);
   const history = await db.attempt.findMany({
     where: { studentId: actor.sub, challengeId: attempt.challengeId },
     include: { hints: true },
     orderBy: { createdAt: "asc" },
   });
-  if (history.at(-1)?.id !== attemptId) throw new BadRequestException("Hãy yêu cầu gợi ý cho lần thử mới nhất");
-  const previousLevel = Math.max(0, ...history.flatMap((item: any) => item.hints.map((h: any) => h.level)));
-  const level = Math.min(4, 1 + previousLevel);
+  if (history.at(-1)?.id !== attemptId)
+    throw new BadRequestException({ code: "HINT_NOT_LATEST_ATTEMPT", message: "Hãy yêu cầu gợi ý cho lần thử mới nhất" });
+  if (attempt.verdict === "passed")
+    throw new ConflictException({ code: "HINT_NOT_NEEDED", message: "Em đã đạt thử thách này nên không cần gợi ý" });
+  await assertHintWindow(db, actor.sub, config, now());
+  const { key, currentDigest, decision } = legacyDecision(history, attempt);
   await assertStillAuthorized(db, actor, attempt);
   const user = await db.user.findUniqueOrThrow({ where: { id: actor.sub } });
-  const context = buildContext(user, attempt, history, level);
+  const template = renderTutorTemplate(key, decision.level, decision.variant, attempt.simulationResult);
+  const context = {
+    ...buildContext(user, attempt, history, decision.level),
+    labDigest: currentDigest,
+    ruleVersion: TUTOR_RULES,
+    tutorKey: key,
+    variant: variantName(decision.variant),
+    escalated: decision.escalated,
+    ruleHint: template,
+  };
+  const sim = attempt.simulationResult as any;
+  const engine: HintPayload["engine"] = {};
+  if (typeof sim?.status === "string") engine.status = sim.status;
+  if (typeof sim?.equation === "string") engine.equation = sim.equation;
+  if (typeof sim?.limiting === "string") engine.limiting = sim.limiting;
 
-  // 2. Provider call outside any transaction; failures fall back to the rules engine.
-  const delay = providerDelayMs();
-  if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-  const explanation = await provider(context);
+  // 2. LLM wording outside any transaction; every failure falls back to the template.
+  const outcome = await phrase(db, actor.sub, deps, {
+    surface: "lab-legacy",
+    context: { title: String(attempt.challenge.objective ?? "") },
+    level: decision.level, levelType: LEVEL_TYPES[decision.level - 1], mustAsk: decision.level === 1,
+    ruleHint: template, engine,
+  });
 
-  // 3. Short transaction: recheck authorization and context, then persist.
-  return db.$transaction(
+  // 3. Short transaction: recheck authorization, window and the escalation decision, then persist.
+  const hint = await db.$transaction(
     async (tx: any) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${actor.sub}))`;
       await assertStillAuthorized(tx, actor, attempt);
@@ -90,21 +181,29 @@ export async function requestHint(db: any, actor: Actor, attemptId: string, prov
       });
       if (!current) throw new NotFoundException();
       // A parallel request already stored this attempt's hint: return it, never a second one.
-      if (current.hints.length) return current.hints[0];
+      if (current.hints.length) return { row: current.hints[0], stored: true };
       const latest = await tx.attempt.findMany({
         where: { studentId: actor.sub, challengeId: attempt.challengeId },
-        include: { hints: { select: { level: true } } },
+        include: { hints: true },
         orderBy: { createdAt: "asc" },
       });
-      const latestLevel = Math.max(0, ...latest.flatMap((item: any) => item.hints.map((h: any) => h.level)));
-      if (latest.at(-1)?.id !== attemptId || latestLevel !== previousLevel)
+      const recheck = latest.at(-1)?.id === attemptId ? legacyDecision(latest, attempt).decision : null;
+      if (!recheck || recheck.level !== decision.level || recheck.variant !== decision.variant || recheck.escalated !== decision.escalated)
         throw new ConflictException({ code: "HINT_CONTEXT_CHANGED", message: "Lần thử đã thay đổi; hãy yêu cầu gợi ý lại" });
-      const hint = await tx.hintLog.create({
+      await assertHintWindow(tx, actor.sub, config, now());
+      const snapshot = { ...context, provider: outcome.provider };
+      const row = await tx.hintLog.create({
         data: {
           attemptId,
-          level,
-          content: explanation.content,
-          contextSnapshot: { ...context, provider: explanation.provider },
+          level: decision.level,
+          content: outcome.content,
+          contextSnapshot: snapshot,
+          contextDigest: contextDigest(snapshot),
+          labDigest: currentDigest,
+          ruleVersion: TUTOR_RULES,
+          ...provenance(outcome),
+          escalated: decision.escalated,
+          variant: variantName(decision.variant),
         },
       });
       await projectLab(tx, actor.sub, attempt.challenge.labId);
@@ -112,10 +211,12 @@ export async function requestHint(db: any, actor: Actor, attemptId: string, prov
         const step = await tx.lessonStep.findUnique({ where: { id: attempt.lessonStepId }, select: { lessonId: true } });
         if (step) await projectLesson(tx, actor.sub, step.lessonId);
       }
-      return hint;
+      return { row, stored: false };
     },
     { timeout: 20000 },
   );
+  if (!hint.stored) await writeHintCache(db, outcome, config, now());
+  return legacyHintView(hint.row);
 }
 
 const CHECKPOINT_HINT_KIND = "checkpoint-hint";
@@ -123,69 +224,98 @@ const RUN_HINT_KIND = "checkpoint-run-hint";
 /** In-run hints per LabRun; a learner who needs more submits and gets the after-submit ladder. */
 export const RUN_HINT_LIMIT = 24;
 
-/** API shape of a SAI-01A hint: the HintLog row plus the fields the student UI needs. */
+/** API shape of a SAI-01A hint: the HintLog row plus the fields the student UI needs; no model internals. */
 function checkpointHintView(hint: any) {
   const snapshot = hint.contextSnapshot ?? {};
+  const { contextDigest: _d, labDigest: _l, model: _m, fallbackReason: _f, promptVersion: _p, ...row } = hint;
   return {
-    ...hint,
+    ...row,
     criterion: snapshot.criterion,
     checkpointId: snapshot.checkpointId,
     label: snapshot.label,
     moment: snapshot.moment ?? "AFTER_SUBMIT",
     escalated: snapshot.escalated,
     repeatReason: snapshot.repeatReason,
-    provider: snapshot.provider,
+    provider: hint.provider ?? snapshot.provider,
     ruleVersion: snapshot.ruleVersion,
     contextSnapshot: undefined,
   };
 }
 
+const forbiddenFor = (rubricRef: string, criterion: string): readonly RegExp[] =>
+  (CHECKPOINT_HINT_CATALOGS[rubricRef]?.criteria[criterion] as any)?.forbidden ?? [];
+
+/** Lab title for the LLM context (no IDs). */
+async function labTitle(db: any, labId: string | null | undefined) {
+  if (!labId) return "";
+  return (await db.lab.findUnique({ where: { id: labId }, select: { title: true } }))?.title ?? "";
+}
+
+/** SAI-01A after-submit plan for the latest attempt; reused by the recheck inside the transaction. */
+async function checkpointPlan(db: any, actor: Actor, attempt: any, rubricRef: string): Promise<CheckpointHintPlan> {
+  const history = await db.attempt.findMany({
+    where: { studentId: actor.sub, challengeId: attempt.challengeId },
+    include: { hints: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (history.at(-1)?.id !== attempt.id)
+    throw new BadRequestException({ code: "HINT_NOT_LATEST_ATTEMPT", message: "Hãy yêu cầu gợi ý cho lần làm mới nhất" });
+  // In-run moment-A hints (levels 1–2) count as earlier hints on their criterion, so the first hint
+  // after submitting continues from them instead of repeating level 1.
+  const inRun = await db.hintLog.findMany({
+    where: { attemptId: null, labRun: { studentId: actor.sub, challengeId: attempt.challengeId } },
+  });
+  const previous: PreviousCheckpointHint[] = [...history.flatMap((item: any) => item.hints), ...inRun]
+    .sort((a: any, b: any) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map((hint: any) => ({ id: hint.id, snapshot: hint.contextSnapshot }))
+    .filter(({ snapshot }: any) => snapshot?.rubricRef === rubricRef &&
+      (snapshot.kind === CHECKPOINT_HINT_KIND || (snapshot.kind === RUN_HINT_KIND && snapshot.moment === "BEFORE_PREDICTION")))
+    .map(({ id, snapshot }: any) => snapshot.kind === CHECKPOINT_HINT_KIND ? snapshot
+      : { criterion: snapshot.criterion, level: snapshot.level, variant: snapshot.variant, answerDigest: "run:" + id });
+  // Event-scored Labs (FL-06/07/10) keep the learner's answers in the run's server events.
+  const evidence = CHECKPOINT_HINT_CATALOGS[rubricRef].withEvents && attempt.labRunId
+    ? { labState: attempt.labState, events: (await db.labRunEvent.findMany({ where: { runId: attempt.labRunId }, orderBy: { sequence: "asc" } })).map((row: any) => row.event) }
+    : attempt.labState;
+  const plan = planCheckpointHint({ rubricRef, evidence, result: attempt.simulationResult, previous });
+  if (!plan) throw new ConflictException({ code: "HINT_NOT_NEEDED", message: "Không còn tiêu chí nào cần gợi ý" });
+  return plan;
+}
+
+const samePlan = (a: { criterion: string; level: number; variant: string }, b: { criterion: string; level: number; variant: string }) =>
+  a.criterion === b.criterion && a.level === b.level && a.variant === b.variant;
+
 /**
- * SAI-01A rules-only hint for a checkpoint Foundational Lab attempt. No provider is called, so the
- * whole decision runs in one short transaction under the student's lock. FR-22: only HintLog and the
- * lastHintLevel projection are written.
+ * SAI-01A hint for a checkpoint Foundational Lab attempt. Rules plan the step and level; the LLM writes the wording
+ * outside any transaction; a short transaction replans and persists only an unchanged plan. FR-22: only HintLog and
+ * the lastHintLevel projection are written.
  */
-async function requestCheckpointHint(db: any, actor: Actor, attempt: any, rubricRef: string) {
-  return db.$transaction(
+async function requestCheckpointHint(db: any, actor: Actor, attempt: any, rubricRef: string, deps: HintDeps) {
+  const stored = await db.hintLog.findFirst({ where: { attemptId: attempt.id }, orderBy: { createdAt: "asc" } });
+  if (stored) return checkpointHintView(stored);
+  if (attempt.verdict === "passed")
+    throw new ConflictException({ code: "HINT_NOT_NEEDED", message: "Em đã hoàn thành bài này nên không cần gợi ý" });
+  const plan = await checkpointPlan(db, actor, attempt, rubricRef);
+  const outcome = await phrase(db, actor.sub, deps, {
+    surface: "lab-checkpoint",
+    context: { title: await labTitle(db, attempt.challenge?.labId), step: plan.label },
+    level: plan.level, levelType: LEVEL_TYPES[plan.level - 1], mustAsk: plan.level === 1, ruleHint: plan.content,
+  }, forbiddenFor(rubricRef, plan.criterion));
+  const result = await db.$transaction(
     async (tx: any) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${actor.sub}))`;
       await assertStillAuthorized(tx, actor, attempt);
-      const stored = await tx.hintLog.findFirst({ where: { attemptId: attempt.id }, orderBy: { createdAt: "asc" } });
-      if (stored) return checkpointHintView(stored);
-      if (attempt.verdict === "passed")
-        throw new ConflictException({ code: "HINT_NOT_NEEDED", message: "Em đã hoàn thành bài này nên không cần gợi ý" });
-      const history = await tx.attempt.findMany({
-        where: { studentId: actor.sub, challengeId: attempt.challengeId },
-        include: { hints: true },
-        orderBy: { createdAt: "asc" },
-      });
-      if (history.at(-1)?.id !== attempt.id)
-        throw new BadRequestException({ code: "HINT_NOT_LATEST_ATTEMPT", message: "Hãy yêu cầu gợi ý cho lần làm mới nhất" });
-      // In-run moment-A hints (levels 1–2) count as earlier hints on their criterion, so the first hint
-      // after submitting continues from them instead of repeating level 1.
-      const inRun = await tx.hintLog.findMany({
-        where: { attemptId: null, labRun: { studentId: actor.sub, challengeId: attempt.challengeId } },
-      });
-      const previous: PreviousCheckpointHint[] = [...history.flatMap((item: any) => item.hints), ...inRun]
-        .sort((a: any, b: any) => a.createdAt.getTime() - b.createdAt.getTime())
-        .map((hint: any) => ({ id: hint.id, snapshot: hint.contextSnapshot }))
-        .filter(({ snapshot }: any) => snapshot?.rubricRef === rubricRef &&
-          (snapshot.kind === CHECKPOINT_HINT_KIND || (snapshot.kind === RUN_HINT_KIND && snapshot.moment === "BEFORE_PREDICTION")))
-        .map(({ id, snapshot }: any) => snapshot.kind === CHECKPOINT_HINT_KIND ? snapshot
-          : { criterion: snapshot.criterion, level: snapshot.level, variant: snapshot.variant, answerDigest: "run:" + id });
-      // Event-scored Labs (FL-06/07/10) keep the learner's answers in the run's server events.
-      const evidence = CHECKPOINT_HINT_CATALOGS[rubricRef].withEvents && attempt.labRunId
-        ? { labState: attempt.labState, events: (await tx.labRunEvent.findMany({ where: { runId: attempt.labRunId }, orderBy: { sequence: "asc" } })).map((row: any) => row.event) }
-        : attempt.labState;
-      const plan = planCheckpointHint({ rubricRef, evidence, result: attempt.simulationResult, previous });
-      if (!plan) throw new ConflictException({ code: "HINT_NOT_NEEDED", message: "Không còn tiêu chí nào cần gợi ý" });
+      const again = await tx.hintLog.findFirst({ where: { attemptId: attempt.id }, orderBy: { createdAt: "asc" } });
+      if (again) return { view: checkpointHintView(again), stored: true };
+      if (!samePlan(await checkpointPlan(tx, actor, attempt, rubricRef), plan))
+        throw new ConflictException({ code: "HINT_CONTEXT_CHANGED", message: "Lần làm đã thay đổi; hãy yêu cầu gợi ý lại" });
       const hint = await tx.hintLog.create({
         data: {
           attemptId: attempt.id,
           labRunId: attempt.labRunId,
           level: plan.level,
-          content: plan.content,
-          // Rule decision only: no user, class, studentLevel or free text (SAI-01A CAP-6).
+          content: outcome.content,
+          // Rule decision only: no user, class, studentLevel or free text (SAI-01A CAP-6). `ruleHint` keeps the rule
+          // text so the rule part stays replayable when the LLM wrote the wording.
           contextSnapshot: {
             kind: CHECKPOINT_HINT_KIND,
             ruleVersion: plan.ruleVersion,
@@ -200,24 +330,26 @@ async function requestCheckpointHint(db: any, actor: Actor, attempt: any, rubric
             variant: plan.variant,
             escalated: plan.escalated,
             repeatReason: plan.repeatReason,
-            provider: "rules",
+            ruleHint: plan.content,
+            provider: outcome.provider,
           },
+          ruleVersion: plan.ruleVersion,
+          ...provenance(outcome),
+          escalated: plan.escalated,
+          variant: plan.variant,
         },
       });
       await projectLab(tx, actor.sub, attempt.challenge.labId);
-      return checkpointHintView(hint);
+      return { view: checkpointHintView(hint), stored: false };
     },
     { timeout: 20000 },
   );
+  if (!result.stored) await writeHintCache(db, outcome, deps.config ?? studentAiConfig());
+  return result.view;
 }
 
 export type RunHintRequest = { criterion: string; moment: RunHintMoment; state?: unknown; prediction?: unknown };
 
-/**
- * SAI-01A moments A and B: a hint during a LabRun, before it is submitted. A (before predicting) gives
- * level 1 then 2 and never reads the learner's draft. B (after the observation) scores that one checkpoint
- * with the activity's evaluator and answers only when the prediction did not match. Writes HintLog only.
- */
 /** The student's own live checkpoint run and its rubric, or the reason it cannot give hints. */
 async function hintableRun(db: any, actor: Actor, runId: string) {
   const run = await db.labRun.findFirst({ where: { id: runId, studentId: actor.sub } });
@@ -258,7 +390,29 @@ export async function listRunHintSteps(db: any, actor: Actor, runId: string) {
   return { steps: runHintSteps(rubricRef), reflections: hasRunReflections(rubricRef), maxLevel: 2 };
 }
 
-export async function requestRunHint(db: any, actor: Actor, runId: string, request: RunHintRequest) {
+/** In-run plan from the run's earlier hints; reused by the recheck inside the transaction. */
+async function runPlan(db: any, runId: string, rubricRef: string, request: RunHintRequest, observation: any): Promise<RunHintPlan> {
+  const earlier = await db.hintLog.findMany({ where: { labRunId: runId, attemptId: null }, orderBy: { createdAt: "asc" } });
+  if (earlier.length >= RUN_HINT_LIMIT)
+    throw new HttpException({ code: "RUN_HINT_LIMIT", message: "Em đã dùng hết gợi ý của lượt này; hãy nộp bài để nhận gợi ý tiếp" }, HttpStatus.TOO_MANY_REQUESTS);
+  const previous: PreviousRunHint[] = earlier
+    .map((hint: any) => hint.contextSnapshot)
+    .filter((snapshot: any) => snapshot?.kind === RUN_HINT_KIND);
+  try {
+    return planRunHint({ rubricRef, criterion: request.criterion, moment: request.moment, observation, previous });
+  } catch (error) {
+    if (error instanceof CheckpointHintInputError)
+      throw new BadRequestException({ code: "INVALID_CHECKPOINT", message: "Bước này không có gợi ý phù hợp" });
+    throw error;
+  }
+}
+
+/**
+ * SAI-01A moments A and B: a hint during a LabRun, before it is submitted. A (before predicting) gives
+ * level 1 then 2 and never reads the learner's draft. B (after the observation) scores that one checkpoint
+ * with the activity's evaluator and answers only when the prediction did not match. Writes HintLog only.
+ */
+export async function requestRunHint(db: any, actor: Actor, runId: string, request: RunHintRequest, deps: HintDeps = NO_LLM) {
   const { run, rubricRef } = await hintableRun(db, actor, runId);
   let observation: any = null;
   if (request.moment === "AFTER_OBSERVATION") {
@@ -266,29 +420,25 @@ export async function requestRunHint(db: any, actor: Actor, runId: string, reque
     if (observation?.predictionCorrect)
       throw new ConflictException({ code: "HINT_NOT_NEEDED", message: "Dự đoán của em ở bước này đã khớp với kết quả" });
   }
-  return db.$transaction(
+  const plan = await runPlan(db, run.id, rubricRef, request, observation);
+  // Moment A never sends the draft; moment B's reflection already depends only on the server's observation.
+  const outcome = await phrase(db, actor.sub, deps, {
+    surface: "lab-run",
+    context: { title: await labTitle(db, run.labId), step: plan.label },
+    level: plan.level, levelType: plan.level === 0 ? "Suy ngẫm sau quan sát" : LEVEL_TYPES[plan.level - 1],
+    mustAsk: plan.level === 1, ruleHint: plan.content,
+  }, forbiddenFor(rubricRef, plan.criterion));
+  const view = await db.$transaction(
     async (tx: any) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${actor.sub}))`;
-      await assertStillAuthorized(tx, actor, { id: run.id, assignmentId: run.assignmentId });
-      const earlier = await tx.hintLog.findMany({ where: { labRunId: run.id, attemptId: null }, orderBy: { createdAt: "asc" } });
-      if (earlier.length >= RUN_HINT_LIMIT)
-        throw new HttpException({ code: "RUN_HINT_LIMIT", message: "Em đã dùng hết gợi ý của lượt này; hãy nộp bài để nhận gợi ý tiếp" }, HttpStatus.TOO_MANY_REQUESTS);
-      const previous: PreviousRunHint[] = earlier
-        .map((hint: any) => hint.contextSnapshot)
-        .filter((snapshot: any) => snapshot?.kind === RUN_HINT_KIND);
-      let plan;
-      try {
-        plan = planRunHint({ rubricRef, criterion: request.criterion, moment: request.moment, observation, previous });
-      } catch (error) {
-        if (error instanceof CheckpointHintInputError)
-          throw new BadRequestException({ code: "INVALID_CHECKPOINT", message: "Bước này không có gợi ý phù hợp" });
-        throw error;
-      }
+      await assertStillAuthorized(tx, actor, { id: run.id, assignmentId: run.assignmentId, labRunId: run.id });
+      if (!samePlan(await runPlan(tx, run.id, rubricRef, request, observation), plan))
+        throw new ConflictException({ code: "HINT_CONTEXT_CHANGED", message: "Lượt làm đã thay đổi; hãy yêu cầu gợi ý lại" });
       const hint = await tx.hintLog.create({
         data: {
           labRunId: run.id,
           level: plan.level,
-          content: plan.content,
+          content: outcome.content,
           contextSnapshot: {
             kind: RUN_HINT_KIND,
             moment: plan.moment,
@@ -303,24 +453,33 @@ export async function requestRunHint(db: any, actor: Actor, runId: string, reque
             variant: plan.variant,
             escalated: plan.escalated,
             repeatReason: plan.repeatReason,
-            provider: "rules",
+            ruleHint: plan.content,
+            provider: outcome.provider,
           },
+          ruleVersion: plan.ruleVersion,
+          ...provenance(outcome),
+          escalated: plan.escalated,
+          variant: plan.variant,
         },
       });
       return checkpointHintView(hint);
     },
     { timeout: 20000 },
   );
+  await writeHintCache(db, outcome, deps.config ?? studentAiConfig());
+  return view;
 }
+
+export type { PhraseOutcome };
 
 /**
  * B2: why the attempt passed or not, from the stored evaluator result only. Read-only (FR-22): no HintLog,
  * no projection. 404 for another student's attempt; 409 EXPLANATION_UNAVAILABLE for Labs without a catalog.
  */
-export async function explainAttempt(db: any, actor: Actor, attemptId: string) {
+export async function explainAttempt(db: any, actor: Actor, attemptId: string, deps: HintDeps = NO_LLM) {
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, studentId: actor.sub },
-    select: { id: true, verdict: true, simulationResult: true, labRun: { select: { execution: true } } },
+    select: { id: true, verdict: true, simulationResult: true, labRun: { select: { execution: true, labId: true } } },
   });
   if (!attempt) throw new NotFoundException();
   const rubricRef = (attempt.labRun?.execution as any)?.rubricRef;
@@ -329,5 +488,18 @@ export async function explainAttempt(db: any, actor: Actor, attemptId: string) {
     : null;
   if (!explanation)
     throw new ConflictException({ code: "EXPLANATION_UNAVAILABLE", message: "Bài này chưa có phần giải thích kết quả" });
-  return { attemptId: attempt.id, ...explanation };
+  // The LLM rewrites the summary only. Unmet steps keep `why: null`, and their answer patterns are forbidden in the
+  // summary, so a learner who can retry is not handed the answer. Read-only (FR-22): no HintLog; cache only.
+  const met = explanation.items.filter((item) => item.met).map((item) => item.label);
+  const unmet = explanation.items.filter((item) => !item.met);
+  const ruleHint = [explanation.summary, met.length ? `Bước đã đúng: ${met.join("; ")}.` : "", unmet.length ? `Bước chưa đúng: ${unmet.map((item) => item.label).join("; ")}.` : ""]
+    .filter(Boolean).join(" ");
+  const outcome = await phrase(db, actor.sub, deps, {
+    surface: "verdict-explanation",
+    context: { title: await labTitle(db, attempt.labRun?.labId) },
+    level: 4, levelType: "Tóm tắt vì sao đạt hoặc chưa đạt", mustAsk: false, ruleHint,
+  }, unmet.flatMap((item) => forbiddenFor(rubricRef, item.criterion)));
+  await writeHintCache(db, outcome, deps.config ?? studentAiConfig());
+  const llm = outcome.provider !== "rules" && outcome.provider !== "rules-fallback";
+  return { attemptId: attempt.id, ...explanation, summary: llm ? outcome.content : explanation.summary, provider: outcome.provider };
 }
