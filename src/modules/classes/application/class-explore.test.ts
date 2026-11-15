@@ -162,12 +162,12 @@ describe("assignment input for Class Explore", () => {
 });
 
 describe("ClassExploreService (C3.4)", () => {
-  async function setup(extra: Record<string, unknown> = {}) {
+  async function setup(extra: Record<string, unknown> = {}, due: { at: Date | null } = { at: null }) {
     const { read } = await world();
     const snapshot = await buildExploreSnapshot(read, resourceRow(await buildExploreResource(read, input)));
     const stored: any[] = [];
     const db: any = {
-      assignment: { findFirst: vi.fn(async ({ where }: any) => (where.id === "a1" ? { id: "a1", classId: "c1", title: "Đo pH", dueDate: null, exploreSnapshot: snapshot, targets: [{ studentId: "s1", student: { id: "s1", fullName: "An", username: "an" } }, { studentId: "s2", student: { id: "s2", fullName: "Bình", username: "binh" } }] } : null)) },
+      assignment: { findFirst: vi.fn(async ({ where }: any) => (where.id === "a1" ? { id: "a1", classId: "c1", title: "Đo pH", dueDate: due.at, exploreSnapshot: snapshot, targets: [{ studentId: "s1", student: { id: "s1", fullName: "An", username: "an" } }, { studentId: "s2", student: { id: "s2", fullName: "Bình", username: "binh" } }] } : null)) },
       classExploreSubmission: {
         findUnique: vi.fn(async ({ where }: any) => stored.find((row) => row.studentId === where.assignmentId_studentId.studentId) ?? null),
         create: vi.fn(async ({ data }: any) => { const row = { id: `sub-${stored.length + 1}`, status: "SUBMITTED", submittedAt: new Date(), feedback: null, reviewedAt: null, ...data }; stored.push(row); return row; }),
@@ -180,8 +180,11 @@ describe("ClassExploreService (C3.4)", () => {
       $executeRaw: vi.fn(),
       ...extra,
     };
-    return { service: new ClassExploreService(db), db, stored, snapshot };
+    return { service: new ClassExploreService(db), db, stored, snapshot, due };
   }
+  const HOUR = 3_600_000;
+  const past = () => new Date(Date.now() - HOUR);
+  const future = () => new Date(Date.now() + HOUR);
   const student = (sub = "s1") => ({ user: { sub, role: "STUDENT" }, headers: {} });
   const teacher = (sub = "t1") => ({ user: { sub, role: "TEACHER" }, headers: {} });
   const answers = { measures: [{ itemId: "NaOH_0_1M", tenthsPh: 130 }, { itemId: "HCl_0_1M", tenthsPh: 10 }], explanation: "HCl là acid mạnh." };
@@ -189,22 +192,63 @@ describe("ClassExploreService (C3.4)", () => {
   it("saves a submission in requirement order, and a retry with the same answers returns it instead of a second row", async () => {
     const { service, stored } = await setup();
     const first = await service.submit("a1", student(), answers);
-    expect(first).toMatchObject({ replayed: false, submission: { status: "SUBMITTED", answers: { measures: [{ itemId: "HCl_0_1M", tenthsPh: 10 }, { itemId: "NaOH_0_1M", tenthsPh: 130 }] } } });
+    expect(first).toMatchObject({ replayed: false, resubmitted: false, submission: { status: "SUBMITTED", late: false, canResubmit: true, answers: { measures: [{ itemId: "HCl_0_1M", tenthsPh: 10 }, { itemId: "NaOH_0_1M", tenthsPh: 130 }] } } });
     const retry = await service.submit("a1", student(), { ...answers, measures: [...answers.measures].reverse() });
     expect(retry).toMatchObject({ replayed: true, submission: { id: first.submission.id } });
     expect(stored).toHaveLength(1);
   });
 
-  it("refuses different answers after submitting, answers that miss the requirements, and anyone outside the audience", async () => {
+  it("refuses answers that miss the requirements and anyone outside the audience", async () => {
     const { service, db } = await setup();
-    await service.submit("a1", student(), answers);
-    await expect(service.submit("a1", student(), { ...answers, explanation: "Khác" })).rejects.toMatchObject({ response: { code: "EXPLORE_ALREADY_SUBMITTED" } });
     await expect(service.submit("a1", student("s2"), { measures: [], explanation: "x" })).rejects.toMatchObject({ response: { code: "EXPLORE_ANSWER_INVALID" } });
     await expect(service.submit("a1", student("s2"), { ...answers, measures: [{ itemId: "HCl_0_1M", tenthsPh: 150 }] })).rejects.toThrow();
     db.assignment.findFirst.mockResolvedValueOnce(null);
     await expect(service.submit("a1", student("outsider"), answers)).rejects.toMatchObject({ response: { code: "ASSIGNMENT_NOT_FOUND" } });
     // The audience check is part of the query, not an afterthought.
     expect(db.assignment.findFirst.mock.calls.at(-1)[0].where).toMatchObject({ id: "a1", contentType: "explore_lab", status: "ACTIVE", targets: { some: { studentId: "outsider" } } });
+  });
+
+  it("lets a student resubmit before the due date, or any time when there is none, and the latest answers are kept", async () => {
+    for (const at of [null, future()]) {
+      const { service, stored } = await setup({}, { at });
+      const first = await service.submit("a1", student(), answers);
+      const again = await service.submit("a1", student(), { ...answers, explanation: "Sửa lại." });
+      expect(again).toMatchObject({ replayed: false, resubmitted: true, submission: { id: first.submission.id, status: "SUBMITTED", late: false, answers: { explanation: "Sửa lại." } } });
+      expect(stored).toHaveLength(1);
+      expect(stored[0].answers.explanation).toBe("Sửa lại.");
+    }
+  });
+
+  it("accepts a first submission after the due date and marks it late, but then closes resubmission", async () => {
+    const { service, stored } = await setup({}, { at: past() });
+    const late = await service.submit("a1", student(), answers);
+    expect(late).toMatchObject({ replayed: false, resubmitted: false, submission: { late: true, canResubmit: false } });
+    await expect(service.submit("a1", student(), { ...answers, explanation: "Khác" })).rejects.toMatchObject({ response: { code: "EXPLORE_RESUBMIT_CLOSED" } });
+    // The same answers are a retry, not a resubmission.
+    expect(await service.submit("a1", student(), answers)).toMatchObject({ replayed: true, submission: { late: true } });
+    expect(stored).toHaveLength(1);
+  });
+
+  it("closes resubmission once the due date passes after an on-time submission", async () => {
+    const { service, due } = await setup({}, { at: future() });
+    await service.submit("a1", student(), answers);
+    due.at = past();
+    await expect(service.submit("a1", student(), { ...answers, explanation: "Muộn." })).rejects.toMatchObject({ response: { code: "EXPLORE_RESUBMIT_CLOSED" } });
+  });
+
+  it("does not let a student overwrite work the teacher has commented on, even before the due date", async () => {
+    const { service } = await setup({}, { at: future() });
+    const { submission } = await service.submit("a1", student(), answers);
+    await service.review("c1", "a1", submission.id, teacher(), { feedback: "Tốt." });
+    await expect(service.submit("a1", student(), { ...answers, explanation: "Khác." })).rejects.toMatchObject({ response: { code: "EXPLORE_ALREADY_REVIEWED" } });
+  });
+
+  it("reads late against the current due date, so a teacher who extends the deadline clears the mark", async () => {
+    const { service, due } = await setup({}, { at: past() });
+    await service.submit("a1", student(), answers);
+    expect((await service.list("c1", "a1", teacher())).submissions[0]).toMatchObject({ late: true, canResubmit: false });
+    due.at = future();
+    expect((await service.list("c1", "a1", teacher())).submissions[0]).toMatchObject({ late: false, canResubmit: true });
   });
 
   it("never touches runs, attempts, progress or verdicts", async () => {

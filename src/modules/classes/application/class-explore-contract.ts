@@ -115,6 +115,17 @@ export function studentExploreSnapshot(snapshot: ExploreSnapshot) {
   };
 }
 
+/**
+ * Late means handed in after the teacher's due date. It is read against the assignment's current due date, so extending the
+ * deadline clears the mark; an assignment without a due date is never late.
+ */
+export const isLateExplore = (submittedAt: Date | string, dueDate: Date | string | null | undefined) =>
+  Boolean(dueDate && new Date(submittedAt).getTime() > new Date(dueDate).getTime());
+
+/** A student may resubmit until the due date, and only while the teacher has not commented on the work. */
+export const canResubmitExplore = (status: string, dueDate: Date | string | null | undefined, now: Date = new Date()) =>
+  status === "SUBMITTED" && (!dueDate || now.getTime() <= new Date(dueDate).getTime());
+
 export const EXPLORE_EXPLANATION_MAX = 2000;
 export const exploreAnswersSchema = z.object({
   measures: z.array(z.object({ itemId: identifier, tenthsPh: z.number().int().min(0).max(140) }).strict()).max(12).default([]),

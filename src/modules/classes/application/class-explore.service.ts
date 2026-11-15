@@ -5,13 +5,14 @@ import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { Db } from "../../../db/db";
 import { applicableAssignmentWhere, ownedClass } from "./class-access";
 import { lock } from "./class-common";
-import { assertExploreAnswers, exploreAnswersSchema, verifyExploreSnapshot } from "./class-explore-contract";
+import { assertExploreAnswers, canResubmitExplore, exploreAnswersSchema, isLateExplore, verifyExploreSnapshot } from "./class-explore-contract";
 
 const reviewSchema = z.object({ feedback: z.string().trim().min(1).max(2000) }).strict();
 
-const submissionView = (row: any) => ({
+const submissionView = (row: any, dueDate: Date | null, now = new Date()) => ({
   id: row.id, assignmentId: row.assignmentId, answers: row.answers, status: row.status, submittedAt: row.submittedAt,
   feedback: row.feedback ?? null, reviewedAt: row.reviewedAt ?? null,
+  late: isLateExplore(row.submittedAt, dueDate), canResubmit: canResubmitExplore(row.status, dueDate, now),
 });
 
 const sameAnswers = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -33,7 +34,10 @@ export class ClassExploreService {
     return assignment;
   }
 
-  /** POST assignments/:id/explore-submissions. A retry by the same student returns the saved submission; different answers are refused. */
+  /**
+   * POST assignments/:id/explore-submissions. A student may submit after the due date (it shows as late) and may resubmit
+   * until the due date while the teacher has not commented. The same answers again return the saved submission.
+   */
   async submit(assignmentId: string, req: any, body: unknown) {
     const parsed = exploreAnswersSchema.parse(body);
     const assignment = await this.studentAssignment(assignmentId, req.user.sub);
@@ -45,23 +49,26 @@ export class ClassExploreService {
     return idempotent(this.db, ctx, async (tx) => {
       await lock(tx, `class-explore-submit:${assignmentId}:${req.user.sub}`);
       const existing = await tx.classExploreSubmission.findUnique({ where: { assignmentId_studentId: { assignmentId, studentId: req.user.sub } } });
+      const due: Date | null = assignment.dueDate ?? null;
+      const now = new Date();
       if (existing) {
-        if (sameAnswers(existing.answers, answers)) return { submission: submissionView(existing), replayed: true };
-        throw new ConflictException({ code: "EXPLORE_ALREADY_SUBMITTED", message: "Em đã nộp bài này; bài đã nộp không sửa được." });
+        if (sameAnswers(existing.answers, answers)) return { submission: submissionView(existing, due, now), replayed: true };
+        if (existing.status === "REVIEWED")
+          throw new ConflictException({ code: "EXPLORE_ALREADY_REVIEWED", message: "Giáo viên đã nhận xét bài này; em không nộp lại được." });
+        if (!canResubmitExplore(existing.status, due, now))
+          throw new ConflictException({ code: "EXPLORE_RESUBMIT_CLOSED", message: "Đã quá hạn nộp; em không nộp lại được." });
+        const updated = await tx.classExploreSubmission.update({ where: { id: existing.id }, data: { answers, submittedAt: now, idempotencyKey: readIdempotencyKey(req) } });
+        await audit(tx, { actor: req.user, action: "class_explore.resubmit", targetType: "Assignment", targetId: assignmentId, after: { assignmentId, studentId: req.user.sub, status: "SUBMITTED" } });
+        return { submission: submissionView(updated, due, now), replayed: false, resubmitted: true };
       }
       const row = await tx.classExploreSubmission.create({
-        data: { assignmentId, studentId: req.user.sub, idempotencyKey: readIdempotencyKey(req), answers },
+        data: { assignmentId, studentId: req.user.sub, idempotencyKey: readIdempotencyKey(req), answers, submittedAt: now },
       });
       await audit(tx, { actor: req.user, action: "class_explore.submit", targetType: "Assignment", targetId: assignmentId, after: { assignmentId, studentId: req.user.sub, status: "SUBMITTED" } });
-      return { submission: submissionView(row), replayed: false };
+      return { submission: submissionView(row, due, now), replayed: false, resubmitted: false };
     });
   }
 
-  /** What a student already handed in for this assignment, or null. */
-  async mine(assignmentId: string, studentId: string) {
-    const row = await this.db.classExploreSubmission.findUnique({ where: { assignmentId_studentId: { assignmentId, studentId } } });
-    return row ? submissionView(row) : null;
-  }
 
   private async teacherAssignment(classId: string, assignmentId: string, req: any) {
     await ownedClass(this.db, classId, req.user);
@@ -81,7 +88,7 @@ export class ClassExploreService {
     const students = new Map(assignment.targets.map((target: any) => [target.studentId, target.student]));
     return {
       assignment: { id: assignment.id, title: assignment.title, dueDate: assignment.dueDate, requirements: snapshot.requirements, instructions: snapshot.instructions },
-      submissions: rows.map((row: any) => ({ ...submissionView(row), student: students.get(row.studentId) ?? { id: row.studentId, fullName: null, username: null } })),
+      submissions: rows.map((row: any) => ({ ...submissionView(row, assignment.dueDate ?? null), student: students.get(row.studentId) ?? { id: row.studentId, fullName: null, username: null } })),
       pending: [...students.values()].filter((student: any) => !rows.some((row: any) => row.studentId === student.id)),
     };
   }
@@ -89,13 +96,13 @@ export class ClassExploreService {
   /** PUT classes/:id/assignments/:assignmentId/explore-submissions/:submissionId/review: the comment moves it to REVIEWED. It can be edited later. */
   async review(classId: string, assignmentId: string, submissionId: string, req: any, body: unknown) {
     const { feedback } = reviewSchema.parse(body);
-    await this.teacherAssignment(classId, assignmentId, req);
+    const assignment = await this.teacherAssignment(classId, assignmentId, req);
     return this.db.$transaction(async (tx) => {
       const row = await tx.classExploreSubmission.findFirst({ where: { id: submissionId, assignmentId } });
       if (!row) throw new NotFoundException({ code: "SUBMISSION_NOT_FOUND", message: "Không tìm thấy bài nộp" });
       const updated = await tx.classExploreSubmission.update({ where: { id: submissionId }, data: { feedback, status: "REVIEWED", reviewedById: req.user.sub, reviewedAt: new Date() } });
       await audit(tx, { actor: req.user, action: "class_explore.review", targetType: "Assignment", targetId: assignmentId, after: { assignmentId, studentId: row.studentId, status: "REVIEWED" } });
-      return { submission: submissionView(updated) };
+      return { submission: submissionView(updated, assignment.dueDate ?? null) };
     });
   }
 }

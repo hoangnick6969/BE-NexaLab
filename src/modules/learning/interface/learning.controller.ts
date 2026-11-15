@@ -16,7 +16,7 @@ import { scoreTest, studentTestContent, TEST_CONTENT_TYPE, testSubmissionSchema 
 import { currentDeadlines, deadlineStates } from "../../classes/application/assignment-test-state";
 import { normalizeWrittenResponses, studentGradeCriteria, studentWrittenAssignmentContent, WRITTEN_CONTENT_TYPE, writtenSubmissionSchema } from "../../classes/application/assignment-written-contract";
 import { lock } from "../../classes/application/class-common";
-import { studentExploreSnapshot, verifyExploreSnapshot } from "../../classes/application/class-explore-contract";
+import { canResubmitExplore, isLateExplore, studentExploreSnapshot, verifyExploreSnapshot } from "../../classes/application/class-explore-contract";
 import { audit } from "../../../common/audit";
 import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { notify } from "../../notifications/application/notify";
@@ -818,7 +818,8 @@ export class LearningController {
       content: { id: lab.id, title: lab.title, subject: { id: lab.subject.id, name: lab.subject.name }, grade: lab.grade, topic: lab.topic },
       explore: {
         snapshot: studentExploreSnapshot(snapshot),
-        submission: row ? { id: row.id, answers: row.answers, status: row.status, submittedAt: row.submittedAt, feedback: row.feedback ?? null, reviewedAt: row.reviewedAt ?? null } : null,
+        submission: row ? { id: row.id, answers: row.answers, status: row.status, submittedAt: row.submittedAt, feedback: row.feedback ?? null, reviewedAt: row.reviewedAt ?? null,
+          late: isLateExplore(row.submittedAt, a.dueDate), canResubmit: canResubmitExplore(row.status, a.dueDate) } : null,
       },
     };
   }
