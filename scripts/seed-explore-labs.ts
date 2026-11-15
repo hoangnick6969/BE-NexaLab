@@ -1,13 +1,9 @@
 import "dotenv/config";
 import { parseArgs } from "node:util";
 import { PrismaClient } from "@prisma/client";
-import { K2_KIT } from "../packages/sim/wet-bench/contracts";
 import { publishExploreLab } from "../src/modules/labs/application/explore-labs";
-import { loadK2ExploreTargets } from "./k2-explore-targets";
-import { loadFl26ExploreTargets } from "./fl26-explore-targets";
-import { loadAnatomyTargets, loadDioramaTargets, loadMolecularTargets } from "./explore-kit-targets";
+import { EXPLORE_TARGETS } from "./explore-targets";
 
-const targetsByKit = new Map<string, typeof loadK2ExploreTargets>([[K2_KIT, loadK2ExploreTargets], ["k8-garden", loadFl26ExploreTargets], ["k8-diorama", loadDioramaTargets], ["k7-molecular", loadMolecularTargets], ["anatomy", loadAnatomyTargets]]);
 const adminId = "admin";
 
 export async function runExploreSeed(args: string[]) {
@@ -17,8 +13,8 @@ export async function runExploreSeed(args: string[]) {
       options: { kit: { type: "string" }, "dry-run": { type: "boolean" }, unpublish: { type: "boolean" } },
     }).values;
     if (!kit) throw new Error("Usage: tsx scripts/seed-explore-labs.ts --kit <bench-id> [--dry-run | --unpublish]");
-    const loadTargets = targetsByKit.get(kit);
-    if (!loadTargets) throw new Error(`No Explore seed targets for ${kit}. Available: ${[...targetsByKit.keys()].join(", ")}`);
+    const loadTargets = EXPLORE_TARGETS.get(kit);
+    if (!loadTargets) throw new Error(`No Explore seed targets for ${kit}. Available: ${[...EXPLORE_TARGETS.keys()].join(", ")}`);
 
     const { assertIsolatedDatabase } = await import("./assert-isolated-db.mjs");
     const target = assertIsolatedDatabase(`${kit} Explore seed`);
