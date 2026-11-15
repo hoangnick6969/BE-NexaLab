@@ -32,7 +32,9 @@
     "mechanics/contracts.ts",
     "mechanics/validate-config.ts",
     "mechanics/class-template.ts",
-    "mechanics/fl06-lever.data.ts"
+    "mechanics/fl06-lever.data.ts",
+    "explore-kits.ts",
+    "eye-parts.ts"
   ],
   "dependencies": {
     "zod": "^3.25.0"

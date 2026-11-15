@@ -105,11 +105,11 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 
 | ID | Task | Xong khi | Chờ |
 |---|---|---|---|
-| [ ] D2-2.1 | FE: trang bàn 2D, phép lai một tính trạng, bảng Punnett | Chạy trên route dev | D1-1.5, O-0.5 |
-| [ ] D2-2.2 | Registry FE (`group: "biology"`, `listKitItems`) và `EXPLORE_BENCHES` BE | Lint, build, unit test pass | D2-2.1 |
-| [ ] D2-2.3 | Nhật ký: kiểu dòng và `describeChange()` | Lưu và export được | D2-2.2 |
-| [ ] D2-2.4 | Seed loader cho kit di truyền trong `seed-explore-labs.ts` và topic code | Unit/CLI test của seed pass (guard chặn mọi DB không cô lập) | D2-2.3 |
-| [ ] D2-2.5 | Nghiệm thu và phát hành FL-26 qua Admin API (Lab mới, không chờ D-5) | Thẻ Lab hiện, mở bàn, thử phép lai; Supabase chỉ-SELECT `ok: true` | D2-2.4, O-0.2 |
+| [x] D2-2.1 | FE: trang bàn 2D, phép lai một tính trạng, bảng Punnett | Bàn 2D + Punnett tương tác (FE `MendelBenchPage`). Chưa kiểm trên trình duyệt | D1-1.5, O-0.5 |
+| [x] D2-2.2 | Registry FE (`group: "biology"`, `listKitItems`) và `EXPLORE_BENCHES` BE | Registry FE (`mendelBench`) và BE (`EXPLORE_BENCHES["k8-garden"]`) | D2-2.1 |
+| [x] D2-2.3 | Nhật ký: kiểu dòng và `describeChange()` | Nhật ký qua store chung (`createObservationLogStore`), xuất JSON. Chưa có `describeChange` riêng cho bàn | D2-2.2 |
+| [~] D2-2.4 | Seed loader cho kit di truyền trong `seed-explore-labs.ts` và topic code | Loader seed `--kit k8-garden` + `db:seed:fl26-explore` đã có. Chưa chạy trên DB cô lập | D2-2.3 |
+| [~] D2-2.5 | Nghiệm thu và phát hành FL-26 qua Admin API (Lab mới, không chờ D-5) | Script `publish:fl26-explore` (dry-run mặc định). Chưa publish: thiếu `NEXALAB_ADMIN_*`, chưa SELECT-check Supabase | D2-2.4, O-0.2 |
 
 ## INC-3: mở rộng
 
@@ -125,8 +125,8 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 | [x] D1-3.1 | Dev 1 | C3 cho FL-06 (template Class Explore đã ghim). **Xong phần code, chưa dùng được với lớp thật** (spec [fl-06-class-explore-spec.md](fl-06-class-explore-spec.md), owner duyệt 2026-11-16): PR A `feat/class-explore-units` tổng quát hoá C3 (đơn vị đo theo bàn, bài nộp `value`, đọc được `tenthsPh` cũ, form giáo viên theo registry; sim 1.14.0); PR B `feat/dev1-fl06-class-explore` mẫu `balance-the-lever`, `deriveLeverEffectiveConfig` có kiểm "tải cân bằng được", tải cố định trên bàn, nộp hai moment N·m + giải thích (sim 1.15.0, FL-06 `configVersion` 2). Giao cho lớp thật cần FL-06 Explore đã phát hành, tức D1-3.3 sau D-5 | K2-2.8 |
 | [ ] D1-3.2 | Dev 1 | Explore Lab mới: FL-04, FL-08, FL-23, FL-24 (mỗi Lab một spec áp dụng) | — |
 | [ ] D1-3.3 | Dev 1 | Công bố FL-06 Explore cho học sinh | O-3.1 |
-| [ ] D2-3.1 | Dev 2 | FL-20, FL-21 (sinh thái), FL-27 (phân tử) Explore | O-3.1 |
-| [ ] D2-3.2 | Dev 2 | Studio FL-16 (giải phẫu, Kit Bổ trợ) | O-3.1 |
+| [~] D2-3.1 | Dev 2 | Explore FL-20, FL-21 (k8-diorama) và FL-27 (k7-molecular): config, registry, trang, test. Chưa seed/publish | O-3.1 |
+| [~] D2-3.2 | Dev 2 | Studio FL-16 (kit anatomy): config, registry, trang, test. Chưa seed/publish; cần SME duyệt | O-3.1 |
 
 
 ## Ghi chú bàn giao (2026-11-15, cuối phiên làm INC-2 lane K2)
@@ -156,3 +156,13 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 - Không chạy `git stash` trần (kho stash dùng chung giữa các worktree/phiên). Dev server cũ của Vite có thể giữ module cũ sau khi sửa file; xoá `node_modules/.vite` rồi chạy lại.
 - Fail sẵn, không liên quan: 2 ca của `tests/lab-run-host.spec.ts` (FE), và `.local/browser-fixture.test.ts` (BE, cần DB cô lập).
 - Máy này không có GitHub CLI (`gh`); khung trình duyệt của app chưa đăng nhập GitHub, nên PR được tạo thủ công.
+
+
+
+## Cập nhật 2026-11-15 (owner duyệt)
+
+- INC-0, INC-1: đã xong trong code (O-0.5, D2-0.1, D2-1.1…1.3 đóng). Commit: `4138840`, `b00fc7a` (BE).
+- INC-2 (Dev 2): đã code và test ở cả BE (`35f8726`) và FE (`922d1e3`, sim 1.11.0). Trạng thái `[~]` là việc còn lại: chạy seed trên DB cô lập, publish qua Admin API, kiểm trên trình duyệt.
+- INC-3 (Dev 2): code và test cho FL-20, FL-21, FL-27, FL-16 trên nhánh feat/fl26-mendel-sim (BE) và feat/fl26-mendel-bench (FE, sim 1.12.2). Chưa seed, chưa publish.
+- D1-1.5 (FL-06 Explore qua registry) chưa làm: đây là việc của Dev 1, owner chỉ mở khóa cổng. Bàn FL-26 là bàn thứ hai thật trong registry.
+- Topic code: FL-26 và FL-27 dùng `KHTN9-CH11-T01`; FL-21 `KHTN8-L44`; FL-20 `KHTN8-L41`; FL-16 `KHTN8-L37`. Cần kiểm tra trong catalog khi publish.

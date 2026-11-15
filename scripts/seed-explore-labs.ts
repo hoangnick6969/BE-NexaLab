@@ -5,8 +5,9 @@ import { K2_KIT } from "../packages/sim/wet-bench/contracts";
 import { publishExploreLab } from "../src/modules/labs/application/explore-labs";
 import { loadK2ExploreTargets } from "./k2-explore-targets";
 import { loadFl26ExploreTargets } from "./fl26-explore-targets";
+import { loadAnatomyTargets, loadDioramaTargets, loadMolecularTargets } from "./explore-kit-targets";
 
-const targetsByKit = new Map<string, typeof loadK2ExploreTargets>([[K2_KIT, loadK2ExploreTargets], ["k8-garden", loadFl26ExploreTargets]]);
+const targetsByKit = new Map<string, typeof loadK2ExploreTargets>([[K2_KIT, loadK2ExploreTargets], ["k8-garden", loadFl26ExploreTargets], ["k8-diorama", loadDioramaTargets], ["k7-molecular", loadMolecularTargets], ["anatomy", loadAnatomyTargets]]);
 const adminId = "admin";
 
 export async function runExploreSeed(args: string[]) {

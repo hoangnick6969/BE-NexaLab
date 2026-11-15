@@ -504,3 +504,5 @@ export function simulate(labId: string, state: unknown) {
   if (labId === "eye") return eye(state);
   throw new Error("Lab không tồn tại");
 }
+export { dioramaExploreSchema, fl20ExploreSchema, fl21ExploreSchema, fl27ExploreSchema, fl16ExploreSchema, fl21RemovalResult, fl20ToleranceResult, fl27VariantResult, fl16PowerResult, FL16_SCENARIOS } from "./explore-kits";
+export type { DioramaExploreConfig, MolecularExploreConfig, AnatomyExploreConfig } from "./explore-kits";
