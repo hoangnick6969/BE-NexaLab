@@ -1,5 +1,6 @@
 import { digest } from "../../labs/application/lab-run";
 import { reviewedBindingsMatch, reviewedBindingsMatchMany } from "../../labs/application/lab-release-bindings";
+import { declaredMode, resolveExploreLabs } from "../../labs/application/explore-labs";
 import { Controller, Get, Inject, Param, Req } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../../common/decorators";
@@ -120,9 +121,10 @@ export class CatalogController {
     });
     // Batched: one query for all active releases and one for release counts, instead of 2 per Lab.
     const labIds = labs.map((lab) => lab.id);
-    const [activeReleases, releaseCounts] = await Promise.all([
+    const [activeReleases, releaseCounts, explore] = await Promise.all([
       this.db.labRelease.findMany({ where: { labId: { in: labIds }, status: "ACTIVE" } }),
       this.db.labRelease.groupBy({ by: ["labId"], where: { labId: { in: labIds } }, _count: { _all: true } }),
+      resolveExploreLabs(this.db, labs),
     ]);
     const releaseOf = new Map(activeReleases.map((release) => [release.labId, release]));
     const hasReleases = new Set(releaseCounts.filter((row) => row._count._all > 0).map((row) => row.labId));
@@ -152,6 +154,15 @@ export class CatalogController {
       const lessonLinks = [...new Set(lessonIds)].map((id) => lessonById.get(id)).filter((lesson) => lesson !== undefined);
       return { ...lab, lessonLinks: lessonLinks.map((lesson) => ({ lessonId: lesson.id, title: lesson.title, topicCode: lesson.curriculumTopicCode })) };
     });
-    return visible.filter((lab) => lab !== null);
+    // P0 C1.2: every row declares its mode; Explore rows carry the pinned config or an error code (students never get errors).
+    const rows = [];
+    for (const lab of visible) {
+      if (!lab) continue;
+      const mode = declaredMode(lab);
+      const resolution = explore.get(lab.id);
+      if (mode === "guided" || !resolution) rows.push({ ...lab, mode });
+      else if (resolution.ok || req.user.role !== "STUDENT") rows.push({ ...lab, mode, explore: resolution });
+    }
+    return rows;
   }
 }

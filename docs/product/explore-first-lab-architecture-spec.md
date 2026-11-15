@@ -150,8 +150,9 @@ dụng cụ riêng của kit vào đó; kit tự đặt dụng cụ trong Stage 
   `modality: "explore"`, `scored: false`, nguồn `technical_draft` + `status: "unverified"` cho tới khi có reviewer.
 - Seed chỉ chạy trên DB cô lập (`assertIsolatedDatabase()`, cả `--unpublish`). Phát hành lên DB dùng chung qua
   `POST /admin/labs/:id/explore-versions` (ADMIN), mẫu K2: `scripts/publish-k2-explore.ts`.
-- FE: `resolveExploreConfig(labId, labRow)` ưu tiên `Lab.config.explore` nếu hợp lệ và đúng `labId`, nếu không
-  dùng config đóng gói sẵn.
+- `GET /labs` trả `mode` cho mọi dòng và `explore` (config đã ghim hoặc mã lỗi) cho dòng Explore (P0 C1.2). FE rẽ nhánh
+  theo `row.mode`, chỉ chạy `explore.config` từ server sau khi validate lại; lỗi thì dừng mở bàn và hiện mã lỗi.
+  Config đóng gói chỉ dùng cho route dev và làm đầu vào seed/phát hành. Khóa lưu cục bộ: `labId@activity.id`.
 
 ---
 

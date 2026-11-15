@@ -131,3 +131,51 @@ export async function publishExploreLab(db: PrismaClient, input: PublishExploreI
     return { labId: config.labId, activity: labConfig.activity, activityCreated: !found, labCreated: !existing };
   });
 }
+
+/** P0 C1.1: the mode a Lab declares on the library route. Never parses the config. */
+export const declaredMode = (lab: { config: unknown }): "guided" | "explore" =>
+  (lab.config as { mode?: unknown } | null)?.mode === "explore" ? "explore" : "guided";
+
+export type ExploreResolveError = "EXPLORE_VERSION_MISSING" | "EXPLORE_IDENTITY_MISMATCH" | "EXPLORE_DIGEST_MISMATCH" | "EXPLORE_KIT_UNSUPPORTED" | "EXPLORE_CONFIG_INVALID";
+export type ExploreResolution =
+  | { ok: true; kit: string; engine: string; activity: { id: string; key: string; version: number; digest: string }; config: unknown }
+  | { ok: false; code: ExploreResolveError };
+type PinnedVersion = { id: string; key: string; version: number; digest: string; spec: unknown };
+
+const pointerSchema = z.object({
+  kit: z.string(),
+  engine: z.string(),
+  activity: z.object({ id: z.string(), key: z.string(), version: z.number().int(), digest: z.string() }),
+});
+
+/** P0 C1.2 ordered checks for one Explore Lab; stops at the first failure and never throws. */
+export function resolveExplore(lab: { id: string; config: unknown }, version: PinnedVersion | undefined): ExploreResolution {
+  const fail = (code: ExploreResolveError) => ({ ok: false as const, code });
+  const pointer = pointerSchema.safeParse(lab.config);
+  if (!pointer.success || !version || version.id !== pointer.data.activity.id) return fail("EXPLORE_VERSION_MISSING");
+  const { kit, engine, activity } = pointer.data;
+  if (version.key !== `${lab.id}-explore` || version.key !== activity.key || version.version !== activity.version) return fail("EXPLORE_IDENTITY_MISMATCH");
+  try {
+    if (activityDigest(version.spec) !== version.digest || version.digest !== activity.digest) return fail("EXPLORE_DIGEST_MISMATCH");
+    const bench = EXPLORE_BENCHES[kit];
+    if (!bench) return fail("EXPLORE_KIT_UNSUPPORTED");
+    const validation = bench.validate((version.spec as { explore?: unknown } | null)?.explore);
+    if (!validation.ok) return fail("EXPLORE_CONFIG_INVALID");
+    const config = validation.config;
+    if (config.labId !== lab.id || config.kit !== kit || config.engine !== engine) return fail("EXPLORE_IDENTITY_MISMATCH");
+    return { ok: true, kit, engine, activity, config: (version.spec as { explore: unknown }).explore };
+  } catch {
+    return fail("EXPLORE_CONFIG_INVALID");
+  }
+}
+
+/** Resolves every Explore Lab in `labs` with one version query (P0 C1.2). */
+export async function resolveExploreLabs(db: Pick<PrismaClient, "practicalActivityVersion">, labs: Array<{ id: string; config: unknown }>) {
+  const explore = labs.filter((lab) => declaredMode(lab) === "explore");
+  const ids = explore.map((lab) => (lab.config as any)?.activity?.id).filter((id): id is string => typeof id === "string");
+  const versions = ids.length
+    ? await db.practicalActivityVersion.findMany({ where: { id: { in: ids } }, select: { id: true, key: true, version: true, digest: true, spec: true } })
+    : [];
+  const byId = new Map(versions.map((version) => [version.id, version]));
+  return new Map(explore.map((lab) => [lab.id, resolveExplore(lab, byId.get((lab.config as any)?.activity?.id))]));
+}
