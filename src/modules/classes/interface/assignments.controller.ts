@@ -46,6 +46,20 @@ export class AssignmentsController {
   }
 
   @Roles("TEACHER")
+  @Post("classes/:id/assignments/:assignmentId/retake-grants")
+  @ApiOperation({ summary: "TAI-07: allow one extra graded attempt for one target student (owner only)" })
+  grantRetake(@Param("id") id: string, @Param("assignmentId") assignmentId: string, @Req() req: any, @Body() body: unknown) {
+    return this.service.grantRetake(id, assignmentId, req, body);
+  }
+
+  @Roles("TEACHER")
+  @Post("classes/:id/assignments/:assignmentId/publish-scores")
+  @ApiOperation({ summary: "TAI-07: publish graded results to students and parents (owner only, append-once)" })
+  publishScores(@Param("id") id: string, @Param("assignmentId") assignmentId: string, @Req() req: any) {
+    return this.service.publishScores(id, assignmentId, req);
+  }
+
+  @Roles("TEACHER")
   @Get("classes/:id/late-queue")
   @ApiOperation({ summary: "Latest late submissions awaiting the owning teacher's decision in one class" })
   lateQueue(@Param("id") id: string, @Req() req: any) {

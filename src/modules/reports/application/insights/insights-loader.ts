@@ -1,7 +1,8 @@
 import { submissionStatus, TEST_CONTENT_TYPE } from "../../../classes/application/assignment-test-contract";
 import { WRITTEN_CONTENT_TYPE } from "../../../classes/application/assignment-written-contract";
 import { EXPLANATION_CRITERION_CODES } from "./explanation-rule";
-import type { ExplanationFact, InsightEvidence, SimilarityFact } from "./types";
+import { buildAssessmentFacts } from "./assessment-facts";
+import type { AssessmentFact, ExplanationFact, InsightEvidence, SimilarityFact } from "./types";
 
 export type ClassMember = { id: string; displayName: string };
 export type AckRow = { id: string; studentId: string; fingerprint: string; ruleVersion: string; ruleCode: string; action: string; note: string | null; createdAt: Date };
@@ -12,6 +13,8 @@ export type ClassEvidence = {
   similarityByStudent: Map<string, SimilarityFact[]>;
   /** insights@3 inputs: teacher-final explanation grades of each student's current graded written submissions. */
   explanationsByStudent: Map<string, ExplanationFact[]>;
+  /** insights@4 inputs (TAI7-T2): one representative result per assignment and target student. */
+  assessmentsByStudent: Map<string, AssessmentFact[]>;
   acknowledgements: AckRow[];
 };
 export type LoadOptions = {
@@ -50,7 +53,14 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
       where: { classId, status: "approved" },
       select: { studentId: true, student: { select: { id: true, fullName: true } } },
     }),
-    db.assignment.findMany({ where: { classId }, select: { id: true, title: true, contentType: true, contentId: true } }),
+    // TAI7-T2: the assessment settings and targets feed insights@4 without another query.
+    db.assignment.findMany({
+      where: { classId },
+      select: {
+        id: true, title: true, contentType: true, contentId: true,
+        status: true, assessmentType: true, scoresPublishedAt: true, dueDate: true, createdAt: true, targets: { select: { studentId: true } },
+      },
+    }),
     wantAcks
       ? db.insightAcknowledgement.findMany({
           where: { classId, ...(options.studentId ? { studentId: options.studentId } : {}) },
@@ -66,7 +76,8 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
   const evidenceByStudent = new Map<string, InsightEvidence[]>(members.map((m) => [m.id, []]));
   const similarityByStudent = new Map<string, SimilarityFact[]>(members.map((m) => [m.id, []]));
   const explanationsByStudent = new Map<string, ExplanationFact[]>(members.map((m) => [m.id, []]));
-  if (options.withEvidence === false || !members.length || !assignments.length) return { members, evidenceByStudent, similarityByStudent, explanationsByStudent, acknowledgements };
+  const assessmentsByStudent = new Map<string, AssessmentFact[]>(members.map((m) => [m.id, []]));
+  if (options.withEvidence === false || !members.length || !assignments.length) return { members, evidenceByStudent, similarityByStudent, explanationsByStudent, assessmentsByStudent, acknowledgements };
 
   const studentIds = members.map((m) => m.id);
   const assignmentIds: string[] = assignments.map((a: any) => a.id);
@@ -78,12 +89,12 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
   const attemptWhere = { assignmentId: { in: assignmentIds }, studentId: { in: studentIds }, ...(asOf ? { createdAt: { lte: asOf } } : {}) };
 
   const [quizzes, attempts, submissions, hints, steps, resources, writtenSubs, simRuns, simMatches, writtenGrades, writtenResources] = await Promise.all([
-    db.quizAttempt.findMany({ where: attemptWhere, select: { id: true, studentId: true, lessonId: true, score: true, passed: true, createdAt: true } }),
+    db.quizAttempt.findMany({ where: attemptWhere, select: { id: true, studentId: true, assignmentId: true, lessonId: true, score: true, passed: true, createdAt: true } }),
     db.attempt.findMany({ where: attemptWhere, select: { id: true, studentId: true, lessonStepId: true, verdict: true, createdAt: true } }),
     testAssignments.length
       ? db.assignmentSubmission.findMany({
           where: { assignmentId: { in: testAssignments.map((a: any) => a.id) }, studentId: { in: studentIds }, gradingMode: "AUTO", score: { not: null }, ...(asOf ? { submittedAt: { lte: asOf } } : {}) },
-          select: { id: true, assignmentId: true, studentId: true, score: true, timing: true, submittedAt: true, decision: { select: { decision: true, createdAt: true } } },
+          select: { id: true, assignmentId: true, studentId: true, score: true, correctCount: true, questionCount: true, timing: true, submittedAt: true, decision: { select: { decision: true, createdAt: true } } },
         })
       : Promise.resolve([]),
     db.hintLog.groupBy({ by: ["attemptId"], _max: { level: true }, where: { attempt: attemptWhere, ...(asOf ? { createdAt: { lte: asOf } } : {}) } }),
@@ -110,7 +121,7 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
     writtenIds.length
       ? db.writtenGradeDecision.findMany({
           where: { submission: { assignmentId: { in: writtenIds }, studentId: { in: studentIds } }, ...(asOf ? { createdAt: { lte: asOf } } : {}) },
-          select: { id: true, submissionId: true, criterionPoints: true, createdAt: true },
+          select: { id: true, submissionId: true, criterionPoints: true, totalPoints: true, maxPoints: true, createdAt: true },
         })
       : Promise.resolve([]),
     writtenIds.length
@@ -138,7 +149,7 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
     const status = submissionStatus({ timing: s.timing, decision });
     if (status !== "SCORED" && status !== "ACCEPTED_BY_EXTENSION") continue;
     const lessonId = resourceLesson.get(assignmentResource.get(s.assignmentId) ?? "") ?? null;
-    push(s.studentId, { kind: "TEST", id: s.id, at: s.submittedAt, score: s.score, outcomeCodes: outcomesOf(lessonId), lessonId });
+    push(s.studentId, { kind: "TEST", id: s.id, at: s.submittedAt, score: s.score, outcomeCodes: outcomesOf(lessonId), lessonId, assignmentId: s.assignmentId });
   }
 
   if (writtenIds.length) {
@@ -229,5 +240,17 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
       });
     }
   }
-  return { members, evidenceByStudent, similarityByStudent, explanationsByStudent, acknowledgements };
+  const resourceLessonAll = new Map<string, string | null>([...resources, ...writtenResources].map((r: any) => [r.id, r.lessonId ?? null]));
+  const facts = buildAssessmentFacts({
+    studentIds,
+    assignments,
+    resourceLesson: resourceLessonAll,
+    testSubmissions: submissions,
+    writtenSubmissions: writtenSubs.filter((s: any) => studentIds.includes(s.studentId)),
+    writtenGrades,
+    quizzes,
+    asOf,
+  });
+  for (const [studentId, list] of facts) assessmentsByStudent.set(studentId, list);
+  return { members, evidenceByStudent, similarityByStudent, explanationsByStudent, assessmentsByStudent, acknowledgements };
 }

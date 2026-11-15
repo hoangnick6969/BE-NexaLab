@@ -1,3 +1,4 @@
+import { assessmentResourceKind } from "../../classes/application/exam-contract";
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import { z } from "zod";
 import { AI_ASSESSMENT_CONFIG, ASSESSMENT_EVALUATION_GATE, type AiAssessmentConfig } from "../../../config/ai-assessment";
@@ -82,14 +83,14 @@ export class AiAssessmentsService {
       const unit = credits ? await credits.quote(tx, ASSESS_PURPOSE, 1) : null;
       if (unit && body.confirmedCredits !== unit.credits * submissionIds.length) throw aiEstimateChanged(unit.credits * submissionIds.length, unit.price.version);
       await lock(tx, `ai-assess:${assignmentId}`);
-      const assignment = await tx.assignment.findFirst({ where: { id: assignmentId, classId, contentType: "written" }, select: { id: true, contentId: true } });
+      const assignment = await tx.assignment.findFirst({ where: { id: assignmentId, classId, contentType: { in: ["written", "exam"] } }, select: { id: true, contentId: true, contentType: true } });
       if (!assignment) throw assignmentNotFound();
       const rows = await tx.assignmentSubmission.findMany({
         where: { id: { in: submissionIds }, assignmentId },
         select: { id: true, studentId: true, timing: true, submittedAt: true, resourceVersion: true, answers: true, decision: { select: { decision: true } } },
       });
       if (rows.length !== submissionIds.length) throw submissionNotFound();
-      const resource = await tx.classResource.findFirst({ where: { id: assignment.contentId, classId, kind: "WRITTEN_TASK" }, select: { id: true, title: true, lessonId: true, content: true } });
+      const resource = await tx.classResource.findFirst({ where: { id: assignment.contentId, classId, kind: assessmentResourceKind(assignment.contentType ?? "written") }, select: { id: true, title: true, lessonId: true, content: true } });
       if (!resource) throw assignmentNotFound();
       const lesson = resource.lessonId ? await tx.lesson.findUnique({ where: { id: resource.lessonId }, select: { id: true, title: true } }) : null;
 

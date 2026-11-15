@@ -11,7 +11,7 @@ import { StudentAccessService } from "../../progress/application/student-access.
 import { applicableAssignmentWhere, assignmentQueueOrder } from "../../classes/application/class-access";
 import { TEST_CONTENT_TYPE } from "../../classes/application/assignment-test-contract";
 import { deadlineStates } from "../../classes/application/assignment-test-state";
-import { WRITTEN_CONTENT_TYPE } from "../../classes/application/assignment-written-contract";
+import { DEADLINE_CONTENT_TYPES } from "../../classes/application/assignment-written-contract";
 import { notify } from "../../notifications/application/notify";
 import { overdueNotice } from "../../notifications/application/time-based-notices";
 import { PARENT_CONSENT_HASH, PARENT_CONSENT_VERSION, parentCode, parentCodeHash } from "../application/parent-codes";
@@ -130,7 +130,7 @@ export class ParentsController {
     const [progress, quizAttempts, practicalAttempts] = await Promise.all([
       this.db.progress.findMany({ where: { studentId }, select: { contentId: true, score: true, status: true, attemptsCount: true, updatedAt: true } }),
       this.db.quizAttempt.findMany({ where: { studentId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true, lessonId: true, stepId: true, score: true, passed: true, createdAt: true } }),
-      this.db.attempt.findMany({ where: { studentId, OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true, challengeId: true, lessonStepId: true, verdict: true, durationMs: true, createdAt: true } }),
+      this.db.attempt.findMany({ where: { studentId, OR: [{ labRunId: null }, { labRun: { context: { notIn: ["CLASS_PRACTICE", "EXAM"] } } }] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true, challengeId: true, lessonStepId: true, verdict: true, durationMs: true, createdAt: true } }),
     ]);
     return { progress, summary: { quizAttempts: quizAttempts.length, practicalAttempts: practicalAttempts.length, passedPracticals: practicalAttempts.filter((a) => a.verdict === "passed").length, lastActivityAt: [quizAttempts[0]?.createdAt, practicalAttempts[0]?.createdAt].filter(Boolean).sort().at(-1) ?? null } };
   }
@@ -139,7 +139,7 @@ export class ParentsController {
     const q = z.object({ limit: z.coerce.number().int().min(1).max(50).default(20) }).parse(query);
     const [quiz, practical] = await Promise.all([
       this.db.quizAttempt.findMany({ where: { studentId }, orderBy: { createdAt: "desc" }, take: q.limit, select: { id: true, lessonId: true, stepId: true, score: true, passed: true, createdAt: true } }),
-      this.db.attempt.findMany({ where: { studentId, OR: [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }] }, orderBy: { createdAt: "desc" }, take: q.limit, select: { id: true, challengeId: true, lessonStepId: true, verdict: true, durationMs: true, createdAt: true } }),
+      this.db.attempt.findMany({ where: { studentId, OR: [{ labRunId: null }, { labRun: { context: { notIn: ["CLASS_PRACTICE", "EXAM"] } } }] }, orderBy: { createdAt: "desc" }, take: q.limit, select: { id: true, challengeId: true, lessonStepId: true, verdict: true, durationMs: true, createdAt: true } }),
     ]);
     return [...quiz.map((a) => ({ kind: "QUIZ", ...a })), ...practical.map((a) => ({ kind: "PRACTICAL", ...a }))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, q.limit);
   }
@@ -159,7 +159,7 @@ export class ParentsController {
   /** Read-only status and deadline for a linked child's assigned test; no answers, scores or actions (I3 / 3.6). */
   private async childTestStates(studentId: string, assignmentId?: string) {
     const rows = await this.db.assignment.findMany({
-      where: { ...applicableAssignmentWhere(studentId), contentType: { in: [TEST_CONTENT_TYPE, WRITTEN_CONTENT_TYPE] }, ...(assignmentId ? { id: assignmentId } : {}) },
+      where: { ...applicableAssignmentWhere(studentId), contentType: { in: [...DEADLINE_CONTENT_TYPES] }, ...(assignmentId ? { id: assignmentId } : {}) },
       include: { classroom: { select: { name: true } } },
       orderBy: assignmentQueueOrder,
     });

@@ -18,14 +18,29 @@ export class CatalogController {
   }
   @Roles("STUDENT")
   @Get("open-curriculum") async openCurriculum() {
-    const lessons = await this.db.lesson.findMany({
+    const rawLessons = await this.db.lesson.findMany({
       where: {
         status: "published", scope: "SHARED_LIBRARY", synthetic: false,
         packVersion: { status: "released", synthetic: false },
       },
-      select: { id: true, subjectId: true, grade: true, chapter: true, topic: true, title: true, curriculumChapterCode: true, curriculumTopicCode: true, curriculumOrder: true, publishedAt: true },
+      select: {
+        id: true, subjectId: true, grade: true, chapter: true, topic: true, title: true,
+        curriculumChapterCode: true, curriculumTopicCode: true, curriculumOrder: true, publishedAt: true,
+        review: true,
+        ebookLocators: { where: { verificationStatus: "verified" }, select: { physicalPageIndex: true, printedPageLabel: true }, take: 1 },
+      },
     });
-    if (!lessons.length) return { subjects: [] };
+    if (!rawLessons.length) return { subjects: [] };
+    const lessons = rawLessons.map(({ review, ebookLocators, ...lesson }: any) => {
+      const locatorPage = Number(ebookLocators?.[0]?.physicalPageIndex);
+      const reviewStart = Number((review as any)?.pdfPageRange?.start);
+      const pdfPage = Number.isInteger(locatorPage) && locatorPage > 0
+        ? locatorPage
+        : Number.isInteger(reviewStart) && reviewStart > 0
+          ? reviewStart
+          : null;
+      return { ...lesson, ...(pdfPage ? { pdfPage } : {}) };
+    });
     const [subjects, chapters] = await Promise.all([
       this.db.subject.findMany({
         where: { id: { in: [...new Set(lessons.map((l: any) => l.subjectId))] } },
@@ -130,7 +145,13 @@ export class CatalogController {
     const hasReleases = new Set(releaseCounts.filter((row) => row._count._all > 0).map((row) => row.labId));
     const boundLessonIds = [...new Set(activeReleases.flatMap((release) =>
       ((release.snapshot as any).lessonBindings ?? []).map((binding: any) => binding.lessonId as string)))];
-    const [checks, lessons] = await Promise.all([
+    // Explore-only wet bench Labs have no release snapshot; their seed supplies the curriculum topic.
+    const exploreTopic = (lab: (typeof labs)[number]) =>
+      !hasReleases.has(lab.id) && (lab.config as { rendererKey?: string } | null)?.rendererKey === "wet-bench-explore"
+        ? lab.topicCode
+        : null;
+    const exploreTopics = [...new Set(labs.map(exploreTopic).filter((code) => code !== null))];
+    const [checks, lessons, exploreLessons] = await Promise.all([
       (async () => {
         const intact = labs.map((lab) => releaseOf.get(lab.id)).filter((release) => !!release && digest(release.snapshot) === release.digest);
         const matches = await reviewedBindingsMatchMany(this.db, intact.map((release) => ({ labId: release!.labId, snapshot: release!.snapshot })));
@@ -143,12 +164,27 @@ export class CatalogController {
           select: { id: true, title: true, curriculumTopicCode: true },
         })
         : Promise.resolve([]),
+      exploreTopics.length
+        ? this.db.lesson.findMany({
+          where: {
+            curriculumTopicCode: { in: exploreTopics }, status: "published", scope: "SHARED_LIBRARY", synthetic: false,
+            packVersion: { status: "released", synthetic: false },
+          },
+          select: { id: true, title: true, curriculumTopicCode: true },
+          orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+        })
+        : Promise.resolve([]),
     ]);
     const lessonById = new Map(lessons.map((lesson) => [lesson.id, lesson]));
     const visible = labs.map((lab, index) => {
       const release = releaseOf.get(lab.id);
       // Preserve legacy catalog behavior for Labs without a release lifecycle record.
-      if (!release) return req.user.role !== "STUDENT" || !hasReleases.has(lab.id) ? lab : null;
+      if (!release) {
+        if (req.user.role === "STUDENT" && hasReleases.has(lab.id)) return null;
+        const topicCode = exploreTopic(lab);
+        const lesson = topicCode && exploreLessons.find((item) => item.curriculumTopicCode === topicCode);
+        return lesson ? { ...lab, lessonLinks: [{ lessonId: lesson.id, title: lesson.title, topicCode }] } : lab;
+      }
       if (!checks[index]) return req.user.role === "STUDENT" ? null : lab;
       const lessonIds: string[] = ((release.snapshot as any).lessonBindings ?? []).map((binding: any) => binding.lessonId);
       const lessonLinks = [...new Set(lessonIds)].map((id) => lessonById.get(id)).filter((lesson) => lesson !== undefined);

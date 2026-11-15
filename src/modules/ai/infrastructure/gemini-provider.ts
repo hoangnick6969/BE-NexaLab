@@ -4,6 +4,14 @@ const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 /** Finish reasons that mean the candidate was withheld, not that the model answered. */
 const BLOCKED_FINISH = new Set(["SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE"]);
 
+/**
+ * Gemini counts thinking tokens against maxOutputTokens, so `maxTokens` (the visible JSON budget) gets this headroom.
+ * Measured 2026-11-15 on gemini-3.5-flash with default thinking: draft-lab-challenge used 1,700-1,967 thinking tokens of a
+ * 2,048 limit and one run in three was cut at MAX_TOKENS; generate-resource used up to ~3,000. Thinking level unchanged.
+ * The student adapter does the same (student-ai/infrastructure/providers.ts).
+ */
+export const THINKING_HEADROOM_TOKENS = 4_096;
+
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 /**
@@ -33,7 +41,7 @@ export class GeminiProvider implements AiProvider {
           contents: [{ role: "user", parts: [{ text: input.user }] }],
           generationConfig: {
             temperature: 0,
-            maxOutputTokens: input.maxTokens,
+            maxOutputTokens: input.maxTokens + THINKING_HEADROOM_TOKENS,
             responseMimeType: "application/json",
             ...(input.responseSchema ? { responseSchema: input.responseSchema } : {}),
           },
@@ -60,7 +68,8 @@ export class GeminiProvider implements AiProvider {
     if (data?.promptFeedback?.blockReason || !candidate || BLOCKED_FINISH.has(candidate.finishReason))
       throw new AiProviderError("OUTPUT_SCHEMA_INVALID");
     const text = (candidate.content?.parts ?? [])
-      .map((part: { text?: unknown }) => (typeof part?.text === "string" ? part.text : ""))
+      // Thought summaries are never part of the answer.
+      .map((part: { text?: unknown; thought?: unknown }) => (typeof part?.text === "string" && part.thought !== true ? part.text : ""))
       .join("");
     if (!text.trim()) throw new AiProviderError("OUTPUT_SCHEMA_INVALID");
 

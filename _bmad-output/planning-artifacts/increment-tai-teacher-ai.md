@@ -48,6 +48,7 @@ Delegate one ticket per task. Use `$bmad-build` and implement only that ticket a
 | TAI-04 Evidence insights | `../specs/spec-teacher-ai-evidence-insights/` | Versioned rule-based consistency insights on top of B2 signals | B2; TAI-02/03 for some rules | G-1, G-5 |
 | TAI-05 AI credits | `../specs/spec-teacher-ai-credits/` | Credit ledger, pricing versions, reserve/settle/refund per job | TAI-01 | G-1, G-3 |
 | TAI-06 Lab drafting | `../specs/spec-teacher-ai-lab-drafting/` | AI-proposed challenge variant (allowlisted lab + in-range parameters) on a draft lesson, checked by the engine | TAI-01 | G-1, G-4, G-6 |
+| TAI-07 Assessment mode | `../specs/spec-teacher-ai-assessment-mode/` | Graded 15p/midterm assessments: timed one-attempt sessions, hidden results until publish, 10-point scale, gradebook + CSV, composite EXAM, AI paper by cognitive matrix | TAI-01..06, I3 | AM-G1 (closed 2026-11-15) |
 
 ```mermaid
 flowchart LR
@@ -243,6 +244,18 @@ From TAI-02 on, each epic lists its stories as a table. The acceptance criteria 
 | TAI6-T3 | `DRAFT_LAB_CHALLENGE` job purpose, review and apply routes | Teacher reviews and applies one proposal to a draft lesson | TAI6-T1, TAI6-T2, TAI-T2, TAI-T4 |
 | TAI6-T4 | Teacher proposal review UX | Preview by deterministic engine before apply | TAI6-T3 |
 | TAI6-T5 | Golden evaluation and end-to-end proof | Lecturer rates ≥ 70% of proposals sensible; journey passes | TAI6-T4 |
+
+## Epic TAI-07: Graded Assessments on the Teacher AI Engines (Assessment Mode)
+
+**Spec:** `../specs/spec-teacher-ai-assessment-mode/SPEC.md`. **Gate:** AM-G1, closed 2026-11-15 by the project owner (decisions in the spec `.memlog.md`). **Watch:** pre-existing assignments default to `PRACTICE`; the I3 (`test:i3`) and TAI-02 suites must pass unchanged. T2 amends G-5 (retires `insights@1 SCORE_CHANGE_UNUSUAL` from the active set). PRD FR-26 and spine AD-19 bind this epic.
+
+| Story | Title | Goal (who / what) | Depends on |
+| --- | --- | --- | --- |
+| TAI7-T1 | Assessment mode: graded types, timed sessions, retake, hidden results, 10-point scale | Teacher assigns a 15p/midterm test; student gets one timed attempt with auto-submit; results hidden until publish | AM-G1, I3, TAI2-T3 |
+| TAI7-T2 | Insights follow the teaching flow (`insights@4`) | Teacher sees trends across graded columns and pre-midterm readiness, not retake noise | TAI7-T1 |
+| TAI7-T3 | Class gradebook, AI quick-approve, similarity flags, lock and CSV | Teacher grades, approves AI suggestions, locks and exports the column | TAI7-T1 |
+| TAI7-T4 | Composite EXAM | One timed paper with MCQ, written and lab parts, 10 points | TAI7-T1, TAI7-T3 |
+| TAI7-T5 | AI paper and marking scheme by cognitive matrix | AI drafts an EXAM from a lesson and NB/TH/VD matrix | TAI7-T4 |
 
 ## Tracking
 

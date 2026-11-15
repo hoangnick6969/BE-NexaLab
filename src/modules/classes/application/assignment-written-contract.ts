@@ -1,3 +1,4 @@
+import { EXAM_CONTENT_TYPE, type ExamComponents } from "./exam-contract";
 import { BadRequestException, ConflictException } from "@nestjs/common";
 import { z } from "zod";
 import { studentWrittenTaskContent } from "./class-resource-contract";
@@ -10,7 +11,7 @@ import { DUE_SOON_MS, latestSubmission, submissionStatus, TEST_CONTENT_TYPE } fr
  */
 export const WRITTEN_CONTENT_TYPE = "written";
 /** Content types with a deadline lifecycle (revisions, late reasons, LateDecision). */
-export const DEADLINE_CONTENT_TYPES = [TEST_CONTENT_TYPE, WRITTEN_CONTENT_TYPE] as const;
+export const DEADLINE_CONTENT_TYPES = [TEST_CONTENT_TYPE, WRITTEN_CONTENT_TYPE, EXAM_CONTENT_TYPE] as const;
 export const isDeadlineContentType = (contentType: string) => (DEADLINE_CONTENT_TYPES as readonly string[]).includes(contentType);
 
 /** Raw text is bounded only to cap the body; the per-prompt `maxChars` rule is applied after normalization. */
@@ -169,6 +170,7 @@ type WrittenRow = {
   lateReason: string | null;
   submittedAt: Date;
   answers?: unknown;
+  examComponents?: ExamComponents | null;
   deadlineRevision?: { revision: number } | null;
   decision?: { decision: string; note?: string | null; createdAt: Date } | null;
   /** Newest first; the first row is the current grade. */
@@ -178,11 +180,11 @@ type WrittenRow = {
 const latestGrade = (row: WrittenRow) => row.gradeDecisions?.[0] ?? null;
 
 /** Gradeable submissions show AWAITING_GRADE until a grade exists, then GRADED. */
-export function writtenSubmissionStatus(row: Pick<WrittenRow, "timing" | "decision" | "gradeDecisions">): WrittenSubmissionStatus {
+export function writtenSubmissionStatus(row: Pick<WrittenRow, "timing" | "decision" | "gradeDecisions" | "examComponents">): WrittenSubmissionStatus {
   const status = submissionStatus(row);
   if (status === "LATE_REVIEW_PENDING") return "LATE_REVIEW_PENDING";
   if (status === "REJECTED_ZERO") return "REJECTED_ZERO";
-  return row.gradeDecisions?.length ? "GRADED" : "AWAITING_GRADE";
+  return row.gradeDecisions?.length || row.examComponents?.writtenRequired === false ? "GRADED" : "AWAITING_GRADE";
 }
 
 /**
@@ -192,7 +194,7 @@ export function writtenSubmissionStatus(row: Pick<WrittenRow, "timing" | "decisi
 export function writtenSubmissionView(row: WrittenRow, options: { withResponses?: boolean; withGrade?: boolean } = {}) {
   const status = writtenSubmissionStatus(row);
   const grade = latestGrade(row);
-  const score = status === "REJECTED_ZERO" ? 0 : status === "GRADED" && options.withGrade ? grade!.score : null;
+  const score = status === "REJECTED_ZERO" ? 0 : status === "GRADED" && options.withGrade ? grade?.score ?? null : null;
   return {
     id: row.id,
     submittedAt: row.submittedAt,
@@ -204,7 +206,7 @@ export function writtenSubmissionView(row: WrittenRow, options: { withResponses?
     questionCount: row.questionCount,
     deadlineRevision: row.deadlineRevision?.revision ?? null,
     decision: row.decision ? { decision: row.decision.decision, note: row.decision.note ?? null, decidedAt: row.decision.createdAt } : null,
-    grade: status === "GRADED" && options.withGrade
+    grade: status === "GRADED" && options.withGrade && grade
       ? { score: grade!.score, totalPoints: grade!.totalPoints, maxPoints: grade!.maxPoints, feedback: grade!.feedback, criterionPoints: grade!.criterionPoints, decidedAt: grade!.createdAt, resourceVersion: grade!.resourceVersion }
       : null,
     ...(options.withResponses

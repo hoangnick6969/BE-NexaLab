@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 
 /**
- * `generate-resource@1` (TAI-01). The template text lives in code with an explicit version. A pinned-digest test
+ * `generate-resource@2` (TAI-01; @2 adds propertyOrdering to the provider schema). The template text lives in code with an explicit version. A pinned-digest test
  * fails when the text below changes without a version bump, and a bump re-runs the golden evaluation
  * (validation-rules.md) before it can become the default.
  */
-export const GENERATE_RESOURCE_PROMPT_VERSION = "generate-resource@1";
+export const GENERATE_RESOURCE_PROMPT_VERSION = "generate-resource@2";
 export const RESOURCE_ITEMS_SCHEMA_VERSION = "resource-items@1";
 /** Output budget of one generate-resource call (runner and golden evaluation send the same value). */
 export const GENERATE_RESOURCE_MAX_OUTPUT_TOKENS = 8_192;
@@ -80,6 +80,10 @@ export const RESOURCE_ITEMS_JSON_SCHEMA = {
       items: {
         type: "OBJECT",
         required: ["type", "sourceRefs"],
+        // @2: without an explicit order Gemini emits the fields in its own order (type, sourceRefs, prompt, ...),
+        // not the order the system text describes; on gemini-3.5-flash it then looped inside the first `prompt`
+        // until MAX_TOKENS, which surfaced as PROVIDER_TIMEOUT or OUTPUT_SCHEMA_INVALID (measured 2026-11-14).
+        propertyOrdering: ["type", "prompt", "options", "correctOption", "explanation", "difficulty", "outcomeCodes", "front", "back", "sourceRefs"],
         properties: {
           type: { type: "STRING", enum: ["SINGLE_CHOICE", "CARD"] },
           prompt: { type: "STRING" },

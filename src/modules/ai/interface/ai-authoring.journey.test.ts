@@ -342,7 +342,7 @@ describe("TAI-T6 success-signal journey (in-memory, fake provider)", () => {
     // 1. The owner requests a 10-question TEST from lesson-circuit; the same key replays the same job.
     const createKey = key();
     const created = await ai.create(CLASS, req(OWNER, createKey), createBody);
-    expect(created).toMatchObject({ status: "PENDING", requestedCount: 10, promptVersion: "generate-resource@1", outputSchemaVersion: "resource-items@1" });
+    expect(created).toMatchObject({ status: "PENDING", requestedCount: 10, promptVersion: "generate-resource@2", outputSchemaVersion: "resource-items@1" });
     expect((await ai.create(CLASS, req(OWNER, createKey), createBody)).id).toBe(created.id);
     await expect(ai.create(CLASS, req(OWNER, createKey), { ...createBody, itemCount: 9 })).rejects.toMatchObject({ status: 409, response: { code: "IDEMPOTENCY_KEY_REUSED" } });
     expect(tableRows("aiJob")).toHaveLength(1);

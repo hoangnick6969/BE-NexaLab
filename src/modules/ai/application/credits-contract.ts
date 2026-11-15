@@ -30,7 +30,7 @@ export const myCreditsQuery = z
 const priceInt = z.number().int().min(0).max(MAX_CREDITS_PER_OPERATION);
 export const createPricingBody = z
   .object({
-    purpose: z.enum(["GENERATE_RESOURCE", "ASSESS_SUBMISSION", "DRAFT_LAB_CHALLENGE"]),
+    purpose: z.enum(["GENERATE_RESOURCE", "ASSESS_SUBMISSION", "DRAFT_LAB_CHALLENGE", "GENERATE_ASSESSMENT"]),
     baseCredits: priceInt,
     perItemCredits: priceInt,
     creditsPer1kInputTokens: priceInt,
@@ -38,7 +38,7 @@ export const createPricingBody = z
     evidenceRef: z.string().trim().min(1, "Cần dẫn chiếu bản ghi bằng chứng giá").max(300),
   })
   .strict();
-export const listPricingQuery = z.object({ purpose: z.enum(["GENERATE_RESOURCE", "ASSESS_SUBMISSION", "DRAFT_LAB_CHALLENGE"]).optional() }).strict();
+export const listPricingQuery = z.object({ purpose: z.enum(["GENERATE_RESOURCE", "ASSESS_SUBMISSION", "DRAFT_LAB_CHALLENGE", "GENERATE_ASSESSMENT"]).optional() }).strict();
 
 // Error factories. Details carry the numbers because the global filter forwards `details` only.
 export const confirmedCreditsRequired = () =>

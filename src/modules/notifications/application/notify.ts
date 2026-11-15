@@ -13,7 +13,10 @@ export type NotificationType =
   | "ENROLLMENT_APPROVED"
   | "RESOURCE_PUBLISHED"
   | "ASSIGNMENT_DUE_SOON"
-  | "ASSIGNMENT_OVERDUE";
+  | "ASSIGNMENT_OVERDUE"
+  /** TAI-07: graded assessment events. */
+  | "ASSESSMENT_RETAKE_GRANTED"
+  | "SCORES_PUBLISHED";
 
 export type NotificationInput = {
   recipientId: string;

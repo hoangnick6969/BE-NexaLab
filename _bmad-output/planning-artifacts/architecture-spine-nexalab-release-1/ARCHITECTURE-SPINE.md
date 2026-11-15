@@ -200,6 +200,12 @@ flowchart LR
 - **Prevents:** conflicting deadline/status displays, unauthorized parent visibility, automatic zero scoring at expiry, and notifications sent from stale client state.
 - **Rule:** the backend derives assignment status, deadline revisions, recipient eligibility, and notification events from assignment/attempt state. Student surfaces include due-soon and overdue states; teacher surfaces include upcoming/overdue recipients and late-review decisions; parent surfaces may notify only explicitly linked/approved parents about their child's overdue unsubmitted work and remain read-only. Parent notices expose no answers or teacher-only decision controls. Generate/deliver notification events idempotently and retain the in-app channel unless another channel is approved. Reminder timing/cadence is an epic-level policy decision.
 
+### AD-19 — Graded assessments are server-timed sessions with teacher-published results
+
+- **Binds:** FR-25, FR-26
+- **Prevents:** client-controlled timers, a second attempt without a teacher grant, double rounding of grade columns, and scores reaching students or parents before the teacher publishes them.
+- **Rule:** `Assignment.assessmentType` (`PRACTICE` default, `REGULAR_15M`, `MIDTERM_45M`) decides the lifecycle. A graded attempt is an `AssessmentSession` whose `expiresAt = min(startedAt + duration, dueAt)` is set by the server; drafts autosave to the session and an expired open session is auto-submitted once (unique `AssignmentSubmission.sessionId`) by the lazy read path and a sweeper. Extra attempts come only from append-only `AssessmentRetakeGrant` rows. Result visibility is decided in the shared `deadlineStates` read path and fails closed for every non-teacher caller until `scoresPublishedAt`. The 10-point scale is derived from raw points and rounded half-up to one decimal only at display or lock. Spec: `../../specs/spec-teacher-ai-assessment-mode/`.
+
 ### AD-17 — Teacher AI is a versioned suggestion layer
 
 - **Binds:** FR-11, FR-21

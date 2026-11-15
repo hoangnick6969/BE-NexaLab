@@ -6,6 +6,7 @@ import {
   DRAFT_LAB_CHALLENGE_SYSTEM,
   buildLabChallengeUser,
   labChallengePromptDigest,
+  labChallengeResponseSchema,
   type LabChallengeSnapshotV1,
 } from "./lab-challenge-prompt";
 import {
@@ -183,8 +184,21 @@ describe("TAI6-T2 reference states", () => {
   });
 });
 
-describe("draft-lab-challenge@1 prompt", () => {
-  const PINNED: Record<string, string> = { "draft-lab-challenge@1": "457e84549ab0be099b8040994e560a1eb50ef2388eaeca52bb542e318f9bbf52" };
+describe("draft-lab-challenge prompt", () => {
+  const PINNED: Record<string, string> = {
+    "draft-lab-challenge@1": "457e84549ab0be099b8040994e560a1eb50ef2388eaeca52bb542e318f9bbf52",
+    "draft-lab-challenge@2": "0df488beada7fdab3ce94fcb70fe0d2d35426f689585cb5c192a11dedc6eb358",
+  };
+  it("lists the snapshot's allowed parameters in the provider schema, so the model cannot only return an empty object", () => {
+    const schema: any = labChallengeResponseSchema([
+      { labId: "eye", modelRef: "m1", params: { minScore: { kind: "number", min: 50, max: 100, step: 10, unit: "điểm", label: "Điểm" } } },
+      { labId: "chemistry", modelRef: "m2", params: { reactionId: { kind: "choice", label: "Phản ứng", options: [{ value: "mg-hcl", label: "a" }, { value: "naoh-hcl", label: "b" }] } } },
+    ]);
+    const item = schema.properties.proposals.items;
+    expect(item.properties.challengeParams).toEqual({ type: "OBJECT", properties: { minScore: { type: "NUMBER" }, reactionId: { type: "STRING", enum: ["mg-hcl", "naoh-hcl"] } } });
+    expect(item.propertyOrdering).toEqual(["labId", "challengeParams", "rationale", "outcomeCodes", "sourceRefs"]);
+    expect(item.required).toContain("challengeParams");
+  });
   it("has a pinned digest for the current version (bump the version when this fails)", () => {
     expect(PINNED[LAB_CHALLENGE_PROMPT_VERSION], "add a pinned digest for the new version").toBeDefined();
     expect(labChallengePromptDigest()).toBe(PINNED[LAB_CHALLENGE_PROMPT_VERSION]);

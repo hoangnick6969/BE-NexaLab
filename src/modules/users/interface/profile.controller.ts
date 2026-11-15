@@ -30,12 +30,18 @@ export class ProfileController {
 
   private async view(user: any) {
     const { avatarKey, preferences, ...rest } = user;
+    const store = storage();
+    const hasAvatar = avatarKey
+      ? store.kind === "local"
+        ? Boolean(await store.head(avatarKey))
+        : true
+      : false;
     return {
       ...rest,
       preferences: readPreferences(preferences),
       // Students' names are provisioned by their teacher; adults may rename themselves.
       canEditName: user.role !== "STUDENT",
-      avatarUrl: avatarKey ? await storage().presignGet(avatarKey, readTtl()) : null,
+      avatarUrl: hasAvatar && avatarKey ? await store.presignGet(avatarKey, readTtl()) : null,
     };
   }
 

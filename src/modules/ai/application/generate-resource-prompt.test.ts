@@ -14,6 +14,7 @@ import {
  */
 const PINNED: Record<string, string> = {
   "generate-resource@1": "88b1c3c9dae1077ccc13eadf07a3f12546afa1778d6dfdcdfdf55bf8be4f2efd",
+  "generate-resource@2": "8e4581d759ad4ffa996e57fa8ea0722b093f5cfef9c4db37ae3e810723ccb9d5",
 };
 
 const snapshot: InputSnapshotV1 = {
