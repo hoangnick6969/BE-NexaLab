@@ -66,7 +66,7 @@ Ba điểm kỹ thuật owner nêu thêm, và cách đã chốt trong code:
 - Vượt giới hạn tan không bị từ chối ngay lúc thêm bột: bột chỉ tan tới giới hạn khi khuấy, phần còn lại ở đáy.
 - Ống đong có 20 vạch (mỗi vạch 5 mL), đọc làm tròn đến 1 mL. Đong 47,5 mL qua nấc rót cho kết quả 4,95 % (đạt dung sai ±0,2 %).
 
-Trạng thái: **đã làm trên dev, chưa phát hành**. FE `e44562f` (nhánh `feat/fl-11-solution-bench`, chồng lên PR item chung), BE `493721b`, `aa7ef76`, `191e838` (nhánh `feat/fl-11-solution-sim`). Xem tại `/dev/lab-kits/k2?lab=fl-11`. Còn: reviewer Hóa duyệt dữ liệu (câu 5 của bản nháp), owner phát hành qua Admin API (`publish-k2-explore.ts --lab solution-concentration --apply`).
+Trạng thái: **đã làm và đã phát hành lên Supabase (2026-11-16, owner đã tự kiểm trên fixture UI local)**; PR chưa merge, dữ liệu vẫn là bản nháp chờ reviewer Hóa. FE `e44562f` (nhánh `feat/fl-11-solution-bench`, chồng lên PR item chung), BE `493721b`, `aa7ef76`, `191e838` (nhánh `feat/fl-11-solution-sim`). Xem tại `/dev/lab-kits/k2?lab=fl-11`. Còn: reviewer Hóa duyệt dữ liệu (câu 5 của bản nháp), owner phát hành qua Admin API (`publish-k2-explore.ts --lab solution-concentration --apply`).
 
 ## Task
 
@@ -74,4 +74,4 @@ Trạng thái: **đã làm trên dev, chưa phát hành**. FE `e44562f` (nhánh 
 |---|---|---|
 | F11-1 | Sim: hợp đồng, engine hòa tan, validator, golden, bump sim 1.11.0, đồng bộ tarball | Xong |
 | F11-2 | FE: renderer, nhập khối lượng, HUD, nhật ký, config, test | Xong |
-| F11-3 | Seed, phát hành qua Admin API, kiểm chỉ-SELECT | Chờ merge PR, reviewer Hóa, owner phát hành |
+| F11-3 | Seed, phát hành qua Admin API, kiểm chỉ-SELECT | Phát hành xong (Lab v1, resolver ok, 0 LabRun). Còn: merge PR và deploy, reviewer Hóa duyệt dữ liệu |
