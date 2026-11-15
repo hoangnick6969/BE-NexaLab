@@ -942,12 +942,24 @@ story_notes:
   lab-space-shared-ui:
     status: in-progress
     date: '2026-11-15'
-    branch: 'FE feat/lab-space-shared-ui and BE feat/lab-space-shared-ui (both from main), uncommitted'
+    branch: 'FE feat/lab-space-shared-ui and BE feat/lab-space-shared-ui, merged to main (FE PR #59, BE PR #68)'
     artifact: ../specs/spec-lab-pipeline/lab-space-shared-ui-refactor-direction.md
     parent: ../specs/spec-lab-pipeline/lab-space-shared-ui-spec.md
     done: 'Steps 1-4 and 6. Layout A chosen by the user 2026-11-15 for every Lab: header (exit, title, 3D/2D, reset) top left, scene full screen, question panel on the right with the run result, explanation, hints and teacher prompts as its last sections, actions dock bottom left, scene notes under the header. Shared LabQuestionPanel/ChoiceGroup/StationTabs/revealInPanel, LabHeaderSlot, LabSpace tools/result props, LabRendererToggle owns its CSS (44px). On the panel: FL-21, FL-20, FL-25, FL-10, FL-06, FL-07, density and buoyancy (K3Hud), gene (K7Hud), eye-optics, circuit bulb, legacy circuit. Scenes full-bleed (FL-06, FL-07, gene 2D). Spacing rhythm 12/8 px.'
     evidence: 'FE lint 0 errors, build OK, test:regression 64/64. Playwright lab suite (26 files): every failure is either in the clean-main baseline (lab-run-host 60/78, lesson-lab-navigation 89/133, FL-25 180/181, circuit-lab copy mismatch "Máy chủ bận") or a load-timing flake that passes when run alone (FL-20 177, FL-25 293/294, buoyancy, gene, K3 preview). lab-run-host 234x2 (baseline failures) now pass. Tests updated to layout A: result in panel, header toggle, bulb radios, class-section bulb.'
     remaining: 'FL-13 Explore keeps ObservationDrawer (same right zone, own style) and the legacy chemistry Lab is not on the panel. Explore has no Class Lab data flow yet. Team review before commit.'
+  fl06-mechanics-bench-explore:
+    status: review
+    date: '2026-11-15'
+    owner: 'Dev 1 (Kit Vật lý), INC-0 D1-0.1 and INC-1 D1-1.1 to D1-1.5'
+    branch: 'FE feat/dev1-physics-bench and BE feat/dev1-physics-bench, rebased on main after K2 step A (FE PR #61, BE PR #72/#73), uncommitted'
+    artifact: ../specs/spec-lab-pipeline/fl-06-mechanics-bench-explore-spec.md
+    tracking: ../specs/spec-lab-pipeline/lab-kit-delivery-tracking.md
+    done: 'Spec approved by the owner 2026-11-15 (Q-1 moment table on, Q-2 shared Lab ID lever-equilibrium waiting for D-5, Q-3 kit k5-lever-bench@1 / schema k5-lever-config/1, Q-4 movable fulcrum later as lever-bench@1.1.0). Sim packages/sim/mechanics (contracts, validateLeverLabConfig, FL06_LEVER_EXPLORE_CONFIG), @nexalab/sim 1.11.0 (on top of K2 1.9.0 molar masses and 1.10.0 class templates) synced to FE vendor. BE EXPLORE_BENCHES k5-lever-bench@1 with leverBenchSpec; no seed target (lever-equilibrium has a Guided release). FE registry entry, LeverExploreBench/LeverExploreLabPage (layout A), listLeverKitItems, lever notebook on the shared Explore store, K5Toolbox shared with FL-06 Guided, dev route /dev/lab-kits/lever-explore.'
+    evidence: 'Sim vitest mechanics + lever-bench + envelope 22/22. BE vitest explore-labs + sim 171/171, tsc clean. FE tsc and build clean; tsx unit lever-explore.test.ts 4/4; Playwright lever-explore.spec.ts 3/3 (registry open, G-02 balance, notebook persists after F5, export scored false, no run request, no-gauge config, EXPLORE_CONFIG_INVALID, phone 390 px); regression fl-06-k5, explore-pinned-config, explore-lab-space, event-lab-hints 13/13.'
+    baseline: 'D1-0.1 done 2026-11-15: FE tests/baseline-d1-fluid-wetbench.spec.ts writes tests/baseline/d1-0.1/ with BASELINE_UPDATE=1 (readings JSON for FL-03, FL-05, FL-10 Guided and 22 reference screenshots); without it the spec asserts the readings and writes fresh shots to test-results/baseline-d1/. Compare mode 3/3 twice. Pre-existing: FL-03 beaker on the balance renders clipped in 3D. Scene fixes from owner review: K5 pivot raised with plumb hangers, overlay insets, stable camera preset (no transition replay on each click), Guided hides free tools in part A, pending label on step buttons.'
+    inc2: 'INC-2 done 2026-11-15 (D1-2.1 to D1-2.4). FL-03 beaker glass is the shared Beaker3D (K3 water motion kept; orange tint fixed); FL-03 balance stays K3 with reasons in tracking D1-2.3; FL-10 Guided WetBenchStage uses the shared DigitalScale3D and Beaker3D, pouring beaker lifts over the rim, no pan z-fighting. Shared scale extension (pan children, onTare) pushed on FE feat/shared-scale-pan-load for K2 review. Acceptance B suites all pass after merging main (K2 class templates, sim now 1.11.0). Note: a dev server started before the sim reinstall serves a stale prebundled sim; restart it with --force (FL-13 Explore tests showed EXPLORE_CONFIG_INVALID until then).'
+    remaining: 'PR review and merge. Publishing FL-06 Explore to students waits for D-5. INC-3 (D1-3.x) opens after K2-2.8. FL-03 moves to the shared scale after feat/shared-scale-pan-load lands.'
   project-structure-refactor:
     status: done
     audited_against_code: '2026-10-17'

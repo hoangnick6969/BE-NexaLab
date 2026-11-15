@@ -24,7 +24,11 @@
     "wet-bench/acid-base.ts",
     "wet-bench/engine.ts",
     "wet-bench/validate-config.ts",
-    "wet-bench/class-template.ts"
+    "wet-bench/class-template.ts",
+    "mechanics/index.ts",
+    "mechanics/contracts.ts",
+    "mechanics/validate-config.ts",
+    "mechanics/fl06-lever.data.ts"
   ],
   "dependencies": {
     "zod": "^3.25.0"

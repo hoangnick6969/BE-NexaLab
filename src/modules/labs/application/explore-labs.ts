@@ -3,6 +3,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { audit, type AuditActor } from "../../../common/audit";
 import { deriveWetBenchEffectiveConfig, reagentById, validateChemistryLabConfig, type ChemistryLabConfig, type EffectiveRequirement } from "../../../../packages/sim/wet-bench";
+import { LEVER_ENGINE, LEVER_KIT, validateLeverLabConfig, type LeverLabConfig } from "../../../../packages/sim/mechanics";
 import { activityDigest } from "./sim-packs";
 
 /** Fields every Explore bench config carries (P0 C1). */
@@ -53,6 +54,35 @@ function wetBenchSpec(config: ChemistryLabConfig) {
   };
 }
 
+const newtons = (milliNewtons: number) => `${(milliNewtons / 1000).toFixed(1).replace(".", ",")} N`;
+
+function leverBenchSpec(config: LeverLabConfig) {
+  return {
+    objective: config.outcomeSummary.join(" "),
+    outcomes: config.outcomeSummary,
+    materials: {
+      reagents: [],
+      apparatus: config.enabledApparatus.map((item) => ({
+        id: item.id, kind: item.kind, label: item.labelVi ?? item.kind,
+        ...(item.kind === "weight_set" ? { forces: config.weights.availableMilliNewtons.map(newtons) } : {}),
+      })),
+    },
+    setup: "Bàn cơ K5: thanh đòn 11 lỗ móc cách nhau 50 mm, điểm tựa O ở giữa, bộ quả nặng và lực kế theo cấu hình.",
+    procedure: "Khám phá tự do: học sinh treo quả nặng, gắn lực kế và quan sát thanh; không có trình tự bắt buộc.",
+    observations: (config.pedagogy.observationPrompts ?? []).map((prompt) => prompt.textVi),
+    observationPrompts: config.pedagogy.observationPrompts ?? [],
+    safety: { simulation: config.safetyBriefing.simulation, realLab: config.safetyBriefing.realLab, reagentNotes: [] },
+    limitations: config.limitations,
+    modality: "explore",
+    scored: false,
+    outcomeCodes: [],
+    sources: [{ kind: "technical_assumption", status: "unverified", description: "Hằng số mô hình đòn bẩy (lever-bench-reference-v1) là giả định kỹ thuật, không phải số liệu SGK." }],
+    engine: config.engine,
+    kit: config.kit,
+    configVersion: config.configVersion,
+  };
+}
+
 /** Server bench registry (P0 C2.3): only benches listed here can be published or resolved. */
 export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
   "k2-wet-bench@1": {
@@ -70,6 +100,15 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
       return checked.ok ? deriveWetBenchEffectiveConfig(checked.config, selection) : { ok: false, errors: checked.errors };
     },
     activitySpec: wetBenchSpec,
+  },
+  [LEVER_KIT]: {
+    kit: LEVER_KIT,
+    modelRef: LEVER_ENGINE,
+    validate: (raw) => {
+      const result = validateLeverLabConfig(raw);
+      return result.ok ? { ok: true, config: result.config } : { ok: false, errors: result.errors };
+    },
+    activitySpec: leverBenchSpec,
   },
 };
 

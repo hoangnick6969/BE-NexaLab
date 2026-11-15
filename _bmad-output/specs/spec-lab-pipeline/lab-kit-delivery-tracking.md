@@ -33,7 +33,7 @@ Quy tắc chung cho mọi task:
 | [ ] O-0.4 | Owner | Chốt **Q-1**: prompt cho mẫu pH FL-13 | Phương án ghi trong spec pilot §3 | — |
 | [ ] O-0.5 | Owner | Xác nhận số track Lab đồng thời từ INC-2 (phase plan giới hạn 2) | Ghi quyết định vào phân công §3 | — |
 | [x] K2-0.1 | K2 | Chụp baseline ảnh và số đo: FL-13 (pH), FL-14a (dụng cụ), FL-10 Explore route dev (cốc, cân) | FE `tests/k2-baseline.spec.ts` và snapshot: danh sách dụng cụ, pH 6 hoá chất FL-13, số cân FL-10 (120,00 g → 120,05 g sau HCl), ảnh 3 bàn. FE `1b30091` | — |
-| [ ] D1-0.1 | Dev 1 | Chụp baseline ảnh và số đo: FL-03, FL-05, FL-10 Guided | Ảnh và số đo lưu trong repo test | — |
+| [x] D1-0.1 | Dev 1 | Chụp baseline ảnh và số đo: FL-03, FL-05, FL-10 Guided. FE `tests/baseline-d1-fluid-wetbench.spec.ts`, kết quả ở `tests/baseline/d1-0.1/` (3 JSON số đo, 22 ảnh 3D/2D ở 1440 và 390 px). Chạy không có `BASELINE_UPDATE` để so số đo khi nghiệm thu D1-2.4. Ghi nhận trước bước B: cốc trên cân FL-03 (3D) hiển thị bị cắt | Ảnh và số đo lưu trong repo test | — |
 | [ ] D2-0.1 | Dev 2 | Chốt nguồn K9, phạm vi FL-26 (phép lai một tính trạng, bảng Punnett), ca kiểm thử | Ghi vào spec áp dụng FL-26 (D2-1.1) | — |
 
 ## INC-1: pilot A + bàn thứ hai
@@ -56,11 +56,13 @@ Quy tắc chung cho mọi task:
 
 | ID | Task | Xong khi | Chờ |
 |---|---|---|---|
-| [ ] D1-1.1 | Viết spec áp dụng **bàn cơ** theo mẫu, dùng lại `lever-bench.ts` và `LeverInvestigationActivity.tsx` | Spec được owner duyệt | — |
-| [ ] D1-1.2 | Sim: schema config đòn bẩy mở rộng `ExploreLabEnvelope`, validator, golden | Test sim pass, envelope không đổi | D1-1.1 |
-| [ ] D1-1.3 | BE: mục `EXPLORE_BENCHES` cho bàn cơ. FE: mục registry `{ kit, group: "physics", validate, loadPage, listKitItems }` và trang Explore | Lint, build, unit test pass | D1-1.2 |
-| [ ] D1-1.4 | Nhật ký: kiểu dòng và `describeChange()` của bàn cơ, dùng lưu trữ chung F0-4 | Nhật ký lưu và export được | D1-1.3 |
-| [ ] D1-1.5 | Nghiệm thu: `/labs/:id` mở FL-06 Explore qua registry trên dev/fixture; Guided FL-06 vẫn mở, nộp, chấm được. Không phát hành (FL-06 có Guided, chờ D-5) | Playwright pass. Đây là bàn thứ hai thật của registry | D1-1.4 |
+| [x] D1-1.1 | Viết spec áp dụng **bàn cơ** theo mẫu, dùng lại `lever-bench.ts` và `LeverInvestigationActivity.tsx`. [Spec](fl-06-mechanics-bench-explore-spec.md), owner duyệt 2026-11-15 | Spec được owner duyệt | — |
+| [x] D1-1.2 | Sim: schema config đòn bẩy mở rộng `ExploreLabEnvelope`, validator, golden | Test sim pass, envelope không đổi | D1-1.1 |
+| [x] D1-1.3 | BE: mục `EXPLORE_BENCHES` cho bàn cơ. FE: mục registry `{ kit, group: "physics", validate, loadPage, listKitItems }` và trang Explore | Lint, build, unit test pass | D1-1.2 |
+| [x] D1-1.4 | Nhật ký: kiểu dòng và `describeChange()` của bàn cơ, dùng lưu trữ chung F0-4 | Nhật ký lưu và export được | D1-1.3 |
+| [x] D1-1.5 | Nghiệm thu: `/labs/:id` mở FL-06 Explore qua registry trên dev/fixture; Guided FL-06 vẫn mở, nộp, chấm được. Không phát hành (FL-06 có Guided, chờ D-5) | Playwright pass. Đây là bàn thứ hai thật của registry | D1-1.4 |
+
+D1-1.2…D1-1.5 nghiệm thu 2026-11-15 trên nhánh `feat/dev1-physics-bench` (FE và BE), chưa merge. Bằng chứng ở `sprint-status.yaml` mục `fl06-mechanics-bench-explore`.
 
 ### Dev 2: chuẩn bị FL-26 (chưa mở track Lab)
 
@@ -94,10 +96,10 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 
 | ID | Task | Xong khi | Chờ |
 |---|---|---|---|
-| [ ] D1-2.1 | FL-03 (hoặc FL-05) dùng cốc/cân của `shared/items/`; chỉ đổi hiển thị | Số đo bàn chất lỏng không đổi | K2-1.5 |
-| [ ] D1-2.2 | FL-10 Guided `WetBenchStage.tsx` dùng cốc/cân chung; số đo vẫn do server tính (mg) | Chuỗi sự kiện giữ nguyên | D1-2.1 |
-| [ ] D1-2.3 | Nếu props không phủ được hình dạng cần: giữ component riêng, ghi lý do; item mới vào thư viện qua PR riêng cho K2 duyệt | Ghi lý do trong PR | D1-2.2 |
-| [ ] D1-2.4 | Nghiệm thu B: `fl-10-k2`, `density-lab`, `buoyancy-*` pass; so baseline D1-0.1 | Ảnh và số đo khớp | D1-2.3, D1-0.1 |
+| [x] D1-2.1 | FL-03 (hoặc FL-05) dùng cốc/cân của `shared/items/`; chỉ đổi hiển thị. Làm trên FL-03 (FL-05 không dùng cốc K3): vỏ cốc K3 là `Beaker3D` của `shared/items/` (scale từ đơn vị item sang mm); cột nước, dòng rót, dâng mực khi chìm vẫn của bàn chất lỏng. Sửa luôn lỗi nước nhuộm màu bàn trong baseline. **Cân giữ `DigitalBalance3D` của K3** (lý do theo D1-2.3: cân chung chưa có vật trên đĩa qua `children`, nút trừ bì, đĩa lún theo tải và số chạy rồi dừng); đề xuất mở rộng `digital-scale` bằng PR riêng cho K2 duyệt. Baseline D1-0.1 FL-03 khớp, `density-lab` pass | Số đo bàn chất lỏng không đổi | K2-1.5 |
+| [x] D1-2.2 | FL-10 Guided `WetBenchStage.tsx` dùng cốc/cân chung; số đo vẫn do server tính (mg). `WetBenchStage.tsx` vẽ `DigitalScale3D` (phóng 2,4× để đĩa đặt vừa hai cốc 250 mL) và hai `Beaker3D` chung; vạch 50–250 mL, mỏ rót, lớp BaSO₄ lắng và nhãn hoá chất là `children` của bàn. Số cân vẫn là chuỗi server (435,0 g). Sửa kèm: cốc rót được nhấc qua miệng cốc kia rồi mới nghiêng (trước đây cắt xuyên cốc 2 và đĩa cân), đáy cốc cách đĩa một khe để hết z-fighting. `fl-10-k2` và baseline D1-0.1 FL-10 pass | Chuỗi sự kiện giữ nguyên | D1-2.1 |
+| [x] D1-2.3 | Nếu props không phủ được hình dạng cần: giữ component riêng, ghi lý do; item mới vào thư viện qua PR riêng cho K2 duyệt. Lý do giữ component riêng (2026-11-15): (1) FL-03 `DigitalBalance3D`: cân chung chưa có vật trên đĩa qua `children`, nút trừ bì, đĩa lún theo tải, số chạy rồi dừng (LCD vẽ canvas); FL-03 cần cả bốn. (2) FL-05 bình tràn, cốc hứng có thang 5 mL, lực kế lò xo, giá đỡ: chỉ bàn chất lỏng dùng, giữ trong bàn theo C2.1. (3) Ống đong FL-03: chỉ bàn chất lỏng dùng. Đề xuất mở rộng `digital-scale` (children ở anchor `pan`, `onTare` tùy chọn) đã đẩy lên nhánh riêng FE `feat/shared-scale-pan-load` (`e2eba2f`) cho K2 duyệt; FL-03 chuyển sang cân chung sau khi PR đó merge | Ghi lý do trong PR | D1-2.2 |
+| [x] D1-2.4 | Nghiệm thu B: `fl-10-k2`, `density-lab`, `buoyancy-*` pass; so baseline D1-0.1. Nghiệm thu 2026-11-15 trên nhánh `feat/dev1-physics-bench` sau khi merge main (K2 PR #62, BE #74; sim của bàn cơ thành 1.11.0): `fl-10-k2` 1/1, `density-lab` 11/11, `buoyancy-labrun` 1/1, `buoyancy-manipulation` 3/3, `buoyancy-state-sync` 1/1, baseline D1-0.1 3/3 (số đo FL-03, FL-05, FL-10 khớp), `k3-kit-preview` 2/2, `k2-baseline` 8/8, `lever-explore` 3/3, `fl-06-k5` 1/1, test:regression 64/64. Ảnh 3D/2D đối chiếu bằng mắt với `tests/baseline/d1-0.1/`: cốc FL-03 và cân, cốc FL-10 đổi sang item chung, bố cục và số đọc giữ nguyên | Ảnh và số đo khớp | D1-2.3, D1-0.1 |
 
 ### Dev 2: FL-26 Explore 2D (track Lab thứ ba)
 
