@@ -96,8 +96,8 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 
 | ID | Task | Xong khi | Chờ |
 |---|---|---|---|
-| [ ] D1-2.1 | FL-03 (hoặc FL-05) dùng cốc/cân của `shared/items/`; chỉ đổi hiển thị | Số đo bàn chất lỏng không đổi | K2-1.5 |
-| [ ] D1-2.2 | FL-10 Guided `WetBenchStage.tsx` dùng cốc/cân chung; số đo vẫn do server tính (mg) | Chuỗi sự kiện giữ nguyên | D1-2.1 |
+| [x] D1-2.1 | FL-03 (hoặc FL-05) dùng cốc/cân của `shared/items/`; chỉ đổi hiển thị. Làm trên FL-03 (FL-05 không dùng cốc K3): vỏ cốc K3 là `Beaker3D` của `shared/items/` (scale từ đơn vị item sang mm); cột nước, dòng rót, dâng mực khi chìm vẫn của bàn chất lỏng. Sửa luôn lỗi nước nhuộm màu bàn trong baseline. **Cân giữ `DigitalBalance3D` của K3** (lý do theo D1-2.3: cân chung chưa có vật trên đĩa qua `children`, nút trừ bì, đĩa lún theo tải và số chạy rồi dừng); đề xuất mở rộng `digital-scale` bằng PR riêng cho K2 duyệt. Baseline D1-0.1 FL-03 khớp, `density-lab` pass | Số đo bàn chất lỏng không đổi | K2-1.5 |
+| [x] D1-2.2 | FL-10 Guided `WetBenchStage.tsx` dùng cốc/cân chung; số đo vẫn do server tính (mg). `WetBenchStage.tsx` vẽ `DigitalScale3D` (phóng 2,4× để đĩa đặt vừa hai cốc 250 mL) và hai `Beaker3D` chung; vạch 50–250 mL, mỏ rót, lớp BaSO₄ lắng và nhãn hoá chất là `children` của bàn. Số cân vẫn là chuỗi server (435,0 g). Sửa kèm: cốc rót được nhấc qua miệng cốc kia rồi mới nghiêng (trước đây cắt xuyên cốc 2 và đĩa cân), đáy cốc cách đĩa một khe để hết z-fighting. `fl-10-k2` và baseline D1-0.1 FL-10 pass | Chuỗi sự kiện giữ nguyên | D1-2.1 |
 | [ ] D1-2.3 | Nếu props không phủ được hình dạng cần: giữ component riêng, ghi lý do; item mới vào thư viện qua PR riêng cho K2 duyệt | Ghi lý do trong PR | D1-2.2 |
 | [ ] D1-2.4 | Nghiệm thu B: `fl-10-k2`, `density-lab`, `buoyancy-*` pass; so baseline D1-0.1 | Ảnh và số đo khớp | D1-2.3, D1-0.1 |
 
