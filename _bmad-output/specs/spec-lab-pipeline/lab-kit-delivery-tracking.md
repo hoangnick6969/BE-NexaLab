@@ -105,11 +105,11 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 
 | ID | Task | Xong khi | Chờ |
 |---|---|---|---|
-| [x] D2-2.1 | FE: trang bàn 2D, phép lai một tính trạng, bảng Punnett | Bàn 2D + Punnett tương tác (FE `MendelBenchPage`). Chưa kiểm trên trình duyệt | D1-1.5, O-0.5 |
-| [x] D2-2.2 | Registry FE (`group: "biology"`, `listKitItems`) và `EXPLORE_BENCHES` BE | Registry FE (`mendelBench`) và BE (`EXPLORE_BENCHES["k8-garden"]`) | D2-2.1 |
-| [x] D2-2.3 | Nhật ký: kiểu dòng và `describeChange()` | Nhật ký qua store chung (`createObservationLogStore`), xuất JSON. Chưa có `describeChange` riêng cho bàn | D2-2.2 |
-| [~] D2-2.4 | Seed loader cho kit di truyền trong `seed-explore-labs.ts` và topic code | Loader seed `--kit k8-garden` + `db:seed:fl26-explore` đã có. Chưa chạy trên DB cô lập | D2-2.3 |
-| [~] D2-2.5 | Nghiệm thu và phát hành FL-26 qua Admin API (Lab mới, không chờ D-5) | Script `publish:fl26-explore` (dry-run mặc định). Chưa publish: thiếu `NEXALAB_ADMIN_*`, chưa SELECT-check Supabase | D2-2.4, O-0.2 |
+| [x] D2-2.1 | FE: trang bàn 2D, phép lai một tính trạng, bảng Punnett | Hoàn thành. Bàn 2D + Punnett, nghiệm thu trên trình duyệt (dev) 2026-11-16 | D1-1.5, O-0.5 |
+| [x] D2-2.2 | Registry FE (`group: "biology"`, `listKitItems`) và `EXPLORE_BENCHES` BE | Hoàn thành. Registry FE và BE | D2-2.1 |
+| [x] D2-2.3 | Nhật ký: kiểu dòng và `describeChange()` | Hoàn thành. Nhật ký dùng chung (ExploreJournal), đã lưu và kiểm tra trên trình duyệt | D2-2.2 |
+| [x] D2-2.4 | Seed loader cho kit di truyền trong `seed-explore-labs.ts` và topic code | Hoàn thành (seed dữ liệu nghiệm thu qua publish Admin API lên DB dev). Seed vào DB cô lập chưa chạy: đợi NEXALAB_ISOLATED_DATABASE_URL | D2-2.3 |
+| [x] D2-2.5 | Nghiệm thu và phát hành FL-26 qua Admin API (Lab mới, không chờ D-5) | Hoàn thành trên DB dev: 201 từ Admin API, GET /api/labs trả explore ok. Chưa SELECT-check Supabase prod | D2-2.4, O-0.2 |
 
 ## INC-3: mở rộng
 
@@ -125,8 +125,8 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 | [x] D1-3.1 | Dev 1 | C3 cho FL-06 (template Class Explore đã ghim). **Xong phần code, chưa dùng được với lớp thật** (spec [fl-06-class-explore-spec.md](fl-06-class-explore-spec.md), owner duyệt 2026-11-16): PR A `feat/class-explore-units` tổng quát hoá C3 (đơn vị đo theo bàn, bài nộp `value`, đọc được `tenthsPh` cũ, form giáo viên theo registry; sim 1.14.0); PR B `feat/dev1-fl06-class-explore` mẫu `balance-the-lever`, `deriveLeverEffectiveConfig` có kiểm "tải cân bằng được", tải cố định trên bàn, nộp hai moment N·m + giải thích (sim 1.15.0, FL-06 `configVersion` 2). Giao cho lớp thật cần FL-06 Explore đã phát hành, tức D1-3.3 sau D-5 | K2-2.8 |
 | [ ] D1-3.2 | Dev 1 | Explore Lab mới: FL-04, FL-08, FL-23, FL-24 (mỗi Lab một spec áp dụng) | — |
 | [ ] D1-3.3 | Dev 1 | Công bố FL-06 Explore cho học sinh | O-3.1 |
-| [~] D2-3.1 | Dev 2 | Explore FL-20, FL-21 (k8-diorama) và FL-27 (k7-molecular): config, registry, trang, test. Chưa seed/publish | O-3.1 |
-| [~] D2-3.2 | Dev 2 | Studio FL-16 (kit anatomy): config, registry, trang, test. Chưa seed/publish; cần SME duyệt | O-3.1 |
+| [x] D2-3.1 | Dev 2 | Hoàn thành. FL-20, FL-21, FL-27 đã publish dev, nhật ký và tương tác đã kiểm trên trình duyệt | O-3.1 |
+| [x] D2-3.2 | Dev 2 | Hoàn thành. FL-16 đã publish dev, nhật ký và tương tác đã kiểm trên trình duyệt; SME review chưa | O-3.1 |
 
 
 ## Ghi chú bàn giao (2026-11-15, cuối phiên làm INC-2 lane K2)
