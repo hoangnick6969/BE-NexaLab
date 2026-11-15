@@ -3,14 +3,17 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const FE_LABS = resolve(__dirname, "../../FE-NexaLab/src/features/labs/chemistry/wet-bench/labs");
+const FE_LABS_PATH = "src/features/labs/chemistry/wet-bench/labs";
+// The frontend sits beside this repo as FE-NexaLab or nexalab-fe, depending on the checkout.
+const FE_LABS = ["FE-NexaLab", "nexalab-fe"].map((name) => resolve(__dirname, "../..", name, FE_LABS_PATH)).find((path) => existsSync(path))
+  ?? resolve(__dirname, "../../FE-NexaLab", FE_LABS_PATH);
 const TARGETS = [
   { file: "fl-13.config.ts", exportName: "fl13Config", topicCode: "KHTN8-L09" },
   { file: "fl-14a.config.ts", exportName: "fl14aConfig", topicCode: "KHTN8-L11" },
 ] as const;
 
 export async function loadK2ExploreTargets() {
-  if (!existsSync(FE_LABS)) throw new Error(`Frontend kit configs not found at ${FE_LABS} (FE-NexaLab must sit beside BE-NexaLab)`);
+  if (!existsSync(FE_LABS)) throw new Error(`Frontend kit configs not found at ${FE_LABS} (FE-NexaLab or nexalab-fe must sit beside this repo)`);
   const out: Array<{ config: { labId: string; kit: string }; topicCode: string }> = [];
   for (const target of TARGETS) {
     const module = await import(pathToFileURL(resolve(FE_LABS, target.file)).href);
