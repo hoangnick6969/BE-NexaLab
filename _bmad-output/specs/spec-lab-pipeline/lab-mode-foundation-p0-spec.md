@@ -1,8 +1,8 @@
 ---
 id: SPEC-lab-mode-foundation-p0
-status: proposed
+status: done (Contract done 2026-11-15; còn merge và deploy PR-2 theo §5.4 bước 4)
 date: 2026-11-15
-revision: 6 (D-3 chốt; lỗi theo dòng; publishExploreLab dùng chung + Admin API; guard host/port/DB; hai PR và cổng rollout)
+revision: 7 (D-6: nghiệm thu bằng unit/Playwright và kiểm chỉ-SELECT trên Supabase, bỏ integration test trên Postgres cô lập. Revision 6: D-3 chốt; lỗi theo dòng; publishExploreLab dùng chung + Admin API; guard host/port/DB; hai PR và cổng rollout)
 depends_on: []
 blocks: [SPEC-lab-kit-assets-and-class-lab]
 amends: [docs/product/explore-first-lab-architecture-spec.md, docs/bmad/explore-labs-backlog-and-epics.md (F0-5, F0-7)]
@@ -274,6 +274,8 @@ Bản đầu giáo viên nhận xét thủ công. Muốn tự chấm từ thao t
 | D-4 | Class Lab Explore có cần review bộ môn trước khi đưa cho lớp thật | **Chốt: không cần.** Nội dung do NexaLab biên soạn; chỉ cần allow-list và validator strict |
 | D-5 | **Contract hai mode**: một Lab ID đã có Guided (challenge/release) mở thêm Explore trên route thư viện | **Mở, ngoài P0.** Cần quyết định cách khai báo hai mode, mode mặc định và nút chuyển. Gộp với F0-7b (đổi mode FL-10). Áp dụng cho FL-10, FL-06 và mọi Lab Guided được thêm Explore |
 
+| D-6 | Nghiệm thu P0 chạy ở đâu | **Chốt (owner, 2026-11-15): không dùng Postgres cô lập để nghiệm thu P0.** Nghiệm thu bằng unit test, CLI test của guard, Playwright với API mock, và truy vấn chỉ-SELECT (transaction `READ ONLY`) trên Supabase dùng chung. Guard DB cô lập của seed giữ nguyên: không chạy test, seed hay migration ghi lên Supabase. `explore-publish.integration.test.ts` giữ lại, chạy khi có Postgres cô lập, không còn là điều kiện đóng P0 |
+
 F0-7b được giải quyết cùng D-5.
 
 ## 5. Phạm vi triển khai P0 và mốc "Contract done"
@@ -301,9 +303,11 @@ P0 gồm hai phần. Cả hai xong thì dev các Kit khác bắt đầu làm son
 
 **5.3 Mốc "Contract done"**
 
-- [ ] Nghiệm thu C1 (§7) pass.
-- [ ] Tất cả việc ở 5.2 đạt cột "Xong khi".
-- [ ] Tài liệu ở §6 đã cập nhật.
+- [x] Nghiệm thu C1 (§7) pass, theo D-6.
+- [x] Tất cả việc ở 5.2 đạt cột "Xong khi". F0-5 (a) kiểm bằng resolver trên bản ghim Supabase của FL-13 và FL-14a (cùng `publishExploreLab`).
+- [x] Tài liệu ở §6 đã cập nhật.
+
+Đạt ngày 2026-11-15, bằng chứng ở [checklist P0](lab-mode-foundation-p0-checklist.md). Merge và deploy PR-2 thuộc cổng rollout §5.4 bước 4, không chặn mốc này nhưng chặn mọi lần phát hành Explore mới lên Supabase.
 
 Sau mốc này:
 
@@ -320,9 +324,10 @@ Làm đúng thứ tự. Chỉ dùng truy vấn chỉ-SELECT để kiểm DB dùn
 
 1. **Trước PR-2:** owner chạy script phát hành cho FL-13 và FL-14a qua Admin API (đã có từ PR-1).
 2. **Kiểm bằng truy vấn chỉ-SELECT:** mỗi Lab có `Lab.config.activity` trỏ tới một version có `spec.explore`. Digest khớp. `spec.explore.labId` đúng với Lab.
-3. **Trên DB cô lập, với build PR-2:**
-   - Bài Guided cũ, gồm Foundational và Class Lab Guided qua `assignmentId`/`resourceId`, vẫn mở, nộp và chấm được.
-   - Explore mở được trên **hai bàn**: bàn ướt và fixture của F0-2.
+3. **Với build PR-2 (theo D-6, không dùng DB cô lập):**
+   - Bài Guided cũ, gồm Foundational và Class Lab Guided qua `assignmentId`/`resourceId`, vẫn mở, nộp và chấm được: Playwright `fl-10-k2`, `lab-run-host`; Supabase chỉ-SELECT thấy mọi release Guided ACTIVE vẫn còn và Lab Guided vẫn khai báo `guided`.
+   - Explore mở được trên **hai bàn**: bàn ướt và fixture của F0-2, qua Playwright với API mock. Server chỉ đăng ký bàn ướt; bàn thứ hai thật (FL-06) được kiểm khi bàn đó vào registry server.
+   - Resolver PR-2 chạy trên dữ liệu Supabase: mọi Lab Explore trả `ok: true`.
 4. **Deploy PR-2** (BE + FE). Sau deploy, học sinh mở FL-13 và FL-14a được. Giáo viên không thấy mã lỗi nào trên hai Lab này.
 
 Nếu bước 2 không đạt thì không deploy PR-2.
@@ -352,7 +357,7 @@ Nếu bước 2 không đạt thì không deploy PR-2.
 
 ## 7. Nghiệm thu P0 (C1)
 
-Tất cả chạy trên DB cô lập.
+Theo D-6: unit test, CLI test của guard, Playwright với API mock, và kiểm chỉ-SELECT trên Supabase. Không mục nào ghi lên Supabase. Kết quả từng mục ở [checklist P0](lab-mode-foundation-p0-checklist.md).
 
 - [ ] Route manifest chỉ thêm đúng một route: `POST /admin/labs/:id/explore-versions` (ADMIN). Mọi route cũ không đổi.
 - [ ] `publishExploreLab`:
