@@ -45,7 +45,7 @@ Ký hiệu: `[x]` xong và đã kiểm · `[~]` code xong, còn việc kiểm ch
 
 ## 3. Hạ tầng chung §5.2 (mỗi việc nên là một PR nhỏ)
 - [ ] **F0-1** Envelope trung lập `packages/sim/explore/envelope.ts`; `ChemistryLabConfig` mở rộng từ envelope; bàn ướt không đổi hành vi
-- [x] **F0-2** Registry đa bàn (FE, chưa commit). FE `runtime/explore-registry.ts` với mục `{ kit, group, validate, loadPage, listKitItems }`; bàn ướt đã đăng ký; `listWetBenchKitItems` là adapter tối thiểu và màn giới thiệu đọc qua nó. BE giữ `EXPLORE_BENCHES` `{ kit, validate }` như spec. Bàn thứ hai là fixture `explore-fixture@1`, **chỉ đăng ký ở build dev**: Playwright mở được hai bàn qua `/labs/:id`. Server không có fixture, nên bước 3 của rollout trên DB cô lập chỉ kiểm được bàn ướt cho tới khi có bàn thật thứ hai
+- [x] **F0-2** Registry đa bàn (FE `e438a0e`, cùng branch với PR-2, chưa push). FE `runtime/explore-registry.ts` với mục `{ kit, group, validate, loadPage, listKitItems }`; bàn ướt đã đăng ký; `listWetBenchKitItems` là adapter tối thiểu và màn giới thiệu đọc qua nó. BE giữ `EXPLORE_BENCHES` `{ kit, validate }` như spec. Bàn thứ hai là fixture `explore-fixture@1`, **chỉ đăng ký ở build dev**: Playwright mở được hai bàn qua `/labs/:id`. Server không có fixture, nên bước 3 của rollout trên DB cô lập chỉ kiểm được bàn ướt cho tới khi có bàn thật thứ hai
 - [ ] **F0-4** Lưu nhật ký dùng chung: khóa, IndexedDB, giới hạn dòng, export
 - [ ] **F0-5** Seed đa bàn `scripts/seed-explore-labs.ts --kit <bàn>` gọi `publishExploreLab`; đạt tiêu chí (a)–(d)
 - [ ] **C2.1** Khung `src/features/labs/shared/items/` (kiểu item, quy ước anchor, README, test kiểu)
