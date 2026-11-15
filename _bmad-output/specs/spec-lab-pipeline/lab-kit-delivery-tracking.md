@@ -45,11 +45,11 @@ Quy tắc chung cho mọi task:
 
 | ID | Task | Xong khi | Chờ |
 |---|---|---|---|
-| [ ] K2-1.1 | PR riêng: thêm **cốc** và **cân** vào `shared/items/` (lấy từ `apparatus3d.tsx`), có anchor `mouth`, `inside`, `base`, `pan`. Kích thước, mức chất lỏng, số đọc truyền qua props | Bàn ướt Explore render cốc/cân từ thư viện | — |
-| [ ] K2-1.2 | Registry renderer theo `ApparatusKind`, bỏ if/else chọn mesh ở `WetBenchKitStage.tsx` | Không còn chuỗi if/else chọn mesh | K2-1.1 |
-| [ ] K2-1.3 | Mở rộng `listKitItems`: mỗi item trỏ tới renderer, cảnh báo lấy từ `reagents.ts` | Unit test `kit-items` pass | K2-1.2 |
-| [~] K2-1.4 | Panel "Dụng cụ và thành phần" cố định trong bàn, đọc `listKitItems` | Panel hiện đúng item của config đã ghim. **Đã có** `shared/LabKitItemsPanel.tsx` dùng chung mọi bàn, đọc `listKitItems` hiện tại (tên, công dụng, cảnh báo); Playwright `kit-items-panel.spec.ts` khớp danh sách màn giới thiệu trên FL-13/14a/10 (FE `7998d9d`). **Còn**: hiện renderer/hình item sau K2-1.3 | K2-1.3 |
-| [ ] K2-1.5 | Nghiệm thu A: so baseline K2-0.1 (pH FL-13, cốc/cân FL-10 Explore, dụng cụ FL-14a) | Ảnh và số đo trước/sau khớp, Playwright pass | K2-1.4, K2-0.1 |
+| [x] K2-1.1 | PR riêng: thêm **cốc** và **cân** vào `shared/items/` (lấy từ `apparatus3d.tsx`), có anchor `mouth`, `inside`, `base`, `pan`. Kích thước, mức chất lỏng, số đọc truyền qua props | Bàn ướt Explore render cốc/cân từ thư viện. **Xong** (FE `daad35d`): `shared/items/` có `Beaker3D`, `DigitalScale3D`, `glass.tsx`, `catalog.ts`; bàn ướt Explore render cốc, cốc thải và cân từ thư viện. | — |
+| [x] K2-1.2 | Registry renderer theo `ApparatusKind`, bỏ if/else chọn mesh ở `WetBenchKitStage.tsx` | Không còn chuỗi if/else chọn mesh. **Xong** (FE `0396bb1`, `1538131`): `apparatus-renderers.tsx` tra theo `ApparatusKind` và `HeldTool`; stage không còn if/else chọn mesh hay offset. | K2-1.1 |
+| [x] K2-1.3 | Mở rộng `listKitItems`: mỗi item trỏ tới renderer, cảnh báo lấy từ `reagents.ts` | Unit test `kit-items` pass. **Xong** (FE `96b9bb1`): `KitItem` có `rendererKey` và `sharedItemId`; cảnh báo vẫn lấy từ `reagents.ts`. | K2-1.2 |
+| [x] K2-1.4 | Panel "Dụng cụ và thành phần" cố định trong bàn, đọc `listKitItems` | Panel hiện đúng item của config đã ghim. **Đã có** `shared/LabKitItemsPanel.tsx` dùng chung mọi bàn, đọc `listKitItems` hiện tại (tên, công dụng, cảnh báo); Playwright `kit-items-panel.spec.ts` khớp danh sách màn giới thiệu trên FL-13/14a/10 (FE `7998d9d`). Panel chỉ hiện chữ (tên, công dụng, cảnh báo); spec không yêu cầu hình, nên coi là xong | K2-1.3 |
+| [x] K2-1.5 | Nghiệm thu A: so baseline K2-0.1 (pH FL-13, cốc/cân FL-10 Explore, dụng cụ FL-14a) | Ảnh và số đo trước/sau khớp, Playwright pass. **Xong**: baseline K2-0.1 khớp (danh sách, pH, số cân, ảnh 3 bàn); 23 Playwright, 8 unit test, lint và build pass. | K2-1.4, K2-0.1 |
 | [ ] K2-1.6 | **Bước K** (song song với K2-1.1→1.5): sửa `species.ts` theo D-2, cập nhật golden và `engine.test.ts`, giữ `mass-conservation@1.0.0`, bump sim, đồng bộ tarball | Golden pass; nghiệm thu K theo nhánh D-2 | O-0.3 |
 
 ### Dev 1: FL-06 Explore trên dev/fixture
