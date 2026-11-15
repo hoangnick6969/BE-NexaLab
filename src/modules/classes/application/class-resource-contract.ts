@@ -2,6 +2,7 @@ import { BadRequestException } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { assignmentExecutionSchema, digest } from "../../labs/application/lab-run";
+import { exploreResourceContentSchema, exploreResourceInputSchema } from "./class-explore-contract";
 
 const nonEmpty = z.string().trim().min(1).max(500);
 const optionsSchema = z.array(nonEmpty).min(2).max(6);
@@ -9,7 +10,7 @@ const cardSchema = z.object({ front: nonEmpty, back: nonEmpty }).strict();
 const questionSchema = z.object({ prompt: nonEmpty, options: optionsSchema, explanation: z.string().trim().max(1000).optional() }).strict();
 const testQuestionSchema = questionSchema.extend({ correctOption: z.number().int().min(0).max(5) });
 
-export const resourceKindSchema = z.enum(["DECK", "STUDY_QUIZ", "TEST", "LAB", "DOCUMENT", "REPORT_TEMPLATE", "LINK", "WRITTEN_TASK"]);
+export const resourceKindSchema = z.enum(["DECK", "STUDY_QUIZ", "TEST", "LAB", "DOCUMENT", "REPORT_TEMPLATE", "LINK", "WRITTEN_TASK", "EXPLORE_LAB"]);
 export type ResourceKind = z.infer<typeof resourceKindSchema>;
 export const practiceKind = (kind: string) => kind === "DECK" || kind === "STUDY_QUIZ";
 const identifier = z.string().trim().min(1).max(100);
@@ -141,6 +142,7 @@ export function studentWrittenTaskContent(content: any) {
 
 /** Item count for audit and views: prompts for WRITTEN_TASK, cards for DECK, questions otherwise. */
 export function resourceItemCount(kind: string, content: any): number {
+  if (kind === "EXPLORE_LAB") return content?.requirements?.length ?? 0;
   if (kind === "WRITTEN_TASK") return content?.prompts?.length ?? 0;
   if (kind === "DECK") return content?.cards?.length ?? 0;
   return content?.questions?.length ?? 0;
@@ -149,6 +151,8 @@ export function resourceItemCount(kind: string, content: any): number {
 export function normalizeResourceContent(kind: ResourceKind, raw: unknown) {
   if (kind === "WRITTEN_TASK") return normalizeWrittenTask(raw);
   if (kind === "LAB") return labResourceInputSchema.parse(raw);
+  // Explore content is built server-side from a selection; `normalize` only checks the shape a teacher may send.
+  if (kind === "EXPLORE_LAB") return exploreResourceInputSchema.parse(raw);
   if (kind === "DOCUMENT" || kind === "REPORT_TEMPLATE") return documentResourceContentSchema.parse(raw);
   if (kind === "LINK") return linkResourceContentSchema.parse(raw);
   const parsed: any =
@@ -171,6 +175,8 @@ export function normalizeResourceContent(kind: ResourceKind, raw: unknown) {
 /** Remove answer keys before any class member response. */
 export function studentResource(kind: ResourceKind, content: any) {
   if (kind === "WRITTEN_TASK") return studentWrittenTaskContent(content);
+  // The pinned effective config and selection stay with the assignment snapshot; a class member only needs to know what it is.
+  if (kind === "EXPLORE_LAB") return { source: { mode: "explore", labId: String(content?.source?.labId ?? "") }, instructions: String(content?.instructions ?? "") };
   if (kind !== "TEST") return content;
   return { questions: content.questions.map(({ correctOption: _answer, ...question }: any) => question) };
 }

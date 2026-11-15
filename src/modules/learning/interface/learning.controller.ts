@@ -16,6 +16,7 @@ import { scoreTest, studentTestContent, TEST_CONTENT_TYPE, testSubmissionSchema 
 import { currentDeadlines, deadlineStates } from "../../classes/application/assignment-test-state";
 import { normalizeWrittenResponses, studentGradeCriteria, studentWrittenAssignmentContent, WRITTEN_CONTENT_TYPE, writtenSubmissionSchema } from "../../classes/application/assignment-written-contract";
 import { lock } from "../../classes/application/class-common";
+import { canResubmitExplore, isLateExplore, studentExploreSnapshot, verifyExploreSnapshot } from "../../classes/application/class-explore-contract";
 import { audit } from "../../../common/audit";
 import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { notify } from "../../notifications/application/notify";
@@ -660,7 +661,8 @@ export class LearningController {
     const tests = rows.filter((a) => a.contentType === TEST_CONTENT_TYPE || a.contentType === WRITTEN_CONTENT_TYPE);
     const testResourceIds = [...new Set(tests.filter((a) => a.contentType === TEST_CONTENT_TYPE).map((a) => a.contentId))];
     const writtenResourceIds = [...new Set(tests.filter((a) => a.contentType === WRITTEN_CONTENT_TYPE).map((a) => a.contentId))];
-    const labIds = [...new Set(rows.filter((a) => a.contentType === "lab").map((a) => a.contentId))];
+    // Class Explore assignments point at their Lab, so they list like lab assignments (P0 C3.4).
+    const labIds = [...new Set(rows.filter((a) => a.contentType === "lab" || a.contentType === "explore_lab").map((a) => a.contentId))];
     const testResources = testResourceIds.length
       ? await this.db.$queryRaw<Array<{ id: string; classId: string; lessonId: string | null; thumbnailUrl: string | null }>>(Prisma.sql`
           SELECT id, "classId", "lessonId", content->>'thumbnailUrl' AS "thumbnailUrl"
@@ -709,6 +711,7 @@ export class LearningController {
     const contentByType = {
       lesson: new Map(lessons.map((content: any) => [content.id, content])),
       lab: new Map(labs.map((content: any) => [content.id, content])),
+      explore_lab: new Map(labs.map((content: any) => [content.id, content])),
     };
     const testStateByAssignment = new Map<string, any>();
     if (tests.length) {
@@ -722,7 +725,7 @@ export class LearningController {
       const testResource = isTest ? testResourceByAssignment.get(a.id) : null;
       const content = isTest
         ? (testResource?.lessonId ? contentByType.lesson.get(testResource.lessonId) : null)
-        : contentByType[a.contentType as "lesson" | "lab"]?.get(a.contentId) ?? null;
+        : contentByType[a.contentType as "lesson" | "lab" | "explore_lab"]?.get(a.contentId) ?? null;
       const state = isTest
         ? (testResource ? "AVAILABLE" as const : "UNAVAILABLE" as const)
         : (await this.contentState(a, req.user.sub, content, true)).state;
@@ -738,7 +741,7 @@ export class LearningController {
           contentTitle: content.title,
           subject: { id: content.subject.id, name: content.subject.name },
           grade: content.grade,
-          ...(a.contentType === "lab" ? { topicCode: content.topicCode } : {}),
+          ...(a.contentType === "lab" || a.contentType === "explore_lab" ? { topicCode: content.topicCode } : {}),
           chapter: lessonContext ? content.chapter : null,
           topic: content.topic,
           curriculumOrder: lessonContext ? content.curriculumOrder : null,
@@ -766,6 +769,7 @@ export class LearningController {
     const a = await this.applicableAssignment(id, req.user.sub);
     if (a.contentType === TEST_CONTENT_TYPE) return this.testAssignment(a, req.user.sub);
     if (a.contentType === WRITTEN_CONTENT_TYPE) return this.writtenAssignment(a, req.user.sub);
+    if (a.contentType === "explore_lab") return this.exploreAssignment(a, req.user.sub);
     const { state, content } = await this.contentState(a, req.user.sub);
     if (!content) throw new NotFoundException("Nội dung không còn khả dụng");
     if (state === "ARCHIVED_NOT_STARTED")
@@ -794,6 +798,28 @@ export class LearningController {
         ...(a.contentType !== "lesson" && "content" in content
           ? { content: content.content }
           : {}),
+      },
+    };
+  }
+  /** Class Explore (P0 C3.4): the pinned bench and requirements from the assignment snapshot, and the student's own submission. */
+  private async exploreAssignment(a: any, studentId: string) {
+    const snapshot = verifyExploreSnapshot(a.exploreSnapshot);
+    const lab = await this.db.lab.findUnique({ where: { id: snapshot.labId }, include: { subject: { select: { id: true, name: true } } } });
+    if (!lab || !["published", "archived"].includes(lab.status)) throw new NotFoundException("Nội dung không còn khả dụng");
+    const row = await this.db.classExploreSubmission.findUnique({ where: { assignmentId_studentId: { assignmentId: a.id, studentId } } });
+    return {
+      id: a.id,
+      title: a.title,
+      contentType: a.contentType,
+      dueDate: a.dueDate,
+      createdAt: a.createdAt,
+      overdue: isOverdue(a.dueDate),
+      classroom: a.classroom,
+      content: { id: lab.id, title: lab.title, subject: { id: lab.subject.id, name: lab.subject.name }, grade: lab.grade, topic: lab.topic },
+      explore: {
+        snapshot: studentExploreSnapshot(snapshot),
+        submission: row ? { id: row.id, answers: row.answers, status: row.status, submittedAt: row.submittedAt, feedback: row.feedback ?? null, reviewedAt: row.reviewedAt ?? null,
+          late: isLateExplore(row.submittedAt, a.dueDate), canResubmit: canResubmitExplore(row.status, a.dueDate) } : null,
       },
     };
   }
