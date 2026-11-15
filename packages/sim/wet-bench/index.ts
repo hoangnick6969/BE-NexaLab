@@ -14,3 +14,5 @@ export { applyOperation, createBench, emptyVessel, litmusColour, measure, phenol
 export type { EngineContext } from "./engine";
 export { validateChemistryLabConfig } from "./validate-config";
 export type { ConfigValidation } from "./validate-config";
+export { classSelectionSchema, deriveWetBenchEffectiveConfig, validateWetBenchEffectiveConfig } from "./class-template";
+export type { ClassSelection, EffectiveRequirement, EffectiveResult } from "./class-template";
