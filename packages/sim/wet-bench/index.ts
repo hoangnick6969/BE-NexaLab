@@ -1,5 +1,5 @@
 export * from "./contracts";
-export { SPECIES, microgramsOf } from "./species";
+export { SPECIES, microgramsOf, nanomolesOf } from "./species";
 export type { Species, SpeciesId, AcidBaseRole } from "./species";
 export { REAGENTS, reagentById } from "./reagents";
 export type { Reagent, ReagentComposition, HazardLevel, HazardTag, IndicatorId, SolidShape } from "./reagents";
@@ -10,8 +10,10 @@ export {
 } from "./fl13-acid-base.data";
 export { solveAcidBase } from "./acid-base";
 export type { AcidBaseResult } from "./acid-base";
-export { applyOperation, createBench, emptyVessel, litmusColour, measure, phenolphthaleinBand, observeVessel, scaleReadingMicrograms } from "./engine";
-export type { EngineContext } from "./engine";
+export {
+  applyOperation, assessSolution, createBench, emptyVessel, engineContextFor, isDissolved, litmusColour, measure, phenolphthaleinBand, observeVessel, readVolume, scaleReadingMicrograms,
+} from "./engine";
+export type { EngineContext, SolutionAssessment } from "./engine";
 export { validateChemistryLabConfig } from "./validate-config";
 export type { ConfigValidation } from "./validate-config";
 export { classSelectionSchema, deriveWetBenchEffectiveConfig, validateWetBenchEffectiveConfig } from "./class-template";

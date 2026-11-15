@@ -10,14 +10,16 @@ export type SolidShape = "granule" | "chips" | "nail" | "foil";
 export type ReagentComposition =
   | { kind: "solution"; solute: SpeciesId | null; millimolar: number; densityMicrogramsPerMicroliter: number }
   | { kind: "solid"; species: SpeciesId; nanomolesPerPiece: number; shape: SolidShape }
-  | { kind: "indicator"; indicator: IndicatorId; microlitersPerDrop: number; densityMicrogramsPerMicroliter: number };
+  | { kind: "indicator"; indicator: IndicatorId; microlitersPerDrop: number; densityMicrogramsPerMicroliter: number }
+  /** Powder taken by mass with a spatula (engine 1.1.0); it dissolves only after stirring, up to the Lab's solubility constant. */
+  | { kind: "powder"; species: SpeciesId };
 
 export type Reagent = {
   id: string;
   labelVi: string;
   composition: ReagentComposition;
   /** Tool the kit uses when the bottle is dragged straight onto a vessel. */
-  dispenser: "dropper" | "tongs";
+  dispenser: "dropper" | "tongs" | "spatula";
   bottleColor: string;
   hazard: { level: HazardLevel; tags: readonly HazardTag[] };
   safetyNoteSim: string;
@@ -76,8 +78,21 @@ const others: Reagent[] = [
     "Mỗi lần gắp một lá khoảng 0,5 g.", "Mép lá kim loại có thể sắc."),
 ];
 
+const powder = (id: string, labelVi: string, species: SpeciesId, bottleColor: string, hazard: Reagent["hazard"], sim: string, real: string): Reagent => ({
+  id, labelVi, composition: { kind: "powder", species }, dispenser: "spatula",
+  bottleColor, hazard, safetyNoteSim: sim, safetyNoteRealLab: real, reviewStatus: "unverified",
+});
+
+/** FL-11 powders (engine 1.1.0). Draft data until a chemistry reviewer signs it off. */
+const powders: Reagent[] = [
+  powder("NaCl_powder", "Muối ăn (NaCl) dạng bột", "NaCl", "#f4f4f2", { level: "none", tags: [] },
+    "Cân bằng thìa, lấy khối lượng theo số em tính.", "Dùng thìa sạch, khô; không nếm hóa chất trong phòng thí nghiệm."),
+  powder("CuSO4_powder", "Đồng(II) sunfat (CuSO₄) dạng bột", "CuSO4", "#8ec3e6", { level: "warning", tags: ["toxic_if_swallowed", "irritant"] },
+    "Bột màu xanh, tan cho dung dịch xanh.", "Độc khi nuốt, gây kích ứng mắt: đeo kính và găng tay, rửa tay sau khi làm."),
+];
+
 export const REAGENTS: Readonly<Record<string, Reagent>> = Object.freeze(
-  Object.fromEntries([...fl13, indicator, ...others].map((reagent) => [reagent.id, Object.freeze(reagent)])),
+  Object.fromEntries([...fl13, indicator, ...others, ...powders].map((reagent) => [reagent.id, Object.freeze(reagent)])),
 );
 
 export const reagentById = (id: string): Reagent | null => (Object.hasOwn(REAGENTS, id) ? REAGENTS[id] : null);

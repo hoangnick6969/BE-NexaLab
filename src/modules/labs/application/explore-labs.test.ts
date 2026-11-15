@@ -168,3 +168,37 @@ describe("Explore seed CLI", () => {
     }, 120_000);
   }
 });
+
+describe("publishExploreLab: wet-bench engine versions", () => {
+  const solutionConfig = () => ({
+    ...exploreConfig("solution-concentration"),
+    catalogId: "FL-11",
+    engine: "wet-bench@1.1.0",
+    enabledApparatus: [
+      { id: "B1", kind: "beaker_100ml", slot: "bench_1" },
+      { id: "G1", kind: "graduated_cylinder_100ml", slot: "bench_2" },
+      { id: "spoon", kind: "spatula", slot: "tool_1" },
+    ],
+    availableReagents: [{ reagentId: "NaCl_powder", shelfPosition: 1 }, { reagentId: "H2O_distilled", shelfPosition: 2 }],
+    allowedReactions: [],
+    measurements: ["volume"],
+    solutes: [{ reagentId: "NaCl_powder", maxMilligramsPerMilliliter: 360, atCelsius: 20 }],
+    pedagogy: { revealEquations: "never" },
+  });
+
+  it("records the engine of the config as the Lab's model: a 1.1.0 Lab is 1.1.0, FL-13 stays 1.0.0", async () => {
+    const solution = fakeDb();
+    await publishExploreLab(solution.db, input(solutionConfig()));
+    expect(solution.tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "wet-bench@1.1.0", config: { engine: "wet-bench@1.1.0" } });
+    const acid = fakeDb();
+    await publishExploreLab(acid.db, input());
+    expect(acid.tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "wet-bench@1.0.0" });
+  });
+
+  it("refuses to move an existing 1.0.0 Lab to 1.1.0, and a 1.1.0 config on 1.0.0 features is invalid", async () => {
+    const existing = fakeDb({ simulationModelRef: "wet-bench@1.0.0", _count: { challenges: 0, releases: 0 } });
+    await expect(publishExploreLab(existing.db, input(solutionConfig()))).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
+    const wrongEngine = fakeDb();
+    await expect(publishExploreLab(wrongEngine.db, input({ ...solutionConfig(), engine: "wet-bench@1.0.0" }))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
+  });
+});
