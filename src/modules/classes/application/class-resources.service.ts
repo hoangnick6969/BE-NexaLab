@@ -8,6 +8,7 @@ import { ownedClass } from "./class-access";
 import { classArchived, lock } from "./class-common";
 import { normalizeResourceContent, parseResourceCsv, practiceKind, resourceItemCount, ResourceKind, resourceKindSchema, studentResource, labResourceContentSchema, verifyClassLabSnapshot } from "./class-resource-contract";
 import { buildLabResource, validateResourceAttachment } from "./class-lab-resource";
+import { buildExploreResource, exploreInputOf, exploreResourceContentSchema } from "./class-explore-contract";
 import { assertClassLesson } from "./class-lesson";
 import { notify } from "../../notifications/application/notify";
 import { checkQuestionDuplicates, resourceFingerprintItems, syncClassResourceFingerprints } from "../../ai/application/question-fingerprints";
@@ -114,6 +115,13 @@ export class ClassResourcesService {
         const content = labResourceContentSchema.parse(existing.content);
         const current = await buildLabResource(tx, { source: content.source, learningObjective: content.learningObjective, instructions: content.instructions, reportPrompts: content.reportPrompts, customParams: content.customParams });
         if (current.executionDigest !== content.executionDigest) throw new ConflictException({ code: "LAB_SOURCE_CHANGED" });
+      }
+      if (existing.kind === "EXPLORE_LAB") {
+        // The Lab may have been republished since the draft: the pinned version and the effective config must still be the current ones.
+        const content = exploreResourceContentSchema.parse(existing.content);
+        const current = await buildExploreResource(tx, exploreInputOf(content));
+        if (current.source.activityVersionId !== content.source.activityVersionId || current.effectiveConfigDigest !== content.effectiveConfigDigest)
+          throw new ConflictException({ code: "EXPLORE_SOURCE_CHANGED", message: "Lab nguồn đã có phiên bản mới; hãy tạo lại bài từ phiên bản hiện tại" });
       }
       if (existing.kind === "DOCUMENT" || existing.kind === "REPORT_TEMPLATE") await validateResourceAttachment(tx, existing.content, req.user.sub);
       const changed = await tx.classResource.updateMany({ where: { id: resourceId, classId, status: "DRAFT" }, data: { status: "PUBLISHED", publishedAt: new Date() } });
@@ -324,6 +332,7 @@ export class ClassResourcesService {
 
   private async prepareContent(kind: z.infer<typeof kindSchema>, raw: unknown, ownerId: string): Promise<any> {
     if (kind === "LAB") return this.db.$transaction((tx) => buildLabResource(tx, raw), TX_LIMITS);
+    if (kind === "EXPLORE_LAB") return this.db.$transaction((tx) => buildExploreResource(tx, raw), TX_LIMITS);
     const content = normalizeResourceContent(kind, raw);
     if (kind === "DOCUMENT" || kind === "REPORT_TEMPLATE") await validateResourceAttachment(this.db, content, ownerId);
     return content;

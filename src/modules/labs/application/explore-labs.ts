@@ -2,16 +2,22 @@ import { BadRequestException, ConflictException, UnprocessableEntityException } 
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { audit, type AuditActor } from "../../../common/audit";
-import { reagentById, validateChemistryLabConfig, type ChemistryLabConfig } from "../../../../packages/sim/wet-bench";
+import { deriveWetBenchEffectiveConfig, reagentById, validateChemistryLabConfig, type ChemistryLabConfig, type EffectiveRequirement } from "../../../../packages/sim/wet-bench";
 import { activityDigest } from "./sim-packs";
 
 /** Fields every Explore bench config carries (P0 C1). */
 type ExploreConfig = { labId: string; kit: string; engine: string; title: string };
 type BenchValidation = { ok: true; config: ExploreConfig } | { ok: false; errors: string[] };
+/** What a bench derives for Class Explore (P0 C3.2): the config a student works in and what they must hand in. */
+export type ClassDerivation =
+  | { ok: true; config: unknown; requirements: EffectiveRequirement[]; templateId: string; promptId: string }
+  | { ok: false; errors: string[] };
 type ExploreBench = {
   kit: string;
   modelRef: string;
   validate: (raw: unknown) => BenchValidation;
+  /** Absent when the bench has no Class Explore templates yet. */
+  deriveClass?: (config: unknown, selection: unknown) => ClassDerivation;
   /** PracticalActivityVersion.spec without `explore`, built from the validated config. */
   activitySpec: (config: any) => Record<string, unknown>;
 };
@@ -55,6 +61,10 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
       if (!result.ok) return { ok: false, errors: result.errors };
       if (result.config.modes.guided) return { ok: false, errors: ["modes.guided: Explore-only Labs cannot declare a guided mode"] };
       return { ok: true, config: result.config };
+    },
+    deriveClass: (config, selection) => {
+      const checked = validateChemistryLabConfig(config);
+      return checked.ok ? deriveWetBenchEffectiveConfig(checked.config, selection) : { ok: false, errors: checked.errors };
     },
     activitySpec: wetBenchSpec,
   },
@@ -178,4 +188,19 @@ export async function resolveExploreLabs(db: Pick<PrismaClient, "practicalActivi
     : [];
   const byId = new Map(versions.map((version) => [version.id, version]));
   return new Map(explore.map((lab) => [lab.id, resolveExplore(lab, byId.get((lab.config as any)?.activity?.id))]));
+}
+
+/**
+ * The Lab a Class Explore resource is built on (P0 C3): published, shared, an Explore Lab whose pinned version resolves,
+ * with the pinned config. Throws 409 with the resolve error code when it does not.
+ */
+export async function loadPinnedExploreLab(db: Pick<PrismaClient, "lab" | "practicalActivityVersion">, labId: string) {
+  const lab = await db.lab.findFirst({
+    where: { id: labId, status: "published", scope: "SHARED_LIBRARY", releaseCleared: true, synthetic: false, topicCode: { not: null } },
+    select: { id: true, title: true, grade: true, config: true },
+  });
+  if (!lab || declaredMode(lab) !== "explore") throw new ConflictException({ code: "LAB_SOURCE_NOT_ELIGIBLE" });
+  const resolved = (await resolveExploreLabs(db, [lab])).get(lab.id)!;
+  if (!resolved.ok) throw new ConflictException({ code: resolved.code });
+  return { lab, resolved };
 }

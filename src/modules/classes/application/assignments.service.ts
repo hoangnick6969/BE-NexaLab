@@ -16,8 +16,9 @@ import { notify } from "../../notifications/application/notify";
 import { snapshotAssignmentLab } from "../../labs/application/assignment-lab-execution";
 import { digest as labExecutionDigest } from "../../labs/application/lab-run";
 import { resolveClassLabResource } from "./class-lab-resource";
+import { buildExploreSnapshot } from "./class-explore-contract";
 
-type ContentType = "lesson" | "lab" | "test" | "written";
+type ContentType = "lesson" | "lab" | "test" | "written" | "explore_lab";
 
 function assignmentView(a: any, now = new Date()) {
   return {
@@ -26,6 +27,8 @@ function assignmentView(a: any, now = new Date()) {
     title: a.title,
     contentId: a.contentId,
     classLabSnapshot: a.classLabSnapshot ?? null,
+    // Class Explore: a short description only; the pinned effective config stays server-side.
+    explore: a.exploreSnapshot ? { resourceId: a.exploreSnapshot.resourceId, version: a.exploreSnapshot.version, templateId: a.exploreSnapshot.templateId, requirementCount: a.exploreSnapshot.requirements?.length ?? 0 } : null,
     contentType: a.contentType,
     dueDate: a.dueDate,
     overdue: isOverdue(a.dueDate, now),
@@ -40,11 +43,13 @@ function assignmentView(a: any, now = new Date()) {
 
 export const assignmentInput = z
   .object({
-    contentType: z.enum(["lesson", "lab", "test", "written"]),
+    contentType: z.enum(["lesson", "lab", "test", "written", "explore_lab"]),
     contentId: text,
     labReleaseId: text.optional(),
     labChallengeId: text.optional(),
     classLabResourceId: text.optional(),
+    /** Class Explore (P0 C3.4): the published EXPLORE_LAB resource; `contentId` is its Lab. */
+    exploreResourceId: text.optional(),
     title: text.optional(),
     dueDate: z.string().datetime().nullable().optional(),
     studentIds: z.array(text).max(200).default([]),
@@ -56,6 +61,10 @@ export const assignmentInput = z
       context.addIssue({ code: z.ZodIssueCode.custom, path: [!value.labReleaseId ? "labReleaseId" : "labChallengeId"], message: "Chọn một Foundational Release đang hoạt động và thử thách được duyệt." });
     if ((value.classLabResourceId && (value.labReleaseId || value.labChallengeId)) || (value.contentType !== "lab" && (value.classLabResourceId || value.labReleaseId || value.labChallengeId)))
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["contentType"], message: "Cấu hình Lab chỉ áp dụng cho bài Lab." });
+    if (value.contentType === "explore_lab" && !value.exploreResourceId)
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["exploreResourceId"], message: "Chọn một bài Explore đã xuất bản." });
+    if (value.contentType !== "explore_lab" && value.exploreResourceId)
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["contentType"], message: "Bài Explore chỉ áp dụng cho loại explore_lab." });
     if (value.audience === "SUBSET" && value.studentIds.length === 0)
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["studentIds"], message: "Hãy chọn ít nhất một học sinh." });
     if (value.audience === "CLASS" && value.studentIds.length > 0)
@@ -419,6 +428,9 @@ export class AssignmentsService {
     });
     return {
       classGrade: c.grade,
+      // Published Class Explore resources the teacher can assign (P0 C3.4); the pinned effective config stays server-side.
+      exploreLabs: (await this.db.classResource.findMany({ where: { classId: id, kind: "EXPLORE_LAB", status: "PUBLISHED" }, select: { id: true, title: true, version: true, content: true }, orderBy: { createdAt: "desc" } }))
+        .map(({ content, ...resource }: any) => ({ ...resource, labId: content?.source?.labId ?? null, requirementCount: content?.requirements?.length ?? 0 })),
       classLabs: await this.db.classResource.findMany({ where: { classId: id, kind: "LAB", status: "PUBLISHED" }, select: { id: true, title: true, version: true, content: true }, orderBy: { createdAt: "desc" } }),
       lessons,
       labs: eligibleLabs,
@@ -426,6 +438,15 @@ export class AssignmentsService {
       // TAI2-T2: the rubric never leaves this route; only the prompt count is listed.
       writtenTasks: writtenTasks.map(({ content, ...task }) => ({ ...task, promptCount: (content as any)?.prompts?.length ?? 0 })),
     };
+  }
+
+  /** The published Class Explore resource and the snapshot this assignment will carry (P0 C3.4). */
+  private async exploreSource(tx: any, classId: string, b: z.infer<typeof assignmentInput>) {
+    const resource = await tx.classResource.findFirst({ where: { id: b.exploreResourceId, classId, kind: "EXPLORE_LAB", status: "PUBLISHED" } });
+    if (!resource) throw new BadRequestException({ code: "CONTENT_NOT_PUBLISHED", message: MSG.publishFirst });
+    const snapshot = await buildExploreSnapshot(tx, resource);
+    if (snapshot.labId !== b.contentId) throw new BadRequestException({ code: "CLASS_LAB_SOURCE_MISMATCH" });
+    return { resource, snapshot };
   }
 
   private async assignableContentOrThrow(tx: any, classId: string, contentType: ContentType, contentId: string, teacherId: string, classGrade: number) {
@@ -565,14 +586,17 @@ export class AssignmentsService {
       await lock(tx, "class-assign:" + id);
       const privateLab = b.classLabResourceId ? await resolveClassLabResource(tx, b.classLabResourceId, undefined, id) : null;
       if (privateLab && privateLab.content.source.labId !== b.contentId) throw new BadRequestException({ code: "CLASS_LAB_SOURCE_MISMATCH" });
-      const content = privateLab ? { title: privateLab.resource.title, version: privateLab.snapshot.contentDigest } : await this.assignableContentOrThrow(tx, id, b.contentType, b.contentId, req.user.sub, c.grade);
-      if (privateLab) {
+      const explore = b.contentType === "explore_lab" ? await this.exploreSource(tx, id, b) : null;
+      const content = explore
+        ? { title: explore.resource.title, version: explore.snapshot.contentDigest }
+        : privateLab ? { title: privateLab.resource.title, version: privateLab.snapshot.contentDigest } : await this.assignableContentOrThrow(tx, id, b.contentType, b.contentId, req.user.sub, c.grade);
+      if (privateLab || explore) {
         const source = await tx.lab.findUnique({ where: { id: b.contentId }, select: { grade: true } });
         if (!source || source.grade !== c.grade)
           throw new BadRequestException({ code: "ASSIGNMENT_GRADE_MISMATCH", message: `Lab nguồn phải thuộc khối ${c.grade} của lớp.` });
       }
       const labExecution = privateLab?.content.execution ?? (b.contentType === "lab" ? await snapshotAssignmentLab(tx, b.contentId, b.labReleaseId!, b.labChallengeId!) : null);
-      const contentVersion = privateLab?.snapshot.contentDigest ?? labExecution?.releaseDigest ?? content.version;
+      const contentVersion = explore?.snapshot.contentDigest ?? privateLab?.snapshot.contentDigest ?? labExecution?.releaseDigest ?? content.version;
       const targets = await this.resolveTargets(tx, id, b.studentIds);
       const hash = targetHash(targets);
       await this.assertNotDuplicate(tx, {
@@ -596,6 +620,7 @@ export class AssignmentsService {
           contentVersion,
           ...(labExecution ? { labExecution, labExecutionDigest: labExecutionDigest(labExecution) } : {}),
           ...(privateLab ? { classLabSnapshot: privateLab.snapshot } : {}),
+          ...(explore ? { exploreSnapshot: explore.snapshot } : {}),
           // Deprecated mirror for older deployments: [] meant "whole class".
           studentIds: audience === "SUBSET" ? targets : [],
           createdById: req.user.sub,

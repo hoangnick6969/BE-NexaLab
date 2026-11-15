@@ -46,6 +46,8 @@ enum ClassResourceKind {
   LINK
   /// TAI-02 written task with a versioned rubric (graded by the teacher).
   WRITTEN_TASK
+  /// P0 C3: Class Explore, a teacher's choice inside a Foundational Explore Lab template (no LabRun, no verdict).
+  EXPLORE_LAB
 }
 
 enum ClassResourceStatus {
@@ -115,6 +117,7 @@ model User {
   children                    ParentLink[]                 @relation("parent")
   assignmentTargets           AssignmentTarget[]
   assignmentSubmissions       AssignmentSubmission[]
+  exploreSubmissions          ClassExploreSubmission[]
   classLabAdditionalResponses ClassLabAdditionalResponse[]
   notifications               Notification[]
   ebookAnnotations            EbookAnnotation[]
@@ -246,6 +249,29 @@ model ClassResourcePractice {
 
   @@unique([resourceId, studentId])
   @@index([studentId, updatedAt])
+}
+
+/// Class Explore submission (P0 C3.4): what the student measured and explained. Never a verdict, score or progress.
+model ClassExploreSubmission {
+  id             String     @id @default(cuid())
+  assignmentId   String
+  assignment     Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  idempotencyKey String?
+  /// { measures: [{ itemId, tenthsPh }], explanation }, checked against the assignment snapshot's requirements.
+  answers        Json
+  /// SUBMITTED, then REVIEWED once the teacher has commented.
+  status         String     @default("SUBMITTED")
+  submittedAt    DateTime   @default(now())
+  feedback       String?
+  reviewedById   String?
+  reviewedAt     DateTime?
+
+  /// One submission per student and assignment: a retry returns the saved one.
+  @@unique([assignmentId, studentId])
+  @@index([studentId, submittedAt])
+  @@index([assignmentId, status])
 }
 
 /// Immutable student text response attempts for teacher-authored Class Lab prompts.
@@ -725,6 +751,8 @@ model Assignment {
   labExecution                Json?
   labExecutionDigest          String?
   classLabSnapshot            Json?
+  /// Class Explore (P0 C3.4): the pinned effective bench, requirements and question this assignment was given with.
+  exploreSnapshot             Json?
   status                      String                       @default("ACTIVE")
   createdById                 String?
   archivedAt                  DateTime?
@@ -737,6 +765,7 @@ model Assignment {
   similarityRuns              SubmissionSimilarityRun[]
   stepProgress                StepProgress[]
   classLabAdditionalResponses ClassLabAdditionalResponse[]
+  exploreSubmissions          ClassExploreSubmission[]
   insightDisagreements        HintInsightDisagreement[]
 
   @@index([classId, status, dueDate])
