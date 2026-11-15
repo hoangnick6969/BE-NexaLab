@@ -13,19 +13,8 @@ import { GENE_VARIANT_IDS, geneExpression } from "./gene-expression";
  */
 
 const removable = Object.keys(FOOD_WEB_SPECIES).filter((id) => FOOD_WEB_SPECIES[id as keyof typeof FOOD_WEB_SPECIES].role !== "DECOMPOSER") as [string, ...string[]];
-/**
- * eye-optics@1.0.0 scenarios and power formula, mirrored here. The eye-optics module cannot load from this
- * package index (it reads `eyeParts` from it), so it is not imported. FE tests pin this table to the released model.
- */
-const VITREOUS_INDEX = 1.336;
-export const FL16_SCENARIOS = [
-  { id: "normal-near", axialLengthM: 0.0226, objectDistanceM: 0.25 },
-  { id: "myopia-far", axialLengthM: 0.0234, objectDistanceM: null },
-  { id: "hyperopia-near", axialLengthM: 0.0215, objectDistanceM: 0.4 },
-] as const;
-export const requiredPowerD = (axialLengthM: number, objectDistanceM: number | null) =>
-  VITREOUS_INDEX / axialLengthM + (objectDistanceM === null ? 0 : 1 / objectDistanceM);
-const scenarioIds = FL16_SCENARIOS.map((scenario) => scenario.id) as [string, ...string[]];
+import { EYE_OPTICS_SCENARIOS, requiredPowerD } from "./eye-optics";
+const scenarioIds = EYE_OPTICS_SCENARIOS.map((scenario) => scenario.id) as [string, ...string[]];
 
 const removalSpec = z.object({
   model: z.literal("food-web@1.0.0"),
@@ -69,7 +58,7 @@ export const fl27VariantResult = (variantId: string) => geneExpression({ variant
 
 /** FL-16: the power the lens needs for one scenario, from the eye-optics@1.0.0 formula (dioptres). */
 export function fl16PowerResult(scenarioId: string) {
-  const scenario = FL16_SCENARIOS.find((item) => item.id === scenarioId);
+  const scenario = EYE_OPTICS_SCENARIOS.find((item) => item.id === scenarioId);
   if (!scenario) throw new Error(`Không có kịch bản ${scenarioId}`);
   return { scenarioId, powerD: requiredPowerD(scenario.axialLengthM, scenario.objectDistanceM) };
 }

@@ -165,4 +165,4 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 - INC-2 (Dev 2): đã code và test ở cả BE (`35f8726`) và FE (`922d1e3`, sim 1.11.0). Trạng thái `[~]` là việc còn lại: chạy seed trên DB cô lập, publish qua Admin API, kiểm trên trình duyệt.
 - INC-3 (Dev 2): code và test cho FL-20, FL-21, FL-27, FL-16 trên nhánh feat/fl26-mendel-sim (BE) và feat/fl26-mendel-bench (FE, sim 1.12.2). Chưa seed, chưa publish.
 - D1-1.5 (FL-06 Explore qua registry) chưa làm: đây là việc của Dev 1, owner chỉ mở khóa cổng. Bàn FL-26 là bàn thứ hai thật trong registry.
-- Topic code: FL-26 và FL-27 dùng `KHTN9-CH11-T01`; FL-21 `KHTN8-L44`; FL-20 `KHTN8-L41`; FL-16 `KHTN8-L37`. Cần kiểm tra trong catalog khi publish.
+- Topic code: FL-26 và FL-27 dùng `KHTN9-CH11-T01`; FL-21 `KHTN8-L44`; FL-20 `KHTN8-L41`; FL-16 `KHTN8-L37`. Đã đối chiếu với `catalog-registry.json` và các script release: khớp.

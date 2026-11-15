@@ -354,48 +354,8 @@ export function chemistry(raw: unknown) {
           : "partial",
   };
 }
-export const eyeParts = [
-  {
-    id: "cornea",
-    name: "Giác mạc",
-    description: "Lớp trong suốt phía trước, khúc xạ ánh sáng đi vào mắt.",
-  },
-  {
-    id: "aqueous",
-    name: "Thủy dịch",
-    description: "Dịch trong suốt giữa giác mạc và thể thủy tinh.",
-  },
-  {
-    id: "pupil",
-    name: "Đồng tử",
-    description: "Lỗ ở giữa mống mắt cho ánh sáng đi qua.",
-  },
-  {
-    id: "lens",
-    name: "Thể thủy tinh",
-    description: "Điều tiết để hội tụ ánh sáng lên võng mạc.",
-  },
-  {
-    id: "vitreous",
-    name: "Dịch kính",
-    description: "Khối gel trong suốt duy trì hình dạng nhãn cầu.",
-  },
-  {
-    id: "retina",
-    name: "Võng mạc",
-    description: "Lớp cảm thụ ánh sáng, chuyển thành tín hiệu thần kinh.",
-  },
-  {
-    id: "nerve",
-    name: "Dây thần kinh thị giác",
-    description: "Dẫn truyền tín hiệu từ võng mạc đến não.",
-  },
-  {
-    id: "sclera",
-    name: "Củng mạc",
-    description: "Lớp vỏ bảo vệ và duy trì hình dạng mắt.",
-  },
-];
+export { eyeParts } from "./eye-parts";
+import { eyeParts } from "./eye-parts";
 export function eye(raw: unknown) {
   const s = z.object({ answers: z.record(z.string().max(100)) }).parse(raw);
   const normalize = (v: string) =>
@@ -504,5 +464,5 @@ export function simulate(labId: string, state: unknown) {
   if (labId === "eye") return eye(state);
   throw new Error("Lab không tồn tại");
 }
-export { dioramaExploreSchema, fl20ExploreSchema, fl21ExploreSchema, fl27ExploreSchema, fl16ExploreSchema, fl21RemovalResult, fl20ToleranceResult, fl27VariantResult, fl16PowerResult, FL16_SCENARIOS } from "./explore-kits";
+export { dioramaExploreSchema, fl20ExploreSchema, fl21ExploreSchema, fl27ExploreSchema, fl16ExploreSchema, fl21RemovalResult, fl20ToleranceResult, fl27VariantResult, fl16PowerResult } from "./explore-kits";
 export type { DioramaExploreConfig, MolecularExploreConfig, AnatomyExploreConfig } from "./explore-kits";

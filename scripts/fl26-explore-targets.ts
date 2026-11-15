@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const FE_GENETICS = resolve(__dirname, "../../FE-NexaLab/src/features/labs/biology/genetics/labs");
-// Same chapter as FL-27 (KHTN 9, CH11); confirm with the curriculum catalog before a production publish.
+// Checked against content/curriculum catalog (catalog-registry.json): KHTN9-CH11-T01 "Di truyền học Mendel và cơ sở phân tử", the only topic in chapter XI.
 const TOPIC_CODE = "KHTN9-CH11-T01";
 
 export async function loadFl26ExploreTargets() {

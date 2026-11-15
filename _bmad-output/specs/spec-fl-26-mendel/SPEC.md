@@ -24,7 +24,7 @@ depends_on: [SPEC-lab-kit-20-slot-delivery, SPEC-lab-mode-foundation-p0]
 
 | Phần | Nội dung |
 |---|---|
-| Bàn và Kit | Bàn di truyền, `kit: "k8-garden"`, `group: "biology"`, thư mục FE `src/features/labs/biology/genetics/`. Topic: `KHTN9-CH11-T01` (cùng chương với FL-27; cần kiểm tra lại khi publish) |
+| Bàn và Kit | Bàn di truyền, `kit: "k8-garden"`, `group: "biology"`, thư mục FE `src/features/labs/biology/genetics/`. Topic: `KHTN9-CH11-T01` (đã đối chiếu catalog: khớp, chương XI chỉ có một chủ đề) |
 | Lab đầu tiên | FL-26, Lab ID `fl-26-explore`, mode Explore mới (chưa có Guided, nên không chờ D-5) |
 | Cách mở | `/labs/:id` với config đã ghim (`publishExploreLab`). Dev/fixture trước khi phát hành |
 | Mô hình | `mendel-cross@1.0.0` trong `packages/sim/mendel-cross.ts`. Đơn vị: số tổ hợp trên 4 ô Punnett (số nguyên). `reviewStatus: PROPOSED_UNAPPROVED` |
