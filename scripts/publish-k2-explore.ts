@@ -1,11 +1,12 @@
 // Owner path for publishing the K2 Explore Labs (FL-13, FL-14a) to any database, including the shared one:
 // Admin API only (POST /admin/labs/:id/explore-versions), never a direct DB write. Read-only unless --apply.
-//   NEXALAB_API=https://.../api NEXALAB_ADMIN_PASSWORD=... npx tsx scripts/publish-k2-explore.ts [--apply]
+//   NEXALAB_API=https://.../api NEXALAB_ADMIN_PASSWORD=... npx tsx scripts/publish-k2-explore.ts [--apply] [--lab <labId>]
 import "dotenv/config";
 import { loadK2ExploreTargets } from "./k2-explore-targets";
 
 const api = (process.env.NEXALAB_API ?? "http://127.0.0.1:4000/api").replace(/\/$/, "");
 const apply = process.argv.includes("--apply");
+const onlyLab = process.argv.includes("--lab") ? process.argv[process.argv.indexOf("--lab") + 1] : undefined;
 const password = process.env.NEXALAB_ADMIN_PASSWORD;
 if (!password) throw new Error("Set NEXALAB_ADMIN_PASSWORD; this script never stores or prints credentials.");
 let token: string | undefined;
@@ -26,6 +27,7 @@ async function main() {
   if (!token) throw new Error("Admin login returned no token");
   const labs: Array<{ id: string; status: string; scope: string; config: unknown }> = await call("/admin/labs");
   for (const { config, topicCode } of targets) {
+    if (onlyLab && config.labId !== onlyLab) continue;
     const current = labs.find((lab) => lab.id === config.labId);
     console.log(JSON.stringify({ api, labId: config.labId, topicCode, current: current ? { status: current.status, scope: current.scope, config: current.config } : null }));
     if (!apply) continue;
