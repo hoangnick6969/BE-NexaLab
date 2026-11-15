@@ -12,21 +12,21 @@ Ký hiệu: `[x]` xong và đã kiểm · `[~]` code xong, còn việc kiểm ch
 - [x] `publishExploreLab` (một transaction, registry server, các ca từ chối, version mới chỉ khi digest mới, `Lab.config` dạng gọn, audit)
 - [x] `POST /admin/labs/:id/explore-versions` (ADMIN, Zod) và script owner `scripts/publish-k2-explore.ts`
 - [x] Route manifest chỉ thêm đúng route trên; lint, build và unit test pass
-- [~] Integration test trên DB cô lập (`explore-publish.integration.test.ts`): đã viết, **chưa chạy** vì máy dev không có Postgres local
+- [~] Integration test trên DB cô lập (`explore-publish.integration.test.ts`): đã viết, chưa chạy theo phạm vi xác minh hiện tại
 
 ### Giữa hai PR: cổng rollout §5.4
 - [x] Bước 1: phát hành FL-13 và FL-14a qua Admin API, cả hai lên version 2
 - [x] Bước 2: kiểm chỉ-SELECT đạt (đúng con trỏ, digest khớp, `spec.explore.labId` đúng Lab)
-- [ ] Bước 3: kiểm trên DB cô lập với build PR-2 (Guided và Class Guided vẫn mở, nộp, chấm được; Explore mở được trên **2 bàn**: bàn ướt và fixture F0-2. Phía FE đã chứng minh bằng Playwright mock API; cần Postgres local để chạy với server thật)
+- [ ] Bước 3: kiểm trên DB cô lập với build PR-2. Guided và Class Guided cần mở, nộp và chấm được. Explore cần mở trên **2 bàn**. Playwright mock API đã mở bàn ướt và fixture F0-2 trên FE. Khi kiểm với server thật cần đăng ký bàn thứ hai trong môi trường test hoặc dùng bàn thứ hai đã triển khai.
 - [ ] Bước 4: deploy PR-2 (BE và FE cùng lúc)
 
-### PR-2 (BE + FE): đọc dữ liệu. Đã commit (BE `eac62f0`, FE `b127276`), chưa push
+### PR-2 (BE + FE): đọc dữ liệu. Đã có trên nhánh remote (BE `eac62f0`, FE `b127276`)
 - [x] `GET /labs`: `mode` trên mọi dòng, `explore` trên dòng Explore, 6 bước kiểm theo thứ tự, lỗi tách theo dòng, học sinh không nhận dòng lỗi
 - [x] FE `Lab.tsx` rẽ nhánh theo `row.mode`; lỗi thì hiện panel kèm mã; đã bỏ `isExploreLab`; chỉ dùng config từ server
 - [x] `ExploreBench` key theo `activity.id`; khóa lưu cục bộ `labId@activity.id`
 - [x] Test: mỗi mã lỗi một ca, ca config thuộc Lab khác, ca Lab hỏng không ảnh hưởng Lab khác, ca Lab ngoài bundle vẫn mở, FL-10 vẫn Guided, FL-13 có nhãn nháp, Playwright FL-13 và `fl-10-k2` pass
-- [x] Chạy resolver chỉ-SELECT trên DB dùng chung: FL-13 và FL-14a `ok: true`
-- [ ] Push branch và mở PR, merge (owner làm tay)
+- [x] Supabase MCP chỉ-SELECT kiểm bản ghim FL-13 và FL-14a v2. Resolver với envelope 1.8.0 trả `ok: true` cho cả hai.
+- [ ] Merge PR-2 ở BE và FE (owner làm tay)
 
 ## 2. Nghiệm thu C1 (§7)
 - [x] Route manifest chỉ thêm `POST /admin/labs/:id/explore-versions`
@@ -41,23 +41,22 @@ Ký hiệu: `[x]` xong và đã kiểm · `[~]` code xong, còn việc kiểm ch
 - [x] Guard chặn khi lệch host, port hoặc DB, cả qua `npm run`, chạy thẳng `tsx` và `--unpublish`
 - [x] FE validate lại thất bại thì dừng, hiện `EXPLORE_CONFIG_INVALID`; seed từ chối Lab có challenge/release/foundationalLabId
 - [~] Dùng Explore không tạo `LabRun`/`Attempt`/`Progress` (Playwright: không có request run; bản kiểm DB cô lập chưa chạy)
-- [x] Lint, test, build BE; lint, build FE
+- [x] Lint/build BE và FE pass. 163 test sim/BE và 12 Playwright mục tiêu pass (API mock).
 
 ## 3. Hạ tầng chung §5.2 (mỗi việc nên là một PR nhỏ)
-- [ ] **F0-1** Envelope trung lập `packages/sim/explore/envelope.ts`; `ChemistryLabConfig` mở rộng từ envelope; bàn ướt không đổi hành vi
-- [x] **F0-2** Registry đa bàn (FE `e438a0e`, cùng branch với PR-2, chưa push). FE `runtime/explore-registry.ts` với mục `{ kit, group, validate, loadPage, listKitItems }`; bàn ướt đã đăng ký; `listWetBenchKitItems` là adapter tối thiểu và màn giới thiệu đọc qua nó. BE giữ `EXPLORE_BENCHES` `{ kit, validate }` như spec. Bàn thứ hai là fixture `explore-fixture@1`, **chỉ đăng ký ở build dev**: Playwright mở được hai bàn qua `/labs/:id`. Server không có fixture, nên bước 3 của rollout trên DB cô lập chỉ kiểm được bàn ướt cho tới khi có bàn thật thứ hai
-- [ ] **F0-4** Lưu nhật ký dùng chung: khóa, IndexedDB, giới hạn dòng, export
-- [ ] **F0-5** Seed đa bàn `scripts/seed-explore-labs.ts --kit <bàn>` gọi `publishExploreLab`; đạt tiêu chí (a)–(d)
-- [ ] **C2.1** Khung `src/features/labs/shared/items/` (kiểu item, quy ước anchor, README, test kiểu)
-- [ ] **Mẫu spec áp dụng** cho mỗi bàn (file mẫu nằm cạnh spec P0)
+- [x] **F0-1** Envelope trung lập `packages/sim/explore/envelope.ts`; `ChemistryLabConfig` mở rộng schema này. Test envelope cho bàn khác, golden của bàn ướt và hai bản ghim v2 đều pass. FE dùng tarball `@nexalab/sim` 1.8.0.
+- [x] **F0-2** Registry đa bàn (FE `e438a0e`, cùng nhánh remote với PR-2). FE `runtime/explore-registry.ts` với mục `{ kit, group, validate, loadPage, listKitItems }`; bàn ướt đã đăng ký; `listWetBenchKitItems` là adapter tối thiểu và màn giới thiệu đọc qua nó. BE giữ `EXPLORE_BENCHES` `{ kit, validate }` như spec. Fixture `explore-fixture@1` chỉ đăng ký ở FE dev. Playwright mock mở được hai bàn qua `/labs/:id`, còn kiểm với server thật ở bước 3.
+- [x] **F0-4** Lưu nhật ký dùng chung: khóa, IndexedDB, giới hạn 500 dòng, export. Playwright FL-13 đọc lại số đo pH sau khi tải lại trang, xuất đúng định dạng JSON K2 và không tạo run request.
+- [~] **F0-5** Đã có `npm run db:seed:explore -- --kit <id-bàn>`, gọi `publishExploreLab`; alias K2 vẫn dùng được. 10 unit/CLI test pass, gồm dùng lại version khi input giữ nguyên (b), tạo version khi config đổi (c) và guard trước mọi đường ghi (d). Supabase MCP chỉ-SELECT lấy bản ghim FL-13 và FL-14a v2, resolver PR-2 kiểm cả hai `ok: true`, đúng bàn K2. Chưa chạy seed thật rồi gọi `GET /labs` trên DB cô lập để nghiệm thu đầy đủ (a)
+- [x] **C2.1** Khung `src/features/labs/shared/items/` có kiểu item, test kiểu và README quy ước anchor. Người phụ trách pilot Kit Hóa học duyệt PR item chung. Cốc và cân thuộc pilot A.
+- [x] **Mẫu spec áp dụng** cho mỗi bàn: [lab-explore-bench-spec-template.md](lab-explore-bench-spec-template.md).
 
 ## 4. Mốc "Contract done" (§5.3)
 - [ ] Nghiệm thu C1 (§7) pass toàn bộ, gồm cả các mục `[~]` ở trên
-- [ ] Mọi việc §5.2 đạt cột "Xong khi"
-- [ ] Tài liệu §6 cập nhật. Đã sửa đoạn DB seed và FE của Kiến trúc Explore; còn lại: Kiến trúc §0.2 và §2, Backlog F0 (F0-1/2/3/4/5/6/7a), Thiết kế K2, Portfolio, Danh mục kit, `sprint-status.yaml`
+- [ ] Mọi việc §5.2 đạt cột "Xong khi". Còn kiểm F0-5(a) qua seed và `GET /labs` trên DB cô lập.
+- [x] Tài liệu §6 đã cập nhật: Kiến trúc Explore, Backlog F0, Thiết kế K2, Portfolio, Danh mục kit và `sprint-status.yaml`.
 
 ## 5. Việc tồn đọng ngoài P0 (phát hiện khi làm)
-- [ ] Chạy các integration test trên DB cô lập: cần một Postgres local (`NEXALAB_PINNING_TEST_URL` / `NEXALAB_ISOLATED_DATABASE_URL`)
 - [ ] 4 Playwright fail sẵn (cũng fail trên code gốc `c869578`): `em-induction` (viewport điện thoại), 2 ca trong `lab-run-host`, 1 ca trong `lab-space-class-section`
 - [ ] `.env` BE có hai dòng `SEED_PASSWORD`; dotenv lấy dòng thứ hai (sai)
 - [ ] `D:\FPT\vite.config.ts` nằm ngoài workspace làm vitest BE đọc nhầm config

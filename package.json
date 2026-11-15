@@ -93,7 +93,9 @@
     "predb:seed:fl05-candidate": "node scripts/assert-isolated-db.mjs FL05-candidate",
     "db:seed:fl05-candidate": "tsx scripts/seed-fl05-candidate.ts",
     "predb:seed:k2-explore": "node scripts/assert-isolated-db.mjs k2-explore-seed",
-    "db:seed:k2-explore": "tsx scripts/seed-k2-explore-labs.ts"
+    "db:seed:k2-explore": "tsx scripts/seed-k2-explore-labs.ts",
+    "predb:seed:explore": "node scripts/assert-isolated-db.mjs explore-seed",
+    "db:seed:explore": "tsx scripts/seed-explore-labs.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1140.0",

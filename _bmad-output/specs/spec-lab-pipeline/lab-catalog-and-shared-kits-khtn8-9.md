@@ -216,6 +216,8 @@ Sơ đồ 2D trong mô phỏng cần được phân định rõ theo yêu cầu 
 
 ### 6A.3. Gom 30 ứng viên theo Shared Kits, Tiers & Modality phát hành đầu
 
+Phân công hiện hành theo [P0 §2.1](lab-mode-foundation-p0-spec.md#21-tổ-chức-4-kit-các-bàn-một-thư-viện-item-dùng-chung): 4 Kit theo môn, K1–K8/EX-A là tên bàn. Bảng dưới giữ các cách ghép ứng viên của quy hoạch ban đầu.
+
 | ID | Lab | Decision & Wave (Catalog) | Kit đề xuất | Presentation Tier (đích đến) | Modality phát hành đầu | Dual-View | Minh hoạ ý tưởng (ngoài scope) |
 |---|---|---|---|---|---|---|---|
 | FL-01 | Mạch điện một chiều | SHARE / W1 | K1 Bàn điện | Tier B (Bench) | 2D (pilot Circuit bulb) | **Vẽ (evidence)** (`B22-O01`, `B25-O02`) | Khung bàn nguồn, khoá K, ampe kế, vôn kế, bóng đèn; pilot P3.4 |
@@ -275,7 +277,7 @@ Sơ đồ 2D trong mô phỏng cần được phân định rõ theo yêu cầu 
 
 ### 6A.6. Runtime frontend dùng chung và phạm vi đã có (cập nhật 2026-10-31)
 
-**Định hướng 8 Shared Kits + 1 Explorer:** Giữ cách phân nhóm K1–K8 ở §6A.3 làm kế hoạch tái sử dụng presentation. Explorer là tài nguyên xem/khám phá không sinh evidence, không tự động là Lab hay một trong 20 slot đề xuất. Bảng này vẫn là proposal: dùng chung phòng, mesh, dụng cụ, HUD hoặc renderer **không** gộp Lab identity, outcome, model khoa học, activity/rubric, quyền truy cập hay assignment. Portfolio vẫn là 30 discovery IDs/20 provisional slots cho tới khi reviewer quyết định; con số 8 kits không phải 8 Lab, 8 release, cũng không chứng minh phủ kín curriculum.
+Bảng quy hoạch bên dưới ghi lại kế hoạch tái sử dụng phòng, mesh, dụng cụ, HUD hoặc renderer. Mỗi Lab vẫn có định danh, outcome, model khoa học, activity/rubric, quyền truy cập và assignment riêng. Phạm vi triển khai theo [lộ trình 20 slot](lab-kit-20-slot-delivery-spec.md).
 
 **Physical Room Environment dùng chung xuyên kit — hợp đồng scene:** Đây là lớp không gian vật lý nền, dùng lại giữa các Lab cần cùng kiểu phòng thực hành. Đây không phải kit dụng cụ, không phải Lab Space UI, và không chứa vật dụng riêng cho một thí nghiệm.
 

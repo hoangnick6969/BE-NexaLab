@@ -3,6 +3,7 @@
  * Integer units: µL (Microliters), nmol (Nanomoles; 1 mM × 1 µL = 1 nmol), µg (Micrograms), pH × 100 (CentiPh).
  */
 import { z } from "zod";
+import { exploreIdSchema as id, exploreLabEnvelopeSchema, observationPromptSchema } from "../explore/envelope";
 import type { IndicatorId, SolidShape } from "./reagents";
 import type { SpeciesId } from "./species";
 
@@ -35,9 +36,6 @@ export const VESSEL_SPECS: Record<VesselKind, VesselSpec> = {
   waste_beaker: { capacityMicroliters: 500_000, tareMicrograms: 80_000_000, stopperable: false },
 };
 
-const id = z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/);
-const text = z.string().trim().min(1).max(600);
-
 export const operationSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("add_liquid"), vesselId: id, reagentId: id, microliters: z.number().int().min(1).max(100_000) }).strict(),
   z.object({ type: z.literal("add_indicator"), vesselId: id, reagentId: id, drops: z.number().int().min(1).max(20) }).strict(),
@@ -48,50 +46,32 @@ export const operationSchema = z.discriminatedUnion("type", [
 ]);
 export type Operation = z.infer<typeof operationSchema>;
 
-const promptSchema = z.object({
-  id,
-  kind: z.enum(["note", "choice", "free_text"]),
-  textVi: text,
-  challenge: z.boolean().optional(),
-  choices: z.array(z.object({ id, labelVi: text }).strict()).min(2).max(6).optional(),
+const promptSchema = observationPromptSchema.extend({
   focus: z.object({ apparatusId: id.optional(), reagentId: id.optional() }).strict().optional(),
   highlightWhen: z.object({ reaction: z.string().optional(), measurement: z.enum(MEASUREMENTS).optional() }).strict().optional(),
-}).strict();
+});
 
-export const chemistryLabConfigSchema = z.object({
+export const chemistryLabConfigSchema = exploreLabEnvelopeSchema.extend({
   schema: z.literal("k2-lab-config/1"),
-  labId: id,
-  catalogId: z.string().regex(/^FL-\d{2}[a-z]?$/),
-  configVersion: z.number().int().positive(),
   kit: z.literal(K2_KIT),
   engine: z.literal(WET_BENCH_ENGINE),
   reactionCatalog: z.literal(K2_REACTION_CATALOG),
-  title: text,
-  contextLabel: z.string().max(120).optional(),
-  outcomeSummary: z.array(text).min(1).max(4),
-  safetyBriefing: z.object({ simulation: z.array(text).min(1), realLab: z.array(text).min(1), acknowledgeRequired: z.boolean() }).strict(),
-  limitations: z.array(text),
-  modes: z.object({ explore: z.literal(true), guided: z.object({ rendererKey: id }).strict().optional() }).strict(),
-  enabledApparatus: z.array(z.object({
-    id,
+  enabledApparatus: z.array(exploreLabEnvelopeSchema.shape.enabledApparatus.element.extend({
     kind: z.enum(APPARATUS_KINDS),
-    slot: id,
-    labelVi: z.string().max(60).optional(),
     initial: z.object({
       contents: z.array(z.object({ reagentId: id, microliters: z.number().int().positive().optional(), pieces: z.number().int().positive().optional() }).strict()).optional(),
       stoppered: z.boolean().optional(),
     }).strict().optional(),
-  }).strict()).min(1).max(24),
+  })).min(1).max(24),
   availableReagents: z.array(z.object({ reagentId: id, shelfPosition: z.number().int().min(1).max(8) }).strict()).min(1).max(8),
   allowedReactions: z.array(z.string()).max(20),
   measurements: z.array(z.enum(MEASUREMENTS)),
   dispensing: z.object({ liquidPresetsMicroliters: z.array(z.number().int().positive()).min(1).max(5) }).strict(),
-  pedagogy: z.object({
+  pedagogy: exploreLabEnvelopeSchema.shape.pedagogy.extend({
     revealEquations: z.enum(["never", "after_observation", "always"]),
     observationPrompts: z.array(promptSchema).max(8).optional(),
-  }).strict(),
-  review: z.object({ status: z.enum(["draft", "reviewed"]), notes: z.string().max(600).optional() }).strict(),
-}).strict();
+  }),
+});
 export type ChemistryLabConfig = z.infer<typeof chemistryLabConfigSchema>;
 export type ObservationPrompt = NonNullable<ChemistryLabConfig["pedagogy"]["observationPrompts"]>[number];
 

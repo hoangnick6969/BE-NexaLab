@@ -1,6 +1,6 @@
 {
   "name": "@nexalab/sim",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
@@ -14,6 +14,7 @@
     "buoyancy.ts",
     "eye-optics.ts",
     "food-web.ts",
+    "explore/envelope.ts",
     "wet-bench/index.ts",
     "wet-bench/contracts.ts",
     "wet-bench/species.ts",

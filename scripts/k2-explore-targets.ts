@@ -11,7 +11,7 @@ const TARGETS = [
 
 export async function loadK2ExploreTargets() {
   if (!existsSync(FE_LABS)) throw new Error(`Frontend kit configs not found at ${FE_LABS} (FE-NexaLab must sit beside BE-NexaLab)`);
-  const out: Array<{ config: { labId: string }; topicCode: string }> = [];
+  const out: Array<{ config: { labId: string; kit: string }; topicCode: string }> = [];
   for (const target of TARGETS) {
     const module = await import(pathToFileURL(resolve(FE_LABS, target.file)).href);
     out.push({ config: module[target.exportName], topicCode: target.topicCode });

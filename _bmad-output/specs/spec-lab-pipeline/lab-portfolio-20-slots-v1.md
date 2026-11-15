@@ -70,8 +70,8 @@ Phạm vi của mục này là đúng 20 slot ở bảng trên. Không thêm tr�
 | 8 / FL-10 — Mol & tính theo PTHH (SPLIT) | K2 — Hóa ướt | Mass Conservation v1 is active for one limited activity; remaining FL-10 scope is not implemented | Activity bảo toàn khối lượng chỉ dùng cân và hai cốc. Không đại diện toàn bộ FL-10 và không có kệ/rack trong phòng nền. |
 | 9 / FL-11 — Dung dịch và nồng độ | K2 — Hóa ướt | Tái sử dụng đề xuất | Cốc, dụng cụ định lượng/khuấy theo thí nghiệm đã review; chưa implement. |
 | 10 / FL-12 — Tốc độ phản ứng & xúc tác | K2 — Hóa ướt | Tái sử dụng đề xuất | Bình phản ứng, gia nhiệt/đo thời gian và thu khí nếu model yêu cầu; chưa implement. |
-| 11 / FL-13 — Acid–base, chỉ thị & pH | K2 — Hóa ướt | Tái sử dụng đề xuất | Chỉ thị, mẫu và dụng cụ đo được chọn theo model đã review; fixture pH cũ không tính là Lab. |
-| 12 / FL-14 — Phản ứng vô cơ & kim loại (SPLIT) | K2 — Hóa ướt | Tái sử dụng đề xuất | Chỉ thêm dụng cụ cho phản ứng con đã chốt; chưa implement và không mặc định dùng chung hóa chất giữa activity. |
+| 11 / FL-13 — Acid–base, chỉ thị & pH | K2 — Bàn ướt | Đã có Explore | Bản ghim v2 có chỉ thị và dụng cụ đo pH. Dữ liệu mô phỏng còn `unverified`. |
+| 12 / FL-14 — Phản ứng vô cơ & kim loại (SPLIT) | K2 — Bàn ướt | Đã có FL-14a Explore | Bản ghim v2 của FL-14a có kim loại với acid loãng và dung dịch muối. FL-14 đầy đủ chưa triển khai. |
 | 13 / FL-15 — An toàn phòng thí nghiệm | K2 — Kịch bản an toàn | Có thể dùng làm bối cảnh nếu scene cần; không bắt buộc phòng 3D | Bài tập nhận diện nguy cơ/PPE là activity riêng; không coi đồ bảo hộ hay dụng cụ minh họa là thao tác an toàn ngoài đời. |
 
 ### Sinh học — 4 Lab
