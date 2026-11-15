@@ -19,7 +19,7 @@ export type Reagent = {
   labelVi: string;
   composition: ReagentComposition;
   /** Tool the kit uses when the bottle is dragged straight onto a vessel. */
-  dispenser: "dropper" | "tongs" | "spatula";
+  dispenser: "dropper" | "tongs" | "spatula" | "pour";
   bottleColor: string;
   hazard: { level: HazardLevel; tags: readonly HazardTag[] };
   safetyNoteSim: string;
@@ -83,8 +83,13 @@ const powder = (id: string, labelVi: string, species: SpeciesId, bottleColor: st
   bottleColor, hazard, safetyNoteSim: sim, safetyNoteRealLab: real, reviewStatus: "unverified",
 });
 
-/** FL-11 powders (engine 1.1.0). Draft data until a chemistry reviewer signs it off. */
+/** FL-11 powders and the water bottle (engine 1.1.0). Draft data until a chemistry reviewer signs it off. */
 const powders: Reagent[] = [
+  {
+    id: "H2O_pour", labelVi: "Nước cất (chai rót)", composition: { kind: "solution", solute: null, millimolar: 0, densityMicrogramsPerMicroliter: 1000 }, dispenser: "pour",
+    bottleColor: "#eef5f6", hazard: { level: "none", tags: [] }, safetyNoteSim: "Rót từng lượng theo nấc em chọn; thêm đến vạch của bình định mức bằng nút riêng.",
+    safetyNoteRealLab: "Dùng chai rót hoặc bình tia, tránh bắn nước ra ngoài.", reviewStatus: "unverified",
+  },
   powder("NaCl_powder", "Muối ăn (NaCl) dạng bột", "NaCl", "#f4f4f2", { level: "none", tags: [] },
     "Cân bằng thìa, lấy khối lượng theo số em tính.", "Dùng thìa sạch, khô; không nếm hóa chất trong phòng thí nghiệm."),
   powder("CuSO4_powder", "Đồng(II) sunfat (CuSO₄) dạng bột", "CuSO4", "#8ec3e6", { level: "warning", tags: ["toxic_if_swallowed", "irritant"] },

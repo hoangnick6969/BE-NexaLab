@@ -22,7 +22,7 @@ const config: ChemistryLabConfig = {
     { id: "scale", kind: "electronic_scale", slot: "scale_1", labelVi: "Cân điện tử" },
   ],
   availableReagents: [
-    { reagentId: "NaCl_powder", shelfPosition: 1 }, { reagentId: "CuSO4_powder", shelfPosition: 2 }, { reagentId: "H2O_distilled", shelfPosition: 3 },
+    { reagentId: "NaCl_powder", shelfPosition: 1 }, { reagentId: "CuSO4_powder", shelfPosition: 2 }, { reagentId: "H2O_pour", shelfPosition: 3 },
   ],
   allowedReactions: [],
   measurements: ["scale", "volume"],
@@ -47,7 +47,7 @@ const run = (ops: Operation[], start?: Bench) => ops.reduce((current, op) => {
   return result.bench;
 }, start ?? createBench(config));
 const addPowder = (vesselId: string, reagentId: string, milligrams: number): Operation => ({ type: "add_solid_mass", vesselId, reagentId, milligrams });
-const water = (vesselId: string, microliters: number): Operation => ({ type: "add_liquid", vesselId, reagentId: "H2O_distilled", microliters });
+const water = (vesselId: string, microliters: number): Operation => ({ type: "add_liquid", vesselId, reagentId: "H2O_pour", microliters });
 const flask = (bench: Bench) => bench.vessels.V1;
 const beaker = (bench: Bench) => bench.vessels.B1;
 
@@ -69,7 +69,7 @@ describe("FL-11 config", () => {
     if (!noSolute.ok) expect(noSolute.errors).toContain("solutes: powder CuSO4_powder needs a solubility constant");
     const noSpatula = validateChemistryLabConfig({ ...config, enabledApparatus: config.enabledApparatus.filter((item) => item.kind !== "spatula") });
     expect(noSpatula.ok).toBe(false);
-    const badTarget = validateChemistryLabConfig({ ...config, targets: [{ ...(molarity as object), reagentId: "H2O_distilled" } as SolutionTarget] });
+    const badTarget = validateChemistryLabConfig({ ...config, targets: [{ ...(molarity as object), reagentId: "H2O_pour" } as SolutionTarget] });
     expect(badTarget.ok).toBe(false);
   });
 
@@ -88,7 +88,7 @@ describe("FL-11 config", () => {
 describe("FL-11 molarity: 100 mL of NaCl 0,10 M", () => {
   const prepare = (milligrams: number) => run([
     addPowder("B1", "NaCl_powder", milligrams), water("B1", 60_000), { type: "stir", vesselId: "B1" },
-    { type: "pour_all", fromVesselId: "B1", toVesselId: "V1" }, { type: "fill_to_mark", vesselId: "V1", reagentId: "H2O_distilled" },
+    { type: "pour_all", fromVesselId: "B1", toVesselId: "V1" }, { type: "fill_to_mark", vesselId: "V1", reagentId: "H2O_pour" },
   ]);
 
   it("585 mg gives exactly 0,100 M and a mass fraction of 0,6 %", () => {
@@ -112,10 +112,10 @@ describe("FL-11 molarity: 100 mL of NaCl 0,10 M", () => {
 
   it("fill_to_mark is only for the volumetric flask and only with water", () => {
     const start = run([water("B1", 10_000)]);
-    expect(applyOperation(start, { type: "fill_to_mark", vesselId: "B1", reagentId: "H2O_distilled" }, context)).toMatchObject({ status: "rejected", code: "NO_MARK" });
+    expect(applyOperation(start, { type: "fill_to_mark", vesselId: "B1", reagentId: "H2O_pour" }, context)).toMatchObject({ status: "rejected", code: "NO_MARK" });
     expect(applyOperation(start, { type: "fill_to_mark", vesselId: "V1", reagentId: "NaCl_powder" }, context)).toMatchObject({ status: "rejected", code: "WRONG_REAGENT_FORM" });
-    const full = run([{ type: "fill_to_mark", vesselId: "V1", reagentId: "H2O_distilled" }], start);
-    expect(applyOperation(full, { type: "fill_to_mark", vesselId: "V1", reagentId: "H2O_distilled" }, context)).toMatchObject({ status: "rejected", code: "VESSEL_FULL" });
+    const full = run([{ type: "fill_to_mark", vesselId: "V1", reagentId: "H2O_pour" }], start);
+    expect(applyOperation(full, { type: "fill_to_mark", vesselId: "V1", reagentId: "H2O_pour" }, context)).toMatchObject({ status: "rejected", code: "VESSEL_FULL" });
   });
 });
 
@@ -183,7 +183,7 @@ describe("FL-11 dissolving", () => {
   it("a powder needs the powder form: liquids and pieces are refused", () => {
     const bench = createBench(config);
     expect(applyOperation(bench, { type: "add_liquid", vesselId: "B1", reagentId: "NaCl_powder", microliters: 1000 }, context)).toMatchObject({ status: "rejected", code: "WRONG_REAGENT_FORM" });
-    expect(applyOperation(bench, { type: "add_solid_mass", vesselId: "B1", reagentId: "H2O_distilled", milligrams: 100 }, context)).toMatchObject({ status: "rejected", code: "WRONG_REAGENT_FORM" });
+    expect(applyOperation(bench, { type: "add_solid_mass", vesselId: "B1", reagentId: "H2O_pour", milligrams: 100 }, context)).toMatchObject({ status: "rejected", code: "WRONG_REAGENT_FORM" });
     expect(applyOperation(bench, { type: "add_solid_mass", vesselId: "B1", reagentId: "HCl_0_1M", milligrams: 100 }, context)).toMatchObject({ status: "rejected", code: "REAGENT_NOT_AVAILABLE" });
   });
 
