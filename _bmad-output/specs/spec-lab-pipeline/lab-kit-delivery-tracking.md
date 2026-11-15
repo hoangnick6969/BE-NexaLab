@@ -147,7 +147,7 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 - Q-1: dùng mặc định của spec (hai câu hỏi). Câu "một câu quan sát của lớp" chưa làm (cần quyết định riêng về dữ liệu và quyền sửa). `ranges` (khoảng giá trị) của spec C3.1 chưa làm vì FL-13 không dùng.
 - D-2: bảng khối lượng mol KHTN 8 đã được owner xác nhận (2026-11-15); không còn việc chờ.
 
-**Việc đề xuất cho INC-3, chưa duyệt.** Trang duyệt dụng cụ theo Kit cho học sinh (C2.2, tùy chọn) và lọc Lab theo Kit ở `/labs`; hình minh hoạ nhỏ cho từng dụng cụ. Nên làm sau khi FL-06 chạy, vì khi đó Kit Vật lý mới có bàn thứ hai thật.
+**Danh mục dụng cụ theo Kit ở `/labs`: đã làm** (FE nhánh `feat/kit-components-catalog`, chưa merge). Mục "Dụng cụ theo bộ Kit" dưới danh sách Lab: mỗi Kit gồm dụng cụ, dụng cụ đo, hoá chất của các bàn Explore đã phát hành, kèm hình placeholder (icon lucide theo renderer key), công dụng, cảnh báo, nhãn "Dùng chung", và link tới Lab dùng nó; admin hoặc `?debug=1` thấy thêm renderer key, item chung, bàn. Học sinh và admin thấy; giáo viên vào `/labs` bị chuyển sang `/class-labs`. Chỉ Kit có bàn Explore đã phát hành mới hiện (hiện là Kit Hóa học; Kit khác hiện khi bàn của chúng đăng ký, ví dụ FL-06). Chưa làm: ảnh thật thay icon placeholder, lọc Lab theo Kit ở `/labs`, và trang theo Kit cho giáo viên.
 
 **Lưu ý môi trường.**
 - `main` cục bộ của hai repo lệch xa origin; tạo nhánh mới từ `origin/main`.
