@@ -5,6 +5,8 @@ import { audit, type AuditActor } from "../../../common/audit";
 import { deriveWetBenchEffectiveConfig, reagentById, validateChemistryLabConfig, type ChemistryLabConfig } from "../../../../packages/sim/wet-bench";
 import { deriveLeverEffectiveConfig, LEVER_ENGINE, LEVER_KIT, validateLeverLabConfig, type LeverLabConfig } from "../../../../packages/sim/mechanics";
 import type { ExploreRequirement } from "../../../../packages/sim/explore/requirements";
+import { fl26MendelConfigSchema, type Fl26MendelConfig } from "../../../../packages/sim/mendel-config";
+import { MENDEL_VERSION } from "../../../../packages/sim/mendel-cross";
 import { activityDigest } from "./sim-packs";
 
 /** Fields every Explore bench config carries (P0 C1). */
@@ -84,8 +86,43 @@ function leverBenchSpec(config: LeverLabConfig) {
   };
 }
 
+function mendelSpec(config: Fl26MendelConfig) {
+  const prompts = config.pedagogy.observationPrompts ?? [];
+  return {
+    objective: config.outcomeSummary.join(" "),
+    outcomes: config.outcomeSummary,
+    materials: {
+      reagents: [],
+      apparatus: config.enabledApparatus.map((item) => ({ id: item.id, kind: item.kind, label: item.labelVi ?? item.kind })),
+    },
+    setup: "Bàn di truyền: vườn thực nghiệm đậu Hà Lan mô phỏng và ma trận Punnett.",
+    procedure: "Khám phá tự do: chọn cặp bố mẹ trong danh sách cho phép, quan sát ma trận Punnett và tỉ lệ đời con.",
+    observations: prompts.map((prompt) => prompt.textVi),
+    observationPrompts: prompts,
+    safety: { simulation: config.safetyBriefing.simulation, realLab: config.safetyBriefing.realLab, reagentNotes: [] },
+    limitations: config.limitations,
+    modality: "explore",
+    scored: false,
+    outcomeCodes: [],
+    sources: [{ kind: "technical_draft", status: "unverified", description: `Lai Mendel một tính trạng (${MENDEL_VERSION}); chờ reviewer sinh học duyệt và kiểm tra provenance K9.` }],
+    engine: config.engine,
+    kit: config.kit,
+    configVersion: config.configVersion,
+  };
+}
+
 /** Server bench registry (P0 C2.3): only benches listed here can be published or resolved. */
 export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
+  "k8-garden": {
+    kit: "k8-garden",
+    modelRef: `mendel-cross@${MENDEL_VERSION}`,
+    validate: (raw) => {
+      const result = fl26MendelConfigSchema.safeParse(raw);
+      if (!result.success) return { ok: false, errors: result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`) };
+      return { ok: true, config: result.data };
+    },
+    activitySpec: mendelSpec,
+  },
   "k2-wet-bench@1": {
     kit: "k2-wet-bench@1",
     modelRef: "wet-bench@1.0.0",

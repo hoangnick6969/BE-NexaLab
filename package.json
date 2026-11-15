@@ -99,7 +99,10 @@
     "predb:seed:k2-explore": "node scripts/assert-isolated-db.mjs k2-explore-seed",
     "db:seed:k2-explore": "tsx scripts/seed-k2-explore-labs.ts",
     "predb:seed:explore": "node scripts/assert-isolated-db.mjs explore-seed",
-    "db:seed:explore": "tsx scripts/seed-explore-labs.ts"
+    "db:seed:explore": "tsx scripts/seed-explore-labs.ts",
+    "predb:seed:fl26-explore": "node scripts/assert-isolated-db.mjs fl26-explore-seed",
+    "db:seed:fl26-explore": "tsx scripts/seed-explore-labs.ts --kit k8-garden",
+    "publish:fl26-explore": "tsx scripts/publish-fl26-explore.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1140.0",
