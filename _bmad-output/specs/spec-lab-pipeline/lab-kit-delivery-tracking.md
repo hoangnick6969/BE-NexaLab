@@ -81,8 +81,8 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 
 | ID | Task | Xong khi | Chờ |
 |---|---|---|---|
-| [ ] K2-2.1 | `classTemplates` trong `spec` của FL-13 (mẫu pH, allow-list 6 mẫu, chọn đúng 2, prompt theo Q-1) | Ghim cùng digest | O-0.4 |
-| [ ] K2-2.2 | Sim: `deriveWetBenchEffectiveConfig` và validator strict | Golden pass; từ chối đủ các ca ở pilot §6 | K2-2.1 |
+| [x] K2-2.1 | `classTemplates` trong `spec` của FL-13 (mẫu pH, allow-list 6 mẫu, chọn đúng 2, prompt theo Q-1) | Ghim cùng digest. **Xong, chưa phát hành** (FE nhánh `feat/k2-c-class-templates`): mẫu `ph-compare-two-samples` trong `fl-13.config.ts` (chọn đúng 2 trong 6 mẫu; câu `compare-two-samples` mới và `strong-vs-weak` chỉ với HCl + CH₃COOH); `configVersion` 2. Bản ghim v2 trên Supabase chưa đổi, owner phát hành ở K2-2.8 thì thành v3. Mẫu "1 câu quan sát của lớp" chưa làm (cần quyết định riêng). Chưa có `ranges` (khoảng giá trị): FL-13 không dùng, thêm khi có bàn cần | O-0.4 |
+| [x] K2-2.2 | Sim: `deriveWetBenchEffectiveConfig` và validator strict | Golden pass; từ chối đủ các ca ở pilot §6. **Xong** (BE nhánh `feat/k2-c-class-templates`, sim 1.10.0): `deriveWetBenchEffectiveConfig`, `validateWetBenchEffectiveConfig`, `classSelectionSchema`; 16 test sim + 1 test BE ghim mẫu vào digest. Chưa có `effectiveConfigDigest` (làm ở K2-2.3 cùng chỗ ghim) | K2-2.1 |
 | [ ] K2-2.3 | BE: nhánh `source.mode = "explore"` trong `ClassResource`, ghim theo C3.4 | Unit test pass | K2-2.2 |
 | [ ] K2-2.4 | BE: bảng bài nộp Explore (migration), idempotency, trạng thái `Đã nộp` → `Đã nhận xét` | Migration và unit test có trong PR; agent không chạy migration trên Supabase, owner áp ở K2-2.8 | K2-2.3 |
 | [ ] K2-2.5 | FE: màn giáo viên chọn mẫu, câu hỏi, xem trước, giao bài | Preview và bản giao cùng `effectiveConfigDigest` | K2-2.3 |
