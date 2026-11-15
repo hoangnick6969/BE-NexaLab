@@ -2,8 +2,9 @@ import { BadRequestException, ConflictException, UnprocessableEntityException } 
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { audit, type AuditActor } from "../../../common/audit";
-import { deriveWetBenchEffectiveConfig, reagentById, validateChemistryLabConfig, type ChemistryLabConfig, type EffectiveRequirement } from "../../../../packages/sim/wet-bench";
+import { deriveWetBenchEffectiveConfig, reagentById, validateChemistryLabConfig, type ChemistryLabConfig } from "../../../../packages/sim/wet-bench";
 import { LEVER_ENGINE, LEVER_KIT, validateLeverLabConfig, type LeverLabConfig } from "../../../../packages/sim/mechanics";
+import type { ExploreRequirement } from "../../../../packages/sim/explore/requirements";
 import { activityDigest } from "./sim-packs";
 
 /** Fields every Explore bench config carries (P0 C1). */
@@ -11,7 +12,7 @@ type ExploreConfig = { labId: string; kit: string; engine: string; title: string
 type BenchValidation = { ok: true; config: ExploreConfig } | { ok: false; errors: string[] };
 /** What a bench derives for Class Explore (P0 C3.2): the config a student works in and what they must hand in. */
 export type ClassDerivation =
-  | { ok: true; config: unknown; requirements: EffectiveRequirement[]; templateId: string; promptId: string }
+  | { ok: true; config: unknown; requirements: ExploreRequirement[]; templateId: string; promptId: string }
   | { ok: false; errors: string[] };
 type ExploreBench = {
   kit: string;

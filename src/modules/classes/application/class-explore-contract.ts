@@ -4,18 +4,21 @@
  */
 import { BadRequestException, ConflictException, UnprocessableEntityException } from "@nestjs/common";
 import { z } from "zod";
-import { classSelectionSchema } from "../../../../packages/sim/wet-bench";
+import { exploreRequirementSchema, measureInRange, type ExploreRequirement } from "../../../../packages/sim/explore/requirements";
 import { EXPLORE_BENCHES, loadPinnedExploreLab } from "../../labs/application/explore-labs";
 import { digest } from "../../labs/application/lab-run";
 
 const identifier = z.string().trim().min(1).max(100);
 const hex64 = z.string().regex(/^[0-9a-f]{64}$/);
 
-export const exploreRequirementSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("measure"), itemId: identifier, measurement: z.literal("ph_meter"), unit: z.literal("tenthsPh") }).strict(),
-  z.object({ kind: z.literal("explain") }).strict(),
-]);
-export type ExploreRequirement = z.infer<typeof exploreRequirementSchema>;
+export { exploreRequirementSchema, type ExploreRequirement };
+
+/**
+ * A teacher's selection inside one template. Each bench owns its shape and checks it in `deriveClass`; here only the
+ * template id and a size cap, so a selection pinned by any bench (FL-13's included) keeps parsing.
+ */
+export const classSelectionSchema = z.object({ templateId: identifier }).passthrough()
+  .refine((value) => JSON.stringify(value).length <= 4000, { message: "selection is too large" });
 
 /** What the teacher sends: the Lab, ids picked inside one template, and optional instructions. */
 export const exploreResourceInputSchema = z.object({
@@ -127,11 +130,27 @@ export const canResubmitExplore = (status: string, dueDate: Date | string | null
   status === "SUBMITTED" && (!dueDate || now.getTime() <= new Date(dueDate).getTime());
 
 export const EXPLORE_EXPLANATION_MAX = 2000;
+/**
+ * Answers: one integer `value` per measured item, in the requirement's unit (MEASURE_UNITS). The first Class Explore
+ * clients sent pH as `tenthsPh`; that form is still accepted and read as `value`.
+ */
+const measureAnswer = z.union([
+  z.object({ itemId: identifier, value: z.number().int() }).strict(),
+  z.object({ itemId: identifier, tenthsPh: z.number().int() }).strict().transform(({ itemId, tenthsPh }) => ({ itemId, value: tenthsPh })),
+]);
 export const exploreAnswersSchema = z.object({
-  measures: z.array(z.object({ itemId: identifier, tenthsPh: z.number().int().min(0).max(140) }).strict()).max(12).default([]),
+  measures: z.array(measureAnswer).max(12).default([]),
   explanation: z.string().trim().min(1).max(EXPLORE_EXPLANATION_MAX).optional(),
 }).strict();
 export type ExploreAnswers = z.infer<typeof exploreAnswersSchema>;
+
+/** Stored answers in today's form: rows saved before units were general carry `tenthsPh`, read here as `value`. */
+export function readStoredAnswers(stored: any): ExploreAnswers {
+  const measures = Array.isArray(stored?.measures)
+    ? stored.measures.map((item: any) => ({ itemId: item.itemId, value: item.value ?? item.tenthsPh }))
+    : [];
+  return { measures, ...(stored?.explanation ? { explanation: stored.explanation } : {}) };
+}
 
 /** The answers must be exactly what the requirements ask: one value per measured item, an explanation when asked, nothing else. */
 export function assertExploreAnswers(requirements: readonly ExploreRequirement[], answers: ExploreAnswers) {
@@ -139,6 +158,11 @@ export function assertExploreAnswers(requirements: readonly ExploreRequirement[]
   const wanted = requirements.flatMap((item) => (item.kind === "measure" ? [item.itemId] : []));
   const given = answers.measures.map((item) => item.itemId);
   for (const itemId of wanted) if (!given.includes(itemId)) details.push({ path: `measures.${itemId}`, message: "Thiếu số đo" });
+  const measures = answers.measures.map((item: any) => ({ itemId: item.itemId, value: item.value ?? item.tenthsPh }));
+  for (const answer of measures) {
+    const unit = requirements.find((item) => item.kind === "measure" && item.itemId === answer.itemId);
+    if (unit?.kind === "measure" && !measureInRange(unit.unit, answer.value)) details.push({ path: `measures.${answer.itemId}`, message: "Số đo nằm ngoài khoảng cho phép" });
+  }
   for (const itemId of new Set(given)) {
     if (!wanted.includes(itemId)) details.push({ path: `measures.${itemId}`, message: "Mẫu này không nằm trong bài" });
     if (given.filter((other) => other === itemId).length > 1) details.push({ path: `measures.${itemId}`, message: "Mỗi mẫu chỉ nộp một số đo" });

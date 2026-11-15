@@ -4,7 +4,7 @@ import { publishExploreLab } from "../../labs/application/explore-labs";
 import { AssignmentsService, assignmentInput } from "./assignments.service";
 import { ClassExploreService } from "./class-explore.service";
 import {
-  assertExploreAnswers, buildExploreResource, buildExploreSnapshot, exploreInputOf, exploreResourceContentSchema, studentExploreSnapshot, verifyExploreSnapshot,
+  assertExploreAnswers, buildExploreResource, buildExploreSnapshot, exploreInputOf, exploreResourceContentSchema, studentExploreSnapshot, verifyExploreSnapshot, exploreAnswersSchema, exploreRequirementSchema, readStoredAnswers,
 } from "./class-explore-contract";
 import { normalizeResourceContent, studentResource } from "./class-resource-contract";
 
@@ -145,6 +145,22 @@ describe("Class Explore answers", () => {
     expect(paths({ ...good, measures: [...good.measures, good.measures[0]] })).toEqual(["measures.HCl_0_1M"]);
     expect(paths({ measures: good.measures })).toEqual(["explanation"]);
   });
+  it("takes `value` in the requirement's unit and checks its range; `tenthsPh` from the first clients still counts", () => {
+    const asValue = { ...good, measures: [{ itemId: "HCl_0_1M", value: 10 }, { itemId: "NaOH_0_1M", value: 130 }] };
+    expect(paths(asValue)).toEqual([]);
+    expect(paths({ ...asValue, measures: [{ itemId: "HCl_0_1M", value: 141 }, asValue.measures[1]] })).toEqual(["measures.HCl_0_1M"]);
+    expect(exploreAnswersSchema.parse(good).measures).toEqual(asValue.measures);
+    const moments = [{ kind: "measure", itemId: "moment-left", measurement: "moment", unit: "milliNewtonMetres" }] as const;
+    expect(() => assertExploreAnswers(moments, { measures: [{ itemId: "moment-left", value: 150 }] })).not.toThrow();
+    expect(() => assertExploreAnswers(moments, { measures: [{ itemId: "moment-left", value: -1 }] })).toThrow();
+  });
+  it("reads answers saved before units were general", () => {
+    expect(readStoredAnswers({ measures: [{ itemId: "HCl_0_1M", tenthsPh: 10 }], explanation: "x" })).toEqual({ measures: [{ itemId: "HCl_0_1M", value: 10 }], explanation: "x" });
+  });
+  it("accepts a requirement only when its unit matches the measurement", () => {
+    expect(exploreRequirementSchema.safeParse({ kind: "measure", itemId: "m", measurement: "moment", unit: "milliNewtonMetres" }).success).toBe(true);
+    expect(exploreRequirementSchema.safeParse({ kind: "measure", itemId: "m", measurement: "moment", unit: "tenthsPh" }).success).toBe(false);
+  });
   it("refuses an explanation when none was asked", () => {
     expect(() => assertExploreAnswers(requirements.slice(0, 2), good)).toThrow(expect.objectContaining({ response: expect.objectContaining({ code: "EXPLORE_ANSWER_INVALID" }) }));
   });
@@ -192,7 +208,7 @@ describe("ClassExploreService (C3.4)", () => {
   it("saves a submission in requirement order, and a retry with the same answers returns it instead of a second row", async () => {
     const { service, stored } = await setup();
     const first = await service.submit("a1", student(), answers);
-    expect(first).toMatchObject({ replayed: false, resubmitted: false, submission: { status: "SUBMITTED", late: false, canResubmit: true, answers: { measures: [{ itemId: "HCl_0_1M", tenthsPh: 10 }, { itemId: "NaOH_0_1M", tenthsPh: 130 }] } } });
+    expect(first).toMatchObject({ replayed: false, resubmitted: false, submission: { status: "SUBMITTED", late: false, canResubmit: true, answers: { measures: [{ itemId: "HCl_0_1M", value: 10 }, { itemId: "NaOH_0_1M", value: 130 }] } } });
     const retry = await service.submit("a1", student(), { ...answers, measures: [...answers.measures].reverse() });
     expect(retry).toMatchObject({ replayed: true, submission: { id: first.submission.id } });
     expect(stored).toHaveLength(1);
