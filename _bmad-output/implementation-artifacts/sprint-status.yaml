@@ -908,6 +908,15 @@ story_notes:
     evidence: 'Source reading of BE main, FE main and BE origin/codex/foundational-lab-platform (P3.1 spec + pinning fix, unmerged). Vitest BE main sim/labs/foundational 37/37; fl branch 40 passed, labs-pinning.integration skipped without a database. DB snapshot and Content Tool proposal not verified.'
     catalog: 'spec-lab-pipeline/lab-catalog-and-shared-kits-khtn8-9.md proposes 30 Foundational Lab candidates mapped from a read-only export of 157 KHTN 8 and 102 canonical KHTN 9 outcomes (KHTN 8 98/157 and KHTN 9 68/102 Lab-touched); all outcomes remain PROPOSED_UNAPPROVED; register defects listed for P3.3.'
     remaining: 'DEFINE exit list in spec-lab-pipeline/lab-pipeline-phase-plan.md: ADR-LAB-01 acceptance, contract v1 fixtures, corrected P3.1 docs, merge decision for the fl branch, product decisions P-1/P-2 and technical T-1..T-4. No reviewer, approval or Lab release exists.'
+  lab-space-shared-ui:
+    status: in-progress
+    date: '2026-11-15'
+    branch: 'FE feat/lab-space-shared-ui and BE feat/lab-space-shared-ui (both from main), uncommitted'
+    artifact: ../specs/spec-lab-pipeline/lab-space-shared-ui-refactor-direction.md
+    parent: ../specs/spec-lab-pipeline/lab-space-shared-ui-spec.md
+    done: 'Steps 1-4 and 6. Layout A chosen by the user 2026-11-15 for every Lab: header (exit, title, 3D/2D, reset) top left, scene full screen, question panel on the right with the run result, explanation, hints and teacher prompts as its last sections, actions dock bottom left, scene notes under the header. Shared LabQuestionPanel/ChoiceGroup/StationTabs/revealInPanel, LabHeaderSlot, LabSpace tools/result props, LabRendererToggle owns its CSS (44px). On the panel: FL-21, FL-20, FL-25, FL-10, FL-06, FL-07, density and buoyancy (K3Hud), gene (K7Hud), eye-optics, circuit bulb, legacy circuit. Scenes full-bleed (FL-06, FL-07, gene 2D). Spacing rhythm 12/8 px.'
+    evidence: 'FE lint 0 errors, build OK, test:regression 64/64. Playwright lab suite (26 files): every failure is either in the clean-main baseline (lab-run-host 60/78, lesson-lab-navigation 89/133, FL-25 180/181, circuit-lab copy mismatch "Máy chủ bận") or a load-timing flake that passes when run alone (FL-20 177, FL-25 293/294, buoyancy, gene, K3 preview). lab-run-host 234x2 (baseline failures) now pass. Tests updated to layout A: result in panel, header toggle, bulb radios, class-section bulb.'
+    remaining: 'FL-13 Explore keeps ObservationDrawer (same right zone, own style) and the legacy chemistry Lab is not on the panel. Explore has no Class Lab data flow yet. Team review before commit.'
   project-structure-refactor:
     status: done
     audited_against_code: '2026-10-17'
