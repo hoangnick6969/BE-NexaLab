@@ -57,7 +57,7 @@ Spec này chốt lát cắt Explore đầu tiên của bàn cơ. Lát cắt dùn
 | `fl06-lever.data.ts` | Config đóng gói của FL-06 Explore |
 | `fl06-lever.golden.test.ts`, `validate-config.test.ts` | Golden và ca lỗi (§3.3) |
 
-`lever-bench.ts` **không đổi**. Guided và Explore cùng gọi `evaluateLeverBench`, nên `modelVersion` vẫn là `"1.0.0"`. Thêm thư mục mới nên phải bump `@nexalab/sim` và đồng bộ tarball sang FE. Bản thực tế là **1.10.0**: K2 đã dùng 1.9.0 cho khối lượng mol (K2-1.6), bàn cơ thêm `mechanics/` lên trên.
+`lever-bench.ts` **không đổi**. Guided và Explore cùng gọi `evaluateLeverBench`, nên `modelVersion` vẫn là `"1.0.0"`. Thêm thư mục mới nên phải bump `@nexalab/sim` và đồng bộ tarball sang FE. Bản thực tế là **1.11.0**: K2 đã dùng 1.9.0 (khối lượng mol, K2-1.6) và 1.10.0 (class template FL-13), bàn cơ thêm `mechanics/` lên trên.
 
 ### 3.1 Schema `k5-lever-config/1`
 
@@ -231,14 +231,14 @@ Owner duyệt ngày 2026-11-15, chấp nhận cả bốn đề xuất.
 
 | Task | Việc | File chính |
 |---|---|---|
-| D1-1.2 | Schema, validator, config FL-06, golden; bump sim 1.10.0 | `packages/sim/mechanics/*`, `packages/sim/package.json` |
+| D1-1.2 | Schema, validator, config FL-06, golden; bump sim 1.11.0 | `packages/sim/mechanics/*`, `packages/sim/package.json` |
 | D1-1.3 | `EXPLORE_BENCHES` + `leverBenchSpec`; registry FE, `LeverExploreLabPage`, `listLeverKitItems`, `K5Toolbox`, dev preview | `explore-labs.ts`; FE `explore-registry.ts`, `physics/mechanics/explore/*`, `kit/K5Toolbox.tsx`, `App.tsx` |
 | D1-1.4 | `LeverLogEntry`, `describeLeverChange`, panel nhật ký, export | `physics/mechanics/explore/lever-log.ts` |
 | D1-1.5 | Playwright §9 và hồi quy Guided | `tests/lever-explore.spec.ts`, `tests/fl-06-k5.spec.ts` |
 
 ## 13. Ghi chú triển khai (2026-11-15)
 
-- Sim 1.10.0 (sau khi gộp 1.9.0 khối lượng mol của K2): `packages/sim/mechanics/` như §3; config đóng gói có thêm `contextLabel` và một câu ghi chú ở `review.notes`.
+- Sim 1.11.0 (sau khi gộp 1.9.0 và 1.10.0 của K2): `packages/sim/mechanics/` như §3; config đóng gói có thêm `contextLabel` và một câu ghi chú ở `review.notes`.
 - FE: nhật ký nằm trong ngăn kéo mở từ dock dưới trái; trên phone ngăn kéo thay chỗ panel khi mở. Dòng trạng thái thanh nằm dưới header. Câu trả lời `free_text` lưu cục bộ theo khóa nhật ký, không vào file export.
 - FE unit test `lever-explore.test.ts` tự dựng config vì `tsx` không đọc được tên export của gói sim (lỗi có sẵn, `kit-items.test.ts` cũng gặp). Tính hợp lệ của config đóng gói do golden sim kiểm.
 - Playwright dùng Lab ID fixture `lever-explore-fixture`, cùng giá trị với config đóng gói.
