@@ -125,3 +125,29 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 | [ ] D1-3.3 | Dev 1 | Công bố FL-06 Explore cho học sinh | O-3.1 |
 | [ ] D2-3.1 | Dev 2 | FL-20, FL-21 (sinh thái), FL-27 (phân tử) Explore | O-3.1 |
 | [ ] D2-3.2 | Dev 2 | Studio FL-16 (giải phẫu, Kit Bổ trợ) | O-3.1 |
+
+
+## Ghi chú bàn giao (2026-11-15, cuối phiên làm INC-2 lane K2)
+
+**Trạng thái.** K2-2.1 → K2-2.7 xong và đã push. BE: nhánh `feat/k2-c-class-templates` (`2c75e03`). FE: cùng tên nhánh (`e4aa02a`, `d243855`, `7ea2589`). Sim 1.10.0 và mẫu FL-13 đã nằm trên `main`. Mô tả PR soạn sẵn cho BE và FE (INC-2). Lane Dev 1 (bước B) và Dev 2 (FL-26) là của hai dev kia, chưa được kiểm ở đây.
+
+**Còn lại cho K2-2.8 (owner, ghi lên Supabase dùng chung).**
+1. Hai migration đã áp trên Supabase (kiểm chỉ-SELECT: cột `Assignment.exploreSnapshot`, bảng `ClassExploreSubmission` với 4 index và 2 FK, giá trị enum `EXPLORE_LAB` đều có). **Nhưng `_prisma_migrations` chưa có dòng cho cả hai** (áp bằng tay). Cần đánh dấu đã áp, nếu không lần `migrate deploy` sau sẽ cố áp lại và lỗi ở `ADD COLUMN`: `prisma migrate resolve --applied 20261115120000_class_explore_kind` rồi `... 20261115120100_class_explore_submission`.
+2. Merge PR BE và FE, deploy cùng lúc.
+3. Phát hành FL-13 có mẫu (v3) qua `POST /admin/labs/:id/explore-versions`. Tới lúc đó nút "Giao bài Explore" báo chưa có Lab có mẫu. Lưu ý `scripts/k2-explore-targets.ts` tìm config ở `../../FE-NexaLab`; thư mục FE trên máy này tên `nexalab-fe`.
+4. Kiểm chỉ-SELECT sau phát hành: `PracticalActivityVersion` v3 có `spec.explore.classTemplates`; resolver `ok: true`; 0 `LabRun`/`Attempt`/`Progress` trên Lab Explore.
+5. Chạy thử một vòng với server thật (chưa từng chạy; toàn bộ Playwright dùng API mock): giáo viên giao, học sinh nộp, giáo viên nhận xét.
+
+**Quyết định đã tự đặt, cần owner xác nhận hoặc đổi.**
+- Một bài nộp cho mỗi học sinh và bài giao (spec ghi unique theo cả idempotency key). Nộp lại cùng đáp án trả bài đã lưu, khác đáp án thì 409.
+- Bài nộp sau hạn vẫn nhận, chưa đánh dấu trễ. Chỉ giao cả lớp, chưa chọn nhóm.
+- Q-1: dùng mặc định của spec (hai câu hỏi). Câu "một câu quan sát của lớp" chưa làm (cần quyết định riêng về dữ liệu và quyền sửa). `ranges` (khoảng giá trị) của spec C3.1 chưa làm vì FL-13 không dùng.
+- D-2: bảng khối lượng mol KHTN 8 chưa đối chiếu từng trang sách (spec mới xác nhận Fe = 56, CaCO₃ = 100).
+
+**Việc đề xuất cho INC-3, chưa duyệt.** Trang duyệt dụng cụ theo Kit cho học sinh (C2.2, tùy chọn) và lọc Lab theo Kit ở `/labs`; hình minh hoạ nhỏ cho từng dụng cụ. Nên làm sau khi FL-06 chạy, vì khi đó Kit Vật lý mới có bàn thứ hai thật.
+
+**Lưu ý môi trường.**
+- `main` cục bộ của hai repo lệch xa origin; tạo nhánh mới từ `origin/main`.
+- Không chạy `git stash` trần (kho stash dùng chung giữa các worktree/phiên). Dev server cũ của Vite có thể giữ module cũ sau khi sửa file; xoá `node_modules/.vite` rồi chạy lại.
+- Fail sẵn, không liên quan: 2 ca của `tests/lab-run-host.spec.ts` (FE), và `.local/browser-fixture.test.ts` (BE, cần DB cô lập).
+- Máy này không có GitHub CLI (`gh`); khung trình duyệt của app chưa đăng nhập GitHub, nên PR được tạo thủ công.
