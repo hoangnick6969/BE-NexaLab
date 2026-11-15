@@ -50,7 +50,7 @@ Quy tắc chung cho mọi task:
 | [x] K2-1.3 | Mở rộng `listKitItems`: mỗi item trỏ tới renderer, cảnh báo lấy từ `reagents.ts` | Unit test `kit-items` pass. **Xong** (FE `96b9bb1`): `KitItem` có `rendererKey` và `sharedItemId`; cảnh báo vẫn lấy từ `reagents.ts`. | K2-1.2 |
 | [x] K2-1.4 | Panel "Dụng cụ và thành phần" cố định trong bàn, đọc `listKitItems` | Panel hiện đúng item của config đã ghim. **Đã có** `shared/LabKitItemsPanel.tsx` dùng chung mọi bàn, đọc `listKitItems` hiện tại (tên, công dụng, cảnh báo); Playwright `kit-items-panel.spec.ts` khớp danh sách màn giới thiệu trên FL-13/14a/10 (FE `7998d9d`). Panel chỉ hiện chữ (tên, công dụng, cảnh báo); spec không yêu cầu hình, nên coi là xong | K2-1.3 |
 | [x] K2-1.5 | Nghiệm thu A: so baseline K2-0.1 (pH FL-13, cốc/cân FL-10 Explore, dụng cụ FL-14a) | Ảnh và số đo trước/sau khớp, Playwright pass. **Xong**: baseline K2-0.1 khớp (danh sách, pH, số cân, ảnh 3 bàn); 23 Playwright, 8 unit test, lint và build pass. | K2-1.4, K2-0.1 |
-| [x] K2-1.6 | **Bước K** (song song với K2-1.1→1.5): sửa `species.ts` theo D-2, cập nhật golden và `engine.test.ts`, giữ `mass-conservation@1.0.0`, bump sim, đồng bộ tarball | Golden pass; nghiệm thu K theo nhánh D-2. **Xong** (BE `14fa2d2` nhánh `feat/k-wet-bench-molar-mass`; FE `chore` sync tarball 1.9.0): theo mặc định của D-2 là quy ước KHTN 8, 13/22 chất đổi sang khối lượng nguyên (Fe 56, Cu 64, Zn 65, Ba 137, Cl 35,5), bàn ướt khớp `mass-conservation@1.0.0` (BaCl₂ và BaSO₄ trước lệch 0,3–0,4); test mới kiểm đủ 22 chất. **Còn chờ owner**: đối chiếu cả bảng với sách (spec D-2 chỉ xác nhận Fe = 56, CaCO₃ = 100) | O-0.3 |
+| [x] K2-1.6 | **Bước K** (song song với K2-1.1→1.5): sửa `species.ts` theo D-2, cập nhật golden và `engine.test.ts`, giữ `mass-conservation@1.0.0`, bump sim, đồng bộ tarball | Golden pass; nghiệm thu K theo nhánh D-2. **Xong** (BE `14fa2d2` nhánh `feat/k-wet-bench-molar-mass`; FE `chore` sync tarball 1.9.0): theo mặc định của D-2 là quy ước KHTN 8, 13/22 chất đổi sang khối lượng nguyên (Fe 56, Cu 64, Zn 65, Ba 137, Cl 35,5), bàn ướt khớp `mass-conservation@1.0.0` (BaCl₂ và BaSO₄ trước lệch 0,3–0,4); test mới kiểm đủ 22 chất. **Owner đã xác nhận bảng (2026-11-15)** | O-0.3 |
 
 ### Dev 1: FL-06 Explore trên dev/fixture
 
@@ -139,10 +139,12 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 5. Chạy thử một vòng với server thật (chưa từng chạy; toàn bộ Playwright dùng API mock): giáo viên giao, học sinh nộp, giáo viên nhận xét.
 
 **Quyết định đã tự đặt, cần owner xác nhận hoặc đổi.**
-- Một bài nộp cho mỗi học sinh và bài giao (spec ghi unique theo cả idempotency key). Nộp lại cùng đáp án trả bài đã lưu, khác đáp án thì 409.
-- Bài nộp sau hạn vẫn nhận, chưa đánh dấu trễ. Chỉ giao cả lớp, chưa chọn nhóm.
+- Chỉ áp dụng cho **Class Explore** (bài giáo viên giao), không áp dụng cho Foundational Explore mở tự do.
+- Một bài nộp cho mỗi học sinh và bài giao (spec C3.4 ghi unique theo cả idempotency key; "retry trả bài đã lưu"). Nộp lại cùng đáp án trả bài đã lưu, khác đáp án thì 409. Contract không nói rõ nộp lại khác đáp án: **cần owner quyết** (cho sửa và nộp lại, hay một lần).
+- Bài nộp sau hạn vẫn nhận, chưa đánh dấu trễ: contract không quy định, **cần owner quyết** (chặn, đánh dấu trễ, hay nhận).
+- Giao nhóm: contract C3.4 và BE đã hỗ trợ (`Assignment.targets`); **form giáo viên FE còn cố định "cả lớp"**: việc còn thiếu, không phải quyết định (task nhỏ, chỉ FE).
 - Q-1: dùng mặc định của spec (hai câu hỏi). Câu "một câu quan sát của lớp" chưa làm (cần quyết định riêng về dữ liệu và quyền sửa). `ranges` (khoảng giá trị) của spec C3.1 chưa làm vì FL-13 không dùng.
-- D-2: bảng khối lượng mol KHTN 8 chưa đối chiếu từng trang sách (spec mới xác nhận Fe = 56, CaCO₃ = 100).
+- D-2: bảng khối lượng mol KHTN 8 đã được owner xác nhận (2026-11-15); không còn việc chờ.
 
 **Việc đề xuất cho INC-3, chưa duyệt.** Trang duyệt dụng cụ theo Kit cho học sinh (C2.2, tùy chọn) và lọc Lab theo Kit ở `/labs`; hình minh hoạ nhỏ cho từng dụng cụ. Nên làm sau khi FL-06 chạy, vì khi đó Kit Vật lý mới có bàn thứ hai thật.
 
