@@ -32,7 +32,7 @@ Quy tắc chung cho mọi task:
 | [ ] O-0.3 | Owner | Chốt **D-2**: bảng khối lượng mol KHTN 8, ghi sách và trang | Bảng ghi trong spec pilot | — |
 | [ ] O-0.4 | Owner | Chốt **Q-1**: prompt cho mẫu pH FL-13 | Phương án ghi trong spec pilot §3 | — |
 | [ ] O-0.5 | Owner | Xác nhận số track Lab đồng thời từ INC-2 (phase plan giới hạn 2) | Ghi quyết định vào phân công §3 | — |
-| [ ] K2-0.1 | K2 | Chụp baseline ảnh và số đo: FL-13 (pH), FL-14a (dụng cụ), FL-10 Explore route dev (cốc, cân) | Ảnh và số đo lưu trong repo test | — |
+| [x] K2-0.1 | K2 | Chụp baseline ảnh và số đo: FL-13 (pH), FL-14a (dụng cụ), FL-10 Explore route dev (cốc, cân) | FE `tests/k2-baseline.spec.ts` và snapshot: danh sách dụng cụ, pH 6 hoá chất FL-13, số cân FL-10 (120,00 g → 120,05 g sau HCl), ảnh 3 bàn. FE `1b30091` | — |
 | [ ] D1-0.1 | Dev 1 | Chụp baseline ảnh và số đo: FL-03, FL-05, FL-10 Guided | Ảnh và số đo lưu trong repo test | — |
 | [ ] D2-0.1 | Dev 2 | Chốt nguồn K9, phạm vi FL-26 (phép lai một tính trạng, bảng Punnett), ca kiểm thử | Ghi vào spec áp dụng FL-26 (D2-1.1) | — |
 
@@ -48,7 +48,7 @@ Quy tắc chung cho mọi task:
 | [ ] K2-1.1 | PR riêng: thêm **cốc** và **cân** vào `shared/items/` (lấy từ `apparatus3d.tsx`), có anchor `mouth`, `inside`, `base`, `pan`. Kích thước, mức chất lỏng, số đọc truyền qua props | Bàn ướt Explore render cốc/cân từ thư viện | — |
 | [ ] K2-1.2 | Registry renderer theo `ApparatusKind`, bỏ if/else chọn mesh ở `WetBenchKitStage.tsx` | Không còn chuỗi if/else chọn mesh | K2-1.1 |
 | [ ] K2-1.3 | Mở rộng `listKitItems`: mỗi item trỏ tới renderer, cảnh báo lấy từ `reagents.ts` | Unit test `kit-items` pass | K2-1.2 |
-| [ ] K2-1.4 | Panel "Dụng cụ và thành phần" cố định trong bàn, đọc `listKitItems` (xem lại `LabKitPanel` trên nhánh `backup/bug-resolve-2026-11-15`) | Panel hiện đúng item của config đã ghim | K2-1.3 |
+| [~] K2-1.4 | Panel "Dụng cụ và thành phần" cố định trong bàn, đọc `listKitItems` | Panel hiện đúng item của config đã ghim. **Đã có** `shared/LabKitItemsPanel.tsx` dùng chung mọi bàn, đọc `listKitItems` hiện tại (tên, công dụng, cảnh báo); Playwright `kit-items-panel.spec.ts` khớp danh sách màn giới thiệu trên FL-13/14a/10 (FE `7998d9d`). **Còn**: hiện renderer/hình item sau K2-1.3 | K2-1.3 |
 | [ ] K2-1.5 | Nghiệm thu A: so baseline K2-0.1 (pH FL-13, cốc/cân FL-10 Explore, dụng cụ FL-14a) | Ảnh và số đo trước/sau khớp, Playwright pass | K2-1.4, K2-0.1 |
 | [ ] K2-1.6 | **Bước K** (song song với K2-1.1→1.5): sửa `species.ts` theo D-2, cập nhật golden và `engine.test.ts`, giữ `mass-conservation@1.0.0`, bump sim, đồng bộ tarball | Golden pass; nghiệm thu K theo nhánh D-2 | O-0.3 |
 
