@@ -144,11 +144,12 @@ dụng cụ riêng của kit vào đó; kit tự đặt dụng cụ trong Stage 
 **DB seed (BẮT BUỘC):**
 - Script idempotent `BE-NexaLab/scripts/seed-<kit>-explore-labs.ts` + npm script `db:seed:<kit>-explore`,
   hỗ trợ `--dry-run` và `--unpublish`. Tham chiếu: `scripts/seed-k2-explore-labs.ts`.
-- Upsert `Lab` (id = `labId`) với `config = { mode: "explore", kit, engine, rendererKey: "<kit>-explore", explore: <config> }`.
+- Mọi lần ghi đi qua `publishExploreLab` (`src/modules/labs/application/explore-labs.ts`): upsert `Lab` (id = `labId`) với
+  `config = { mode: "explore", kit, engine, activity: { id, key, version, digest } }`; config đầy đủ của bàn nằm ở `spec.explore` của version.
 - Tạo `PracticalActivityVersion` `<labId>-explore` v1 (bất biến, chỉ tạo version mới khi nội dung đổi) với
   `modality: "explore"`, `scored: false`, nguồn `technical_draft` + `status: "unverified"` cho tới khi có reviewer.
-- Ghi vào DB không phải loopback phải có biến môi trường phê duyệt riêng (mẫu K2:
-  `K2_EXPLORE_SHARED_WRITE_APPROVED`). Không tự ý ghi lên DB dùng chung khi chưa có phê duyệt của chủ dự án.
+- Seed chỉ chạy trên DB cô lập (`assertIsolatedDatabase()`, cả `--unpublish`). Phát hành lên DB dùng chung qua
+  `POST /admin/labs/:id/explore-versions` (ADMIN), mẫu K2: `scripts/publish-k2-explore.ts`.
 - FE: `resolveExploreConfig(labId, labRow)` ưu tiên `Lab.config.explore` nếu hợp lệ và đúng `labId`, nếu không
   dùng config đóng gói sẵn.
 

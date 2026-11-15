@@ -1,8 +1,8 @@
 import "dotenv/config";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const mode = process.argv[2] ?? "database command";
-
-function parse(name, value) {
+function parse(mode, name, value) {
   if (!value) throw new Error(`${name} is required for ${mode}. Set NEXALAB_ISOLATED_DATABASE_URL to an isolated local PostgreSQL target.`);
   let url;
   try {
@@ -18,18 +18,27 @@ function parse(name, value) {
   return { host, port: url.port || "5432", database };
 }
 
-try {
-  const target = parse("NEXALAB_ISOLATED_DATABASE_URL", process.env.NEXALAB_ISOLATED_DATABASE_URL);
+/** Throws unless DATABASE_URL/DIRECT_URL (when set) match NEXALAB_ISOLATED_DATABASE_URL on host, port and database. */
+export function assertIsolatedDatabase(mode = "database command") {
+  const target = parse(mode, "NEXALAB_ISOLATED_DATABASE_URL", process.env.NEXALAB_ISOLATED_DATABASE_URL);
   for (const name of ["DATABASE_URL", "DIRECT_URL", "NEXALAB_PINNING_TEST_URL"]) {
     const value = process.env[name];
     if (!value) continue;
-    const configured = parse(name, value);
+    const configured = parse(mode, name, value);
     if (configured.host !== target.host || configured.port !== target.port || configured.database !== target.database) {
       throw new Error(`${name} does not match NEXALAB_ISOLATED_DATABASE_URL; refusing ${mode}.`);
     }
   }
-  console.log(`Isolated database guard passed for ${mode} (${target.host}:${target.port}/${target.database}).`);
-} catch (error) {
-  console.error(`Database safety guard: ${error instanceof Error ? error.message : "invalid database target"}`);
-  process.exitCode = 1;
+  return target;
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const mode = process.argv[2] ?? "database command";
+  try {
+    const target = assertIsolatedDatabase(mode);
+    console.log(`Isolated database guard passed for ${mode} (${target.host}:${target.port}/${target.database}).`);
+  } catch (error) {
+    console.error(`Database safety guard: ${error instanceof Error ? error.message : "invalid database target"}`);
+    process.exitCode = 1;
+  }
 }
