@@ -3,7 +3,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { audit, type AuditActor } from "../../../common/audit";
 import { deriveWetBenchEffectiveConfig, reagentById, validateChemistryLabConfig, type ChemistryLabConfig } from "../../../../packages/sim/wet-bench";
-import { LEVER_ENGINE, LEVER_KIT, validateLeverLabConfig, type LeverLabConfig } from "../../../../packages/sim/mechanics";
+import { deriveLeverEffectiveConfig, LEVER_ENGINE, LEVER_KIT, validateLeverLabConfig, type LeverLabConfig } from "../../../../packages/sim/mechanics";
 import type { ExploreRequirement } from "../../../../packages/sim/explore/requirements";
 import { activityDigest } from "./sim-packs";
 
@@ -108,6 +108,10 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
     validate: (raw) => {
       const result = validateLeverLabConfig(raw);
       return result.ok ? { ok: true, config: result.config } : { ok: false, errors: result.errors };
+    },
+    deriveClass: (config, selection) => {
+      const checked = validateLeverLabConfig(config);
+      return checked.ok ? deriveLeverEffectiveConfig(checked.config, selection) : { ok: false, errors: checked.errors };
     },
     activitySpec: leverBenchSpec,
   },

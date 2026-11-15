@@ -8,6 +8,31 @@ export type LeverConfigValidation =
 
 const duplicates = <T>(values: readonly T[]) => values.filter((value, index) => values.indexOf(value) !== index);
 
+/** Template rules that need the rest of the config: prompts exist, loads fit the model and the weight list, weight sets are allowed. */
+export function checkLeverClassTemplates(config: LeverLabConfig): string[] {
+  const errors: string[] = [];
+  const prompts = new Set((config.pedagogy.observationPrompts ?? []).map((prompt) => prompt.id));
+  const templateIds = new Set<string>();
+  for (const template of config.classTemplates ?? []) {
+    const at = `classTemplates.${template.id}`;
+    if (templateIds.has(template.id)) errors.push(`${at}: duplicate template id`);
+    templateIds.add(template.id);
+    for (const choice of template.promptChoices) if (!prompts.has(choice.promptId)) errors.push(`${at}: prompt ${choice.promptId} is not in pedagogy.observationPrompts`);
+    for (const [index, set] of template.weightOptions.entries())
+      for (const force of set) if (!config.weights.availableMilliNewtons.includes(force)) errors.push(`${at}.weightOptions.${index}: ${force} mN is not in weights.availableMilliNewtons`);
+    const presetIds = new Set<string>();
+    for (const preset of template.loadPresets) {
+      if (presetIds.has(preset.id)) errors.push(`${at}: duplicate load preset ${preset.id}`);
+      presetIds.add(preset.id);
+      if (preset.attachments.some((item) => item.kind !== "WEIGHT")) errors.push(`${at}.${preset.id}: a starting load is made of weights only`);
+      if (!evaluateLeverBench({ fixtureId: config.fixtureId, attachments: preset.attachments }).ok) errors.push(`${at}.${preset.id}: the load does not fit the lever model`);
+      if (preset.attachments.filter((item) => item.kind === "WEIGHT").length > config.weights.maxCount) errors.push(`${at}.${preset.id}: more weights than weights.maxCount`);
+    }
+    if (template.gauge !== "off" && !config.enabledApparatus.some((item) => item.kind === "spring_gauge")) errors.push(`${at}: the gauge can be on but the config has no spring_gauge`);
+  }
+  return errors;
+}
+
 export function validateLeverLabConfig(raw: unknown): LeverConfigValidation {
   const parsed = leverLabConfigSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, errors: parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`), warnings: [] };
@@ -29,11 +54,14 @@ export function validateLeverLabConfig(raw: unknown): LeverConfigValidation {
 
   const attachments = config.initialAttachments;
   const weights = attachments.filter((item) => item.kind === "WEIGHT");
-  for (const item of weights) if (!available.includes(item.forceMilliNewtons)) errors.push(`initialAttachments: weight ${item.forceMilliNewtons} mN is not in weights.availableMilliNewtons`);
+  // A locked load (Class Explore) is part of the bench, not taken from the student's weight set.
+  if (!config.lockInitialAttachments) for (const item of weights) if (!available.includes(item.forceMilliNewtons)) errors.push(`initialAttachments: weight ${item.forceMilliNewtons} mN is not in weights.availableMilliNewtons`);
   if (weights.length > config.weights.maxCount) errors.push("initialAttachments: more weights than weights.maxCount");
   if (attachments.some((item) => item.kind === "GAUGE") && count("spring_gauge") === 0) errors.push("initialAttachments: a GAUGE needs an enabled spring_gauge");
   const model = evaluateLeverBench({ fixtureId: config.fixtureId, attachments });
   if (!model.ok) errors.push(`initialAttachments: ${model.code}`);
+
+  errors.push(...checkLeverClassTemplates(config));
 
   if (config.modes.guided) errors.push("modes.guided: the mechanics bench config is Explore-only (two-mode Labs wait for D-5)");
   if (config.review.status === "draft") warnings.push("review.status: draft (model constants are technical assumptions, not textbook data)");

@@ -114,3 +114,9 @@ selection = { templateId, loadPresetId, weightOptionIndex, gauge?: boolean, mome
 | Q-3 | Đơn vị moment học sinh nhập? | N·m, 3 chữ số thập phân (khớp bảng moment trên bàn), lưu số nguyên mN·m |
 | Q-4 | Làm D1-3.1 trước khi chốt D-5, chấp nhận chưa dùng được với lớp thật? | Có. Code và test sẵn, D1-3.3 chỉ còn phát hành |
 | Q-5 | Giáo viên tắt được bảng moment? | Có (spec FL-06 Q-1 đã ghi "giáo viên tắt được qua C3") |
+
+## 9. Ghi chú triển khai (2026-11-16)
+
+- **PR A** (`feat/class-explore-units`, sim 1.14.0): `packages/sim/explore/requirements.ts` (bảng đơn vị, `exploreRequirementSchema` dùng chung, `measureInRange`). BE: `classSelectionSchema` chỉ kiểm `templateId` và kích thước; bài nộp `{ itemId, value }`, nhận `tenthsPh` cũ; `readStoredAnswers` đọc bài đã lưu; bảng giáo viên trả thêm `effectiveConfig` để đặt tên mục. FE: `measureText`, `formatMeasure`, `parseMeasureInput` trong `class-explore.ts`; registry có `ClassTemplateForm` và `classItemLabels`; form chọn hoá chất chuyển nguyên vào `WetBenchClassTemplateForm`. Thay đổi hiển thị duy nhất của FL-13: trang chi tiết bài giao liệt kê từng số đo ("Số đo pH của …") thay cho câu chung "Đo pH của hai mẫu…".
+- **PR B** (`feat/dev1-fl06-class-explore`, sim 1.15.0): `mechanics/class-template.ts` (`deriveLeverEffectiveConfig`, `validateLeverEffectiveConfig`, `findLeverBalance` thử tối đa 4 quả thêm và lực kế bước 0,1 N); schema mẫu trong `contracts.ts`; `lockInitialAttachments` (validator bỏ luật "quả nặng ban đầu thuộc bộ" khi tải bị khoá). FL-06 `configVersion` 2 thêm câu `explain-balance` và mẫu `balance-the-lever`. FE: `LeverClassTemplateForm`, `LeverClassExplorePage`, `K5Toolbox` có `locked`, nhật ký ẩn moment khi tắt bảng moment.
+- Golden CT-03: 16 tổ hợp tải × bộ quả nặng × lực kế, chỉ "0,5 N ở −250 mm, chỉ quả 1 N, tắt lực kế" bị từ chối.

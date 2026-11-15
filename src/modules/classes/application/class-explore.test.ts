@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { exploreConfig } from "../../labs/interface/explore-lab.fixture";
+import { FL06_LEVER_EXPLORE_CONFIG } from "../../../../packages/sim/mechanics";
 import { publishExploreLab } from "../../labs/application/explore-labs";
 import { AssignmentsService, assignmentInput } from "./assignments.service";
 import { ClassExploreService } from "./class-explore.service";
@@ -23,7 +24,7 @@ const withTemplate = () => ({
 const selection = { templateId: "ph-two", reagents: { samples: ["NaOH_0_1M", "HCl_0_1M"] }, promptId: "p1" };
 
 /** Publish through the real write path, then expose what the Lab and version rows look like to the read helpers. */
-async function world(config: unknown = withTemplate()) {
+async function world(config: unknown = withTemplate(), labId = "acid-base-indicators") {
   const versions: any[] = [];
   const tx: any = {
     $executeRawUnsafe: vi.fn(),
@@ -39,7 +40,7 @@ async function world(config: unknown = withTemplate()) {
   await publishExploreLab({ $transaction: (work: any) => work(tx) } as any, { config, topicCode: "KHTN8-L09", actor: { sub: "admin", role: "ADMIN" }, reason: "test" });
   let labConfig = tx.lab.upsert.mock.calls[0][0].update.config;
   const read: any = {
-    lab: { findFirst: vi.fn(async ({ where }: any) => (where.id === "acid-base-indicators" ? { id: where.id, title: "FL-13", grade: 8, config: labConfig } : null)), findUnique: vi.fn(async () => ({ grade: 8 })) },
+    lab: { findFirst: vi.fn(async ({ where }: any) => (where.id === labId ? { id: where.id, title: "FL-13", grade: 8, config: labConfig } : null)), findUnique: vi.fn(async () => ({ grade: 8 })) },
     practicalActivityVersion: { findMany: vi.fn(async ({ where }: any) => versions.filter((v) => where.id.in.includes(v.id))) },
   };
   return { read, versions, repoint: (next: any) => { labConfig = next; } };
@@ -127,6 +128,32 @@ describe("Class Explore snapshot (C3.4)", () => {
     const config = (await read.lab.findFirst({ where: { id: "acid-base-indicators" } })).config;
     repoint({ ...config, activity: { ...config.activity, id: "pav-2", version: 2, digest: "f".repeat(64) } });
     await expect(buildExploreSnapshot(read, resource)).rejects.toMatchObject({ response: { code: expect.stringMatching(/EXPLORE_DIGEST_MISMATCH|EXPLORE_SOURCE_CHANGED/) } });
+  });
+});
+
+describe("FL-06 Class Explore on the mechanics bench (D1-3.1)", () => {
+  const leverSelection = { templateId: "balance-the-lever", loadPresetId: "load-2n-left-200", weightOptionIndex: 0, gauge: true, momentTable: false, promptId: "explain-balance" };
+  const leverInput = { source: { labId: "lever-equilibrium" }, selection: leverSelection, instructions: "" };
+
+  it("pins a lever resource with two moments and an explanation, and the snapshot carries the locked load", async () => {
+    const { read } = await world(structuredClone(FL06_LEVER_EXPLORE_CONFIG), "lever-equilibrium");
+    const content = await buildExploreResource(read, leverInput);
+    expect(content.requirements).toEqual([
+      { kind: "measure", itemId: "moment-left", measurement: "moment", unit: "milliNewtonMetres" },
+      { kind: "measure", itemId: "moment-right", measurement: "moment", unit: "milliNewtonMetres" },
+      { kind: "explain" },
+    ]);
+    const snapshot = await buildExploreSnapshot(read, resourceRow(content));
+    expect(snapshot.effectiveConfig).toMatchObject({ kit: "k5-lever-bench@1", lockInitialAttachments: true, initialAttachments: [{ kind: "WEIGHT", positionMillimetres: -200, forceMilliNewtons: 2000 }] });
+    expect(verifyExploreSnapshot(snapshot).requirements).toHaveLength(3);
+    const moments = { measures: [{ itemId: "moment-left", value: 400 }, { itemId: "moment-right", value: 400 }], explanation: "Hai moment bằng nhau." };
+    expect(() => assertExploreAnswers(snapshot.requirements, exploreAnswersSchema.parse(moments))).not.toThrow();
+  });
+
+  it("refuses a load the chosen weights cannot level", async () => {
+    const { read } = await world(structuredClone(FL06_LEVER_EXPLORE_CONFIG), "lever-equilibrium");
+    await expect(buildExploreResource(read, { ...leverInput, selection: { ...leverSelection, loadPresetId: "load-05n-left-250", weightOptionIndex: 1, gauge: false } }))
+      .rejects.toMatchObject({ response: { code: "EXPLORE_SELECTION_INVALID", errors: [expect.stringMatching(/cannot be levelled/)] } });
   });
 });
 
