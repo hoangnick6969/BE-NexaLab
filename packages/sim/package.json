@@ -1,6 +1,6 @@
 {
   "name": "@nexalab/sim",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
@@ -23,7 +23,8 @@
     "wet-bench/reactions.ts",
     "wet-bench/acid-base.ts",
     "wet-bench/engine.ts",
-    "wet-bench/validate-config.ts"
+    "wet-bench/validate-config.ts",
+    "wet-bench/class-template.ts"
   ],
   "dependencies": {
     "zod": "^3.25.0"
