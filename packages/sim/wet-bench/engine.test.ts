@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Bench, Operation } from "./contracts";
 import { applyOperation, emptyVessel, measure, observeVessel, scaleReadingMicrograms, type EngineContext } from "./engine";
+import { massConservationRegistry } from "../mass-conservation";
+import { SPECIES } from "./species";
 
 const FL14A: EngineContext = {
   allowedReactions: ["metal-acid.zn-hcl", "metal-acid.fe-hcl", "displace.fe-cuso4", "displace.zn-cuso4"],
@@ -55,7 +57,8 @@ describe("wet-bench engine: FL-14a metals (draft data)", () => {
     const tube = result.bench.vessels.T1;
     expect(tube.dissolved).toMatchObject({ HCl: 0, ZnCl2: 50_000 });
     expect(tube.solids[0].nanomoles).toBe(9_950_000);
-    expect(tube.contentMicrograms).toBe(654_000 + 1_000_000 - 100);
+    // 10 000 µmol Zn × 65,0 g/mol (KHTN 8 convention) + 1 mL of solution − the escaped H₂.
+    expect(tube.contentMicrograms).toBe(650_000 + 1_000_000 - 100);
     expect(observeVessel(tube, transition).visual.gasBubbles).toEqual({ intensity: "medium", gasId: "H2" });
   });
   it("Cu + HCl is a reviewed no-reaction pair", () => {
@@ -104,18 +107,40 @@ describe("wet-bench engine: FL-10 Explore mass bookkeeping (draft data)", () => 
     const acid = run([{ type: "add_liquid", vesselId: "C1", reagentId: "HCl_0_1M", microliters: 10_000 }], FL10);
     const before = scaleReadingMicrograms([acid.vessels.C1]);
     const after = run([{ type: "add_solid", vesselId: "C1", reagentId: "CaCO3_chips", pieces: 1 }], FL10, acid);
-    // 1 000 µmol HCl → 500 µmol CO₂ = 22 000 µg leaves the open beaker; the 1 001 000 µg chip was added.
-    expect(scaleReadingMicrograms([after.vessels.C1]) - before).toBe(1_001_000 - 22_000);
+    // 1 000 µmol HCl → 500 µmol CO₂ = 22 000 µg leaves the open beaker; the chip (10 000 µmol × 100,0 g/mol) was added.
+    expect(scaleReadingMicrograms([after.vessels.C1]) - before).toBe(1_000_000 - 22_000);
   });
   it("in a stoppered flask the CO₂ stays on the scale until the stopper is removed", () => {
     const acid = run([{ type: "add_liquid", vesselId: "F1", reagentId: "HCl_0_1M", microliters: 10_000 }, { type: "toggle_stopper", vesselId: "F1" }], FL10);
     const before = scaleReadingMicrograms([acid.vessels.F1]);
     const reacted = run([{ type: "add_solid", vesselId: "F1", reagentId: "CaCO3_chips", pieces: 1 }], FL10, acid);
-    expect(scaleReadingMicrograms([reacted.vessels.F1]) - before).toBe(1_001_000);
+    expect(scaleReadingMicrograms([reacted.vessels.F1]) - before).toBe(1_000_000);
     const opened = run([{ type: "toggle_stopper", vesselId: "F1" }], FL10, reacted);
-    expect(scaleReadingMicrograms([opened.vessels.F1]) - before).toBe(1_001_000 - 22_000);
+    expect(scaleReadingMicrograms([opened.vessels.F1]) - before).toBe(1_000_000 - 22_000);
   });
   it("only flasks take a stopper", () => {
     expect(applyOperation(bench(), { type: "toggle_stopper", vesselId: "C1" }, FL10)).toEqual({ status: "rejected", code: "NOT_STOPPERABLE" });
+  });
+});
+
+describe("wet-bench species table: KHTN 8 molar-mass convention (P0 D-2)", () => {
+  const atomic = { H: 1, C: 12, O: 16, Na: 23, S: 32, Cl: 35.5, Ca: 40, Fe: 56, Cu: 64, Zn: 65, Ba: 137 } as const;
+  const formula: Record<string, Partial<Record<keyof typeof atomic, number>>> = {
+    H2O: { H: 2, O: 1 }, HCl: { H: 1, Cl: 1 }, H2SO4: { H: 2, S: 1, O: 4 }, CH3COOH: { C: 2, H: 4, O: 2 }, NaOH: { Na: 1, O: 1, H: 1 },
+    CaOH2: { Ca: 1, O: 2, H: 2 }, NaCl: { Na: 1, Cl: 1 }, Na2SO4: { Na: 2, S: 1, O: 4 }, CuSO4: { Cu: 1, S: 1, O: 4 }, FeSO4: { Fe: 1, S: 1, O: 4 },
+    ZnSO4: { Zn: 1, S: 1, O: 4 }, ZnCl2: { Zn: 1, Cl: 2 }, FeCl2: { Fe: 1, Cl: 2 }, CaCl2: { Ca: 1, Cl: 2 }, BaCl2: { Ba: 1, Cl: 2 },
+    BaSO4: { Ba: 1, S: 1, O: 4 }, CaCO3: { Ca: 1, C: 1, O: 3 }, Zn: { Zn: 1 }, Fe: { Fe: 1 }, Cu: { Cu: 1 }, H2: { H: 2 }, CO2: { C: 1, O: 2 },
+  };
+  it("every species is the sum of whole-number atomic masses (Cl = 35.5)", () => {
+    expect(Object.keys(formula).sort()).toEqual(Object.keys(SPECIES).sort());
+    for (const [id, parts] of Object.entries(formula)) {
+      const grams = Object.entries(parts).reduce((sum, [atom, count]) => sum + atomic[atom as keyof typeof atomic] * count!, 0);
+      expect(SPECIES[id as keyof typeof SPECIES].molarMassTenthsGramsPerMol, id).toBe(Math.round(grams * 10));
+    }
+  });
+  it("the two engines agree on the species they share, so FL-10 Guided and Explore show the same masses", () => {
+    for (const fixture of Object.values(massConservationRegistry))
+      for (const entry of [...fixture.reactants, ...fixture.products])
+        expect(SPECIES[entry.species as keyof typeof SPECIES].molarMassTenthsGramsPerMol, entry.species).toBe(entry.molarMassTenthsGramsPerMol);
   });
 });
