@@ -18,14 +18,29 @@ export class CatalogController {
   }
   @Roles("STUDENT")
   @Get("open-curriculum") async openCurriculum() {
-    const lessons = await this.db.lesson.findMany({
+    const rawLessons = await this.db.lesson.findMany({
       where: {
         status: "published", scope: "SHARED_LIBRARY", synthetic: false,
         packVersion: { status: "released", synthetic: false },
       },
-      select: { id: true, subjectId: true, grade: true, chapter: true, topic: true, title: true, curriculumChapterCode: true, curriculumTopicCode: true, curriculumOrder: true, publishedAt: true },
+      select: {
+        id: true, subjectId: true, grade: true, chapter: true, topic: true, title: true,
+        curriculumChapterCode: true, curriculumTopicCode: true, curriculumOrder: true, publishedAt: true,
+        review: true,
+        ebookLocators: { where: { verificationStatus: "verified" }, select: { physicalPageIndex: true, printedPageLabel: true }, take: 1 },
+      },
     });
-    if (!lessons.length) return { subjects: [] };
+    if (!rawLessons.length) return { subjects: [] };
+    const lessons = rawLessons.map(({ review, ebookLocators, ...lesson }: any) => {
+      const locatorPage = Number(ebookLocators?.[0]?.physicalPageIndex);
+      const reviewStart = Number((review as any)?.pdfPageRange?.start);
+      const pdfPage = Number.isInteger(locatorPage) && locatorPage > 0
+        ? locatorPage
+        : Number.isInteger(reviewStart) && reviewStart > 0
+          ? reviewStart
+          : null;
+      return { ...lesson, ...(pdfPage ? { pdfPage } : {}) };
+    });
     const [subjects, chapters] = await Promise.all([
       this.db.subject.findMany({
         where: { id: { in: [...new Set(lessons.map((l: any) => l.subjectId))] } },
