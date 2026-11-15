@@ -33,7 +33,7 @@ Quy tắc chung cho mọi task:
 | [ ] O-0.4 | Owner | Chốt **Q-1**: prompt cho mẫu pH FL-13 | Phương án ghi trong spec pilot §3 | — |
 | [ ] O-0.5 | Owner | Xác nhận số track Lab đồng thời từ INC-2 (phase plan giới hạn 2) | Ghi quyết định vào phân công §3 | — |
 | [x] K2-0.1 | K2 | Chụp baseline ảnh và số đo: FL-13 (pH), FL-14a (dụng cụ), FL-10 Explore route dev (cốc, cân) | FE `tests/k2-baseline.spec.ts` và snapshot: danh sách dụng cụ, pH 6 hoá chất FL-13, số cân FL-10 (120,00 g → 120,05 g sau HCl), ảnh 3 bàn. FE `1b30091` | — |
-| [ ] D1-0.1 | Dev 1 | Chụp baseline ảnh và số đo: FL-03, FL-05, FL-10 Guided | Ảnh và số đo lưu trong repo test | — |
+| [x] D1-0.1 | Dev 1 | Chụp baseline ảnh và số đo: FL-03, FL-05, FL-10 Guided. FE `tests/baseline-d1-fluid-wetbench.spec.ts`, kết quả ở `tests/baseline/d1-0.1/` (3 JSON số đo, 22 ảnh 3D/2D ở 1440 và 390 px). Chạy không có `BASELINE_UPDATE` để so số đo khi nghiệm thu D1-2.4. Ghi nhận trước bước B: cốc trên cân FL-03 (3D) hiển thị bị cắt | Ảnh và số đo lưu trong repo test | — |
 | [ ] D2-0.1 | Dev 2 | Chốt nguồn K9, phạm vi FL-26 (phép lai một tính trạng, bảng Punnett), ca kiểm thử | Ghi vào spec áp dụng FL-26 (D2-1.1) | — |
 
 ## INC-1: pilot A + bàn thứ hai
@@ -56,11 +56,13 @@ Quy tắc chung cho mọi task:
 
 | ID | Task | Xong khi | Chờ |
 |---|---|---|---|
-| [ ] D1-1.1 | Viết spec áp dụng **bàn cơ** theo mẫu, dùng lại `lever-bench.ts` và `LeverInvestigationActivity.tsx` | Spec được owner duyệt | — |
-| [ ] D1-1.2 | Sim: schema config đòn bẩy mở rộng `ExploreLabEnvelope`, validator, golden | Test sim pass, envelope không đổi | D1-1.1 |
-| [ ] D1-1.3 | BE: mục `EXPLORE_BENCHES` cho bàn cơ. FE: mục registry `{ kit, group: "physics", validate, loadPage, listKitItems }` và trang Explore | Lint, build, unit test pass | D1-1.2 |
-| [ ] D1-1.4 | Nhật ký: kiểu dòng và `describeChange()` của bàn cơ, dùng lưu trữ chung F0-4 | Nhật ký lưu và export được | D1-1.3 |
-| [ ] D1-1.5 | Nghiệm thu: `/labs/:id` mở FL-06 Explore qua registry trên dev/fixture; Guided FL-06 vẫn mở, nộp, chấm được. Không phát hành (FL-06 có Guided, chờ D-5) | Playwright pass. Đây là bàn thứ hai thật của registry | D1-1.4 |
+| [x] D1-1.1 | Viết spec áp dụng **bàn cơ** theo mẫu, dùng lại `lever-bench.ts` và `LeverInvestigationActivity.tsx`. [Spec](fl-06-mechanics-bench-explore-spec.md), owner duyệt 2026-11-15 | Spec được owner duyệt | — |
+| [x] D1-1.2 | Sim: schema config đòn bẩy mở rộng `ExploreLabEnvelope`, validator, golden | Test sim pass, envelope không đổi | D1-1.1 |
+| [x] D1-1.3 | BE: mục `EXPLORE_BENCHES` cho bàn cơ. FE: mục registry `{ kit, group: "physics", validate, loadPage, listKitItems }` và trang Explore | Lint, build, unit test pass | D1-1.2 |
+| [x] D1-1.4 | Nhật ký: kiểu dòng và `describeChange()` của bàn cơ, dùng lưu trữ chung F0-4 | Nhật ký lưu và export được | D1-1.3 |
+| [x] D1-1.5 | Nghiệm thu: `/labs/:id` mở FL-06 Explore qua registry trên dev/fixture; Guided FL-06 vẫn mở, nộp, chấm được. Không phát hành (FL-06 có Guided, chờ D-5) | Playwright pass. Đây là bàn thứ hai thật của registry | D1-1.4 |
+
+D1-1.2…D1-1.5 nghiệm thu 2026-11-15 trên nhánh `feat/dev1-physics-bench` (FE và BE), chưa merge. Bằng chứng ở `sprint-status.yaml` mục `fl06-mechanics-bench-explore`.
 
 ### Dev 2: chuẩn bị FL-26 (chưa mở track Lab)
 
