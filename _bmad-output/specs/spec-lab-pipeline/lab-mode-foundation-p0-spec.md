@@ -2,7 +2,7 @@
 id: SPEC-lab-mode-foundation-p0
 status: proposed
 date: 2026-11-15
-revision: 4 (tổ chức theo 4 Kit + bàn + thư viện item dùng chung; Foundational Explore là open curriculum; không cần duyệt bộ môn)
+revision: 6 (D-3 chốt; lỗi theo dòng; publishExploreLab dùng chung + Admin API; guard host/port/DB; hai PR và cổng rollout)
 depends_on: []
 blocks: [SPEC-lab-kit-assets-and-class-lab]
 amends: [docs/product/explore-first-lab-architecture-spec.md, docs/bmad/explore-labs-backlog-and-epics.md (F0-5, F0-7)]
@@ -96,49 +96,86 @@ Các điểm hiện trạng sau đã đối chiếu với code ngày 2026-11-15:
 | H2 | Bàn chạy bản sao `Lab.config.explore`, bản có thể sửa ở mỗi lần seed. Nếu bản sao hỏng thì FE lặng lẽ dùng config đóng gói. `PracticalActivityVersion` bất biến nhưng không chứa config. | seed `:47-80, 130-141`; FE `explore-labs.ts:20-27` |
 | H3 | Nhật ký, xác nhận an toàn và câu trả lời lưu theo khóa `labId@configVersion`. | FE `observation-log.ts:109`, `ExploreBench.tsx:19, 36` |
 | H4 | Seed lấy `_count.challenges`/`releases` nhưng không dùng. Không có gì ngăn `foundationalLabId` trỏ tới Lab Explore. | seed `:113`; `foundational-progress.service.ts:44-53` |
-| H5 | `db:seed:k2-explore` không có guard DB cô lập. Nó cho ghi DB dùng chung bằng token, trái với `AGENTS.md`. | `package.json:95`; seed `:30, 99-100` |
+| H5 | `db:seed:k2-explore` không có guard DB cô lập. Nó cho ghi DB dùng chung bằng token, trái với `AGENTS.md`. `targetHost()` trong seed chỉ so tên host, không kiểm port và tên DB. Explore cũng chưa có đường phát hành qua Admin API như Guided (`scripts/release-fl06-lever.mjs`), và `activitySpecSchema` của admin (`sim-packs.ts:189`) không nhận spec Explore. | `package.json:95`; seed `:30, 99-100` |
 
 **C1.1 Mode khai báo tách khỏi tình trạng config**
 
 - `Lab.config` của Lab Explore có đúng dạng `{ mode: "explore", kit, engine, activity: { id, key, version, digest } }`. Seed bỏ các bản sao `explore`, `reviewStatus`, `rendererKey`.
-- `declaredMode(lab)` trả `"explore"` khi `Lab.config.mode === "explore"`, ngược lại trả `"guided"`. Hàm này không parse config.
-- Server phân giải Lab Explore thành một trong hai kết quả:
-  - `{ ok: true, activity, explore }`;
-  - `{ ok: false, code }`, với `code` thuộc `EXPLORE_VERSION_MISSING | EXPLORE_DIGEST_MISMATCH | EXPLORE_KIT_UNSUPPORTED | EXPLORE_CONFIG_INVALID`.
-- Kết quả `ok: false` thì **chặn mở bàn** và hiện mã lỗi. Lab không rơi sang Guided.
+- `declaredMode(lab)` trả `"explore"` khi `Lab.config.mode === "explore"`, ngược lại trả `"guided"`. Hàm này không parse config. Mỗi Lab có đúng một mode khai báo. Lab có cả hai mode cần contract riêng (D-5, ngoài P0).
+- Kết quả phân giải `ok: false` thì **chặn mở bàn** và hiện mã lỗi. Lab không rơi sang Guided.
 - FE `Lab.tsx` rẽ nhánh theo thứ tự:
-  1. Có `assignmentId`/`resourceId`: vào đường hiện có (`Lab.tsx:244-253`). Đường Class Explore (C3) sẽ rẽ tiếp theo mode của bản giao.
+  1. Có `assignmentId`/`resourceId`: vào đường hiện có (`Lab.tsx:244-253`). Đường Class Explore (C3.4) sẽ rẽ tiếp theo mode của bản giao.
   2. Không có: đọc query `["labs"]`, phân biệt bốn trạng thái:
      - **đang tải**;
      - **lỗi API**, kèm nút thử lại;
      - **không có dòng**: giữ màn "Phòng thực hành chưa được phát hành" của `GuidedLab` (`Lab.tsx:387`);
-     - **có dòng**: mở theo `declaredMode`.
+     - **có dòng**: rẽ theo `row.mode` (C1.2). `"guided"` mở `GuidedLab`. `"explore"` mở trang Explore của bàn mà registry FE tra theo `row.explore.kit`. Nếu `row.explore.ok = false` thì hiện panel lỗi kèm `code`.
   - Bỏ `isExploreLab` dựa trên bundle.
 
 **C1.2 Bàn chạy bản đã ghim**
 
 - `PracticalActivityVersion.spec.explore` chứa toàn bộ config của bàn, đã qua validator lúc ghi. Digest khi đó bao cả config.
-- `GET /labs` với dòng Explore:
-  - đọc các version bằng **một** truy vấn;
-  - kiểm `digest(spec)` = `version.digest` = `Lab.config.activity.digest`;
-  - kiểm bàn (`kit`) có trong registry server và `spec.explore` qua schema của bàn;
-  - trả `explore` và `activity` từ bản ghim.
-- Không cần bảng hay endpoint mới.
-- FE chỉ dùng `explore` từ server. Config đóng gói chỉ còn cho route dev và làm đầu vào của seed. `ExploreBench` được `key` theo `activity.id`.
-- Khóa lưu cục bộ của Explore mở là `labId@activity.id`. Dữ liệu theo khóa cũ không chuyển sang, vì đó là ghi chép chưa chấm.
+- **Response contract của `GET /labs`.** Mỗi dòng giữ các trường hiện có, và thêm:
 
-**C1.3 Seed và tiến độ**
+  ```ts
+  mode: "guided" | "explore";              // = declaredMode(lab); FE rẽ nhánh theo trường này
+  explore?:                                // chỉ có khi mode = "explore"
+    | { ok: true; kit: string; engine: string;
+        activity: { id: string; key: string; version: number; digest: string };
+        config: unknown }                  // spec.explore đã kiểm; FE validate lại bằng schema của bàn
+    | { ok: false; code: ExploreResolveError };
+  ```
 
-- Seed của mọi bàn chạy qua npm script có `pre…` gọi `scripts/assert-isolated-db.mjs`. Seed không có đường ghi DB dùng chung.
-- **Phát hành lên DB dùng chung là thủ tục owner riêng**, có ghi chép.
-- Seed từ chối khi:
-  - Lab đích đã có challenge hoặc release;
-  - Lab đích đang là `foundationalLabId` trong một khóa active.
-- Integration test trên DB cô lập: dùng Lab Explore không tạo `LabRun`, `Attempt` hay `Progress`.
-- **Hai dòng legacy trên DB dùng chung** (`acid-base-indicators`, `metal-reactivity`):
-  - trước khi chuyển BE/FE, chạy truy vấn chỉ-SELECT kiểm `Lab.config.activity` và `spec.explore` của version;
-  - sau khi chuyển, hai dòng báo `EXPLORE_CONFIG_INVALID` hoặc `EXPLORE_VERSION_MISSING` cho tới khi owner phát hành bản ghim mới;
-  - P0 không sửa dữ liệu dùng chung.
+  - FE không đọc `Lab.config` để chạy bàn. P0 không đổi việc trả hay không trả `Lab.config` cho từng vai trò.
+  - Học sinh không nhận dòng có `explore.ok = false`; mở bằng link trực tiếp sẽ thấy màn "chưa phát hành". Giáo viên và admin nhận dòng đó kèm `code`.
+- **Thứ tự kiểm và mã lỗi** (dừng ở lỗi đầu tiên):
+
+  | # | Kiểm | Mã lỗi |
+  |---|---|---|
+  | 1 | Có `PracticalActivityVersion` với `id = Lab.config.activity.id` | `EXPLORE_VERSION_MISSING` |
+  | 2 | `version.key = "<lab.id>-explore"`, `version.key/version = Lab.config.activity.key/version` | `EXPLORE_IDENTITY_MISMATCH` |
+  | 3 | `digest(spec) = version.digest = Lab.config.activity.digest` | `EXPLORE_DIGEST_MISMATCH` |
+  | 4 | `Lab.config.kit` có trong registry server | `EXPLORE_KIT_UNSUPPORTED` |
+  | 5 | `spec.explore` qua schema của bàn | `EXPLORE_CONFIG_INVALID` |
+  | 6 | `spec.explore.labId = lab.id`, `spec.explore.kit = Lab.config.kit`, `spec.explore.engine = Lab.config.engine` | `EXPLORE_IDENTITY_MISMATCH` |
+
+  Kiểm 6 giữ điều kiện `labId` mà resolver FE đang có (`explore-labs.ts:24`). Lý do: một config đúng schema, đúng digest nhưng thuộc Lab khác không được chạy.
+- **Lỗi được tách theo từng dòng.** Một dòng hỏng chỉ làm dòng đó có `explore.ok = false`; `GET /labs` vẫn trả 200 với các dòng khác. `Lab.config.activity` thiếu hoặc sai dạng thì trả `EXPLORE_VERSION_MISSING`. Không để lỗi parse của một dòng làm cả request trả 500.
+- Đọc các version bằng **một** truy vấn. Không cần bảng mới. Endpoint mới duy nhất là đường phát hành ở C1.3.
+- FE chỉ dùng `explore.config` từ server. Config đóng gói chỉ còn cho route dev và làm đầu vào của seed/script phát hành. `ExploreBench` được `key` theo `explore.activity.id`.
+- FE validate lại `explore.config` bằng schema của bàn. Nếu lỗi (ví dụ tarball sim ở FE lệch với BE), FE **dừng mở bàn** và hiện `EXPLORE_CONFIG_INVALID`, giống như khi server báo lỗi.
+- Khóa lưu cục bộ của Explore mở là `labId@activity.id`. Dữ liệu theo khóa cũ không được chuyển sang, vì đó là ghi chép chưa chấm.
+
+**C1.3 Ghi dữ liệu Explore: seed, phát hành, tiến độ**
+
+Mọi lần ghi một Lab Explore đi qua **một hàm dùng chung** `publishExploreLab(db, input)`, đặt ở module labs của BE. Seed và Admin API chỉ là hai lối gọi tới hàm này.
+
+| | Seed (DB cô lập) | Phát hành (DB dùng chung) |
+|---|---|---|
+| Lối gọi | `npm run db:seed:k2-explore` → `publishExploreLab` | `POST /admin/labs/:id/explore-versions` (ADMIN, body validate bằng Zod) → `publishExploreLab`. Owner chạy một script gọi API, theo mẫu `scripts/release-fl06-lever.mjs`: đăng nhập admin, không ghi DB trực tiếp |
+| Bảo vệ | `assertIsolatedDatabase()` chạy trước mọi lệnh ghi, kể cả `--unpublish` | RBAC ADMIN và audit, như các route admin khác |
+
+`publishExploreLab` làm các bước sau trong một transaction:
+1. Validate config bằng validator của bàn, lấy từ registry server.
+2. Từ chối nếu Lab đích đã có challenge hoặc release, hoặc đang là `foundationalLabId` của một khóa active.
+3. Dựng spec, parse bằng `exploreActivitySpecSchema`, tính digest bằng `activityDigest`.
+   - `exploreActivitySpecSchema` là schema riêng của Explore: dạng spec seed đang ghi, cộng thêm `explore`.
+   - `activityDigest` là hàm digest admin đang dùng (`sim-packs.ts:421`).
+   - Không đổi `activitySpecSchema` của Guided.
+4. Tạo `PracticalActivityVersion` key `<labId>-explore` nếu digest mới. Cùng nội dung thì dùng lại version cũ.
+5. Ghi `Lab.config` (C1.1) và các trường hiển thị (published, `SHARED_LIBRARY`, `releaseCleared`, `topicCode`), sau đó ghi audit.
+
+**Guard dùng chung.**
+- Export hàm `assertIsolatedDatabase()` từ `scripts/assert-isolated-db.mjs`. Hàm giữ nguyên logic hiện có:
+  - kiểm loopback;
+  - cấm DB `postgres`;
+  - bắt `DATABASE_URL`/`DIRECT_URL` khớp **host, port và tên DB** với `NEXALAB_ISOLATED_DATABASE_URL`.
+- Hook `pre…` của npm và seed cùng gọi hàm này.
+- Bỏ `targetHost()` và token `K2_EXPLORE_SHARED_WRITE_APPROVED` khỏi seed. Lý do: `targetHost()` chỉ so tên host, mà một cổng loopback khác có thể là tunnel ra DB dùng chung.
+
+**Tiến độ.** Integration test trên DB cô lập khẳng định dùng Lab Explore không tạo `LabRun`, `Attempt` hay `Progress`.
+
+**Hai dòng legacy** (`acid-base-indicators`, `metal-reactivity`) được xử lý ở cổng rollout §5.4.
 
 ### C2. Kit, bàn và thư viện item dùng chung
 
@@ -182,7 +219,7 @@ Bàn không có engine phản ứng, ví dụ giải phẫu hay sinh thái, vẫ
   - item bắt buộc;
   - các nhóm tùy chọn kèm allow-list ID và số lượng chọn;
   - khoảng giá trị cho phép (số nguyên, có đơn vị);
-  - prompt ID được chọn;
+  - prompt ID được chọn, kèm điều kiện lựa chọn nếu nội dung prompt phụ thuộc vào mẫu (ví dụ prompt nhắc tên chất cụ thể chỉ hợp lệ khi đã chọn đúng các chất đó). Validator strict từ chối prompt không khớp lựa chọn;
   - các loại yêu cầu được phép.
 - Giáo viên **chỉ** chọn trong mẫu. Lựa chọn gửi lên chỉ gồm ID và giá trị.
 - Ngoài phạm vi: tạo model, viết phản ứng mới, sửa đáp án chuẩn, ghép asset tự do.
@@ -214,7 +251,9 @@ Bản đầu giáo viên nhận xét thủ công. Muốn tự chấm từ thao t
   - `effectiveConfigDigest`;
   - `requirements`.
 - Cách ghim này dùng lại vòng đời `ClassResource` hiện có (DRAFT → PUBLISHED → revise tạo version mới). Nó **không** đi qua release/challenge (`class-lab-resource.ts:19-33`).
-- Lúc mở và lúc nộp, server kiểm quyền thành viên lớp, đối tượng giao và digest. Tutor dùng cùng điều kiện cho bài lớp.
+- **Học sinh mở và nộp theo `assignmentId`.** Server đọc snapshot đã ghim của bài giao (cấu hình hiệu lực, câu hỏi, `effectiveConfigDigest`), không đọc `ClassResource` hiện hành.
+- Lúc mở, lúc nộp và khi tutor lấy ngữ cảnh, server đều kiểm ba điều: học sinh là thành viên lớp, học sinh nằm trong **đối tượng giao** (`Assignment.targets`), và digest khớp.
+- Đường `resourceId` (luyện tập lớp) **không** mở bài Explore cho học sinh, chỉ dùng cho giáo viên xem trước. Lý do: `resolveClassLabResource` hiện chỉ kiểm thành viên lớp (`class-lab-resource.ts:42-49`), không kiểm đối tượng giao.
 - Bài nộp lưu ở bảng riêng, unique theo (học sinh, bài giao, idempotency key). Retry của cùng học sinh trên cùng bài giao trả bài đã lưu.
 - Bài nộp có trạng thái `Đã nộp` → `Đã nhận xét`. Không tạo LabRun, Attempt hay Progress.
 - Khóa nháp cục bộ theo học sinh + bài giao + version.
@@ -223,7 +262,7 @@ Bản đầu giáo viên nhận xét thủ công. Muốn tự chấm từ thao t
 
 - **Bắt buộc:** C3.2 pass, tức allow-list của cấu hình mẫu và validator strict.
 - **Không cần review bộ môn** (D-4). Nội dung do NexaLab biên soạn.
-- Việc đưa nội dung lên DB dùng chung đi theo thủ tục phát hành owner ở C1.3.
+- Đưa nội dung lên DB dùng chung qua đường phát hành Admin API ở C1.3.
 
 ## 4. Quyết định
 
@@ -231,29 +270,32 @@ Bản đầu giáo viên nhận xét thủ công. Muốn tự chấm từ thao t
 |---|---|---|
 | D-1 | (F0-7a) Foundational Explore còn `unverified` có hiện cho học sinh không | **Chốt: hiện, kèm nhãn** (open curriculum) |
 | D-2 | Quy ước khối lượng mol của bàn ướt (Kit Hóa học) | Đề xuất dùng quy ước bài tập KHTN 8 mà NexaLab chọn, ghi rõ sách và trang. Căn cứ ban đầu: SGV KHTN 8 (NXB GDVN) Bài 3 dùng Fe = 56, CaCO₃ = 100; căn cứ này chưa xác nhận cả bảng. Người biên soạn NexaLab chốt bảng đầy đủ. Áp dụng trong pilot. |
-| D-3 | Bỏ config FE đóng gói trên route chính | Đề xuất **bỏ**, theo C1.2 |
+| D-3 | Bỏ config FE đóng gói trên route chính | **Chốt: bỏ.** `/labs/:id` chỉ chạy Explore bằng config đã ghim từ server. Bản ghim lỗi thì dừng mở bàn (C1.2) |
 | D-4 | Class Lab Explore có cần review bộ môn trước khi đưa cho lớp thật | **Chốt: không cần.** Nội dung do NexaLab biên soạn; chỉ cần allow-list và validator strict |
+| D-5 | **Contract hai mode**: một Lab ID đã có Guided (challenge/release) mở thêm Explore trên route thư viện | **Mở, ngoài P0.** Cần quyết định cách khai báo hai mode, mode mặc định và nút chuyển. Gộp với F0-7b (đổi mode FL-10). Áp dụng cho FL-10, FL-06 và mọi Lab Guided được thêm Explore |
 
-F0-7b (đổi mode FL-10) không thuộc spec này.
+F0-7b được giải quyết cùng D-5.
 
 ## 5. Phạm vi triển khai P0 và mốc "Contract done"
 
 P0 gồm hai phần. Cả hai xong thì dev các Kit khác bắt đầu làm song song.
 
-**5.1 C1, chạy Lab Explore**
+**5.1 C1, chạy Lab Explore: hai PR theo thứ tự**
 
-```
-D-3 chốt ─► C1.1 mode ─► C1.2 ghim ─► C1.3 seed/tiến độ     (một PR BE+sim, một PR FE)
-```
+| PR | Nội dung | Ghi chú |
+|---|---|---|
+| **PR-1 (BE + sim): ghi** | C1.3 đầy đủ: `publishExploreLab`, `exploreActivitySpecSchema`, `POST /admin/labs/:id/explore-versions`, guard dùng chung, seed gọi `publishExploreLab`, script phát hành của owner | Chưa đổi `GET /labs`. FE cũ vẫn chạy: Lab không còn bản sao `Lab.config.explore` thì FE cũ dùng config đóng gói, cùng nội dung với bản ghim |
+| *Giữa hai PR* | Cổng rollout §5.4, bước 1–2: phát hành bản ghim FL-13/FL-14a lên DB dùng chung | Học sinh không mất quyền truy cập |
+| **PR-2 (BE + FE): đọc** | C1.1 + C1.2: `mode`/`explore` trong `GET /labs`, rẽ nhánh FE, khóa lưu mới, bỏ `isExploreLab` | Deploy BE và FE cùng lúc |
 
 **5.2 Hạ tầng chung để chia việc song song.** Các story F0 sẵn có trong backlog, cộng thêm phần C2.1:
 
 | Việc | Nội dung | Xong khi |
 |---|---|---|
-| F0-1 Envelope | Tách `ExploreLabEnvelope` và `ObservationPrompt` sang `packages/sim/explore/envelope.ts`. `ChemistryLabConfig` mở rộng từ envelope | Test sim pass, bàn ướt không đổi hành vi |
-| F0-2 Registry đa bàn | FE: `{ kit, group, validate, loadPage, listKitItems }`. BE: `{ kit, validate }` (C1.2) | `/labs/:id` mở được Explore của **2 bàn khác nhau**. Bàn thứ hai có thể là fixture tối giản chỉ dùng cho test |
-| F0-4 Nhật ký dùng chung | Tách phần chung của `observation-log.ts` | Bàn khác chỉ cần viết `describeChange()` |
-| F0-5 Seed đa bàn | `scripts/seed-explore-labs.ts --kit <bàn>`, có guard cô lập (C1.3) | Seed bàn ướt qua script mới cho kết quả giống hệt script cũ |
+| F0-1 Envelope trung lập | `packages/sim/explore/envelope.ts` chỉ chứa phần chung. **Prompt chung** gồm `{ id, kind, textVi, choices?, challenge? }`. Các điều kiện kích hoạt và trỏ tới item (`focus`, `highlightWhen`, kể cả `reagentId`, `reaction`, `MEASUREMENTS` hiện ở `wet-bench/contracts.ts:51-59`) do **schema của từng bàn** mở rộng và validate. `ChemistryLabConfig` mở rộng từ envelope | Test sim pass. Bàn ướt không đổi hành vi. Envelope không import gì từ `wet-bench` |
+| F0-2 Registry đa bàn + đăng ký bàn ướt | FE: `{ kit, group, validate, loadPage, listKitItems }`. BE: `{ kit, validate }` (C1.2). Bàn ướt được đăng ký ngay trong P0. `listKitItems` của bàn ướt là **adapter tối thiểu** từ `apparatus-manifest.ts` và `reagents.ts` | `/labs/:id` mở được Explore của **2 bàn khác nhau**. Bàn thứ hai có thể là fixture tối giản, chỉ để chứng minh registry chạy. Danh sách dụng cụ và chất ở màn giới thiệu hiện có của FL-13/FL-14a/FL-10 Explore không đổi, và được đọc qua `listKitItems` |
+| F0-4 Lưu trữ nhật ký dùng chung | Phần dùng chung **chỉ** gồm khóa (`labId@activity.id`, hoặc khóa lớp ở C3.4), đọc/ghi IndexedDB, giới hạn số dòng và export. Kiểu dòng nhật ký và cách mô tả hiện tượng thuộc từng bàn: `ObservationLogEntry` hiện có `readings.ph/litmus/scale`, `equations`, là dữ liệu hóa học | Bàn ướt dùng phần lưu trữ chung, không đổi hành vi. Bàn khác chỉ viết kiểu dòng và `describeChange()` |
+| F0-5 Seed đa bàn | `scripts/seed-explore-labs.ts --kit <bàn>`, gọi `publishExploreLab` (C1.3). Guard áp dụng cho mọi đường ghi. C1 **cố ý đổi** dữ liệu được ghi, nên không so với seed cũ | (a) Sau khi seed, cùng Lab mở đúng bàn qua `GET /labs`. (b) Chạy lại với cùng input thì không tạo version mới. (c) Đổi một giá trị config thì tạo version mới. (d) Mọi đường ghi, kể cả `--unpublish` và chạy thẳng `tsx`, đều bị chặn trên DB không cô lập |
 | C2.1 Khung thư viện item | Tạo `src/features/labs/shared/items/`, kiểu item, quy ước anchor. **Một người chịu trách nhiệm** thư mục này: item chung được thêm qua PR riêng, không gộp trong PR của bàn | Khung, test kiểu và README quy ước có trong repo. Cốc và cân được thêm ở pilot bước A |
 | Mẫu spec áp dụng | Mẫu một trang cho mỗi bàn: điền bảng C2.3, liệt kê item riêng và item dùng chung, loại yêu cầu bàn hỗ trợ, Lab nào có Explore | File mẫu nằm cạnh spec này |
 
@@ -267,22 +309,39 @@ Sau mốc này:
 
 | Việc | Ai làm |
 |---|---|
-| Explore và danh mục item của từng bàn (C1 + C2.3) | **Dev các Kit, song song** |
+| Explore và danh mục item của từng bàn (C1 + C2.3) | **Dev các Kit, song song.** Lab mới hoặc Lab chưa có Guided: làm đến Lab thật. Lab đã có Guided (có challenge/release, ví dụ FL-06): chỉ làm trên dev route/fixture cho tới khi có contract hai mode (D-5), vì seed C1.3 từ chối các Lab này |
 | Class Lab Explore (C3) cho bàn khác bàn ướt | Chỉ sau khi pilot Kit Hóa học xong **bước C**, khi schema `classTemplates` và bảng bài nộp đã chạy bằng code thật |
 
 C2 và C3 là chuẩn. Bàn ướt (Kit Hóa học) áp dụng chúng đầu tiên ở pilot. Mỗi bàn sau viết spec áp dụng theo mẫu ở 5.2. Item dùng chung đi vào thư viện C2.1 khi bàn thứ hai cần đến.
+
+**5.4 Cổng rollout lên DB dùng chung**
+
+Làm đúng thứ tự. Chỉ dùng truy vấn chỉ-SELECT để kiểm DB dùng chung (theo AGENTS.md).
+
+1. **Trước PR-2:** owner chạy script phát hành cho FL-13 và FL-14a qua Admin API (đã có từ PR-1).
+2. **Kiểm bằng truy vấn chỉ-SELECT:** mỗi Lab có `Lab.config.activity` trỏ tới một version có `spec.explore`. Digest khớp. `spec.explore.labId` đúng với Lab.
+3. **Trên DB cô lập, với build PR-2:**
+   - Bài Guided cũ, gồm Foundational và Class Lab Guided qua `assignmentId`/`resourceId`, vẫn mở, nộp và chấm được.
+   - Explore mở được trên **hai bàn**: bàn ướt và fixture của F0-2.
+4. **Deploy PR-2** (BE + FE). Sau deploy, học sinh mở FL-13 và FL-14a được. Giáo viên không thấy mã lỗi nào trên hai Lab này.
+
+Nếu bước 2 không đạt thì không deploy PR-2.
 
 ## 6. Sửa tài liệu kèm theo
 
 - **Kiến trúc Explore:**
   - §0.2: Explore của lớp có bài nộp riêng theo C3.4, vẫn không tạo Attempt.
   - Khóa IndexedDB đổi sang `labId@activity.id`.
-  - Dòng DoD "chỉ ghi DB dùng chung khi có phê duyệt" đổi thành "seed chỉ chạy trên DB cô lập; phát hành là thủ tục owner".
+  - §2 `ExploreLabEnvelope`: `ObservationPrompt` trong envelope chỉ còn phần chung (F0-1).
+  - Dòng DoD "chỉ ghi DB dùng chung khi có phê duyệt" đổi thành "seed chỉ chạy trên DB cô lập; phát hành lên DB dùng chung qua `POST /admin/labs/:id/explore-versions`".
 - **Backlog F0:**
   - Ghi D-1 vào F0-7a.
   - F0-6 không còn là cổng phát hành (D-4). `reviewStatus` chỉ còn tác dụng hiện nhãn.
   - F0-5 bỏ "biến phê duyệt ghi DB dùng chung".
-  - F0-2 thêm `group` và `listKitItems` vào mục đăng ký.
+  - F0-1: envelope trung lập, prompt chung không có trường của bàn ướt (§5.2).
+  - F0-2 thêm `group` và `listKitItems` vào mục đăng ký, và đăng ký bàn ướt ngay trong P0.
+  - F0-4: phần dùng chung chỉ còn khóa và lưu/đọc.
+  - F0-5: thay "kết quả giống hệt" bằng bốn tiêu chí (a)–(d) ở §5.2.
   - F0-3 (hạ tầng tương tác dùng chung) mở rộng thành thư viện item dùng chung C2.1.
 - **Thiết kế K2:**
   - §5: giáo viên chọn trong allow-list của `classTemplates`.
@@ -295,12 +354,22 @@ C2 và C3 là chuẩn. Bàn ướt (Kit Hóa học) áp dụng chúng đầu ti�
 
 Tất cả chạy trên DB cô lập.
 
-- [ ] Route manifest không đổi.
-- [ ] Lab có `mode: "explore"` mà config sai, bàn lạ, thiếu version hoặc sai digest thì hiện panel lỗi kèm mã. Không mở `GuidedLab`, không dùng config đóng gói.
+- [ ] Route manifest chỉ thêm đúng một route: `POST /admin/labs/:id/explore-versions` (ADMIN). Mọi route cũ không đổi.
+- [ ] `publishExploreLab`:
+  - gọi qua API hay qua seed đều cho cùng version và cùng digest với cùng input;
+  - cùng input thì không tạo version mới;
+  - từ chối Lab có challenge/release hoặc đang là `foundationalLabId`;
+  - từ chối config sai validator;
+  - không phải ADMIN thì bị chặn.
+- [ ] Một Lab có con trỏ activity sai trả đúng mã lỗi trên dòng đó. `GET /labs` vẫn trả 200 và các Lab khác vẫn tải bình thường.
+- [ ] Mỗi mã lỗi ở bảng C1.2 có một ca test. Mỗi ca, giáo viên thấy panel lỗi kèm đúng mã, không mở `GuidedLab`, không dùng config đóng gói, còn học sinh không nhận dòng đó.
+- [ ] Ca **config đúng schema, đúng digest nhưng thuộc Lab khác** trả `EXPLORE_IDENTITY_MISMATCH`.
+- [ ] Response của `GET /labs` có `mode` trên mọi dòng và `explore` trên dòng Explore, đúng dạng ở C1.2. Danh sách dụng cụ ở màn giới thiệu đọc qua `listKitItems` và không đổi.
 - [ ] Lab Explore hợp lệ mở được dù không có trong bundle FE. FL-10 vẫn mở Guided. Class Guided qua `assignmentId`/`resourceId` vẫn mở, nộp và chấm được, kể cả bài giao trước thay đổi.
 - [ ] Sửa `Lab.config` mà không tạo version mới thì bàn không đổi, hoặc báo `EXPLORE_DIGEST_MISMATCH`. Seed config mới thì tạo version mới, bàn khởi tạo lại với khóa lưu mới, bản cũ giữ nguyên.
 - [ ] Học sinh mở được FL-13 khi dữ liệu còn `unverified`, có nhãn.
-- [ ] `npm run db:seed:k2-explore` thất bại trên DB không cô lập. Seed từ chối Lab đã có challenge/release hoặc đang là `foundationalLabId`.
+- [ ] Seed thất bại khi `DATABASE_URL` khác `NEXALAB_ISOLATED_DATABASE_URL` ở host, ở port hoặc ở tên DB. Điều này đúng cả khi gọi qua `npm run` lẫn khi chạy thẳng `tsx`, và cả nhánh `--unpublish`.
+- [ ] FE validate lại config thất bại thì dừng mở bàn, hiện `EXPLORE_CONFIG_INVALID`. Seed từ chối Lab đã có challenge/release hoặc đang là `foundationalLabId`.
 - [ ] Dùng Lab Explore không tạo `LabRun`, `Attempt` hay `Progress`.
 - [ ] Playwright FL-13 (mở, đo pH, danh sách dụng cụ) và `tests/fl-10-k2.spec.ts` pass. Lint, test và build ở BE; lint và build ở FE.
 
