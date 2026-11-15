@@ -37,6 +37,7 @@ import type { Fl10Event } from "../application/fl-10-events";
 import { evaluateFl07Activity } from "../application/fl-07-activity";
 import { canonical, digest, evaluateRunV1, executionSchema as labRunExecutionSchema, LEGACY_CHALLENGE_RUBRIC } from "../application/lab-run";
 import { labEvaluators } from "../application/evaluators/registry";
+import { publishExploreLab } from "../application/explore-labs";
 /** PostgreSQL JSON numbers can round at the last floating-point digits. */
 function sameStoredResult(actual: any, expected: any): boolean {
   if (typeof actual === "number" && typeof expected === "number")
@@ -96,6 +97,13 @@ export class AdminLabsController {
   @ApiOperation({ summary: "Quarantine a release and revoke new evaluations using its pinned pack" })
   quarantineLabRelease(@Param("id") labId: string, @Param("releaseId") releaseId: string, @Req() req: any, @Body() body: unknown) {
     return this.releases.quarantine(labId, releaseId, req, body);
+  }
+
+  @Post("labs/:id/explore-versions")
+  @ApiOperation({ summary: "Pin a validated Explore bench config in an immutable activity version and point the Lab at it (P0 C1.3)" })
+  publishExploreVersion(@Param("id") labId: string, @Req() req: any, @Body() body: unknown) {
+    const input = z.object({ config: z.object({ labId: z.literal(labId) }).passthrough(), topicCode: z.string().min(1).max(80), reason }).strict().parse(body);
+    return publishExploreLab(this.db, { ...input, actor: req.user });
   }
 
   // ───────────────────────── C2-T3 simulation versions ─────────────────────────

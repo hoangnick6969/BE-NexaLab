@@ -1,0 +1,25 @@
+/** Minimal valid K2 wet-bench Explore config for tests. */
+export const exploreConfig = (labId = "acid-base-indicators") => ({
+  schema: "k2-lab-config/1",
+  labId,
+  catalogId: "FL-13",
+  configVersion: 1,
+  kit: "k2-wet-bench@1",
+  engine: "wet-bench@1.0.0",
+  reactionCatalog: "k2-reactions@1",
+  title: "Acid, base và chất chỉ thị",
+  outcomeSummary: ["Nhận biết acid, base bằng chất chỉ thị."],
+  safetyBriefing: { simulation: ["An toàn trong mô phỏng."], realLab: ["Đeo kính bảo hộ."], acknowledgeRequired: true },
+  limitations: ["Không mô phỏng nhiệt độ."],
+  modes: { explore: true },
+  enabledApparatus: [
+    { id: "T1", kind: "test_tube", slot: "rack_1" },
+    { id: "meter", kind: "digital_ph_meter", slot: "tool_ph" },
+  ],
+  availableReagents: [{ reagentId: "HCl_0_1M", shelfPosition: 1 }, { reagentId: "NaOH_0_1M", shelfPosition: 2 }],
+  allowedReactions: ["acid-base.neutralization"],
+  measurements: ["ph_meter"],
+  dispensing: { liquidPresetsMicroliters: [50, 250, 1000] },
+  pedagogy: { revealEquations: "after_observation", observationPrompts: [{ id: "p1", kind: "note", textVi: "Đo pH.", focus: { apparatusId: "meter" }, highlightWhen: { measurement: "ph_meter" } }] },
+  review: { status: "draft" },
+});

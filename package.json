@@ -92,6 +92,7 @@
     "prepare:fl05": "tsx scripts/prepare-fl05.ts",
     "predb:seed:fl05-candidate": "node scripts/assert-isolated-db.mjs FL05-candidate",
     "db:seed:fl05-candidate": "tsx scripts/seed-fl05-candidate.ts",
+    "predb:seed:k2-explore": "node scripts/assert-isolated-db.mjs k2-explore-seed",
     "db:seed:k2-explore": "tsx scripts/seed-k2-explore-labs.ts"
   },
   "dependencies": {
