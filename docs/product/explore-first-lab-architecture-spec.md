@@ -16,14 +16,15 @@ Status: APPROVED_PATTERN (rút ra từ pilot Kit K2 + FL-13, nhánh `feat/new-la
 
 1. **Thao tác trước, câu hỏi sau.** Học sinh vào Lab là được cầm, kéo, thả, đo ngay. Câu hỏi chỉ là gợi mở
    tùy chọn, không bao giờ khóa bàn thí nghiệm, không có thứ tự bắt buộc.
-2. **Explore không chấm điểm.** Không tạo `LabRun`, `Attempt`, evidence hay điểm. Dữ liệu ở lại trên máy học sinh
-   (IndexedDB) cho tới khi có Class Lab endpoint nhận `exportObservationLog()`.
+2. **Explore không chấm điểm tự động.** Foundational Explore lưu nhật ký trên máy học sinh (IndexedDB). Class Lab
+   Explore theo P0 C3.4 nộp câu trả lời riêng theo `assignmentId` để giáo viên nhận xét. Cả hai không tạo `LabRun`,
+   `Attempt` hay `Progress`.
 3. **Trung thực về mô hình.** Mô phỏng chỉ trả lời trong phạm vi mô hình đã khai báo. Ngoài phạm vi thì nói rõ
    "nằm ngoài phạm vi mô hình" kèm lý do, không bịa kết quả, không suy ra "không phản ứng" từ việc thiếu luật.
-4. **Dùng chung theo Kit.** Lab là *cấu hình* trên một Kit (bàn + dụng cụ + engine). Lab mới ưu tiên thêm config,
-   chỉ thêm dụng cụ/engine khi Lab thật sự cần.
-5. **Guided và Explore cùng tồn tại.** Lab đã có luồng guided (server evaluator, event order) giữ nguyên.
-   Explore là chế độ thêm vào, không sửa evaluator cũ.
+4. **Dùng chung theo bàn.** Lab là cấu hình trên một bàn có scene, dụng cụ và engine. Mỗi Kit theo môn gồm các bàn
+   và danh mục item của chúng. Mô hình 4 Kit và thư viện item dùng chung nằm ở P0 §2.1.
+5. **Guided và Explore cùng tồn tại.** `GET /labs` xác định mode của mỗi Lab. Mở hai mode cùng một `Lab.id` phụ
+   thuộc quyết định D-5. Guided tiếp tục dùng server evaluator và thứ tự event hiện có.
 
 ---
 
@@ -33,7 +34,7 @@ Status: APPROVED_PATTERN (rút ra từ pilot Kit K2 + FL-13, nhánh `feat/new-la
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ Tầng 3 · 3-Stage UX & DB Seed                                             │
 │   LabIntroOverlay → Explore Workbench (+ObservationLog) → ObservationDrawer│
-│   scripts/seed-<kit>-explore-labs.ts  →  Lab.config.explore               │
+│   scripts/seed-explore-labs.ts  →  Lab.config.activity → spec.explore    │
 ├───────────────────────────────────────────────────────────────────────────┤
 │ Tầng 2 · FE Kit 3D + Accessible HUD                                       │
 │   features/labs/<subject>/<kit>/kit/  (reducer, stage 3D, HUD, log)       │
@@ -137,52 +138,55 @@ dụng cụ riêng của kit vào đó; kit tự đặt dụng cụ trong Stage 
   (chỉ khi `revealEquations` cho phép), cờ `outOfScope`.
 - **Gộp dòng:** các thao tác *liên tiếp* giống nhau (cùng loại, cùng chất, cùng vật chứa, cùng hiện tượng) gộp
   thành một dòng và cộng dồn lượng (`merge.key`, `merge.microliters`), ví dụ `Thêm 0,75 mL (15 giọt) Nước cất`.
-- Lưu IndexedDB theo khóa `<labId>@<configVersion>`, giữ tối đa 500 dòng, lỗi lưu trữ không làm hỏng phiên.
+- Lưu IndexedDB theo khóa `labId@activity.id` ở route chính và `labId@configVersion` ở route dev chưa có bản ghim.
+  Giữ tối đa 500 dòng. Lỗi lưu trữ không làm hỏng phiên.
 - `exportObservationLog(config, entries)` trả JSON `schema: "<kit>-observation-log/1"`, `scored: false`.
 - Màu chữ đủ tương phản: phụ `#475569`, chính `#0f172a`, thời gian `#334155`, `font-weight: 500`.
 
 **DB seed (BẮT BUỘC):**
-- Script idempotent `BE-NexaLab/scripts/seed-<kit>-explore-labs.ts` + npm script `db:seed:<kit>-explore`,
-  hỗ trợ `--dry-run` và `--unpublish`. Tham chiếu: `scripts/seed-k2-explore-labs.ts`.
-- Mọi lần ghi đi qua `publishExploreLab` (`src/modules/labs/application/explore-labs.ts`): upsert `Lab` (id = `labId`) với
+- Dùng `npm run db:seed:explore -- --kit <id-bàn>` qua `scripts/seed-explore-labs.ts`. Lệnh hỗ trợ `--dry-run` và
+  `--unpublish`. K2 có ID `k2-wet-bench@1`, và alias `npm run db:seed:k2-explore` vẫn dùng được.
+- Khi seed để công bố bài, `publishExploreLab` (`src/modules/labs/application/explore-labs.ts`) upsert `Lab` (id = `labId`) với
   `config = { mode: "explore", kit, engine, activity: { id, key, version, digest } }`; config đầy đủ của bàn nằm ở `spec.explore` của version.
 - Tạo `PracticalActivityVersion` `<labId>-explore` v1 (bất biến, chỉ tạo version mới khi nội dung đổi) với
   `modality: "explore"`, `scored: false`, nguồn `technical_draft` + `status: "unverified"` cho tới khi có reviewer.
 - Seed chỉ chạy trên DB cô lập (`assertIsolatedDatabase()`, cả `--unpublish`). Phát hành lên DB dùng chung qua
   `POST /admin/labs/:id/explore-versions` (ADMIN), mẫu K2: `scripts/publish-k2-explore.ts`.
-- FE: `resolveExploreConfig(labId, labRow)` ưu tiên `Lab.config.explore` nếu hợp lệ và đúng `labId`, nếu không
-  dùng config đóng gói sẵn.
+- `GET /labs` trả `mode` cho mọi dòng và `explore` (config đã ghim hoặc mã lỗi) cho dòng Explore (P0 C1.2). FE rẽ nhánh
+  theo `row.mode`, chỉ chạy `explore.config` từ server sau khi validate lại; lỗi thì dừng mở bàn và hiện mã lỗi.
+  Config đóng gói chỉ dùng cho route dev và làm đầu vào seed/phát hành. Khóa lưu cục bộ: `labId@activity.id`.
 
 ---
 
 ## 2. Hợp đồng config Lab
 
-Mỗi kit có `<Kit>LabConfig` riêng (K2: `ChemistryLabConfig`, `schema: "k2-lab-config/1"`), nhưng đều có chung
-phần vỏ sau. Phần vỏ này hiện mới nằm trong `wet-bench/contracts.ts`; story F0-1 trong backlog tách nó thành
-`packages/sim/explore/envelope.ts` trước khi làm kit thứ hai.
+Mỗi bàn mở rộng `exploreLabEnvelopeSchema` ở `packages/sim/explore/envelope.ts` (K2: `ChemistryLabConfig`,
+`schema: "k2-lab-config/1"`). Trường `kit` là ID của bàn. Bên dưới là các trường của envelope.
 
 ```ts
 type ExploreLabEnvelope = {
-  schema: `${string}-lab-config/${number}`;
+  schema: string;
   labId: string;              // id trong bảng Lab, dùng cho route /labs/:id
-  catalogId: `FL-${string}`;  // mã portfolio
-  configVersion: number;      // tăng khi đổi nội dung -> khóa IndexedDB mới
-  kit: `${string}@${number}`; // ví dụ "k2-wet-bench@1"
-  engine: `${string}@${string}`;
-  title: string; contextLabel: string;
+  catalogId: string;          // mã portfolio, ví dụ "FL-14a"
+  configVersion: number;      // phiên bản config dùng cho route dev chưa có bản ghim
+  kit: string;               // ví dụ "k2-wet-bench@1"
+  engine: string;
+  title: string;
+  contextLabel?: string;
   outcomeSummary: string[];
   safetyBriefing: { simulation: string[]; realLab: string[]; acknowledgeRequired: boolean };
   limitations: string[];
   modes: { explore: true; guided?: { rendererKey: string } };
   enabledApparatus: { id: string; kind: string; slot: string; labelVi?: string; initial?: unknown }[];
   measurements: string[];
-  pedagogy: { revealEquations?: "never" | "after_observation"; observationPrompts: ObservationPrompt[] };
+  pedagogy: { observationPrompts?: ObservationPrompt[] };
   review: { status: "draft" | "reviewed"; notes?: string };
 };
 ```
 
-- Lab có `modes.guided` → route chính vẫn mở luồng guided; config Explore chỉ dùng ở route dev cho tới khi PO
-  quyết định cho học sinh chuyển chế độ.
+- `ObservationPrompt` dùng chung gồm `id`, `kind`, `textVi`, `choices?` và `challenge?`. Schema của bàn tự mở rộng
+  các trường như `focus`, `highlightWhen` và `pedagogy.revealEquations` của bàn ướt.
+- `modes.guided` mô tả renderer Guided có sẵn trong config dev. Route chính lấy mode từ `GET /labs` theo P0 C1.2.
 - `review.status: "reviewed"` chỉ đặt khi reviewer bộ môn đã duyệt toàn bộ input `unverified`. Validator chặn
   trường hợp ngược lại.
 
@@ -196,14 +200,14 @@ BE-NexaLab/
     contracts.ts  engine.ts  validate-config.ts  index.ts
     flXX-<topic>.data.ts
     flXX-<topic>.golden.test.ts  engine.test.ts  validate-config.test.ts
-  scripts/seed-<kit>-explore-labs.ts
+  scripts/seed-explore-labs.ts
 FE-NexaLab/
   vendor/nexalab-sim-<ver>.tgz
   src/features/labs/<subject>/<kit-slug>/
     kit/      (manifest, layout, reducer, Stage, apparatus3d, HUD, ExploreBench, log, ExploreLabPage, css, dev/)
     labs/     (flXX.config.ts, index.ts)
     README.md
-  src/features/labs/runtime/explore-labs.ts   (đăng ký Lab explore)
+  src/features/labs/runtime/explore-registry.ts  (đăng ký runtime của bàn)
   src/features/labs/lab-info.ts               (thẻ catalog)
 ```
 
@@ -235,7 +239,7 @@ Một Lab chỉ được đánh dấu `DONE` khi đủ cả danh sách:
 - [ ] Kéo-thả, click 2 bước và bàn phím đều làm được toàn bộ thao tác của Lab.
 - [ ] Stage 1 có bảng an toàn 2 cột; Stage 3 không khóa bàn.
 - [ ] Log gộp dòng liên tiếp, lưu IndexedDB, `exportObservationLog()` ra đúng schema.
-- [ ] Seed idempotent đã chạy `--dry-run`; chỉ ghi DB dùng chung khi có phê duyệt.
+- [ ] Kiểm seed idempotent trên DB cô lập. Phát hành lên DB dùng chung qua `POST /admin/labs/:id/explore-versions`.
 - [ ] FE: `npx tsc -b` (hoặc `npm run lint`), `npm run build`, `npm run test:regression` pass.
 - [ ] Đã mở trình duyệt kiểm tra desktop + mobile (375 px), không lỗi console, chụp ảnh làm bằng chứng.
 - [ ] Lab guided cũ (nếu có) không đổi hành vi: evaluator server và thứ tự event giữ nguyên.

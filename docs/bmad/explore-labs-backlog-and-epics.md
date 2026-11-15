@@ -62,13 +62,13 @@ K2 là kit Explore đầu tiên nên vài phần hiện chỉ phục vụ K2. C�
 
 | Status | Story | Việc | Done khi |
 |---|---|---|---|
-| `READY_FOR_DEV` | F0-1 Envelope chung | Tách `ExploreLabEnvelope` (spec mục 2) + `ObservationPrompt` từ `wet-bench/contracts.ts` sang `packages/sim/explore/envelope.ts`; `ChemistryLabConfig` mở rộng từ envelope. | Test sim pass, K2 không đổi hành vi. |
-| `READY_FOR_DEV` | F0-2 Registry Explore đa kit | `runtime/explore-labs.ts` hiện chỉ đọc `k2LabConfigs`. Đổi thành registry `{ kit, configs, validate, loadPage }` để `Lab.tsx` mở đúng `ExploreLabPage` của từng kit (lazy). | Route `/labs/:id` mở được Explore của 2 kit khác nhau. |
-| `READY_FOR_DEV` | F0-3 Hạ tầng tương tác dùng chung | Đưa `FollowGroup`, hook `useReleaseOnContextMenuAndEsc`, collider 1,4×, snap helper, kiểu `capacity` sang `features/labs/shared/explore/`. | K2 dùng lại từ shared, không trùng code. |
-| `READY_FOR_DEV` | F0-4 Log quan sát dùng chung | Tách phần chung của `observation-log.ts` (gộp dòng, IndexedDB, export) khỏi phần mô tả hiện tượng hóa học. | Kit khác chỉ viết `describeChange()`. |
-| `READY_FOR_DEV` | F0-5 Seed đa kit | Từ `scripts/seed-k2-explore-labs.ts` làm `scripts/seed-explore-labs.ts --kit <kit>`; giữ cờ `--dry-run`, `--unpublish` và biến phê duyệt ghi DB dùng chung. | Seed K2 qua script mới cho kết quả giống hệt. |
-| `READY_FOR_DEV` | F0-6 Review Hóa K2 | Reviewer môn Hóa duyệt `species.ts`, `reagents.ts`, `reactions.ts`, `fl13-acid-base.data.ts` (dải màu chỉ thị, Ka, màu dung dịch). | `reviewStatus` từng bộ số chuyển `reviewed` có tên người duyệt. |
-| `READY_FOR_DEV` | F0-7 Quyết định hiển thị | PO chốt: (a) giữ hay `--unpublish` 2 Lab K2 đang hiện cho học sinh khi dữ liệu còn `unverified`; (b) có cho học sinh chuyển Guided ↔ Explore ở FL-10 không. | Quyết định ghi vào file này. |
+| `IN_PROGRESS` | F0-1 Envelope chung | `packages/sim/explore/envelope.ts` chứa envelope và các trường prompt chung. Bàn tự mở rộng schema, gồm `focus` và `highlightWhen` của K2. | Test sim pass, K2 giữ nguyên hành vi. |
+| `DONE` | F0-2 Registry Explore đa bàn | FE đăng ký `{ kit, group, validate, loadPage, listKitItems }`, BE đăng ký `{ kit, validate }`. Bàn ướt đăng ký trong P0. | `/labs/:id` mở bàn ướt và fixture FE trên API mock. Kiểm với server thật theo cổng P0 §5.4. |
+| `IN_PROGRESS` | F0-3 Thư viện item dùng chung | Tạo khung `features/labs/shared/items/` theo P0 C2.1. Pilot A thêm cốc và cân. | Có kiểu item, test kiểu và README quy ước anchor. |
+| `IN_PROGRESS` | F0-4 Log quan sát dùng chung | Phần chung gồm khóa, đọc/ghi IndexedDB, giới hạn dòng và khung export. Kiểu dòng, mô tả hiện tượng và luật gộp thuộc từng bàn. | K2 đọc lại dữ liệu đã lưu và xuất đúng định dạng cũ. |
+| `IN_PROGRESS` | F0-5 Seed đa bàn | `npm run db:seed:explore -- --kit <id-bàn>` gọi `publishExploreLab`. Có `--dry-run`, `--unpublish` và guard DB cô lập. | Đạt các ca mở Lab đã ghim, dùng lại version, tạo version khi config đổi và chặn mọi đường ghi ngoài DB cô lập (P0 §5.2). |
+| `READY_FOR_DEV` | F0-6 Review Hóa K2 | Reviewer môn Hóa duyệt `species.ts`, `reagents.ts`, `reactions.ts`, `fl13-acid-base.data.ts` (dải màu chỉ thị, Ka, màu dung dịch). `reviewStatus` phục vụ hiển thị nhãn, phát hành Explore theo D-4. | `reviewStatus` từng bộ số chuyển `reviewed` có tên người duyệt. |
+| `IN_PROGRESS` | F0-7 Quyết định hiển thị | (a) D-1 đã chốt: Foundational Explore hiện cho học sinh kèm nhãn `unverified`. (b) Chuyển Guided ↔ Explore ở FL-10 theo D-5 của pilot. | D-5 chốt contract hai mode. |
 
 ---
 

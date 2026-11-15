@@ -23,7 +23,7 @@ Spec này là **contract chung**. Dev làm bất kỳ Kit hay bàn nào cũng d�
 
 Spec này **bổ sung** [Kiến trúc Explore](../../../docs/product/explore-first-lab-architecture-spec.md) (APPROVED_PATTERN), không thay thế. Cây thư mục (§3), quy ước dữ liệu khoa học (§4) và Definition of Done (§5) của tài liệu đó vẫn giữ nguyên. Các điểm được sửa có ghi ở §6.
 
-**"sim" là gì.** `packages/sim` trong BE là package `@nexalab/sim`, phiên bản hiện tại 1.7.0. Package này chứa:
+**"sim" là gì.** `packages/sim` trong BE là package `@nexalab/sim`. Phiên bản 1.8.0 chứa envelope Explore dùng chung. Package này chứa:
 - engine mô phỏng tất định, dùng đơn vị số nguyên;
 - dữ liệu khoa học: ID dụng cụ, chất, phản ứng, kèm `reviewStatus`;
 - validator config;
@@ -297,7 +297,7 @@ P0 gồm hai phần. Cả hai xong thì dev các Kit khác bắt đầu làm son
 | F0-4 Lưu trữ nhật ký dùng chung | Phần dùng chung **chỉ** gồm khóa (`labId@activity.id`, hoặc khóa lớp ở C3.4), đọc/ghi IndexedDB, giới hạn số dòng và export. Kiểu dòng nhật ký và cách mô tả hiện tượng thuộc từng bàn: `ObservationLogEntry` hiện có `readings.ph/litmus/scale`, `equations`, là dữ liệu hóa học | Bàn ướt dùng phần lưu trữ chung, không đổi hành vi. Bàn khác chỉ viết kiểu dòng và `describeChange()` |
 | F0-5 Seed đa bàn | `scripts/seed-explore-labs.ts --kit <bàn>`, gọi `publishExploreLab` (C1.3). Guard áp dụng cho mọi đường ghi. C1 **cố ý đổi** dữ liệu được ghi, nên không so với seed cũ | (a) Sau khi seed, cùng Lab mở đúng bàn qua `GET /labs`. (b) Chạy lại với cùng input thì không tạo version mới. (c) Đổi một giá trị config thì tạo version mới. (d) Mọi đường ghi, kể cả `--unpublish` và chạy thẳng `tsx`, đều bị chặn trên DB không cô lập |
 | C2.1 Khung thư viện item | Tạo `src/features/labs/shared/items/`, kiểu item, quy ước anchor. **Một người chịu trách nhiệm** thư mục này: item chung được thêm qua PR riêng, không gộp trong PR của bàn | Khung, test kiểu và README quy ước có trong repo. Cốc và cân được thêm ở pilot bước A |
-| Mẫu spec áp dụng | Mẫu một trang cho mỗi bàn: điền bảng C2.3, liệt kê item riêng và item dùng chung, loại yêu cầu bàn hỗ trợ, Lab nào có Explore | File mẫu nằm cạnh spec này |
+| Mẫu spec áp dụng | Mẫu một trang cho mỗi bàn: điền bảng C2.3, liệt kê item riêng và item dùng chung, loại yêu cầu bàn hỗ trợ, Lab nào có Explore | [Mẫu spec áp dụng](lab-explore-bench-spec-template.md) nằm cạnh spec này |
 
 **5.3 Mốc "Contract done"**
 

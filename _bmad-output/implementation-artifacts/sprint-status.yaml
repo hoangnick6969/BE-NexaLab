@@ -6,7 +6,7 @@ project_key: nexalab-release-1
 tracking_system: file-system
 story_location: _bmad-output/specs/spec-content-foundation
 scope: Release 1 / Content Foundation CF-T1..T4 plus I1 open curriculum, I2 Class Space resources, I3 assigned-test lifecycle, account/notifications (acc-1..acc-6) and the BE module-layer refactor; CF-T5 corpus remains a staffed workstream
-last_updated: '2026-11-14'
+last_updated: '2026-11-15'
 tracking_timezone: Asia/Saigon
 repositories:
   backend: 'BE-NexaLab: origin/main ebfaba7 (PR #28 refactor/be-module-layers incl. acc-1..acc-6; earlier PR #27, I1 #23/#26, I2 #24, I3 #25, project-structure #20). Still unmerged: feat/content-foundation 1 commit ahead (824dc74 chemistry pH-mode registry outputs; the CF core 8a1d44b and its three migrations are already on main).'
@@ -126,6 +126,9 @@ development_status:
   p3-5-second-model-gate: backlog
   p3-6-lab-factory-operations: done
   p3-7-class-lab: ready-for-dev
+  p0-explore-run-contract: in-progress
+  chem-wet-bench-pilot: backlog
+  wet-bench-molar-mass-convention: backlog
   # FL-25 em-induction — ../specs/spec-fl-25-em-induction/; private engineering prototype under owner exception D-1 (P3.5 gate still not met).
   fl-25-t0-owner-decisions: in-progress
   fl-25-t1-blueprint: review

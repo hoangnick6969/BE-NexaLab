@@ -1,6 +1,6 @@
-# K2 Wet Bench Kit — Explore-First, Optional Questions (thiết kế chờ duyệt)
+# K2 — Bàn ướt của Kit Hóa học, Explore-First
 
-**Trạng thái:** Đề xuất thiết kế 2026-11-13. Chưa duyệt, chưa code. Không thay thế `lab-catalog-and-shared-kits-khtn8-9.md`, `fl-10-k2-implementation-spec.md` hay các gate release. Mọi dữ liệu hoá học trong tài liệu (nồng độ, màu, ngưỡng pH, danh sách phản ứng) là **bản nháp kỹ thuật `unverified`**, cần reviewer môn Hoá/an toàn trước khi học sinh thấy ngoài dev route.
+**Trạng thái:** Thiết kế ban đầu ngày 2026-11-13. FL-13 và FL-14a đã có Explore, với bản ghim v2 đã phát hành qua Admin API. Dữ liệu hóa học còn `unverified` hiển thị kèm nhãn theo D-1. Contract runtime và cổng rollout theo [P0](lab-mode-foundation-p0-spec.md).
 
 ## 0. Đính chính phạm vi
 
@@ -9,15 +9,15 @@ Trong yêu cầu ban đầu, FL-06 và FL-07 được nêu làm ví dụ lab Ho�
 - FL-06 là đòn bẩy, thuộc K5 Cơ học.
 - FL-07 là năng lượng nhiệt, thuộc K4 Bàn nhiệt.
 
-Theo §6A.3 của catalog, kit Hoá là **K2 Bàn hoá ướt**, gồm FL-10 đến FL-15:
+**Kit Hóa học** gồm FL-10 đến FL-15. FL-10 đến FL-14 thuộc bàn ướt K2, FL-15 là bàn kịch bản an toàn:
 
 | ID | Nội dung | Quyết định catalog | Hiện trạng |
 |---|---|---|---|
 | FL-10 | Mol và PTHH | SPLIT | Activity Bảo toàn khối lượng v1 đang ACTIVE (guided, chấm server) |
 | FL-11 | Dung dịch và nồng độ | KEEP | Chưa làm |
 | FL-12 | Tốc độ phản ứng | KEEP | Chưa làm (cần mô hình theo thời gian) |
-| FL-13 | Acid–base, chỉ thị, pH | SHARE | Chưa làm (chỉ có fixture quỳ `chemistry@1.0.0` TECHNICAL_FIXTURE_ONLY) |
-| FL-14 | Phản ứng vô cơ, kim loại | SPLIT | Chưa làm |
+| FL-13 | Acid–base, chỉ thị, pH | SHARE | Đã có Explore |
+| FL-14 | Phản ứng vô cơ, kim loại | SPLIT | Đã có FL-14a Explore phạm vi hẹp. FL-14 đầy đủ chưa có |
 | FL-15 | An toàn phòng thí nghiệm | KEEP | Chưa làm |
 
 Ba lab áp thử ở §6 là **FL-13**, **FL-14a** (một mode hẹp đề xuất của FL-14) và **FL-10 Explore** (chế độ khám phá cạnh activity guided hiện có).
@@ -443,7 +443,7 @@ Overlay hiện khi mở lab. Mở lại được bất cứ lúc nào bằng nú
    Ghi chú cố định: "Lab ảo không thay thế hướng dẫn của giáo viên".
 5. **Giới hạn mô hình:** các ý `limitations`.
 6. Nút **"Vào bàn thí nghiệm"**.
-   - Khi `acknowledgeRequired` là true, nút có dạng "Em đã đọc lưu ý an toàn". Lựa chọn này được nhớ cục bộ theo lab và `configVersion`, không phải evidence.
+   - Khi `acknowledgeRequired` là true, nút có dạng "Em đã đọc lưu ý an toàn". Lựa chọn được nhớ cục bộ theo `labId@activity.id`, hoặc `labId@configVersion` trên route dev.
 
 ### Stage 2 — Bàn thí nghiệm (Explore)
 
@@ -473,7 +473,7 @@ Overlay hiện khi mở lab. Mở lại được bất cứ lúc nào bằng nú
 - **Nhật ký thí nghiệm** (`ObservationLog`) tự sinh từ delta giữa hai lần observation:
   - mỗi dòng gồm thao tác, vật chứa và hiện tượng thay đổi;
   - phương trình chỉ hiện theo `revealEquations`;
-  - lưu IndexedDB theo `labId`, `configVersion`; có nút "Xoá nhật ký" và "Bắt đầu lại bàn".
+  - lưu IndexedDB theo `labId@activity.id`, hoặc `labId@configVersion` trên route dev, với nút "Xoá nhật ký" và "Bắt đầu lại bàn".
 - **Thiết bị yếu:** `lowTierFallback` hạ hiệu ứng (bọt ít hạt, bỏ transmission). Khi WebGL lỗi, tự chuyển sang danh sách DOM. Mọi thao tác vẫn làm được vì `BenchAccessibleControls` là đường thao tác đầy đủ, không chỉ là trang trí.
 
 ### Stage 3 — `ObservationDrawer` (shared)
@@ -483,23 +483,15 @@ Overlay hiện khi mở lab. Mở lại được bất cứ lúc nào bằng nú
   - Kiểu `choice` không có đáp án đúng, chỉ để học sinh tự ghi nhận. Kiểu `free_text` lưu cục bộ.
   - Nút "Chỉ cho em" làm sáng dụng cụ ghi trong `focus`.
   - `highlightWhen` chỉ thêm badge "mới" khi hiện tượng liên quan vừa xảy ra.
-- **Tab "Câu hỏi của giáo viên"** (chỉ Class Lab): dùng lại `StudentClassLabAdditionalResponses` cùng `reportPrompts`, do giáo viên chấm như hiện tại.
+- **Câu hỏi của Class Lab Explore** (pilot bước C): hiển thị yêu cầu đã ghim của bài giao, với bài nộp riêng để giáo viên nhận xét theo P0 C3.4.
 - **Tab "Nhật ký":** cùng `ObservationLog` ở trên; trên mobile thì gộp vào drawer.
 
 ---
 
-## 5. Data contract của pha tích hợp (để không phải làm lại)
+## 5. Contract tích hợp
 
-Pha này không thuộc pilot, chỉ chốt hướng:
-
-- **Pha 1:**
-  - `GET /labs` (hoặc launch) trả thêm `intro { objective, materials, safety, limitations }` từ `release.snapshot.activity.spec`, cùng `exploreConfigRef`.
-  - `Lab.tsx` hiện bộ chọn mode "Khám phá tự do / Thực hành có chấm" cho lab có cả hai, mặc định là Khám phá.
-  - Nhánh FL-10 guided giữ nguyên.
-- **Pha 2:**
-  - Ghim `ChemistryLabConfig` vào `SimulationPackVersion.template.explore`, để release có digest và để server validate bằng chính `validateChemistryLabConfig`.
-  - Class Lab thêm `content.mode: "explore" | "guided"`. Giáo viên bật hoặc tắt prompt và thêm `reportPrompts`. Không cho sửa `allowedReactions` hay chất (đó là khoa học đã ghim).
-- **Pha 3:** activity guided mới trên wet-bench, dùng `MODEL_REGISTRY["wet-bench@1.0.0"]`, rubric mới, và server replay chuỗi `Operation`. Đây là lúc Explore và chấm điểm dùng chung một engine.
+- **Foundational Explore (P0 C1):** `Lab.config.activity` ghim `PracticalActivityVersion.spec.explore`. `GET /labs` trả mode và config đã kiểm. FE validate lại bằng validator đã đăng ký của bàn. FL-10 tiếp tục Guided ở route chính cho tới quyết định D-5.
+- **Class Lab Explore ([pilot bước C](lab-kit-assets-and-class-lab-spec.md), P0 C3):** Giáo viên chọn mẫu, chất, dụng cụ, giá trị và prompt trong allow-list của `classTemplates`. Server xác thực lựa chọn, ghim cấu hình hiệu lực và yêu cầu tại lúc giao. Học sinh mở và nộp theo `assignmentId`, giáo viên nhận xét bài nộp riêng.
 
 ---
 
