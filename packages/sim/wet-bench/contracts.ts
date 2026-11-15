@@ -51,6 +51,31 @@ const promptSchema = observationPromptSchema.extend({
   highlightWhen: z.object({ reaction: z.string().optional(), measurement: z.enum(MEASUREMENTS).optional() }).strict().optional(),
 });
 
+/**
+ * Class Explore template (P0 C3.1): what a teacher may choose when assigning this Lab. NexaLab authors it and it is
+ * pinned with the Lab version; the teacher only picks inside it, by id.
+ */
+export const classTemplateSchema = z.object({
+  id,
+  titleVi: z.string().trim().min(1).max(120),
+  /** Apparatus (by config id) that is always on the bench; nothing else is. */
+  requiredApparatusIds: z.array(id).min(1).max(24),
+  /** Allow-lists of reagents: the teacher picks exactly `count` of `options` per group. */
+  reagentGroups: z.array(z.object({
+    id, labelVi: z.string().trim().min(1).max(120), options: z.array(id).min(1).max(8), count: z.number().int().min(1).max(8),
+  }).strict()).min(1).max(2),
+  /** Prompts the teacher may attach (ids of `pedagogy.observationPrompts`). `onlyWithReagents` limits a prompt whose wording names substances. */
+  promptChoices: z.array(z.object({ promptId: id, onlyWithReagents: z.array(id).max(8).optional() }).strict()).min(1).max(4),
+  /** `measure`: the pH of each reagent picked in `perGroup`; `explain`: one free-text explanation. */
+  requirements: z.object({
+    measure: z.object({ measurement: z.literal("ph_meter"), perGroup: id }).strict().optional(),
+    explain: z.boolean(),
+  }).strict(),
+  /** Reactions the requirements need to be able to happen; strict validation turns "cannot happen" into an error for these. */
+  requiresReactions: z.array(z.string()).max(8).optional(),
+}).strict();
+export type ClassTemplate = z.infer<typeof classTemplateSchema>;
+
 export const chemistryLabConfigSchema = exploreLabEnvelopeSchema.extend({
   schema: z.literal("k2-lab-config/1"),
   kit: z.literal(K2_KIT),
@@ -71,6 +96,7 @@ export const chemistryLabConfigSchema = exploreLabEnvelopeSchema.extend({
     revealEquations: z.enum(["never", "after_observation", "always"]),
     observationPrompts: z.array(promptSchema).max(8).optional(),
   }),
+  classTemplates: z.array(classTemplateSchema).max(4).optional(),
 });
 export type ChemistryLabConfig = z.infer<typeof chemistryLabConfigSchema>;
 export type ObservationPrompt = NonNullable<ChemistryLabConfig["pedagogy"]["observationPrompts"]>[number];

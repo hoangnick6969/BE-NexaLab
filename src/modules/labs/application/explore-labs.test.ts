@@ -56,6 +56,32 @@ describe("publishExploreLab (P0 C1.3)", () => {
     expect(versions[0].digest).not.toBe(versions[1].digest);
   });
 
+  it("pins class templates with the config: they are in spec.explore, change the digest, and a bad template is refused", async () => {
+    const { db, versions } = fakeDb();
+    const withTemplate = (count: number) => ({
+      ...exploreConfig(),
+      enabledApparatus: [{ id: "T1", kind: "test_tube", slot: "rack_1" }, { id: "T2", kind: "test_tube", slot: "rack_2" }, { id: "meter", kind: "digital_ph_meter", slot: "tool_ph" }],
+      classTemplates: [{
+        id: "ph-compare", titleVi: "So sánh pH", requiredApparatusIds: ["T1", "T2", "meter"],
+        reagentGroups: [{ id: "samples", labelVi: "Mẫu", count, options: ["HCl_0_1M", "NaOH_0_1M"] }],
+        promptChoices: [{ promptId: "p1" }], requirements: { measure: { measurement: "ph_meter", perGroup: "samples" }, explain: true },
+      }],
+    });
+    await publishExploreLab(db, input(withTemplate(2)));
+    const spec = versions[0].spec;
+    expect(spec.explore.classTemplates[0]).toMatchObject({ id: "ph-compare", reagentGroups: [{ count: 2 }] });
+    expect(resolveExplore({ id: "acid-base-indicators", config: { mode: "explore", kit: "k2-wet-bench@1", engine: "wet-bench@1.0.0", activity: { id: "pav-1", key: "acid-base-indicators-explore", version: 1, digest: versions[0].digest } } }, versions[0]).ok).toBe(true);
+    // Another allow-list is another digest, hence another version.
+    const withOneSample = withTemplate(1);
+    expect(await publishExploreLab(db, input(withOneSample))).toMatchObject({ activityCreated: true, activity: { version: 2 } });
+    expect(versions[0].digest).not.toBe(versions[1].digest);
+    // A template that points at an unknown prompt never reaches the database.
+    const broken = withTemplate(2);
+    broken.classTemplates[0].promptChoices = [{ promptId: "missing" }];
+    await expect(publishExploreLab(db, input(broken))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
+    expect(versions).toHaveLength(2);
+  });
+
   it("gives the same version and digest through the Admin API and the seed call", async () => {
     const seed = fakeDb();
     const api = fakeDb();

@@ -65,6 +65,37 @@ export function validateChemistryLabConfig(raw: unknown): ConfigValidation {
     if (prompt.highlightWhen?.measurement && !config.measurements.includes(prompt.highlightWhen.measurement)) errors.push(`observationPrompts.${prompt.id}: measurement ${prompt.highlightWhen.measurement} is not enabled`);
   }
 
+  // Class Explore templates (P0 C3.1) may only refer to things this config has.
+  const templates = config.classTemplates ?? [];
+  for (const value of duplicates(templates.map((template) => template.id))) errors.push(`classTemplates: duplicate id ${value}`);
+  const promptIds = prompts.map((prompt) => prompt.id);
+  for (const template of templates) {
+    const at = `classTemplates.${template.id}`;
+    for (const apparatusId of template.requiredApparatusIds) if (!apparatusIds.includes(apparatusId)) errors.push(`${at}: unknown apparatus ${apparatusId}`);
+    for (const value of duplicates(template.requiredApparatusIds)) errors.push(`${at}: duplicate apparatus ${value}`);
+    const groupIds = template.reagentGroups.map((group) => group.id);
+    for (const value of duplicates(groupIds)) errors.push(`${at}: duplicate reagent group ${value}`);
+    for (const group of template.reagentGroups) {
+      for (const reagentId of group.options) if (!shelf.includes(reagentId)) errors.push(`${at}.${group.id}: option ${reagentId} is not on the shelf`);
+      for (const value of duplicates(group.options)) errors.push(`${at}.${group.id}: duplicate option ${value}`);
+      if (group.count > group.options.length) errors.push(`${at}.${group.id}: count ${group.count} exceeds the ${group.options.length} options`);
+    }
+    const groupOptions = new Set(template.reagentGroups.flatMap((group) => group.options));
+    for (const choice of template.promptChoices) {
+      if (!promptIds.includes(choice.promptId)) errors.push(`${at}: prompt ${choice.promptId} is not in observationPrompts`);
+      for (const reagentId of choice.onlyWithReagents ?? []) if (!groupOptions.has(reagentId)) errors.push(`${at}: prompt ${choice.promptId} needs ${reagentId}, which is in no reagent group`);
+    }
+    for (const value of duplicates(template.promptChoices.map((choice) => choice.promptId))) errors.push(`${at}: duplicate prompt choice ${value}`);
+    const measure = template.requirements.measure;
+    if (measure) {
+      if (!groupIds.includes(measure.perGroup)) errors.push(`${at}: measure refers to unknown reagent group ${measure.perGroup}`);
+      const tool = MEASUREMENT_TOOL[measure.measurement];
+      if (!template.requiredApparatusIds.some((apparatusId) => config.enabledApparatus.find((item) => item.id === apparatusId)?.kind === tool)) errors.push(`${at}: measure ${measure.measurement} needs ${tool} among requiredApparatusIds`);
+    }
+    if (!measure && !template.requirements.explain) errors.push(`${at}: a template needs at least one requirement`);
+    for (const reactionId of template.requiresReactions ?? []) if (!known.has(reactionId)) errors.push(`${at}: unknown reaction ${reactionId}`);
+  }
+
   // A config may only claim "reviewed" when every scientific input it uses is reviewed.
   if (config.review.status === "reviewed") {
     const unreviewed = [

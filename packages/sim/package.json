@@ -1,6 +1,6 @@
 {
   "name": "@nexalab/sim",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
@@ -24,6 +24,7 @@
     "wet-bench/acid-base.ts",
     "wet-bench/engine.ts",
     "wet-bench/validate-config.ts",
+    "wet-bench/class-template.ts",
     "mechanics/index.ts",
     "mechanics/contracts.ts",
     "mechanics/validate-config.ts",
