@@ -17,7 +17,7 @@ Ký hiệu: `[x]` xong và đã kiểm · `[~]` code xong, còn việc kiểm ch
 ### Giữa hai PR: cổng rollout §5.4
 - [x] Bước 1: phát hành FL-13 và FL-14a qua Admin API, cả hai lên version 2
 - [x] Bước 2: kiểm chỉ-SELECT đạt (đúng con trỏ, digest khớp, `spec.explore.labId` đúng Lab)
-- [ ] Bước 3: kiểm trên DB cô lập với build PR-2 (Guided và Class Guided vẫn mở, nộp, chấm được; Explore mở được trên **2 bàn**, cần F0-2)
+- [ ] Bước 3: kiểm trên DB cô lập với build PR-2 (Guided và Class Guided vẫn mở, nộp, chấm được; Explore mở được trên **2 bàn**: bàn ướt và fixture F0-2. Phía FE đã chứng minh bằng Playwright mock API; cần Postgres local để chạy với server thật)
 - [ ] Bước 4: deploy PR-2 (BE và FE cùng lúc)
 
 ### PR-2 (BE + FE): đọc dữ liệu. Đã commit (BE `eac62f0`, FE `b127276`), chưa push
@@ -34,7 +34,7 @@ Ký hiệu: `[x]` xong và đã kiểm · `[~]` code xong, còn việc kiểm ch
 - [x] Con trỏ activity sai trả đúng mã lỗi trên dòng đó; `GET /labs` vẫn 200
 - [x] Mỗi mã lỗi một ca: giáo viên thấy panel kèm mã, không vào GuidedLab, không dùng config đóng gói; học sinh không nhận dòng
 - [x] Config đúng schema và digest nhưng thuộc Lab khác trả `EXPLORE_IDENTITY_MISMATCH`
-- [~] Response đúng contract C1.2 (đã xong). **Phần "danh sách dụng cụ đọc qua `listKitItems`" chờ F0-2**
+- [x] Response đúng contract C1.2; danh sách dụng cụ và chất ở màn giới thiệu đọc qua `listKitItems` và không đổi (test so với logic cũ trên FL-10/13/14a)
 - [x] Lab Explore ngoài bundle mở được; FL-10 vẫn Guided; Class Guided qua `assignmentId`/`resourceId` vẫn mở, nộp được (Playwright `fl-10-k2`, `lab-run-host`)
 - [x] Sửa `Lab.config` mà không tạo version mới thì báo `EXPLORE_DIGEST_MISMATCH`; config mới thì có version mới và khóa lưu mới
 - [x] Học sinh mở FL-13 khi dữ liệu còn `unverified`, có nhãn
@@ -43,9 +43,9 @@ Ký hiệu: `[x]` xong và đã kiểm · `[~]` code xong, còn việc kiểm ch
 - [~] Dùng Explore không tạo `LabRun`/`Attempt`/`Progress` (Playwright: không có request run; bản kiểm DB cô lập chưa chạy)
 - [x] Lint, test, build BE; lint, build FE
 
-## 3. Hạ tầng chung §5.2 (chưa bắt đầu; mỗi việc nên là một PR nhỏ)
+## 3. Hạ tầng chung §5.2 (mỗi việc nên là một PR nhỏ)
 - [ ] **F0-1** Envelope trung lập `packages/sim/explore/envelope.ts`; `ChemistryLabConfig` mở rộng từ envelope; bàn ướt không đổi hành vi
-- [ ] **F0-2** Registry đa bàn: FE `{ kit, group, validate, loadPage, listKitItems }`, BE `{ kit, validate }` (BE đã có `EXPLORE_BENCHES`, cần thêm `group`); đăng ký bàn ướt; fixture bàn thứ hai; màn giới thiệu đọc dụng cụ qua `listKitItems`
+- [x] **F0-2** Registry đa bàn (FE, chưa commit). FE `runtime/explore-registry.ts` với mục `{ kit, group, validate, loadPage, listKitItems }`; bàn ướt đã đăng ký; `listWetBenchKitItems` là adapter tối thiểu và màn giới thiệu đọc qua nó. BE giữ `EXPLORE_BENCHES` `{ kit, validate }` như spec. Bàn thứ hai là fixture `explore-fixture@1`, **chỉ đăng ký ở build dev**: Playwright mở được hai bàn qua `/labs/:id`. Server không có fixture, nên bước 3 của rollout trên DB cô lập chỉ kiểm được bàn ướt cho tới khi có bàn thật thứ hai
 - [ ] **F0-4** Lưu nhật ký dùng chung: khóa, IndexedDB, giới hạn dòng, export
 - [ ] **F0-5** Seed đa bàn `scripts/seed-explore-labs.ts --kit <bàn>` gọi `publishExploreLab`; đạt tiêu chí (a)–(d)
 - [ ] **C2.1** Khung `src/features/labs/shared/items/` (kiểu item, quy ước anchor, README, test kiểu)
