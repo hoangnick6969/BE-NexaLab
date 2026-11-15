@@ -81,10 +81,8 @@ export function mapItemsToContent(kind: ResourceKind, items: ResourceItem[]) {
   if (kind === "DECK") return { cards: items.flatMap((item) => (item.type === "CARD" ? [{ front: item.front, back: item.back }] : [])) };
   const questions = items.flatMap((item) => (item.type === "SINGLE_CHOICE" ? [item] : []));
   return {
-    questions: questions.map((item) =>
-      kind === "TEST"
-        ? { prompt: item.prompt, options: item.options, correctOption: item.correctOption, explanation: item.explanation }
-        : { prompt: item.prompt, options: item.options, explanation: item.explanation }),
+    // STUDY_QUIZ keeps the answer key as TEST does: the student sees right/wrong and the explanation (not scored).
+    questions: questions.map((item) => ({ prompt: item.prompt, options: item.options, correctOption: item.correctOption, explanation: item.explanation })),
   };
 }
 const TERMINAL = new Set(["SUCCEEDED", "FAILED", "CANCELLED"]);

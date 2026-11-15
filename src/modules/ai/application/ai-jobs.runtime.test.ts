@@ -209,7 +209,7 @@ describe("POST classes/:id/ai-jobs", () => {
   it("creates one PENDING job with a pinned snapshot, and replays the same key", async () => {
     const r = req();
     const first = await create({}, r);
-    expect(first).toMatchObject({ status: "PENDING", requestedCount: 2, promptVersion: "generate-resource@1", outputSchemaVersion: "resource-items@1", model: "fake-model" });
+    expect(first).toMatchObject({ status: "PENDING", requestedCount: 2, promptVersion: "generate-resource@2", outputSchemaVersion: "resource-items@1", model: "fake-model" });
     const replay = await create({}, r);
     expect(replay.id).toBe(first.id);
     expect(store.aiJob.rows).toHaveLength(1);
@@ -537,12 +537,12 @@ describe("item decisions and materialization (TAI-T4)", () => {
     ]);
   });
 
-  it("drops the answer key for STUDY_QUIZ and maps cards for DECK", async () => {
+  it("keeps the answer key and explanation for STUDY_QUIZ and maps cards for DECK", async () => {
     const quiz = await succeeded([question(0)], { targetKind: "STUDY_QUIZ" });
     await decide(quiz.id, quiz.items![0].id, { decision: "ACCEPTED" });
     const quizResource = await materialize(quiz.id);
     expect(quizResource.kind).toBe("STUDY_QUIZ");
-    expect(quizResource.content.questions[0]).not.toHaveProperty("correctOption");
+    expect(quizResource.content.questions[0]).toMatchObject({ correctOption: question(0).correctOption, explanation: question(0).explanation });
     const deck = await succeeded([{ type: "CARD", front: "Ampe kế", back: "Đo cường độ dòng điện", sourceRefs: ["P1"] }], { targetKind: "DECK" });
     await decide(deck.id, deck.items![0].id, { decision: "ACCEPTED" });
     const deckResource = await materialize(deck.id);

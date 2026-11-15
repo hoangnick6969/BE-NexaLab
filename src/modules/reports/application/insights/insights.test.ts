@@ -33,6 +33,30 @@ describe("INSUFFICIENT_EVIDENCE boundary", () => {
   });
 });
 
+describe("SCORE_CHANGE_UNUSUAL retake context", () => {
+  const hour = 3600_000;
+  const retake = (id: string, minutes: number, score: number, assignmentId = "a1"): InsightEvidence =>
+    ({ kind: "TEST", id, at: new Date(at(0).getTime() + minutes * 60_000), score, outcomeCodes: [], assignmentId });
+  const scoreChange = (evidence: InsightEvidence[]) => run(evidence).find((i) => i.ruleCode === "SCORE_CHANGE_UNUSUAL")!;
+
+  it("labels resubmissions of one assigned test within 24 hours as a retake, without changing the fingerprint inputs", () => {
+    const evidence = [retake("t1", 0, 35), retake("t2", 85, 35), retake("t3", 86, 30), retake("t4", 94, 75)];
+    const hit = scoreChange(evidence);
+    expect(hit.values).toMatchObject({ context: "RETAKE_SAME_ASSIGNMENT", assignmentId: "a1", direction: "UP" });
+    expect(hit.message).toBe(INSIGHT_MESSAGES.SCORE_CHANGE_RETAKE);
+    // Same rule, same evidence -> same fingerprint as before the context existed: acknowledgements stay valid.
+    expect(hit.fingerprint).toBe(insightFingerprint({ ruleVersion: "insights@1", ruleCode: "SCORE_CHANGE_UNUSUAL", classId: "c1", studentId: "s1", evidenceIds: ["t1", "t2", "t3", "t4"] }));
+  });
+
+  it("keeps the across-work wording for different tests, for the same test spread over more than 24 hours, and for quizzes", () => {
+    expect(scoreChange([retake("t1", 0, 35, "a1"), retake("t2", 10, 35, "a2"), retake("t3", 20, 35, "a3"), retake("t4", 30, 75, "a4")]).values.context).toBe("ACROSS_WORK");
+    const spread = scoreChange([retake("t1", 0, 35), retake("t2", 60, 35), retake("t3", 120, 35), retake("t4", (24 * hour) / 60_000 + 1, 75)]);
+    expect(spread.values.context).toBe("ACROSS_WORK");
+    expect(spread.message).toBe(INSIGHT_MESSAGES.SCORE_CHANGE_UNUSUAL);
+    expect(scoreChange(scores([35, 35, 35, 75])).values.context).toBe("ACROSS_WORK");
+  });
+});
+
 describe("SCORE_CHANGE_UNUSUAL boundaries", () => {
   it("fires at a 25 point change from a flat baseline and not at 24", () => {
     expect(codes(scores([60, 60, 60, 85]))).toEqual(["SCORE_CHANGE_UNUSUAL"]);

@@ -202,7 +202,7 @@ describe("TAI6-T5 SPEC success-signal journey (in-memory, fake provider)", () =>
     // 1. The owner of class-pilot-a asks for 3 proposals for a draft private lesson; the same key replays the job.
     const k = key();
     const created: any = await ai.create(CLASS, req(OWNER, k), body());
-    expect(created).toMatchObject({ purpose: "DRAFT_LAB_CHALLENGE", status: "PENDING", requestedCount: 3, promptVersion: "draft-lab-challenge@1", outputSchemaVersion: "lab-challenge-proposals@1", targetKind: null });
+    expect(created).toMatchObject({ purpose: "DRAFT_LAB_CHALLENGE", status: "PENDING", requestedCount: 3, promptVersion: "draft-lab-challenge@2", outputSchemaVersion: "lab-challenge-proposals@1", targetKind: null });
     expect((await ai.create(CLASS, req(OWNER, k), body())).id).toBe(created.id);
     await expect(codeOf(ai.create(CLASS, req(OWNER, k), body({ proposalCount: 2 })))).resolves.toBe("IDEMPOTENCY_KEY_REUSED");
     expect(jobs()).toHaveLength(1);

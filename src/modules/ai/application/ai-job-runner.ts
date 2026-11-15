@@ -16,7 +16,7 @@ import { loadQdupCorpus, qdupFlagger } from "./question-fingerprints";
 import { processGenerateResourceOutput, type DroppedItem, type ProcessedItem } from "./output-pipeline";
 import { buildAssessProviderRequest } from "./assess-submission-prompt";
 import { LAB_CHALLENGE_MAX_OUTPUT_TOKENS } from "./lab-challenge-contract";
-import { DRAFT_LAB_CHALLENGE_SYSTEM, LAB_CHALLENGE_JSON_SCHEMA, buildLabChallengeUser, type LabChallengeSnapshotV1 } from "./lab-challenge-prompt";
+import { DRAFT_LAB_CHALLENGE_SYSTEM, buildLabChallengeUser, labChallengeResponseSchema, type LabChallengeSnapshotV1 } from "./lab-challenge-prompt";
 import { processLabChallengeOutput } from "./lab-challenge-validation";
 import { loadLabContexts } from "./lab-reference-states";
 import { PRIVACY_GUARD_FAILURE } from "./assessment-contract";
@@ -187,7 +187,7 @@ export class AiJobRunner implements OnModuleInit, OnModuleDestroy {
         user: buildLabChallengeUser(snapshot),
         maxTokens: LAB_CHALLENGE_MAX_OUTPUT_TOKENS,
         timeoutMs: RUNNER_TIMINGS.providerTimeoutMs,
-        responseSchema: LAB_CHALLENGE_JSON_SCHEMA as unknown as Record<string, unknown>,
+        responseSchema: labChallengeResponseSchema(snapshot.models),
       });
       text = result.text;
       usage = { inputTokens: result.inputTokens, outputTokens: result.outputTokens };

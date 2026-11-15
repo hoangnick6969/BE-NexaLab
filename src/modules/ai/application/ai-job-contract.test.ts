@@ -45,7 +45,7 @@ describe("create body (discriminated union on purpose)", () => {
 describe("toAiJobView", () => {
   const job = {
     id: "j1", classId: "c1", lessonId: "l1", targetKind: "TEST", status: "SUCCEEDED", failureCode: null,
-    promptVersion: "generate-resource@1", outputSchemaVersion: "resource-items@1", model: "fake-model",
+    promptVersion: "generate-resource@2", outputSchemaVersion: "resource-items@1", model: "fake-model",
     request: { itemCount: 3 }, droppedItems: [{ position: 2, reasonCodes: ["X"] }], inputTokens: 5, outputTokens: 7,
     materializedResourceId: null, createdAt: new Date("2026-11-05T00:00:00Z"), completedAt: new Date("2026-11-05T00:00:05Z"),
   };

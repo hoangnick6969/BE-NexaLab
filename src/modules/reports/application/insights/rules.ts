@@ -21,6 +21,20 @@ export const INSIGHTS_V1_THRESHOLDS = {
 } as const;
 
 const T = INSIGHTS_V1_THRESHOLDS;
+/**
+ * Context only (not a threshold, so the approved insights@1 rule and its fingerprints do not change): compared results
+ * that are all resubmissions of one assigned test, first to last within this window, are labelled a retake.
+ */
+export const RETAKE_WINDOW_HOURS = 24;
+
+/** True when every item is a TEST of the same assignment and they span at most RETAKE_WINDOW_HOURS. */
+export function isSameTestRetake(items: InsightEvidence[]): boolean {
+  if (items.length < 2) return false;
+  const assignmentId = items[0]!.assignmentId;
+  if (!assignmentId || items.some((e) => e.kind !== "TEST" || e.assignmentId !== assignmentId)) return false;
+  const times = items.map((e) => e.at.getTime());
+  return Math.max(...times) - Math.min(...times) <= RETAKE_WINDOW_HOURS * 3_600_000;
+}
 const EPSILON = 1e-9;
 const KIND_ORDER: InsightEvidenceKind[] = ["PRACTICAL", "QUIZ", "TEST"];
 
@@ -82,12 +96,18 @@ export function scoreChangeUnusual(input: InsightInput): Insight[] {
   const threshold = Math.max(T.sigmaMultiplier * sd, T.minDelta);
   const delta = latest.score! - mean;
   if (Math.abs(delta) < threshold - EPSILON) return [];
+  const retake = isSameTestRetake([...baseline, latest]);
   return [build(input, {
     ruleCode: "SCORE_CHANGE_UNUSUAL",
     status: "TEACHER_REVIEW_RECOMMENDED",
-    message: INSIGHT_MESSAGES.SCORE_CHANGE_UNUSUAL,
+    message: retake ? INSIGHT_MESSAGES.SCORE_CHANGE_RETAKE : INSIGHT_MESSAGES.SCORE_CHANGE_UNUSUAL,
     thresholds: { baselineMin: T.baselineMin, baselineMax: T.baselineMax, sigmaMultiplier: T.sigmaMultiplier, minDelta: T.minDelta },
-    values: { latest: latest.score!, mean: round4(mean), standardDeviation: round4(sd), delta: round4(delta), threshold: round4(threshold), direction: delta > 0 ? "UP" : "DOWN" },
+    values: {
+      latest: latest.score!, mean: round4(mean), standardDeviation: round4(sd), delta: round4(delta), threshold: round4(threshold), direction: delta > 0 ? "UP" : "DOWN",
+      // "RETAKE_SAME_ASSIGNMENT": resubmissions of one assigned test; "ACROSS_WORK": results of different work.
+      context: retake ? "RETAKE_SAME_ASSIGNMENT" : "ACROSS_WORK",
+      ...(retake ? { assignmentId: latest.assignmentId! } : {}),
+    },
     evidence: [...baseline, latest].map(ref),
   })];
 }

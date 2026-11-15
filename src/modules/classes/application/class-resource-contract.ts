@@ -8,6 +8,8 @@ const nonEmpty = z.string().trim().min(1).max(500);
 const optionsSchema = z.array(nonEmpty).min(2).max(6);
 const cardSchema = z.object({ front: nonEmpty, back: nonEmpty }).strict();
 const questionSchema = z.object({ prompt: nonEmpty, options: optionsSchema, explanation: z.string().trim().max(1000).optional() }).strict();
+/** STUDY_QUIZ keeps an answer key so a student gets right/wrong feedback; optional for quizzes made without one. */
+const studyQuizQuestionSchema = questionSchema.extend({ correctOption: z.number().int().min(0).max(5).optional() });
 const testQuestionSchema = questionSchema.extend({ correctOption: z.number().int().min(0).max(5) });
 
 export const resourceKindSchema = z.enum(["DECK", "STUDY_QUIZ", "TEST", "LAB", "DOCUMENT", "REPORT_TEMPLATE", "LINK", "WRITTEN_TASK", "EXPLORE_LAB"]);
@@ -159,16 +161,16 @@ export function normalizeResourceContent(kind: ResourceKind, raw: unknown) {
     kind === "DECK"
       ? z.object({ cards: z.array(cardSchema).min(1).max(200) }).strict().parse(raw)
       : kind === "STUDY_QUIZ"
-        ? z.object({ questions: z.array(questionSchema).min(1).max(100) }).strict().parse(raw)
+        ? z.object({ questions: z.array(studyQuizQuestionSchema).min(1).max(100) }).strict().parse(raw)
         : z.object({ questions: z.array(testQuestionSchema).min(1).max(100), thumbnailUrl: httpsUrlSchema.optional() }).strict().parse(raw);
   if (kind === "DECK") return { cards: parsed.cards.map((card: any) => ({ id: randomUUID(), ...card })) };
   for (const question of parsed.questions) {
-    if (kind === "TEST" && question.correctOption >= question.options.length) throw new BadRequestException({ code: "TEST_ANSWER_INVALID", message: "Đáp án đúng phải trỏ tới phương án có nội dung" });
+    if (question.correctOption !== undefined && question.correctOption >= question.options.length) throw new BadRequestException({ code: "TEST_ANSWER_INVALID", message: "Đáp án đúng phải trỏ tới phương án có nội dung" });
   }
   return { ...(kind === "TEST" && parsed.thumbnailUrl ? { thumbnailUrl: parsed.thumbnailUrl } : {}), questions: parsed.questions.map((question: any) => ({
     id: randomUUID(), prompt: question.prompt, explanation: question.explanation ?? null,
     options: question.options.map((text: string) => ({ id: randomUUID(), text })),
-    ...(kind === "TEST" ? { correctOption: question.correctOption } : {}),
+    ...(question.correctOption !== undefined ? { correctOption: question.correctOption } : {}),
   })) };
 }
 
@@ -186,10 +188,13 @@ export function parseResourceCsv(kind: ResourceKind, csv: string) {
     throw new BadRequestException({ code: "IMPORT_KIND_UNSUPPORTED", message: "Loại tài nguyên này không hỗ trợ nhập CSV" });
   if (Buffer.byteLength(csv, "utf8") > 1_000_000) throw new BadRequestException({ code: "IMPORT_TOO_LARGE", message: "CSV không được vượt quá 1 MB" });
   const records = parseCsv(csv);
-  const headers = kind === "DECK" ? ["front", "back"] : kind === "STUDY_QUIZ"
-    ? ["prompt", "optionA", "optionB", "optionC", "optionD", "explanation"]
-    : ["prompt", "optionA", "optionB", "optionC", "optionD", "correctOption", "explanation"];
+  const answerHeaders = ["prompt", "optionA", "optionB", "optionC", "optionD", "correctOption", "explanation"];
   const actual = records.shift()?.map((x) => x.trim()) ?? [];
+  // STUDY_QUIZ accepts the answer-key layout too, so a practice quiz can give right/wrong feedback.
+  const quizWithAnswers = kind === "STUDY_QUIZ" && actual.join(",") === answerHeaders.join(",");
+  const headers = kind === "DECK" ? ["front", "back"] : kind === "STUDY_QUIZ" && !quizWithAnswers
+    ? ["prompt", "optionA", "optionB", "optionC", "optionD", "explanation"]
+    : answerHeaders;
   if (actual.join(",") !== headers.join(",")) throw new BadRequestException({ code: "IMPORT_HEADERS_INVALID", message: `Cột CSV phải theo thứ tự: ${headers.join(",")}` });
   if (!records.length || records.length > (kind === "DECK" ? 200 : 100)) throw new BadRequestException({ code: "IMPORT_ROW_LIMIT", message: `Số dòng dữ liệu phải từ 1 đến ${kind === "DECK" ? 200 : 100}` });
   const errors: Array<{ row: number; field: string; message: string }> = [];
@@ -209,7 +214,7 @@ export function parseResourceCsv(kind: ResourceKind, csv: string) {
     else {
       const options = [cells.optionA, cells.optionB, cells.optionC, cells.optionD].filter(Boolean);
       const q: any = { prompt: cells.prompt, options, ...(cells.explanation ? { explanation: cells.explanation } : {}) };
-      if (kind === "TEST") {
+      if (kind === "TEST" || (quizWithAnswers && cells.correctOption)) {
         const answer = ["A", "B", "C", "D"].indexOf((cells.correctOption ?? "").toUpperCase());
         if (answer < 0 || answer >= options.length) errors.push({ row: rowNumber, field: "correctOption", message: "Chọn A/B/C/D ứng với một phương án có nội dung" });
         q.correctOption = answer;

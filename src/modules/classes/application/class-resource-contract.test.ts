@@ -3,11 +3,27 @@ import { BadRequestException } from "@nestjs/common";
 import { normalizeResourceContent, parseResourceCsv, studentResource } from "./class-resource-contract";
 
 describe("Class Space resource contract", () => {
-  it("stores direct study quizzes without grading keys and rejects unknown fields", () => {
+  it("stores study quizzes with an optional answer key, shown to students as feedback, and rejects unknown fields", () => {
     const content = normalizeResourceContent("STUDY_QUIZ", { questions: [{ prompt: "Nước sôi ở?", options: ["100°C", "0°C"] }] });
     expect(content.questions[0].options).toHaveLength(2);
     expect(content.questions[0]).not.toHaveProperty("correctOption");
-    expect(() => normalizeResourceContent("STUDY_QUIZ", { questions: [{ prompt: "x", options: ["a", "b"], correctOption: 0 }] })).toThrow();
+    const keyed = normalizeResourceContent("STUDY_QUIZ", { questions: [{ prompt: "x", options: ["a", "b"], correctOption: 1, explanation: "vì b" }] });
+    expect(keyed.questions[0]).toMatchObject({ correctOption: 1, explanation: "vì b" });
+    // Practice is unscored, so the key reaches the student for instant right/wrong feedback (TEST still strips it).
+    expect(studentResource("STUDY_QUIZ", keyed).questions[0].correctOption).toBe(1);
+    expect(() => normalizeResourceContent("STUDY_QUIZ", { questions: [{ prompt: "x", options: ["a", "b"], correctOption: 2 }] })).toThrow();
+    expect(() => normalizeResourceContent("STUDY_QUIZ", { questions: [{ prompt: "x", options: ["a", "b"], answer: 0 }] })).toThrow();
+  });
+
+  it("imports a study quiz CSV with or without the correctOption column", () => {
+    const keyHeader = "prompt,optionA,optionB,optionC,optionD,correctOption,explanation";
+    const withKey = parseResourceCsv("STUDY_QUIZ", `${keyHeader}\nq?,a,b,,,B,vì b\n`);
+    expect(withKey.errors).toEqual([]);
+    expect(withKey.data!.questions[0]).toMatchObject({ correctOption: 1, explanation: "vì b" });
+    const withoutKey = parseResourceCsv("STUDY_QUIZ", "prompt,optionA,optionB,optionC,optionD,explanation\nq?,a,b,,,\n");
+    expect(withoutKey.errors).toEqual([]);
+    expect(withoutKey.data!.questions[0]).not.toHaveProperty("correctOption");
+    expect(parseResourceCsv("STUDY_QUIZ", `${keyHeader}\nq?,a,b,,,D,\n`).errors[0]).toMatchObject({ field: "correctOption" });
   });
 
   it("keeps test answers out of member content", () => {
