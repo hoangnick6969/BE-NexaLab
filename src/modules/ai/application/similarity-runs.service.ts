@@ -1,3 +1,4 @@
+import { assessmentResourceKind, writtenContentType } from "../../classes/application/exam-contract";
 import { ConflictException, Inject, Injectable, NotFoundException, PayloadTooLargeException } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -42,7 +43,7 @@ export class SimilarityRunsService {
   private async writtenAssignment(db: any, classId: string, assignmentId: string) {
     const assignment = await db.assignment.findFirst({ where: { id: assignmentId, classId }, select: { id: true, classId: true, contentType: true, contentId: true } });
     if (!assignment) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài đã giao" });
-    if (assignment.contentType !== WRITTEN_CONTENT_TYPE)
+    if (!writtenContentType(assignment.contentType))
       throw new ConflictException({ code: "NOT_A_WRITTEN_ASSIGNMENT", message: "Chỉ bài tự luận mới kiểm tra được nội dung tương đồng" });
     return assignment;
   }
@@ -107,7 +108,7 @@ export class SimilarityRunsService {
   private async createInTransaction(tx: any, classId: string, assignmentId: string, req: any) {
     await lock(tx, "similarity:" + assignmentId);
     const assignment = await this.writtenAssignment(tx, classId, assignmentId);
-    const resource = await tx.classResource.findFirst({ where: { id: assignment.contentId, classId, kind: "WRITTEN_TASK" }, select: { content: true } });
+    const resource = await tx.classResource.findFirst({ where: { id: assignment.contentId, classId, kind: assessmentResourceKind(assignment.contentType) }, select: { content: true } });
     if (!resource) throw new NotFoundException("Nội dung không còn khả dụng");
     const current = await this.currentSubmissions(tx, assignmentId, true);
     if (current.length < MIN_RUN_SUBMISSIONS)
@@ -189,7 +190,7 @@ export class SimilarityRunsService {
         ? this.db.similarityMatchReview.findMany({ where: { matchId: { in: matches.map((m) => m.id) } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] })
         : [],
       submissionIds.length ? this.db.assignmentSubmission.findMany({ where: { id: { in: submissionIds } }, select: { id: true, studentId: true, answers: true } }) : [],
-      this.db.classResource.findFirst({ where: { id: assignment.contentId, classId, kind: "WRITTEN_TASK" }, select: { content: true } }),
+      this.db.classResource.findFirst({ where: { id: assignment.contentId, classId, kind: assessmentResourceKind(assignment.contentType) }, select: { content: true } }),
     ]);
     const students = submissions.length
       ? await this.db.user.findMany({ where: { id: { in: [...new Set(submissions.map((s: any) => s.studentId))] as string[] } }, select: { id: true, fullName: true, username: true } })

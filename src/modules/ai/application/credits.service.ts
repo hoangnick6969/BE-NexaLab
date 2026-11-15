@@ -7,6 +7,7 @@ import { Db } from "../../../db/db";
 import { ownedClass } from "../../classes/application/class-access";
 import { lock } from "../../classes/application/class-common";
 import { createAiJobBody } from "./ai-job-contract";
+import { slotCount } from "./assessment-blueprint";
 import { aiCreditsInsufficient, aiEstimateChanged, myCreditsQuery, pricingNotActive } from "./credits-contract";
 import { ensureSystemAccounts, getAccount, LedgerError, post, teacherAccounts } from "./credits-ledger";
 import { chargeCredits, estimateCredits, tokenCostCredits, type PriceTable } from "./credits-pricing";
@@ -205,7 +206,7 @@ export class AiCreditsService implements OnModuleInit {
     if (!this.config.enabled) return { enabled: false, credits: 0, pricingVersion: null, available: 0 };
     // GENERATE_RESOURCE: one job priced by its item count. ASSESS_SUBMISSION: one job per submission, so the ceiling for
     // N submissions is N unit prices (the value the request route compares with `confirmedCredits`).
-    const requestedCount = body.purpose === "ASSESS_SUBMISSION" ? ASSESS_REQUESTED : body.purpose === "DRAFT_LAB_CHALLENGE" ? body.proposalCount : body.itemCount;
+    const requestedCount = body.purpose === "ASSESS_SUBMISSION" ? ASSESS_REQUESTED : body.purpose === "DRAFT_LAB_CHALLENGE" ? body.proposalCount : body.purpose === "GENERATE_ASSESSMENT" ? slotCount(body.sections) : body.itemCount;
     const quote = await this.quote(this.db, body.purpose, requestedCount);
     const credits = body.purpose === "ASSESS_SUBMISSION" ? quote.credits * body.submissionCount : quote.credits;
     const account = await this.db.creditAccount.findFirst({ where: { kind: "TEACHER_AVAILABLE", ownerId: req.user.sub }, select: { balance: true } });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  ACTIVE_INSIGHT_VERSIONS, applyPatternVisibility, engineFor, evaluateInsightsV1, evaluateInsightsV2, evaluateInsightsV3, FORBIDDEN_INSIGHT_WORDS, INSIGHT_MESSAGES,
+  ACTIVE_INSIGHT_VERSIONS, applyPatternVisibility, engineFor, evaluateInsightsV1, evaluateInsightsV2, evaluateInsightsV3, evaluateInsightsV4, FORBIDDEN_INSIGHT_WORDS, INSIGHT_MESSAGES,
   insightFingerprint, type InsightEvidence,
 } from "./index";
 
@@ -215,10 +215,11 @@ describe("fingerprints and determinism", () => {
     expect(list.every((i) => i.ruleVersion === "insights@1" && i.studentId === "s1" && i.computedAt === now.toISOString())).toBe(true);
   });
   it("keeps insights@1 callable through the registry", () => {
-    expect(ACTIVE_INSIGHT_VERSIONS).toEqual(["insights@1", "insights@2", "insights@3"]);
+    expect(ACTIVE_INSIGHT_VERSIONS).toEqual(["insights@1", "insights@2", "insights@3", "insights@4"]);
     expect(engineFor("insights@1")).toBe(evaluateInsightsV1);
     expect(engineFor("insights@2")).toBe(evaluateInsightsV2);
     expect(engineFor("insights@3")).toBe(evaluateInsightsV3);
+    expect(engineFor("insights@4")).toBe(evaluateInsightsV4);
     expect(engineFor("insights@9")).toBeUndefined();
   });
 });

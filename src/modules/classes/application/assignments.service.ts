@@ -1,3 +1,4 @@
+import { assessmentResourceKind, EXAM_CONTENT_TYPE, writtenContentType } from "./exam-contract";
 import { Injectable, BadRequestException, Body, ConflictException, Controller, Get, Inject, NotFoundException, Optional, Param, Post, Put, Query, Req, } from "@nestjs/common";
 import { z } from "zod";
 import { AI_ASSESSMENT_CONFIG, assistActive, parseAiAssessmentConfig, type AiAssessmentConfig } from "../../../config/ai-assessment";
@@ -17,8 +18,12 @@ import { snapshotAssignmentLab } from "../../labs/application/assignment-lab-exe
 import { digest as labExecutionDigest } from "../../labs/application/lab-run";
 import { resolveClassLabResource } from "./class-lab-resource";
 import { buildExploreSnapshot } from "./class-explore-contract";
+import { ASSESSMENT_POLICY, assessmentTypeSchema, isGraded, resolveAssessmentConfig, type AssessmentType } from "./assessment-policy";
+import { finalizeExpiredInTx, finalizeExpiredSessions } from "./assessment-session";
+import { eligibleLabs } from "./eligible-labs";
+import { appendWrittenGrade, assertGradebookUnlocked } from "./written-grade-write";
 
-type ContentType = "lesson" | "lab" | "test" | "written" | "explore_lab";
+type ContentType = "lesson" | "lab" | "test" | "written" | "explore_lab" | "exam";
 
 function assignmentView(a: any, now = new Date()) {
   return {
@@ -38,12 +43,25 @@ function assignmentView(a: any, now = new Date()) {
     recipientCount: a._count?.targets ?? a.targets?.length ?? 0,
     createdAt: a.createdAt,
     updatedAt: a.updatedAt,
+    // TAI-07 (AD-19): PRACTICE for every pre-existing row.
+    assessment: {
+      type: (a.assessmentType ?? "PRACTICE") as AssessmentType,
+      graded: isGraded(a.assessmentType),
+      coefficient: ASSESSMENT_POLICY[(a.assessmentType ?? "PRACTICE") as AssessmentType]?.coefficient ?? null,
+      durationMinutes: a.durationMinutes ?? null,
+      scoresPublishedAt: a.scoresPublishedAt ?? null,
+      // TAI7-T3: "Chốt sổ điểm" state of the column.
+      gradebookLockedAt: a.gradebookLockedAt ?? null,
+      gradebookLockVersion: a.gradebookLockVersion ?? 0,
+    },
   };
 }
 
+const retakeGrantSchema = z.object({ studentId: text, reason: z.string().trim().min(1).max(500) }).strict();
+
 export const assignmentInput = z
   .object({
-    contentType: z.enum(["lesson", "lab", "test", "written", "explore_lab"]),
+    contentType: z.enum(["lesson", "lab", "test", "written", "explore_lab", "exam"]),
     contentId: text,
     labReleaseId: text.optional(),
     labChallengeId: text.optional(),
@@ -54,6 +72,9 @@ export const assignmentInput = z
     dueDate: z.string().datetime().nullable().optional(),
     studentIds: z.array(text).max(200).default([]),
     audience: z.enum(["CLASS", "SUBSET"]).optional(),
+    /** TAI-07: PRACTICE (default) or a graded type; fixed at creation. */
+    assessmentType: assessmentTypeSchema.optional(),
+    durationMinutes: z.number().int().positive().max(600).nullable().optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -105,10 +126,12 @@ export class AssignmentsService {
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     });
     const deadlined = rows.filter((a) => (DEADLINE_CONTENT_TYPES as readonly string[]).includes(a.contentType));
+    const graded = deadlined.filter((a) => isGraded(a.assessmentType)).map((a) => a.id);
+    if (graded.length) await finalizeExpiredSessions(this.db, { assignmentIds: graded });
     const studentIds = [...new Set(deadlined.flatMap((a) => a.targets.map((t) => t.studentId)))];
-    const { states, key } = await deadlineStates(this.db, deadlined, studentIds);
+    const { states, key } = await deadlineStates(this.db, deadlined, studentIds, new Date(), { revealResults: true });
     return rows.map(({ targets, ...a }) => {
-      if (a.contentType === WRITTEN_CONTENT_TYPE) {
+      if (writtenContentType(a.contentType)) {
         // TAI2-T2: written work waits for the teacher grade instead of being scored.
         const counts = { AWAITING_GRADE: 0, GRADED: 0, LATE_REVIEW_PENDING: 0, REJECTED: 0, OVERDUE_UNSUBMITTED: 0, NOT_SUBMITTED: 0 };
         let revision = 1;
@@ -153,19 +176,21 @@ export class AssignmentsService {
   async testStatus(id: string, assignmentId: string, req: any) {
     await ownedClass(this.db, id, req.user);
     const a = await this.ownedTestAssignment(this.db, id, assignmentId, [TEST_CONTENT_TYPE]);
-    const [{ states, key }, revisions] = await Promise.all([
-      deadlineStates(this.db, [a], a.targets.map((t: any) => t.studentId)),
+    if (isGraded(a.assessmentType)) await finalizeExpiredSessions(this.db, { assignmentIds: [assignmentId] });
+    const [{ states, key }, revisions, sessions] = await Promise.all([
+      deadlineStates(this.db, [a], a.targets.map((t: any) => t.studentId), new Date(), { revealResults: true }),
       this.db.assignmentDeadlineRevision.findMany({
         where: { assignmentId },
         orderBy: { revision: "asc" },
         select: { revision: true, dueAt: true, note: true, createdAt: true, triggeredBySubmissionId: true },
       }),
+      this.assessmentRows(a),
     ]);
     return {
       assignment: assignmentView({ ...a, _count: { targets: a.targets.length } }),
       deadlines: revisions,
       permittedDecisions: this.permittedDecisions(a),
-      students: a.targets.map((t: any) => ({ student: t.student, ...states.get(key(a.id, t.studentId))! })),
+      students: a.targets.map((t: any) => ({ student: t.student, ...states.get(key(a.id, t.studentId))!, ...sessions(t.studentId) })),
     };
   }
 
@@ -180,7 +205,7 @@ export class AssignmentsService {
       where: { id: { in: [...new Set(pending.map((p) => p.assignmentId))] } },
       include: { targets: { include: { student: { select: { id: true, fullName: true, username: true } } } }, classroom: { select: { status: true } } },
     });
-    const { states, key } = await deadlineStates(this.db, assignments, [...new Set(pending.map((p) => p.studentId))]);
+    const { states, key } = await deadlineStates(this.db, assignments, [...new Set(pending.map((p) => p.studentId))], new Date(), { revealResults: true });
     const items: any[] = [];
     for (const a of assignments)
       for (const t of a.targets) {
@@ -352,7 +377,7 @@ export class AssignmentsService {
 
   async assignableContent(id: string, req: any) {
     const c = await ownedClass(this.db, id, req.user);
-    const [lessons, labs, tests, writtenTasks] = await Promise.all([
+    const [lessons, tests, writtenTasks] = await Promise.all([
       this.db.lesson.findMany({
         where: {
           status: "published",
@@ -371,24 +396,6 @@ export class AssignmentsService {
         },
         orderBy: [{ grade: "asc" }, { title: "asc" }],
       }),
-      this.db.lab.findMany({
-        where: {
-          status: "published", scope: "SHARED_LIBRARY", releaseCleared: true, synthetic: false,
-          grade: c.grade,
-          topicCode: { not: null }, releases: { some: { status: "ACTIVE" } },
-        },
-        select: {
-          id: true,
-          title: true,
-          grade: true,
-          topicCode: true,
-          topic: true,
-          subject: { select: { id: true, name: true } },
-          challenges: { where: { NOT: { id: { contains: "_v-" } } }, select: { id: true, objective: true }, orderBy: { id: "asc" } },
-          releases: { where: { status: "ACTIVE" }, select: { id: true, version: true, digest: true, snapshot: true }, take: 1 },
-        },
-        orderBy: { title: "asc" },
-      }),
       this.db.classResource.findMany({
         where: { classId: id, kind: "TEST", status: "PUBLISHED" },
         select: { id: true, title: true, version: true, lessonId: true, lesson: { select: { grade: true, subject: { select: { id: true, name: true } } } }, content: true, publishedAt: true },
@@ -400,32 +407,8 @@ export class AssignmentsService {
         orderBy: [{ title: "asc" }, { version: "desc" }],
       }),
     ]);
-    const releaseRows = labs.flatMap((lab: any) => {
-      const release = lab.releases?.[0];
-      const snapshot = release?.snapshot as any;
-      const execution = snapshot?.execution;
-      const challengeIds = execution && typeof execution.effectiveParams === "object" ? Object.keys(execution.effectiveParams) : [];
-      if (!release || !snapshot?.lab || snapshot.lab.id !== lab.id || labExecutionDigest(snapshot) !== release.digest || !challengeIds.length)
-        return [];
-      return [{ lab, release, challengeIds }];
-    });
-    const revokedIds = releaseRows.length ? new Set((await this.db.labPackRevocation.findMany({
-      where: { packVersionId: { in: releaseRows.map(({ release }: any) => (release.snapshot as any).execution.packVersionId) } },
-      select: { packVersionId: true },
-    })).map((entry: any) => entry.packVersionId)) : new Set<string>();
-    const eligibleLabs = releaseRows.flatMap(({ lab, release, challengeIds }: any) => {
-      const execution = (release.snapshot as any).execution;
-      if (revokedIds.has(execution.packVersionId)) return [];
-      return [{
-        id: lab.id, title: lab.title, grade: lab.grade, topic: lab.topic, topicCode: lab.topicCode, subject: lab.subject,
-        release: { id: release.id, version: release.version, digest: release.digest },
-        ranges: (execution.template as any)?.ranges ?? {},
-        previewConfig: (execution.template as any)?.buoyancy ?? null,
-        effectiveParams: execution.effectiveParams,
-        lessonIds: lessons.filter((lesson: any) => lesson.labId === lab.id).map((lesson: any) => lesson.id),
-        challenges: lab.challenges.filter((challenge: any) => challengeIds.includes(challenge.id)),
-      }].filter((entry: any) => entry.challenges.length > 0);
-    });
+    // TAI7-T5: one rule for the editor's Lab list and the AI exam draft (eligible-labs.ts, extracted unchanged).
+    const eligible = await eligibleLabs(this.db, lessons, c.grade);
     return {
       classGrade: c.grade,
       // Published Class Explore resources the teacher can assign (P0 C3.4); the pinned effective config stays server-side.
@@ -433,7 +416,8 @@ export class AssignmentsService {
         .map(({ content, ...resource }: any) => ({ ...resource, labId: content?.source?.labId ?? null, requirementCount: content?.requirements?.length ?? 0 })),
       classLabs: await this.db.classResource.findMany({ where: { classId: id, kind: "LAB", status: "PUBLISHED" }, select: { id: true, title: true, version: true, content: true }, orderBy: { createdAt: "desc" } }),
       lessons,
-      labs: eligibleLabs,
+      exams: await this.db.classResource.findMany({ where: { classId: id, kind: "EXAM", status: "PUBLISHED" }, select: { id: true, title: true, version: true, lessonId: true, publishedAt: true }, orderBy: { title: "asc" } }),
+      labs: eligible,
       tests: tests.map(({ content, lesson, ...test }) => ({ ...test, grade: lesson?.grade ?? null, subject: lesson?.subject ?? null, questionCount: (content as any)?.questions?.length ?? 0 })),
       // TAI2-T2: the rubric never leaves this route; only the prompt count is listed.
       writtenTasks: writtenTasks.map(({ content, ...task }) => ({ ...task, promptCount: (content as any)?.prompts?.length ?? 0 })),
@@ -450,10 +434,10 @@ export class AssignmentsService {
   }
 
   private async assignableContentOrThrow(tx: any, classId: string, contentType: ContentType, contentId: string, teacherId: string, classGrade: number) {
-    if (contentType === TEST_CONTENT_TYPE || contentType === WRITTEN_CONTENT_TYPE) {
+    if (contentType === TEST_CONTENT_TYPE || writtenContentType(contentType)) {
       // Only an explicit assignment makes a shared class test scored (I3 / 3.1); a written task (TAI2-T2) likewise.
       const test = await tx.classResource.findFirst({
-        where: { id: contentId, classId, kind: contentType === TEST_CONTENT_TYPE ? "TEST" : "WRITTEN_TASK", status: "PUBLISHED" },
+        where: { id: contentId, classId, kind: assessmentResourceKind(contentType), status: "PUBLISHED" },
         select: { id: true, title: true, version: true, lesson: { select: { grade: true } } },
       });
       if (!test)
@@ -575,7 +559,8 @@ export class AssignmentsService {
     if (c.status === "ARCHIVED") throw classArchived();
     const now = new Date();
     const dueDate = this.assertDueDate(b.dueDate, now);
-    if (b.contentType === TEST_CONTENT_TYPE || b.contentType === WRITTEN_CONTENT_TYPE) requireTestDueDate(dueDate);
+    if (b.contentType === TEST_CONTENT_TYPE || writtenContentType(b.contentType)) requireTestDueDate(dueDate);
+    const assessment = resolveAssessmentConfig(b.contentType, b.assessmentType, b.durationMinutes);
     const ctx = {
       actorId: req.user.sub,
       key: readIdempotencyKey(req),
@@ -618,6 +603,8 @@ export class AssignmentsService {
           audience,
           targetHash: hash,
           contentVersion,
+          assessmentType: assessment.assessmentType,
+          durationMinutes: assessment.durationMinutes,
           ...(labExecution ? { labExecution, labExecutionDigest: labExecutionDigest(labExecution) } : {}),
           ...(privateLab ? { classLabSnapshot: privateLab.snapshot } : {}),
           ...(explore ? { exploreSnapshot: explore.snapshot } : {}),
@@ -642,7 +629,7 @@ export class AssignmentsService {
           dedupKey: `assignment:${assignment.id}`,
         })),
       );
-      if (b.contentType === TEST_CONTENT_TYPE || b.contentType === WRITTEN_CONTENT_TYPE)
+      if (b.contentType === TEST_CONTENT_TYPE || writtenContentType(b.contentType))
         await tx.assignmentDeadlineRevision.create({
           data: { assignmentId: assignment.id, revision: 1, dueAt: dueDate!, actorId: req.user.sub },
         });
@@ -660,6 +647,8 @@ export class AssignmentsService {
           audience,
           recipientCount: targets.length,
           title: assignment.title,
+          assessmentType: assessment.assessmentType,
+          durationMinutes: assessment.durationMinutes,
         },
       });
       return {
@@ -691,7 +680,7 @@ export class AssignmentsService {
           code: "ASSIGNMENT_ARCHIVED",
           message: "Bài đã lưu trữ; hãy giao bài mới",
         });
-      if (existing.contentType === TEST_CONTENT_TYPE || existing.contentType === WRITTEN_CONTENT_TYPE) assertTestAssignmentUpdate(b, existing.dueDate);
+      if (existing.contentType === TEST_CONTENT_TYPE || writtenContentType(existing.contentType)) assertTestAssignmentUpdate(b, existing.dueDate);
       const dueDate =
         b.dueDate === undefined
           ? existing.dueDate
@@ -800,10 +789,115 @@ export class AssignmentsService {
     });
   }
 
+  // ---------- TAI-07 (TAI7-T1) assessment mode ----------
+
+  /** Per-student attempt facts for the teacher boards (graded only; PRACTICE rows get `attempts: null`). */
+  private async assessmentRows(a: { id: string; assessmentType?: string | null }) {
+    if (!isGraded(a.assessmentType)) return (_studentId: string) => ({ attempts: null });
+    const [sessions, grants] = await Promise.all([
+      this.db.assessmentSession.findMany({
+        where: { assignmentId: a.id },
+        orderBy: { attemptNo: "asc" },
+        select: { id: true, studentId: true, attemptNo: true, startedAt: true, expiresAt: true, status: true, submission: { select: { id: true, submittedAt: true, autoSubmitted: true } } },
+      }),
+      this.db.assessmentRetakeGrant.findMany({ where: { assignmentId: a.id }, select: { studentId: true, consumedAt: true, createdAt: true } }),
+    ]);
+    return (studentId: string) => {
+      const own = sessions.filter((s: any) => s.studentId === studentId);
+      return {
+        attempts: {
+          used: own.length,
+          allowed: 1 + grants.filter((g: any) => g.studentId === studentId).length,
+          retakePending: grants.some((g: any) => g.studentId === studentId && !g.consumedAt),
+          sessions: own.map((s: any) => ({
+            id: s.id,
+            attemptNo: s.attemptNo,
+            status: s.status,
+            startedAt: s.startedAt,
+            expiresAt: s.expiresAt,
+            submissionId: s.submission?.id ?? null,
+            autoSubmitted: s.submission?.autoSubmitted ?? false,
+            durationUsedSeconds: s.submission ? Math.max(0, Math.round((s.submission.submittedAt.getTime() - s.startedAt.getTime()) / 1000)) : null,
+          })),
+        },
+      };
+    };
+  }
+
+  private async ownedGradedAssignment(db: any, classId: string, assignmentId: string) {
+    const a = await db.assignment.findFirst({
+      where: { id: assignmentId, classId, contentType: { in: [...DEADLINE_CONTENT_TYPES] } },
+      include: { targets: { select: { studentId: true } } },
+    });
+    if (!a) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài kiểm tra đã giao" });
+    if (!isGraded(a.assessmentType))
+      throw new ConflictException({ code: "ASSESSMENT_NOT_GRADED", message: "Thao tác này chỉ dùng cho bài kiểm tra lấy điểm" });
+    return a;
+  }
+
+  /** "Cho phép làm lại": one extra attempt for one target student; at most one unconsumed grant at a time. */
+  async grantRetake(id: string, assignmentId: string, req: any, body: unknown) {
+    const b = retakeGrantSchema.parse(body ?? {});
+    const c = await ownedClass(this.db, id, req.user);
+    if (c.status === "ARCHIVED") throw classArchived();
+    const ctx = { actorId: req.user.sub, key: readIdempotencyKey(req), scope: "POST classes/:id/assignments/:aid/retake-grants:" + assignmentId, payload: b };
+    return idempotent(this.db, ctx, async (tx) => {
+      await lock(tx, "assignment-deadline:" + assignmentId);
+      const a = await this.ownedGradedAssignment(tx, id, assignmentId);
+      assertGradebookUnlocked(a);
+      if (!a.targets.some((t: any) => t.studentId === b.studentId))
+        throw new NotFoundException({ code: "STUDENT_NOT_TARGETED", message: "Học sinh không thuộc danh sách được giao bài này" });
+      const pending = await tx.assessmentRetakeGrant.findFirst({ where: { assignmentId, studentId: b.studentId, consumedAt: null } });
+      if (pending) throw new ConflictException({ code: "ASSESSMENT_RETAKE_PENDING", message: "Học sinh đã có một lượt làm lại chưa dùng" });
+      const grant = await tx.assessmentRetakeGrant.create({ data: { assignmentId, studentId: b.studentId, grantedById: req.user.sub, reason: b.reason } });
+      await audit(tx, {
+        actor: req.user,
+        action: "assessment.retake.grant",
+        targetType: "AssessmentRetakeGrant",
+        targetId: grant.id,
+        reason: b.reason,
+        after: { assignmentId, studentId: b.studentId, retakeGrantId: grant.id },
+      });
+      await notify(tx, [{
+        recipientId: b.studentId,
+        type: "ASSESSMENT_RETAKE_GRANTED",
+        title: `Em được làm lại bài "${a.title}"`,
+        link: `/assignments/${a.id}`,
+        dedupKey: `retake:${grant.id}`,
+      }]);
+      return { grant: { id: grant.id, studentId: grant.studentId, createdAt: grant.createdAt, consumedAt: null } };
+    });
+  }
+
+  /** "Công bố điểm": results become visible to students and parents. Append-once; publishing again returns the same instant. */
+  async publishScores(id: string, assignmentId: string, req: any) {
+    const c = await ownedClass(this.db, id, req.user);
+    if (c.status === "ARCHIVED") throw classArchived();
+    const ctx = { actorId: req.user.sub, key: readIdempotencyKey(req), scope: "POST classes/:id/assignments/:aid/publish-scores:" + assignmentId, payload: {} };
+    return idempotent(this.db, ctx, async (tx) => {
+      await lock(tx, "assignment-deadline:" + assignmentId);
+      const a = await this.ownedGradedAssignment(tx, id, assignmentId);
+      if (a.scoresPublishedAt) return { scoresPublishedAt: a.scoresPublishedAt, alreadyPublished: true };
+      await finalizeExpiredInTx(tx, assignmentId, new Date());
+      const now = new Date();
+      await tx.assignment.update({ where: { id: assignmentId }, data: { scoresPublishedAt: now, scoresPublishedById: req.user.sub } });
+      await audit(tx, { actor: req.user, action: "assessment.scores.publish", targetType: "Assignment", targetId: assignmentId, after: { scoresPublishedAt: now } });
+      const submitted = await tx.assignmentSubmission.findMany({ where: { assignmentId }, select: { studentId: true }, distinct: ["studentId"] });
+      await notify(tx, submitted.map((row: any) => ({
+        recipientId: row.studentId,
+        type: "SCORES_PUBLISHED" as const,
+        title: `Đã có điểm bài "${a.title}"`,
+        link: `/assignments/${a.id}`,
+        dedupKey: `scores-published:${a.id}:${row.studentId}`,
+      })));
+      return { scoresPublishedAt: now, alreadyPublished: false };
+    });
+  }
+
   // ---------- TAI2-T3 written grading (owner only; an archived assignment or resource stays gradeable) ----------
   private async ownedWrittenAssignment(db: any, classId: string, assignmentId: string) {
     const assignment = await db.assignment.findFirst({
-      where: { id: assignmentId, classId, contentType: WRITTEN_CONTENT_TYPE },
+      where: { id: assignmentId, classId, contentType: { in: [WRITTEN_CONTENT_TYPE, EXAM_CONTENT_TYPE] } },
       include: {
         targets: { include: { student: { select: { id: true, fullName: true, username: true } } } },
         classroom: { select: { status: true } },
@@ -818,16 +912,22 @@ export class AssignmentsService {
   async writtenStatus(id: string, assignmentId: string, req: any) {
     await ownedClass(this.db, id, req.user);
     const a = await this.ownedWrittenAssignment(this.db, id, assignmentId);
-    const [{ states, key }, revisions] = await Promise.all([
-      deadlineStates(this.db, [a], a.targets.map((t: any) => t.studentId), new Date(), { withGrade: true }),
+    if (isGraded(a.assessmentType)) await finalizeExpiredSessions(this.db, { assignmentIds: [assignmentId] });
+    const [{ states, key }, revisions, sessions, examResource] = await Promise.all([
+      deadlineStates(this.db, [a], a.targets.map((t: any) => t.studentId), new Date(), { withGrade: true, revealResults: true }),
       this.db.assignmentDeadlineRevision.findMany({
         where: { assignmentId },
         orderBy: { revision: "asc" },
         select: { revision: true, dueAt: true, note: true, createdAt: true, triggeredBySubmissionId: true },
       }),
+      this.assessmentRows(a),
+      a.contentType === EXAM_CONTENT_TYPE ? this.db.classResource.findFirst({
+        where: { id: a.contentId, classId: id, kind: "EXAM" }, select: { content: true },
+      }) : null,
     ]);
-    const students = a.targets.map((t: any) => ({ student: t.student, ...states.get(key(a.id, t.studentId))! }));
-    const assist = assistActive(this.assessment);
+    const hasWritten = a.contentType !== EXAM_CONTENT_TYPE || !!(examResource?.content as any)?.prompts?.length;
+    const students = a.targets.map((t: any) => ({ student: t.student, ...states.get(key(a.id, t.studentId))!, ...sessions(t.studentId) }));
+    const assist = hasWritten && assistActive(this.assessment);
     // TAI2-T6: in assist mode each current submission carries its latest AI job state and suggestion summary.
     // In shadow mode nothing about suggestions (content or existence) is returned.
     const aiByCurrent = assist ? await this.latestAiState(students.map((s: any) => s.current?.id).filter(Boolean)) : new Map();
@@ -835,7 +935,8 @@ export class AssignmentsService {
       assignment: assignmentView({ ...a, _count: { targets: a.targets.length } }),
       deadlines: revisions,
       permittedDecisions: this.permittedDecisions(a),
-      aiAssessment: this.aiAssessmentFlags(),
+      ...(a.contentType === EXAM_CONTENT_TYPE ? { hasWritten } : {}),
+      aiAssessment: hasWritten ? this.aiAssessmentFlags() : { available: false, assist: false },
       students: assist ? students.map((s: any) => ({ ...s, aiSuggestion: (s.current && aiByCurrent.get(s.current.id)) ?? null })) : students,
     };
   }
@@ -878,7 +979,7 @@ export class AssignmentsService {
     if (!submission)
       throw new NotFoundException({ code: "SUBMISSION_NOT_FOUND", message: "Không tìm thấy bài nộp" });
     const resource = await this.db.classResource.findFirst({
-      where: { id: a.contentId, classId: id, kind: "WRITTEN_TASK" },
+      where: { id: a.contentId, classId: id, kind: assessmentResourceKind(a.contentType) },
       select: { id: true, title: true, version: true, content: true },
     });
     if (!resource) throw new NotFoundException("Nội dung không còn khả dụng");
@@ -929,40 +1030,27 @@ export class AssignmentsService {
     return idempotent(this.db, ctx, async (tx) => {
       await lock(tx, "assignment-deadline:" + assignmentId);
       const a = await this.ownedWrittenAssignment(tx, id, assignmentId);
+      assertGradebookUnlocked(a);
       const submission = await tx.assignmentSubmission.findFirst({ where: { id: submissionId, assignmentId }, include: { decision: true } });
       if (!submission)
         throw new NotFoundException({ code: "SUBMISSION_NOT_FOUND", message: "Không tìm thấy bài nộp" });
       const siblings = await tx.assignmentSubmission.findMany({ where: { assignmentId, studentId: submission.studentId }, select: { id: true, submittedAt: true } });
       assertGradeable(submission as any, siblings);
       // The assignment pins the resource row it was created from; that row is immutable once published.
-      const resource = await tx.classResource.findFirst({ where: { id: a.contentId, classId: id, kind: "WRITTEN_TASK" }, select: { content: true } });
+      const resource = await tx.classResource.findFirst({ where: { id: a.contentId, classId: id, kind: assessmentResourceKind(a.contentType) }, select: { content: true } });
       if (!resource) throw new NotFoundException("Nội dung không còn khả dụng");
-      const grade = buildWrittenGrade(resource.content, b.criterionPoints);
-      if (b.kind !== "MANUAL") {
-        const suggestion = await tx.aiAssessmentSuggestion.findFirst({ where: { id: b.basedOnSuggestionId, submissionId }, select: suggestionSelect });
-        assertGradeMatchesSuggestion(b.kind, suggestion as any, submission, grade.criterionPoints);
-      }
-      const row = await tx.writtenGradeDecision.create({
-        data: {
-          submissionId,
-          actorId: req.user.sub,
-          kind: b.kind,
-          basedOnSuggestionId: b.kind === "MANUAL" ? null : b.basedOnSuggestionId,
-          criterionPoints: grade.criterionPoints,
-          totalPoints: grade.totalPoints,
-          maxPoints: grade.maxPoints,
-          score: grade.score,
-          feedback,
-          resourceVersion: submission.resourceVersion,
-        },
-        select: writtenGradeSelect,
-      });
-      await audit(tx, {
+      const suggestion = b.kind !== "MANUAL"
+        ? await tx.aiAssessmentSuggestion.findFirst({ where: { id: b.basedOnSuggestionId, submissionId }, select: suggestionSelect })
+        : null;
+      const { row } = await appendWrittenGrade(tx, {
         actor: req.user,
-        action: "written_grade.create",
-        targetType: "AssignmentSubmission",
-        targetId: submissionId,
-        after: { submissionId, kind: b.kind, score: grade.score, resourceVersion: submission.resourceVersion, basedOnSuggestionId: b.kind === "MANUAL" ? null : b.basedOnSuggestionId },
+        submission,
+        rubricContent: resource.content,
+        kind: b.kind,
+        criterionPoints: b.criterionPoints,
+        feedback,
+        basedOnSuggestionId: b.basedOnSuggestionId,
+        suggestion: suggestion as any,
       });
       return { grade: row, status: "GRADED" };
     });

@@ -10,7 +10,7 @@ import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { supportFlags } from "../application/evidence-support";
 import { TEST_CONTENT_TYPE } from "../../classes/application/assignment-test-contract";
 import { deadlineStates } from "../../classes/application/assignment-test-state";
-import { WRITTEN_CONTENT_TYPE } from "../../classes/application/assignment-written-contract";
+import { writtenContentType } from "../../classes/application/exam-contract";
 
 const reasonSchema = z.object({ reason: z.string().trim().min(3).max(500), stepId: z.string().min(1).max(200) }).strict();
 const notFound = () => new NotFoundException({ code: "EVIDENCE_NOT_FOUND", message: "Không tìm thấy bằng chứng học tập" });
@@ -50,9 +50,9 @@ export class ClassEvidenceController {
     if (assignment.status !== "ACTIVE" || assignment.classroom.status !== "ACTIVE") return [];
     const now = new Date();
     const studentIds = assignment.targets.map((target) => target.studentId);
-    if (assignment.contentType === TEST_CONTENT_TYPE || assignment.contentType === WRITTEN_CONTENT_TYPE) {
+    if (assignment.contentType === TEST_CONTENT_TYPE || writtenContentType(assignment.contentType)) {
       // Test and written (TAI2-T2) submissions are not Attempt rows; derive state from the deadline lifecycle.
-      const { deadlines, states, key } = await deadlineStates(this.db, [assignment], studentIds, now);
+      const { deadlines, states, key } = await deadlineStates(this.db, [assignment], studentIds, now, { revealResults: true });
       const dueAt = deadlines.get(assignment.id)?.dueAt ?? assignment.dueDate;
       return assignment.targets.map(({ student }) => {
         const state = states.get(key(assignment.id, student.id));

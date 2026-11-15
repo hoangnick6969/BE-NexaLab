@@ -5,7 +5,7 @@ import { audit } from "../../../../common/audit";
 import { idempotent, readIdempotencyKey } from "../../../../common/idempotency";
 import { ownedClass } from "../../../classes/application/class-access";
 import { classArchived } from "../../../classes/application/class-common";
-import { applyPatternVisibility, engineFor, evaluateActiveInsights, type Insight, type ExplanationFact, type InsightEvidence, type SimilarityFact } from "./index";
+import { applyPatternVisibility, applyRetirement, engineFor, evaluateActiveInsights, type AssessmentFact, type Insight, type ExplanationFact, type InsightEvidence, type SimilarityFact } from "./index";
 import { INSIGHTS_CONFIG, type InsightsConfig } from "./insights-config";
 import { loadClassEvidence, type AckRow } from "./insights-loader";
 
@@ -41,9 +41,10 @@ export class InsightsService {
   constructor(@Inject(Db) private readonly db: Db, @Inject(INSIGHTS_CONFIG) private readonly config: InsightsConfig) {}
 
   /** Without `version` every active rule version runs; replay passes the stored version and runs only that one. */
-  private compute(classId: string, studentId: string, evidence: InsightEvidence[], similarity: SimilarityFact[], explanations: ExplanationFact[], now: Date, version?: string): Insight[] {
-    const input = { classId, studentId, evidence, similarity, explanations, now };
-    const insights = version ? engineFor(version)?.(input) ?? [] : evaluateActiveInsights(input);
+  private compute(classId: string, studentId: string, evidence: InsightEvidence[], similarity: SimilarityFact[], explanations: ExplanationFact[], assessments: AssessmentFact[], now: Date, version?: string): Insight[] {
+    const input = { classId, studentId, evidence, similarity, explanations, assessments, now };
+    // Replay runs the stored version as it was; the read routes hide retired rules (TAI7-T2).
+    const insights = version ? engineFor(version)?.(input) ?? [] : applyRetirement(evaluateActiveInsights(input), this.config.includeRetired === true);
     return applyPatternVisibility(insights, this.config.showSuddenUnaidedPass);
   }
 
@@ -58,13 +59,13 @@ export class InsightsService {
     const { status } = insightsQuerySchema.parse(query ?? {});
     const classroom = await ownedClass(this.db, classId, actor);
     const archived = classroom.status !== "ACTIVE";
-    const { members, evidenceByStudent, similarityByStudent, explanationsByStudent, acknowledgements } = await loadClassEvidence(this.db, classId, { withEvidence: !archived });
+    const { members, evidenceByStudent, similarityByStudent, explanationsByStudent, assessmentsByStudent, acknowledgements } = await loadClassEvidence(this.db, classId, { withEvidence: !archived });
     const acked = InsightsService.byFingerprint(acknowledgements);
     const now = new Date();
     const students = [...members]
       .sort((a, b) => collator.compare(a.displayName, b.displayName) || (a.id < b.id ? -1 : 1))
       .map((m) => {
-        const all = archived ? [] : this.compute(classId, m.id, evidenceByStudent.get(m.id) ?? [], similarityByStudent.get(m.id) ?? [], explanationsByStudent.get(m.id) ?? [], now);
+        const all = archived ? [] : this.compute(classId, m.id, evidenceByStudent.get(m.id) ?? [], similarityByStudent.get(m.id) ?? [], explanationsByStudent.get(m.id) ?? [], assessmentsByStudent.get(m.id) ?? [], now);
         const insights = status === "open"
           ? all.filter((i) => !acked.has(i.fingerprint))
           : all.map((i) => {
@@ -80,11 +81,11 @@ export class InsightsService {
     const { status } = insightsQuerySchema.parse(query ?? {});
     const classroom = await ownedClass(this.db, classId, actor);
     const archived = classroom.status !== "ACTIVE";
-    const { members, evidenceByStudent, similarityByStudent, explanationsByStudent, acknowledgements } = await loadClassEvidence(this.db, classId, { studentId, withEvidence: !archived });
+    const { members, evidenceByStudent, similarityByStudent, explanationsByStudent, assessmentsByStudent, acknowledgements } = await loadClassEvidence(this.db, classId, { studentId, withEvidence: !archived });
     const member = members[0];
     if (!member) throw notFound();
     const acked = InsightsService.byFingerprint(acknowledgements);
-    const all = archived ? [] : this.compute(classId, member.id, evidenceByStudent.get(member.id) ?? [], similarityByStudent.get(member.id) ?? [], explanationsByStudent.get(member.id) ?? [], new Date());
+    const all = archived ? [] : this.compute(classId, member.id, evidenceByStudent.get(member.id) ?? [], similarityByStudent.get(member.id) ?? [], explanationsByStudent.get(member.id) ?? [], assessmentsByStudent.get(member.id) ?? [], new Date());
     const insights = status === "open"
       ? all.filter((i) => !acked.has(i.fingerprint))
       : all.map((i) => {
@@ -114,8 +115,8 @@ export class InsightsService {
       this.db,
       { actorId: actor.sub, key, scope: `POST insights-acknowledgement:${classId}:${studentId}:${hash}`, payload: input },
       async (tx) => {
-        const { evidenceByStudent, similarityByStudent, explanationsByStudent } = await loadClassEvidence(tx, classId, { studentId, acknowledgements: false });
-        const hit = this.compute(classId, studentId, evidenceByStudent.get(studentId) ?? [], similarityByStudent.get(studentId) ?? [], explanationsByStudent.get(studentId) ?? [], new Date()).find((i) => i.fingerprint === hash);
+        const { evidenceByStudent, similarityByStudent, explanationsByStudent, assessmentsByStudent } = await loadClassEvidence(tx, classId, { studentId, acknowledgements: false });
+        const hit = this.compute(classId, studentId, evidenceByStudent.get(studentId) ?? [], similarityByStudent.get(studentId) ?? [], explanationsByStudent.get(studentId) ?? [], assessmentsByStudent.get(studentId) ?? [], new Date()).find((i) => i.fingerprint === hash);
         if (!hit) throw stale();
         const row = await tx.insightAcknowledgement.create({
           data: {
@@ -153,8 +154,8 @@ export class InsightsService {
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
     if (!first || !engineFor(first.ruleVersion)) throw notFound();
-    const { evidenceByStudent, similarityByStudent, explanationsByStudent } = await loadClassEvidence(this.db, classId, { studentId, acknowledgements: false, asOf: first.createdAt });
-    const hit = this.compute(classId, studentId, evidenceByStudent.get(studentId) ?? [], similarityByStudent.get(studentId) ?? [], explanationsByStudent.get(studentId) ?? [], first.createdAt, first.ruleVersion).find((i) => i.fingerprint === fingerprint);
+    const { evidenceByStudent, similarityByStudent, explanationsByStudent, assessmentsByStudent } = await loadClassEvidence(this.db, classId, { studentId, acknowledgements: false, asOf: first.createdAt });
+    const hit = this.compute(classId, studentId, evidenceByStudent.get(studentId) ?? [], similarityByStudent.get(studentId) ?? [], explanationsByStudent.get(studentId) ?? [], assessmentsByStudent.get(studentId) ?? [], first.createdAt, first.ruleVersion).find((i) => i.fingerprint === fingerprint);
     if (!hit) throw notFound();
     return hit;
   }

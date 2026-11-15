@@ -122,3 +122,55 @@ type Insight = {
 ## Forbidden vocabulary
 
 Templates and codes must not contain `gian lận`, `năng lực thật`, `yếu kém`, `xếp hạng`, `nghi ngờ`, or their English equivalents. A unit test scans every template.
+
+## insights@4 (TAI-07 / TAI7-T2, project owner 2026-11-15)
+
+Spec of record: `../spec-teacher-ai-assessment-mode/` (tickets TAI7-T2, `.memlog.md`). Thresholds approved by the PO on 2026-11-15. Code: `trend-rule.ts`,
+`assessment-facts.ts`. Additive version; `insights@1..3` code and fingerprints are unchanged.
+
+### G-5 amendment: `insights@1 SCORE_CHANGE_UNUSUAL` retired from the read routes
+
+- The rule compared every QUIZ attempt and TEST submission, so resubmissions of one practice test fired it (the
+  uncommitted `RETAKE_SAME_ASSIGNMENT` label only reworded it). It is removed from the list, open and all views, by the
+  service (`applyRetirement`, `RETIRED_RULES`). Its engine still runs inside `insights@1` and replay of an acknowledged
+  fingerprint uses it unchanged; an acknowledgement of it can no longer be created (the read routes do not list it).
+- `InsightsConfig.includeRetired` exists only for the TAI-04 mechanics tests; production never sets it.
+- Requested by the project owner on 2026-11-15; the G-5 PO approval of `insights@1` thresholds is otherwise unchanged.
+
+### Representative result per assignment (`AssessmentFact`)
+
+One row per (assignment, target student) of the class, from rows the loader already reads (no extra query):
+
+| Assignment | Representative | Not counted |
+|---|---|---|
+| TEST, `REGULAR_15M` / `MIDTERM_45M` | current submission, only once `scoresPublishedAt` (≤ as-of) | unpublished → `PENDING` |
+| TEST, `PRACTICE` | **first** submission that is on time, accepted by extension or rejected (0) | later resubmissions |
+| WRITTEN (any type) | newest teacher grade of the current submission (graded types: once published) | AI suggestions, ungraded |
+| lesson | first quiz attempt of the assignment | later attempts; no attempt → no row |
+
+Score on the 10-point scale = `toScale10(raw, max)` (half-up, one decimal). An active test/written assignment with no
+submission is `NOT_DONE`; archived work never is.
+
+### ASSESSMENT_TREND — status `TEACHER_REVIEW_RECOMMENDED`
+
+- Series: scored facts ordered by the representative's time; the graded columns when there are at least 4, otherwise
+  every scored fact (`values.family` = `GRADED` | `ALL`).
+- Latest vs the 3–5 assignments before it: fires when |latest − μ| ≥ max(2σ, 2.0 points), population σ.
+- Values: `latest10`, `mean10`, `delta10`, `threshold10`, `direction`, `family`, `latestAssignmentId`, `latestTitle`,
+  `latestAssessmentType`. Evidence: the baseline and latest representatives, each with `label`, `score10`,
+  `assessmentType`.
+- Boundaries: 6,6,6 → 8 fires; 6,6,6 → 7.9 does not; five resubmissions of one practice test never fire.
+
+### READINESS_BEFORE_MIDTERM — status `INFORMATIONAL`
+
+- For each `MIDTERM_45M` of the student due within 7 days and still `NOT_DONE`: the prep work is the `PRACTICE` and
+  `REGULAR_15M` assignments created by now, of the midterm's lesson (all lessons when the midterm has none).
+- Fires when at least one prep assignment is `NOT_DONE`, or the scored prep average is < 5.0 (`average10` keeps two
+  decimals, so 4.95 never displays as 5.0). `values.reason`: `NOT_DONE`, `LOW_AVERAGE`, `NOT_DONE_AND_LOW`.
+- Evidence: the midterm (`ASSIGNMENT`, status `UPCOMING`), every not-done prep (`ASSIGNMENT`, `NOT_DONE`) and every
+  scored prep representative with its 10-point score. New evidence (work done) gives a new fingerprint.
+
+### Evidence entry (insights@4 additions)
+
+`{ kind, id, at, label?, score10?, assessmentType?, status? }`; kind adds `ASSIGNMENT`. Display fields are never part
+of the fingerprint (ids only).

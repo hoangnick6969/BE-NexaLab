@@ -37,6 +37,8 @@ import { quotaUsage } from "./ai-quota";
 import { confirmedCreditsRequired } from "./credits-contract";
 import { AiCreditsService } from "./credits.service";
 import { AiLabChallengesService } from "./ai-lab-challenges.service";
+import { AiAssessmentDraftsService, assessmentDraftNoDecisions } from "./ai-assessment-drafts.service";
+import { ASSESSMENT_PURPOSE } from "./assessment-blueprint";
 import { LAB_CHALLENGE_PURPOSE } from "./lab-challenge-contract";
 import { GENERATE_RESOURCE_PROMPT_VERSION, RESOURCE_ITEMS_SCHEMA_VERSION } from "./generate-resource-prompt";
 import { lessonOutcomeCodes, type LessonSource } from "./input-snapshot";
@@ -104,12 +106,16 @@ export class AiJobsService {
     @Optional() @Inject(AI_ASSESSMENT_CONFIG) assessment?: AiAssessmentConfig,
     @Optional() @Inject(AiCreditsService) private credits?: AiCreditsService,
     @Optional() @Inject(AiLabChallengesService) lab?: AiLabChallengesService,
+    @Optional() @Inject(AiAssessmentDraftsService) drafts?: AiAssessmentDraftsService,
   ) {
     this.assessment = assessment ?? parseAiAssessmentConfig({});
     // TAI-06: DRAFT_LAB_CHALLENGE jobs are handled by their own service behind these same routes.
     this.lab = lab ?? new AiLabChallengesService(db, config, provider, undefined, credits);
+    // TAI7-T5: GENERATE_ASSESSMENT jobs (AI exam drafts) are handled by their own service behind these same routes.
+    this.drafts = drafts ?? new AiAssessmentDraftsService(db, config, provider, credits);
   }
   private lab: AiLabChallengesService;
+  private drafts: AiAssessmentDraftsService;
 
   /** TAI-05: credits apply to this service only while AI_CREDITS_ENABLED=true. */
   private get creditsOn() {
@@ -119,6 +125,7 @@ export class AiJobsService {
   async create(classId: string, req: any, raw: unknown) {
     const body = createAiJobBody.parse(raw);
     if (body.purpose === LAB_CHALLENGE_PURPOSE) return this.lab.create(classId, req, body);
+    if (body.purpose === ASSESSMENT_PURPOSE) return this.drafts.create(classId, req, body);
     const key = readIdempotencyKey(req);
     if (!key) throw idempotencyKeyRequired();
     const classroom = await ownedClass(this.db, classId, req.user);
@@ -167,6 +174,7 @@ export class AiJobsService {
   async list(classId: string, req: any, rawQuery: unknown) {
     const query = listAiJobsQuery.parse(rawQuery ?? {});
     if (query.purpose === LAB_CHALLENGE_PURPOSE) return this.lab.list(classId, req, query);
+    if (query.purpose === ASSESSMENT_PURPOSE) return this.drafts.list(classId, req, query);
     await ownedClass(this.db, classId, req.user);
     if (query.cursor && !(await this.db.aiJob.findFirst({ where: { id: query.cursor, classId }, select: { id: true } })))
       throw aiJobNotFound();
@@ -195,6 +203,7 @@ export class AiJobsService {
     if (!job) throw aiJobNotFound();
     if (job.purpose === "ASSESS_SUBMISSION") return this.assessmentJobView(job);
     if (job.purpose === LAB_CHALLENGE_PURPOSE) return this.lab.detail(job);
+    if (job.purpose === ASSESSMENT_PURPOSE) return this.drafts.detail(job);
     const changed = await lessonChangedSince(this.db, job.lessonId, job.request as NormalizedAiRequest, job.inputDigest);
     return toAiJobView(job as any, { lessonChangedSinceGeneration: changed, items: await this.enrichItems(job), credits: this.creditsOn });
   }
@@ -247,6 +256,7 @@ export class AiJobsService {
       await this.lab.reject(classId, jobId, itemId, req, raw);
       return this.get(classId, jobId, req);
     }
+    if (target?.purpose === ASSESSMENT_PURPOSE) throw assessmentDraftNoDecisions();
     let editedPayload: ResourceItem | null = null;
     if (body.decision === "EDITED") {
       const parsed = resourceItemSchema.safeParse(body.editedPayload);
@@ -287,6 +297,8 @@ export class AiJobsService {
     if (!key) throw idempotencyKeyRequired();
     const classroom = await ownedClass(this.db, classId, req.user);
     if (classroom.status !== "ACTIVE") throw classArchived();
+    const kindOf = await this.db.aiJob.findFirst({ where: { id: jobId, classId }, select: { purpose: true } });
+    if (kindOf?.purpose === ASSESSMENT_PURPOSE) throw assessmentDraftNoDecisions();
     const ctx = { actorId: req.user.sub, key, scope: `POST classes/${classId}/ai-jobs/${jobId}/materialize`, payload: body };
     return idempotent(this.db, ctx, async (tx) => {
       await lock(tx, `ai-job:${jobId}`);

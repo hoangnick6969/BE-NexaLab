@@ -10,6 +10,9 @@ export const INSIGHT_MESSAGES = {
   SUBMISSION_SIMILARITY_HIGH: "Bài làm có nội dung trùng khá nhiều với bài của học sinh khác trong cùng bài giao. Đây là bằng chứng để giáo viên đối chiếu, không phải kết luận.",
   MCQ_EXPLANATION_MISMATCH: "Điểm trắc nghiệm và phần giải thích bằng văn bản của cùng một bài học chưa tương xứng với nhau. Đây là bằng chứng để giáo viên đối chiếu, không phải kết luận.",
   SIMULATION_EXPLANATION_MISMATCH: "Kết quả thực hành và phần giải thích bằng văn bản của cùng một bài học chưa tương xứng với nhau. Đây là bằng chứng để giáo viên đối chiếu, không phải kết luận.",
+  /** insights@4: one representative score per assignment, compared across different assignments over time. */
+  ASSESSMENT_TREND: "Kết quả bài kiểm tra gần nhất khác đáng kể so với các bài kiểm tra trước (mỗi bài một điểm đại diện, không tính các lần làm lại). Nên xem lại các bài liên quan.",
+  READINESS_BEFORE_MIDTERM: "Sắp đến bài kiểm tra giữa kỳ nhưng học sinh chưa hoàn thành bài ôn tập hoặc điểm luyện tập còn thấp. Nên nhắc học sinh ôn lại trước khi kiểm tra.",
 } as const;
 
 /** Words templates and codes must never contain (Vietnamese and English equivalents). */

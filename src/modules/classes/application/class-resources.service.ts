@@ -1,3 +1,4 @@
+import { pinExamLabs } from "./exam-contract";
 import { Injectable, BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Put, Req } from "@nestjs/common";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
@@ -73,7 +74,7 @@ export class ClassResourcesService {
     await this.assertLesson(classId, b.lessonId, req.user.sub);
     // Read-only qdup@1 warnings, computed before the write; they never block (TAI3-T2).
     const duplicateWarnings = await this.duplicateWarnings(classId, req.user.sub, b.kind, content, b.title);
-    const ctx = { actorId: req.user.sub, key: readIdempotencyKey(req), scope: `POST classes/${classId}/resources`, payload: { ...b, content } };
+    const ctx = { actorId: req.user.sub, key: readIdempotencyKey(req), scope: `POST classes/${classId}/resources`, payload: b.kind === "EXAM" ? b : { ...b, content } };
     return idempotent(this.db, ctx, async (tx) => {
       const created = await tx.classResource.create({ data: { classId, kind: b.kind, title: b.title, lessonId: b.lessonId, content, createdById: req.user.sub }, select: resourceSelect });
       await syncClassResourceFingerprints(tx, created.id);
@@ -124,7 +125,7 @@ export class ClassResourcesService {
           throw new ConflictException({ code: "EXPLORE_SOURCE_CHANGED", message: "Lab nguồn đã có phiên bản mới; hãy tạo lại bài từ phiên bản hiện tại" });
       }
       if (existing.kind === "DOCUMENT" || existing.kind === "REPORT_TEMPLATE") await validateResourceAttachment(tx, existing.content, req.user.sub);
-      const changed = await tx.classResource.updateMany({ where: { id: resourceId, classId, status: "DRAFT" }, data: { status: "PUBLISHED", publishedAt: new Date() } });
+      const changed = await tx.classResource.updateMany({ where: { id: resourceId, classId, status: "DRAFT" }, data: { status: "PUBLISHED", publishedAt: new Date(), ...(existing.kind === "EXAM" ? { content: await pinExamLabs(tx, existing.content as any) } : {}) } });
       if (!changed.count) throw new ConflictException({ code: "RESOURCE_NOT_DRAFT", message: "Chỉ có thể xuất bản bản nháp" });
       const updated = await tx.classResource.findUnique({ where: { id: resourceId }, select: resourceSelect });
       await syncClassResourceFingerprints(tx, resourceId);
@@ -303,7 +304,7 @@ export class ClassResourcesService {
 
   private async memberView(resource: any, studentId: string, metadataLoaded = false) {
     const practice = !practiceKind(resource.kind) ? null : await this.db.classResourcePractice.findUnique({ where: { resourceId_studentId: { resourceId: resource.id, studentId } }, select: { state: true, updatedAt: true } });
-    return { ...(metadataLoaded ? resource : await this.withAttachmentMetadata(resource)), content: resource.kind === "TEST" ? null : studentResource(resource.kind, resource.content), practice: practice ? { ...practice, scored: false } : null };
+    return { ...(metadataLoaded ? resource : await this.withAttachmentMetadata(resource)), content: ["TEST", "EXAM"].includes(resource.kind) ? null : studentResource(resource.kind, resource.content), practice: practice ? { ...practice, scored: false } : null };
   }
 
   private async withAttachmentMetadataList(resources: any[]) {
@@ -363,7 +364,7 @@ export class ClassResourcesService {
     return warnings.map((w) => ({ ...w, matches: w.matches.filter((m) => !ownPrevious(m)) })).filter((w) => w.matches.length > 0);
   }
 
-  private itemCount(resource: any) { return resource.kind === "DECK" ? resource.content.cards.length : ["TEST", "STUDY_QUIZ"].includes(resource.kind) ? resource.content.questions.length : 1; }
+  private itemCount(resource: any) { return ["DECK", "TEST", "STUDY_QUIZ", "EXAM"].includes(resource.kind) ? resourceItemCount(resource.kind, resource.content) : 1; }
 
   private denied() { return new ForbiddenException({ code: "CLASS_RESOURCE_ACCESS_DENIED", message: "Không có quyền truy cập tài nguyên lớp này" }); }
 }

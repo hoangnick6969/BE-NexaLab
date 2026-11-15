@@ -19,6 +19,9 @@ import { LAB_CHALLENGE_MAX_OUTPUT_TOKENS } from "./lab-challenge-contract";
 import { DRAFT_LAB_CHALLENGE_SYSTEM, buildLabChallengeUser, labChallengeResponseSchema, type LabChallengeSnapshotV1 } from "./lab-challenge-prompt";
 import { processLabChallengeOutput } from "./lab-challenge-validation";
 import { loadLabContexts } from "./lab-reference-states";
+import { ASSESSMENT_PURPOSE, GENERATE_ASSESSMENT_MAX_OUTPUT_TOKENS } from "./assessment-blueprint";
+import { processGenerateAssessmentOutput } from "./assessment-draft-output";
+import { ASSESSMENT_ITEMS_JSON_SCHEMA, buildGenerateAssessmentUser, GENERATE_ASSESSMENT_SYSTEM, type AssessmentSnapshotV1 } from "./generate-assessment-prompt";
 import { PRIVACY_GUARD_FAILURE } from "./assessment-contract";
 import { PrivacyGuardError } from "./assessment-privacy";
 import { loadKnownIdentities } from "./assessment-snapshot";
@@ -34,7 +37,7 @@ import {
 
 export const RUNNER_TIMINGS = { pollMs: 2_000, sweepMs: 30_000, leaseMs: 90_000, providerTimeoutMs: 60_000 } as const;
 export const MAX_ATTEMPTS = 2;
-const SUPPORTED_PURPOSES = ["GENERATE_RESOURCE", "ASSESS_SUBMISSION", "DRAFT_LAB_CHALLENGE"];
+const SUPPORTED_PURPOSES = ["GENERATE_RESOURCE", "ASSESS_SUBMISSION", "DRAFT_LAB_CHALLENGE", ASSESSMENT_PURPOSE];
 
 type FailureCode =
   | "PROVIDER_UNAVAILABLE" | "PROVIDER_TIMEOUT" | "OUTPUT_SCHEMA_INVALID" | "OUTPUT_VALIDATION_FAILED" | "LESSON_UNAVAILABLE" | "INTERNAL_ERROR"
@@ -132,6 +135,7 @@ export class AiJobRunner implements OnModuleInit, OnModuleDestroy {
     if (!job) return;
     if (job.purpose === "ASSESS_SUBMISSION") return this.processAssessment(claimed, job, now);
     if (job.purpose === "DRAFT_LAB_CHALLENGE") return this.processLabChallenge(claimed, job, now);
+    if (job.purpose === ASSESSMENT_PURPOSE) return this.processAssessmentDraft(claimed, job, now);
     const lesson = await this.db.lesson.findUnique({ where: { id: job.lessonId }, select: { id: true } });
     if (!lesson) return this.fail(claimed, "LESSON_UNAVAILABLE", null, [], now());
 
@@ -167,6 +171,46 @@ export class AiJobRunner implements OnModuleInit, OnModuleDestroy {
     const output = processGenerateResourceOutput(snapshot, text, corpus);
     if (!output.ok) return this.fail(claimed, output.code, usage, output.dropped, now());
     return this.succeed(claimed, output.items, output.dropped, usage, now());
+  }
+
+  /**
+   * TAI7-T5 GENERATE_ASSESSMENT. Built from the stored snapshot only (lesson passages, server blueprint, the Lab the teacher
+   * picked). The pure pipeline fills the blueprint, re-allocates points to exactly 10,00 and gates the paper through the
+   * EXAM contract; the single resulting item is the draft the teacher loads into the exam editor.
+   */
+  private async processAssessmentDraft(claimed: Claimed, job: any, now: () => Date) {
+    const lesson = await this.db.lesson.findUnique({ where: { id: job.lessonId }, select: { id: true } });
+    if (!lesson) return this.fail(claimed, "LESSON_UNAVAILABLE", null, [], now());
+    const snapshot = job.inputSnapshot as unknown as AssessmentSnapshotV1;
+    let text: string;
+    let usage: Usage = null;
+    try {
+      await this.respectMinInterval();
+      const result = await this.provider!.generate({
+        system: GENERATE_ASSESSMENT_SYSTEM,
+        user: buildGenerateAssessmentUser(snapshot),
+        maxTokens: GENERATE_ASSESSMENT_MAX_OUTPUT_TOKENS,
+        timeoutMs: RUNNER_TIMINGS.providerTimeoutMs,
+        responseSchema: ASSESSMENT_ITEMS_JSON_SCHEMA as unknown as Record<string, unknown>,
+      });
+      text = result.text;
+      usage = { inputTokens: result.inputTokens, outputTokens: result.outputTokens };
+      this.logger.log(`job ${job.id} attempt ${claimed.attempt}: provider ok, request ${result.requestId ?? "-"}, tokens ${result.inputTokens}/${result.outputTokens}`);
+    } catch (error) {
+      const code: FailureCode = error instanceof AiProviderError ? error.code : "INTERNAL_ERROR";
+      this.logger.warn(`job ${job.id} attempt ${claimed.attempt}: ${code}`);
+      return this.fail(claimed, code, null, [], now());
+    }
+    const output = processGenerateAssessmentOutput(snapshot, text);
+    if (!output.ok) return this.fail(claimed, output.code, usage, output.dropped as unknown as DroppedItem[], now());
+    return this.succeed(
+      claimed,
+      [{ payload: output.payload as unknown as Record<string, unknown>, flags: output.flags }],
+      output.dropped as unknown as DroppedItem[],
+      usage,
+      now(),
+      output.validCount,
+    );
   }
 
   /**
@@ -294,7 +338,8 @@ export class AiJobRunner implements OnModuleInit, OnModuleDestroy {
     await tx.aiJob.updateMany({ where: { id: claimed.id, status: "CANCELLED", attemptCount: claimed.attempt }, data: await this.tokens(tx, claimed.id, usage) });
   }
 
-  async succeed(claimed: Claimed, items: Array<{ payload: Record<string, unknown>; flags: unknown }>, dropped: DroppedItem[], usage: Usage, at: Date) {
+  /** `validCount` defaults to the item count; GENERATE_ASSESSMENT stores one draft item but settles credits per surviving slot. */
+  async succeed(claimed: Claimed, items: Array<{ payload: Record<string, unknown>; flags: unknown }>, dropped: DroppedItem[], usage: Usage, at: Date, validCount = items.length) {
     await this.db.$transaction(async (tx: any) => {
       const tokenData = await this.tokens(tx, claimed.id, usage);
       const result = await tx.aiJob.updateMany({
@@ -303,10 +348,10 @@ export class AiJobRunner implements OnModuleInit, OnModuleDestroy {
       });
       if (result.count !== 1) return this.recordCancelledUsage(tx, claimed, usage);
       await tx.aiJobItem.createMany({ data: items.map((item, position) => ({ jobId: claimed.id, position, payload: item.payload, flags: item.flags })) });
-      const settled = await this.settle(tx, claimed.id, { kind: "SETTLE", validCount: items.length });
+      const settled = await this.settle(tx, claimed.id, { kind: "SETTLE", validCount });
       await audit(tx, {
         actor: null, action: "ai_job.complete", targetType: "AiJob", targetId: claimed.id,
-        after: { status: "SUCCEEDED", failureCode: null, validCount: items.length, droppedCount: dropped.length, ...tokenData, ...settled },
+        after: { status: "SUCCEEDED", failureCode: null, validCount, droppedCount: dropped.length, ...tokenData, ...settled },
       });
     }, TX_LIMITS);
   }

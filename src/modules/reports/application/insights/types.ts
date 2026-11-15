@@ -1,8 +1,21 @@
 export type InsightEvidenceKind = "QUIZ" | "TEST" | "PRACTICAL";
 export type InsightStatus = "INFORMATIONAL" | "NEEDS_MORE_EVIDENCE" | "TEACHER_REVIEW_RECOMMENDED";
-export type InsightRuleVersion = "insights@1" | "insights@2" | "insights@3";
+export type InsightRuleVersion = "insights@1" | "insights@2" | "insights@3" | "insights@4";
 /** Evidence entries of an insight: the three scored kinds plus the written submission and a similarity match (insights@2). */
-export type InsightEvidenceRefKind = InsightEvidenceKind | "WRITTEN" | "SIMILARITY_MATCH" | "WRITTEN_GRADE";
+export type InsightEvidenceRefKind = InsightEvidenceKind | "WRITTEN" | "SIMILARITY_MATCH" | "WRITTEN_GRADE" | "ASSIGNMENT";
+/**
+ * One evidence entry. insights@4 adds display fields (never part of the fingerprint, which uses ids only): the assignment
+ * title, its 10-point representative score and type, and for ASSIGNMENT entries a status (UPCOMING or NOT_DONE).
+ */
+export type InsightEvidenceRefItem = {
+  kind: InsightEvidenceRefKind;
+  id: string;
+  at: string;
+  label?: string;
+  score10?: number | null;
+  assessmentType?: string;
+  status?: string;
+};
 export type InsightRuleCode =
   | "INSUFFICIENT_EVIDENCE"
   | "SCORE_CHANGE_UNUSUAL"
@@ -10,7 +23,9 @@ export type InsightRuleCode =
   | "OBJECTIVE_MASTERY_INCONSISTENT"
   | "SUBMISSION_SIMILARITY_HIGH"
   | "MCQ_EXPLANATION_MISMATCH"
-  | "SIMULATION_EXPLANATION_MISMATCH";
+  | "SIMULATION_EXPLANATION_MISMATCH"
+  | "ASSESSMENT_TREND"
+  | "READINESS_BEFORE_MIDTERM";
 
 /**
  * One normalized evidence item of one student in one class. The loader (TAI4-T2) filters and normalizes: class
@@ -71,6 +86,26 @@ export type ExplanationFact = {
   explanationMaxPoints: number;
 };
 
+/**
+ * insights@4 (TAI7-T2): one row per (assignment, student target) of the class, reduced to a single representative result:
+ * graded work (REGULAR_15M / MIDTERM_45M) counts only once its scores are published; practice tests count their first
+ * scored submission (resubmissions never); written work counts the teacher grade of the current submission; lesson
+ * assignments count their first quiz attempt. `status` is SCORED (has score10), PENDING (submitted, no countable score
+ * yet) or NOT_DONE (nothing submitted). Lesson assignments never produce NOT_DONE (a lesson may have no quiz).
+ */
+export type AssessmentFact = {
+  assignmentId: string;
+  title: string;
+  contentType: string;
+  assessmentType: string;
+  lessonId: string | null;
+  createdAt: Date;
+  dueAt: Date | null;
+  status: "SCORED" | "PENDING" | "NOT_DONE";
+  score10: number | null;
+  ref: { kind: "TEST" | "WRITTEN" | "QUIZ"; id: string; at: Date } | null;
+};
+
 export type InsightInput = {
   classId: string;
   studentId: string;
@@ -79,6 +114,8 @@ export type InsightInput = {
   similarity?: SimilarityFact[];
   /** insights@3: teacher-final explanation grades of this student; absent or empty when none. */
   explanations?: ExplanationFact[];
+  /** insights@4: one representative fact per assignment of this student; absent or empty when none. */
+  assessments?: AssessmentFact[];
   now: Date;
 };
 
@@ -92,6 +129,6 @@ export type Insight = {
   message: string;
   thresholds: Record<string, number>;
   values: Record<string, number | string>;
-  evidence: Array<{ kind: InsightEvidenceRefKind; id: string; at: string }>;
+  evidence: InsightEvidenceRefItem[];
   computedAt: string;
 };
