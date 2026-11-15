@@ -13,10 +13,10 @@ depends_on: [SPEC-lab-kit-20-slot-delivery, SPEC-lab-mode-foundation-p0]
 
 ## Quyết định cần owner chốt (D2-0.1)
 
-| # | Quyết định | **Owner đã duyệt** | Trạng thái |
+| # | Quyết định | Đề xuất | Trạng thái |
 |---|---|---|---|
 | 1 | Nguồn K9 | `9/hien-tuong-di-truyen-mendel/1, 2` (quy luật Mendel), `9/di-truyen-nhiem-sac-the/4, 5` (phân ly, tổ hợp) theo [catalog](../spec-lab-pipeline/lab-catalog-and-shared-kits-khtn8-9.md) | **Owner đã duyệt.** Provenance K9 vẫn có điều kiện kiểm tra bởi reviewer |
-| 2 | Phạm vi lát cắt đầu | **Một tính trạng, trội hoàn toàn**: Punnett 2×2, tỉ lệ kiểu gen và kiểu hình | Đề xuất |
+| 2 | Phạm vi lát cắt đầu | **Một tính trạng, trội hoàn toàn**: Punnett 2×2, tỉ lệ kiểu gen và kiểu hình | **Owner đã duyệt** |
 | 3 | Ngoài phạm vi v1 | Lai hai tính trạng, liên kết gen, NST giới tính XY, lấy mẫu ngẫu nhiên có `seed` | Owner đã duyệt. Để sang version sau. Catalog ghi các mục này nhưng backlog K8-FL26 coi là mở rộng |
 | 4 | Track Lab | Từ INC-2 là track thứ ba, cần owner nới giới hạn 2 track (O-0.5) | **Owner đã duyệt** |
 
@@ -34,7 +34,7 @@ depends_on: [SPEC-lab-kit-20-slot-delivery, SPEC-lab-mode-foundation-p0]
 
 - Đầu vào: `{ setup: "monohybrid", parents: [kiểu gen 1, kiểu gen 2] }`, trong đó kiểu gen là hai chữ cái cùng tên. Chữ hoa là trội. `aA` được chuẩn hóa thành `Aa`.
 - Giao tử: mỗi alen của bố hoặc mẹ là một giao tử, mỗi giao tử có trọng số 1/2. Cá thể đồng hợp cho hai giao tử giống nhau.
-- Punnett: 2×2 (hoặc 1×2, 2×1 nếu cần), mỗi ô là một tổ hợp kiểu gen.
+- Punnett: 2×2 (luôn luôn với lai một tính trạng; đồng hợp vẫn cho hai giao tử giống nhau), mỗi ô là một tổ hợp kiểu gen.
 - Kết quả: `genotypeCounts`, `phenotypeCounts`, `genotypeRatio` và `phenotypeRatio` dưới dạng số nguyên đã rút gọn.
 - Giới hạn: không mô phỏng ngẫu nhiên, không lai hai tính trạng, không liên kết gen. Con số là tỉ lệ kỳ vọng, không phải kết quả thí nghiệm.
 
