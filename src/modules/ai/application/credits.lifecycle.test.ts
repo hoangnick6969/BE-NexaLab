@@ -90,11 +90,11 @@ function expectReconciled() {
 describe("TAI5-T2 pricing versions and estimate", () => {
   it("seeds the team-lead baseline as active version 1 per purpose, idempotently and audited", async () => {
     await credits.ensureBaselinePricing();
-    expect(store.pricingVersion.rows).toHaveLength(3); // GENERATE_RESOURCE, ASSESS_SUBMISSION and (TAI-06) DRAFT_LAB_CHALLENGE
+    expect(store.pricingVersion.rows).toHaveLength(4); // GENERATE_RESOURCE, ASSESS_SUBMISSION, (TAI-06) DRAFT_LAB_CHALLENGE and (TAI7-T5) GENERATE_ASSESSMENT
     const generate = store.pricingVersion.rows.find((p: Row) => p.purpose === "GENERATE_RESOURCE")!;
     expect(generate).toMatchObject({ version: 1, status: "active", createdById: "system", ...BASELINE_PRICES.GENERATE_RESOURCE });
     expect(generate.evidenceRef).toContain("spec-teacher-ai-credits/tai-05-pricing-evidence.md");
-    expect(store.auditLog.rows.filter((a: Row) => a.action === "credits.pricing.create")).toHaveLength(3);
+    expect(store.auditLog.rows.filter((a: Row) => a.action === "credits.pricing.create")).toHaveLength(4);
   });
 
   it("estimates deterministically for the same request and price, writes nothing and reports an unknown balance as 0", async () => {
@@ -121,7 +121,7 @@ describe("TAI5-T2 pricing versions and estimate", () => {
   it("answers enabled=false without a price lookup when credits are off", async () => {
     await build({});
     expect(await credits.estimate("class-a", req(), body())).toEqual({ enabled: false, credits: 0, pricingVersion: null, available: 0 });
-    expect(store.pricingVersion.rows).toHaveLength(3); // baseline was seeded by the explicit call in build()
+    expect(store.pricingVersion.rows).toHaveLength(4); // baseline was seeded by the explicit call in build()
   });
 
   it("creates a draft with the next version (evidence required), activates atomically and retires the previous price", async () => {
@@ -141,7 +141,7 @@ describe("TAI5-T2 pricing versions and estimate", () => {
     await expect(admin.activatePricing(draft.id, req(ADMIN))).rejects.toMatchObject({ status: 409, response: { code: "PRICING_NOT_DRAFT" } });
     await expect(admin.activatePricing("missing", req(ADMIN))).rejects.toMatchObject({ status: 404 });
     const audit = store.auditLog.rows.filter((a: Row) => a.action.startsWith("credits.pricing"));
-    expect(audit.map((a: Row) => a.action)).toEqual(["credits.pricing.create", "credits.pricing.create", "credits.pricing.create", "credits.pricing.create", "credits.pricing.activate"]);
+    expect(audit.map((a: Row) => a.action)).toEqual(["credits.pricing.create", "credits.pricing.create", "credits.pricing.create", "credits.pricing.create", "credits.pricing.create", "credits.pricing.activate"]);
     expect(Object.keys(audit.at(-1).after).sort()).toEqual(["baseCredits", "evidenceRef", "perItemCredits", "purpose", "version"]);
   });
 

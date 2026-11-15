@@ -10,7 +10,7 @@
  */
 export const AI_CREDITS_CONFIG = Symbol("AI_CREDITS_CONFIG");
 
-export const PRICED_PURPOSES = ["GENERATE_RESOURCE", "ASSESS_SUBMISSION", "DRAFT_LAB_CHALLENGE"] as const;
+export const PRICED_PURPOSES = ["GENERATE_RESOURCE", "ASSESS_SUBMISSION", "DRAFT_LAB_CHALLENGE", "GENERATE_ASSESSMENT"] as const;
 export type PricedPurpose = (typeof PRICED_PURPOSES)[number];
 
 export type BaselinePrice = {
@@ -34,6 +34,9 @@ export const BASELINE_PRICES: Readonly<Record<PricedPurpose, BaselinePrice>> = {
   ASSESS_SUBMISSION: { baseCredits: 2, perItemCredits: 3, creditsPer1kInputTokens: 2, creditsPer1kOutputTokens: 3 },
   // TAI-06 (team-lead baseline 2026-11-09): estimate = 2 + 2 x requested proposals, so 3 proposals is 8 credits.
   DRAFT_LAB_CHALLENGE: { baseCredits: 2, perItemCredits: 2, creditsPer1kInputTokens: 2, creditsPer1kOutputTokens: 3 },
+  // TAI7-T5 (team-lead baseline 2026-11-15): estimate = 4 + 1 x slots, so a 15-minute paper of 7 slots is 11 credits and a
+  // 45-minute paper of 13 slots is 17. Rubrics and a larger prompt cost more tokens, hence the higher base.
+  GENERATE_ASSESSMENT: { baseCredits: 4, perItemCredits: 1, creditsPer1kInputTokens: 2, creditsPer1kOutputTokens: 3 },
 };
 
 export type AiCreditsConfig = {

@@ -102,4 +102,5 @@ export const submission = (t: Tables, studentId: string, n: number, extra: Row =
   t.assignmentSubmission!.push({ id: sid, assignmentId: "a-test", studentId, score: 80, gradingMode: "AUTO", timing: "ON_TIME", submittedAt: at(n), decision: null, ...extra });
   return sid;
 };
-export const service = (t: Tables, show = false) => new InsightsService(makeDb(t), { showSuddenUnaidedPass: show });
+/** TAI-04 mechanics tests use SCORE_CHANGE_UNUSUAL as their sample insight, so they list the retired rule explicitly (TAI7-T2). */
+export const service = (t: Tables, show = false) => new InsightsService(makeDb(t), { showSuddenUnaidedPass: show, includeRetired: true });

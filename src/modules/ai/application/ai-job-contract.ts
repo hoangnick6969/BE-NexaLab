@@ -1,12 +1,13 @@
 import { BadRequestException, ConflictException, HttpException, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { z } from "zod";
 import { labChallengeBody } from "./lab-challenge-contract";
+import { ASSESSMENT_PURPOSE, assessmentDraftObject, refineAssessmentDraft } from "./assessment-blueprint";
 
 /**
  * Purposes known to the runtime. ASSESS_SUBMISSION (TAI-02) is created through its own route, not the create body below.
  * DRAFT_LAB_CHALLENGE (TAI-06) is the second branch of the create body.
  */
-export const AI_PURPOSES = ["GENERATE_RESOURCE", "ASSESS_SUBMISSION", "DRAFT_LAB_CHALLENGE"] as const;
+export const AI_PURPOSES = ["GENERATE_RESOURCE", "ASSESS_SUBMISSION", "DRAFT_LAB_CHALLENGE", "GENERATE_ASSESSMENT"] as const;
 
 /** duplicateOf entry on the job detail view (computed on read from qdup@1; never stored). */
 export type DuplicateMatch = {
@@ -44,7 +45,9 @@ const generateResourceBody = z
  * Create body: a strict discriminated union on the required `purpose` (implementation-contract.md). TAI-01 ships only
  * GENERATE_RESOURCE; later purposes (TAI-06 DRAFT_LAB_CHALLENGE) add branches without changing this one.
  */
-export const createAiJobBody = z.discriminatedUnion("purpose", [generateResourceBody, labChallengeBody]).superRefine((body, ctx) => {
+// TAI7-T5: GENERATE_ASSESSMENT is the third branch (its cross-field rules live in assessment-blueprint.ts).
+export const createAiJobBody = z.discriminatedUnion("purpose", [generateResourceBody, labChallengeBody, assessmentDraftObject]).superRefine((body, ctx) => {
+  if (body.purpose === ASSESSMENT_PURPOSE) return refineAssessmentDraft(body, ctx);
   if (body.purpose !== "GENERATE_RESOURCE") return;
   if (body.targetKind !== "DECK" && body.itemCount > MAX_QUESTIONS_PER_JOB)
     ctx.addIssue({ code: z.ZodIssueCode.too_big, maximum: MAX_QUESTIONS_PER_JOB, inclusive: true, type: "number", path: ["itemCount"], message: `Tối đa ${MAX_QUESTIONS_PER_JOB} câu hỏi mỗi lần tạo` });
@@ -70,7 +73,7 @@ export type NormalizedAiRequest = ReturnType<typeof normalizeCreateBody>;
 export const listAiJobsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   /** TAI-06: DRAFT_LAB_CHALLENGE lists proposal jobs; the default keeps the TAI-01 list unchanged. */
-  purpose: z.enum(["GENERATE_RESOURCE", "DRAFT_LAB_CHALLENGE"]).default("GENERATE_RESOURCE"),
+  purpose: z.enum(["GENERATE_RESOURCE", "DRAFT_LAB_CHALLENGE", "GENERATE_ASSESSMENT"]).default("GENERATE_RESOURCE"),
   cursor: z.string().trim().min(1).max(64).optional(),
 });
 

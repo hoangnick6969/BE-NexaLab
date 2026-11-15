@@ -35,6 +35,7 @@ export function providerDelayMs(env: NodeJS.ProcessEnv = process.env) {
 async function assertStillAuthorized(db: any, actor: Actor, attempt: { id: string; assignmentId: string | null; labRunId?: string | null }) {
   if (attempt.labRunId) {
     const run = await db.labRun.findUnique({ where: { id: attempt.labRunId } });
+    if (run?.context === "EXAM") throw new NotFoundException();
     if (run?.context === "CLASS_PRACTICE") await assertClassPracticeRun(db, run, actor.sub);
   }
   const session = await db.session.findFirst({
@@ -353,7 +354,7 @@ export type RunHintRequest = { criterion: string; moment: RunHintMoment; state?:
 /** The student's own live checkpoint run and its rubric, or the reason it cannot give hints. */
 async function hintableRun(db: any, actor: Actor, runId: string) {
   const run = await db.labRun.findFirst({ where: { id: runId, studentId: actor.sub } });
-  if (!run) throw new NotFoundException();
+  if (!run || run.context === "EXAM") throw new NotFoundException();
   if (run.revokedAt) throw new ConflictException({ code: "RUN_REVOKED", message: "Lượt làm này đã bị thu hồi" });
   if (run.expiresAt && run.expiresAt < new Date()) throw new ConflictException({ code: "RUN_EXPIRED", message: "Lượt làm này đã hết hạn" });
   const rubricRef = (run.execution as any)?.rubricRef;
@@ -479,9 +480,9 @@ export type { PhraseOutcome };
 export async function explainAttempt(db: any, actor: Actor, attemptId: string, deps: HintDeps = NO_LLM) {
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, studentId: actor.sub },
-    select: { id: true, verdict: true, simulationResult: true, labRun: { select: { execution: true, labId: true } } },
+    select: { id: true, verdict: true, simulationResult: true, labRun: { select: { execution: true, labId: true, context: true } } },
   });
-  if (!attempt) throw new NotFoundException();
+  if (!attempt || attempt.labRun?.context === "EXAM") throw new NotFoundException();
   const rubricRef = (attempt.labRun?.execution as any)?.rubricRef;
   const explanation = hasCheckpointHints(rubricRef)
     ? explainVerdict({ rubricRef, verdict: attempt.verdict, result: attempt.simulationResult })

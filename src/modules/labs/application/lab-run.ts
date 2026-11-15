@@ -18,9 +18,10 @@ export const digest = (value: unknown) => createHash("sha256").update(canonical(
 export const launchSchema = z.object({
   challengeId: z.string().min(1).max(80),
   assignmentId: z.string().min(1).max(100).optional(),
+  exam: z.object({ assignmentId: z.string().min(1).max(100), sessionId: z.string().min(1).max(100), itemId: z.string().min(1).max(100) }).strict().optional(),
   releaseId: z.string().min(1).max(100).optional(),
   resourceId: z.string().min(1).max(100).optional(),
-}).strict().refine((value) => [value.assignmentId, value.releaseId, value.resourceId].filter(Boolean).length <= 1, "Run selectors cannot be combined");
+}).strict().refine((value) => [value.assignmentId, value.releaseId, value.resourceId, value.exam].filter(Boolean).length <= 1, "Run selectors cannot be combined");
 
 const runSubmissionBase = z.object({
   contract: z.literal("lab-contract/1"),

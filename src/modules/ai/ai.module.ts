@@ -3,6 +3,7 @@ import { AI_ASSESSMENT_CONFIG, parseAiAssessmentConfig } from "../../config/ai-a
 import { AI_CREDITS_CONFIG, parseAiCreditsConfig } from "../../config/ai-credits";
 import { AI_LAB_CHALLENGE_CONFIG, parseAiLabChallengeConfig } from "../../config/ai-lab-challenge";
 import { AiLabChallengesService } from "./application/ai-lab-challenges.service";
+import { AiAssessmentDraftsService } from "./application/ai-assessment-drafts.service";
 import { AiAssessmentsService } from "./application/ai-assessments.service";
 import { AiJobRunner } from "./application/ai-job-runner";
 import { AiJobsService } from "./application/ai-jobs.service";
@@ -32,6 +33,7 @@ import { SimilarityController } from "./interface/similarity.controller";
     { provide: AI_LAB_CHALLENGE_CONFIG, useFactory: () => parseAiLabChallengeConfig(process.env) },
     { provide: AI_PROVIDER, useFactory: (config: ReturnType<typeof parseAiConfig>) => createAiProvider(config), inject: [AI_CONFIG] },
     AiLabChallengesService,
+    AiAssessmentDraftsService,
     AiJobsService,
     AiJobRunner,
     SimilarityRunsService,

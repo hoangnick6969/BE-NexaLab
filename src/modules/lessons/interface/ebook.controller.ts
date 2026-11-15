@@ -17,8 +17,8 @@ export class EbookController {
       fingerprint: z.string().trim().min(1).max(200),
       skip: z.coerce.number().int().min(0).max(1_000_000).default(0),
     }).strict().parse(query);
-    const subject = await this.db.subject.findUnique({ where: { id: subjectId }, select: { ebookUrl: true } });
-    if (!subject?.ebookUrl) throw new NotFoundException({ code: "EBOOK_NOT_FOUND", message: "Không tìm thấy sách giáo khoa" });
+    const subject = await this.db.subject.findUnique({ where: { id: subjectId }, select: { ebookUrl: true, ebookEditions: { select: { id: true }, take: 1 } } });
+    if (!subject?.ebookUrl && !subject?.ebookEditions?.length) throw new NotFoundException({ code: "EBOOK_NOT_FOUND", message: "Không tìm thấy sách giáo khoa" });
     return this.db.ebookAnnotation.findMany({
       where: { userId: req.user.sub, subjectId, documentFingerprint: q.fingerprint },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -42,8 +42,8 @@ export class EbookController {
       suffix: z.string().max(120).nullable().optional(),
       noteText: z.string().trim().max(2000).nullable().optional(),
     }).strict().refine((value) => value.endOffset > value.startOffset, { path: ["endOffset"], message: "Đoạn được chọn không hợp lệ" }).parse(body);
-    const subject = await this.db.subject.findUnique({ where: { id: subjectId }, select: { ebookUrl: true } });
-    if (!subject?.ebookUrl) throw new NotFoundException({ code: "EBOOK_NOT_FOUND", message: "Không tìm thấy sách giáo khoa" });
+    const subject = await this.db.subject.findUnique({ where: { id: subjectId }, select: { ebookUrl: true, ebookEditions: { select: { id: true }, take: 1 } } });
+    if (!subject?.ebookUrl && !subject?.ebookEditions?.length) throw new NotFoundException({ code: "EBOOK_NOT_FOUND", message: "Không tìm thấy sách giáo khoa" });
     return this.db.ebookAnnotation.create({ data: { ...b, userId: req.user.sub, subjectId } });
   }
   @Put("ebook-annotations/:id") async updateEbookAnnotation(

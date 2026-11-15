@@ -40,7 +40,7 @@ const grade = (t: Tables, n: number, criterionPoints: Row[], over: Row = {}) => 
 };
 const mismatches = async (svc: InsightsService, studentId = "s1", status = "all") =>
   (await svc.studentInsights("c1", studentId, { status }, teacher)).insights.filter((i) => i.ruleVersion === "insights@3");
-const svcOf = (t: Tables) => new InsightsService(makeDb(t), { showSuddenUnaidedPass: false });
+const svcOf = (t: Tables) => new InsightsService(makeDb(t), { showSuddenUnaidedPass: false, includeRetired: true });
 
 beforeEach(() => setClock(new Date("2026-11-09T10:00:00.000Z")));
 
@@ -177,7 +177,7 @@ describe("TAI4-T5 service: insights@3 end to end", () => {
     practical(t, "s1", 2, "passed", 0);
     const db = makeDb(t);
     for (const name of ["aiAssessmentSuggestion", "aiJob"]) Object.defineProperty(db, name, { get() { throw new Error(`${name} must not be read`); } });
-    const svc = new InsightsService(db, { showSuddenUnaidedPass: false });
+    const svc = new InsightsService(db, { showSuddenUnaidedPass: false, includeRetired: true });
     expect(await mismatches(svc)).toEqual([]);
     expect((await svc.classInsights("c1", { status: "all" }, teacher)).students.flatMap((s) => s.insights).filter((i) => i.ruleVersion === "insights@3")).toEqual([]);
   });
@@ -189,7 +189,7 @@ describe("TAI4-T5 service: insights@3 end to end", () => {
     grade(t, 3, points(0, 1), { kind: "REJECTED_AI", basedOnSuggestionId: "sug1" });
     const db = makeDb(t);
     for (const name of ["aiAssessmentSuggestion", "aiJob"]) Object.defineProperty(db, name, { get() { throw new Error(`${name} must not be read`); } });
-    const found = await mismatches(new InsightsService(db, { showSuddenUnaidedPass: false }));
+    const found = await mismatches(new InsightsService(db, { showSuddenUnaidedPass: false, includeRetired: true }));
     expect(found).toHaveLength(1);
     expect(found[0]!.values.explanationPercent).toBe(10);
   });

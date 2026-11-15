@@ -46,6 +46,9 @@ enum ClassResourceKind {
   LINK
   /// TAI-02 written task with a versioned rubric (graded by the teacher).
   WRITTEN_TASK
+  /// P0 C3: Class Explore, a teacher's choice inside a Foundational Explore Lab template (no LabRun, no verdict).
+  EXPLORE_LAB
+  EXAM
 }
 
 enum ClassResourceStatus {
@@ -115,6 +118,7 @@ model User {
   children                    ParentLink[]                 @relation("parent")
   assignmentTargets           AssignmentTarget[]
   assignmentSubmissions       AssignmentSubmission[]
+  exploreSubmissions          ClassExploreSubmission[]
   classLabAdditionalResponses ClassLabAdditionalResponse[]
   notifications               Notification[]
   ebookAnnotations            EbookAnnotation[]
@@ -122,6 +126,10 @@ model User {
   labReleaseReviews           LabReleaseReview[]           @relation("LabReleaseReviewer")
   /// TAI-04 (TAI4-T3): acknowledgements that concern this student as the subject (cascade on user deletion).
   insightAcknowledgements     InsightAcknowledgement[]
+  /// TAI-07 (TAI7-T1): timed graded attempts and teacher retake grants of this student.
+  assessmentSessions          AssessmentSession[]
+  assessmentRetakeGrants      AssessmentRetakeGrant[]
+  gradebookEntries            GradebookEntry[]
 }
 
 model Session {
@@ -246,6 +254,29 @@ model ClassResourcePractice {
 
   @@unique([resourceId, studentId])
   @@index([studentId, updatedAt])
+}
+
+/// Class Explore submission (P0 C3.4): what the student measured and explained. Never a verdict, score or progress.
+model ClassExploreSubmission {
+  id             String     @id @default(cuid())
+  assignmentId   String
+  assignment     Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  idempotencyKey String?
+  /// { measures: [{ itemId, tenthsPh }], explanation }, checked against the assignment snapshot's requirements.
+  answers        Json
+  /// SUBMITTED, then REVIEWED once the teacher has commented.
+  status         String     @default("SUBMITTED")
+  submittedAt    DateTime   @default(now())
+  feedback       String?
+  reviewedById   String?
+  reviewedAt     DateTime?
+
+  /// One submission per student and assignment: a retry returns the saved one.
+  @@unique([assignmentId, studentId])
+  @@index([studentId, submittedAt])
+  @@index([assignmentId, status])
 }
 
 /// Immutable student text response attempts for teacher-authored Class Lab prompts.
@@ -725,6 +756,8 @@ model Assignment {
   labExecution                Json?
   labExecutionDigest          String?
   classLabSnapshot            Json?
+  /// Class Explore (P0 C3.4): the pinned effective bench, requirements and question this assignment was given with.
+  exploreSnapshot             Json?
   status                      String                       @default("ACTIVE")
   createdById                 String?
   archivedAt                  DateTime?
@@ -737,7 +770,23 @@ model Assignment {
   similarityRuns              SubmissionSimilarityRun[]
   stepProgress                StepProgress[]
   classLabAdditionalResponses ClassLabAdditionalResponse[]
+  exploreSubmissions          ClassExploreSubmission[]
   insightDisagreements        HintInsightDisagreement[]
+  /// TAI-07 (TAI7-T1): PRACTICE keeps the I3/TAI-02 lifecycle; REGULAR_15M / MIDTERM_45M are graded (AD-19). Fixed at creation.
+  assessmentType              AssessmentType               @default(PRACTICE)
+  /// Graded only: minutes per attempt (policy bounds in assessment-policy.ts); null for PRACTICE.
+  durationMinutes             Int?
+  /// Graded only: results stay hidden from students and parents until set (append-once).
+  scoresPublishedAt           DateTime?
+  scoresPublishedById         String?
+  assessmentSessions          AssessmentSession[]
+  retakeGrants                AssessmentRetakeGrant[]
+  /// TAI-07 (TAI7-T3): "Chốt sổ điểm". Set while the column is locked; grades, quick-approve and retakes are refused.
+  gradebookLockedAt           DateTime?
+  gradebookLockedById         String?
+  /// Number of locks so far; each lock writes GradebookEntry rows with this version (unlock keeps them as history).
+  gradebookLockVersion        Int                          @default(0)
+  gradebookEntries            GradebookEntry[]
 
   @@index([classId, status, dueDate])
   @@index([contentType, contentId, status])
@@ -777,11 +826,14 @@ model AssignmentDeadlineRevision {
 enum GradingMode {
   AUTO
   TEACHER
+  MIXED
 }
 
 /// Immutable test submission (I3 / 3.2). The server scores every submission; a late one stays
 /// pending until a LateDecision exists. The latest submission per student is current.
 model AssignmentSubmission {
+  /// Immutable MCQ and Lab components for a submitted EXAM.
+  examComponents     Json?
   id                 String                      @id @default(cuid())
   assignmentId       String
   assignment         Assignment                  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
@@ -812,10 +864,92 @@ model AssignmentSubmission {
   /// TAI-02 (TAI2-T4): ASSESS_SUBMISSION jobs and their suggestions die with the submission (redacted snapshot included).
   aiJobs             AiJob[]
   aiSuggestions      AiAssessmentSuggestion[]
+  /// TAI-07 (TAI7-T1): the graded session this submission closed (unique, so a session is submitted at most once).
+  sessionId          String?                     @unique
+  session            AssessmentSession?          @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  /// TAI-07: true when the server submitted the session draft at expiry.
+  autoSubmitted      Boolean                     @default(false)
 
   @@index([assignmentId, studentId, submittedAt])
   @@index([studentId, submittedAt])
   @@index([deadlineRevisionId])
+}
+
+/// TAI-07 (TAI7-T1): kind of assessment an assignment is (AD-19).
+enum AssessmentType {
+  PRACTICE
+  REGULAR_15M
+  MIDTERM_45M
+}
+
+enum AssessmentSessionStatus {
+  OPEN
+  SUBMITTED
+}
+
+/// TAI-07 (TAI7-T1): one server-timed attempt at a graded assignment. expiresAt = min(startedAt + duration, dueAt).
+/// The draft holds only the student's own answers; an expired OPEN session is auto-submitted once from it.
+model AssessmentSession {
+  id            String                  @id @default(cuid())
+  assignmentId  String
+  assignment    Assignment              @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       User                    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  attemptNo     Int
+  startedAt     DateTime                @default(now())
+  expiresAt     DateTime
+  draftAnswers  Json                    @default("[]")
+  draftSavedAt  DateTime?
+  status        AssessmentSessionStatus @default(OPEN)
+  /// The retake grant this attempt consumed; null for the first attempt.
+  retakeGrantId String?                 @unique
+  retakeGrant   AssessmentRetakeGrant?  @relation(fields: [retakeGrantId], references: [id], onDelete: SetNull)
+  examLabRuns   LabRun[]
+  submission    AssignmentSubmission?
+
+  @@unique([assignmentId, studentId, attemptNo])
+  @@index([status, expiresAt])
+}
+
+/// TAI-07 (TAI7-T3): immutable gradebook snapshot of one student for one lock of one assignment. Export reads it.
+model GradebookEntry {
+  id                 String     @id @default(cuid())
+  assignmentId       String
+  assignment         Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId          String
+  student            User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lockVersion        Int
+  /// "GRADED" | "ABSENT" | "ZERO_REJECTED"
+  status             String
+  /// 10-point score, half-up to one decimal; null for ABSENT.
+  score10            Decimal?   @db.Decimal(3, 1)
+  rawPoints          Float?
+  maxPoints          Float?
+  /// Similarity level of the student's current submission at lock time ("HIGH" | "ELEVATED"), teacher-only.
+  similarityFlag     String?
+  sourceSubmissionId String?
+  sourceGradeId      String?
+  lockedById         String
+  lockedAt           DateTime   @default(now())
+
+  @@unique([assignmentId, studentId, lockVersion])
+  @@index([assignmentId, lockVersion])
+}
+
+/// TAI-07 (TAI7-T1): append-only teacher permission for one extra graded attempt; consumed by the session it opens.
+model AssessmentRetakeGrant {
+  id           String             @id @default(cuid())
+  assignmentId String
+  assignment   Assignment         @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      User               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  grantedById  String
+  reason       String
+  createdAt    DateTime           @default(now())
+  consumedAt   DateTime?
+  session      AssessmentSession?
+
+  @@index([assignmentId, studentId, createdAt])
 }
 
 /// TAI-02 (TAI2-T3): how a written submission was graded.
@@ -946,6 +1080,9 @@ model LabPackRevocation {
 
 /// Server-created, immutable launch tuple. Revocation never deletes historical evidence.
 model LabRun {
+  assessmentSessionId String?
+  assessmentSession   AssessmentSession? @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  examItemId          String?
   id               String         @id @default(cuid())
   studentId        String
   labId            String
@@ -969,6 +1106,7 @@ model LabRun {
   @@index([studentId, createdAt])
   @@index([labId, revokedAt])
   @@index([resourceId])
+  @@index([assessmentSessionId, examItemId])
 }
 
 /// Ordered server evidence for activities that require a prediction before observation.
@@ -1539,7 +1677,7 @@ model AiJob {
   id                     String                  @id @default(cuid())
   classId                String
   actorId                String
-  /// "GENERATE_RESOURCE" in TAI-01, "ASSESS_SUBMISSION" (TAI-02), "DRAFT_LAB_CHALLENGE" (TAI-06); quota is counted per actor and purpose.
+  /// "GENERATE_RESOURCE" in TAI-01, "ASSESS_SUBMISSION" (TAI-02), "DRAFT_LAB_CHALLENGE" (TAI-06), "GENERATE_ASSESSMENT" (TAI7-T5); quota is counted per actor and purpose.
   purpose                String
   /// Resource kind of a GENERATE_RESOURCE job; null for purposes that do not create a class resource (TAI-06).
   targetKind             ClassResourceKind?

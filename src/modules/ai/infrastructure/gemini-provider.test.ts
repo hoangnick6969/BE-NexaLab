@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { AiProviderError } from "../application/ai-provider";
-import { GeminiProvider } from "./gemini-provider";
+import { GeminiProvider, THINKING_HEADROOM_TOKENS } from "./gemini-provider";
 
 const input = { system: "SYSTEM-TEXT", user: "USER-TEXT", maxTokens: 100, timeoutMs: 5000 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -69,7 +69,7 @@ describe("GeminiProvider request and secrecy", () => {
     const body = JSON.parse(init.body as string);
     expect(body.systemInstruction.parts[0].text).toBe("SYSTEM-TEXT");
     expect(body.contents[0].parts[0].text).toBe("USER-TEXT");
-    expect(body.generationConfig).toMatchObject({ temperature: 0, maxOutputTokens: 100, responseMimeType: "application/json", responseSchema: { type: "OBJECT" } });
+    expect(body.generationConfig).toMatchObject({ temperature: 0, maxOutputTokens: 100 + THINKING_HEADROOM_TOKENS, responseMimeType: "application/json", responseSchema: { type: "OBJECT" } });
   });
 
   it("omits responseSchema when none is given", async () => {

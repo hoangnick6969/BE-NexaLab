@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ProgressController } from "./progress.controller";
 import { ParentsController } from "../../parents/interface/parents.controller";
 
-const exclusion = [{ labRunId: null }, { labRun: { context: { not: "CLASS_PRACTICE" } } }];
+const exclusion = [{ labRunId: null }, { labRun: { context: { notIn: ["CLASS_PRACTICE", "EXAM"] } } }];
 const assigned = { id: "assigned", assignmentId: "assignment", challengeId: "challenge", lessonStepId: null, verdict: "passed", durationMs: 10, createdAt: new Date(), challenge: { lab: { id: "lab", title: "Lab" } } };
 
 function fixture() {
@@ -20,7 +20,7 @@ function fixture() {
   return { db, access };
 }
 
-describe("official achievement and activity excludes class practice", () => {
+describe("official achievement and activity exclude class practice and exam evidence", () => {
   it("keeps assignment evidence in parent summaries/activity while excluding practice", async () => {
     const { db, access } = fixture();
     const controller = new ParentsController(db, access, {} as any);

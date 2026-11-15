@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  ACTIVE_INSIGHT_VERSIONS, applyPatternVisibility, engineFor, evaluateInsightsV1, evaluateInsightsV2, evaluateInsightsV3, FORBIDDEN_INSIGHT_WORDS, INSIGHT_MESSAGES,
+  ACTIVE_INSIGHT_VERSIONS, applyPatternVisibility, engineFor, evaluateInsightsV1, evaluateInsightsV2, evaluateInsightsV3, evaluateInsightsV4, FORBIDDEN_INSIGHT_WORDS, INSIGHT_MESSAGES,
   insightFingerprint, type InsightEvidence,
 } from "./index";
 
@@ -30,6 +30,30 @@ describe("INSUFFICIENT_EVIDENCE boundary", () => {
   it("does not count practicals as scored and suppresses SCORE_CHANGE_UNUSUAL", () => {
     expect(codes([...scores([60, 60]), practical("p1", 5, 0, "passed")])).toContain("INSUFFICIENT_EVIDENCE");
     expect(codes(scores([60, 60, 90]))).not.toContain("SCORE_CHANGE_UNUSUAL");
+  });
+});
+
+describe("SCORE_CHANGE_UNUSUAL retake context", () => {
+  const hour = 3600_000;
+  const retake = (id: string, minutes: number, score: number, assignmentId = "a1"): InsightEvidence =>
+    ({ kind: "TEST", id, at: new Date(at(0).getTime() + minutes * 60_000), score, outcomeCodes: [], assignmentId });
+  const scoreChange = (evidence: InsightEvidence[]) => run(evidence).find((i) => i.ruleCode === "SCORE_CHANGE_UNUSUAL")!;
+
+  it("labels resubmissions of one assigned test within 24 hours as a retake, without changing the fingerprint inputs", () => {
+    const evidence = [retake("t1", 0, 35), retake("t2", 85, 35), retake("t3", 86, 30), retake("t4", 94, 75)];
+    const hit = scoreChange(evidence);
+    expect(hit.values).toMatchObject({ context: "RETAKE_SAME_ASSIGNMENT", assignmentId: "a1", direction: "UP" });
+    expect(hit.message).toBe(INSIGHT_MESSAGES.SCORE_CHANGE_RETAKE);
+    // Same rule, same evidence -> same fingerprint as before the context existed: acknowledgements stay valid.
+    expect(hit.fingerprint).toBe(insightFingerprint({ ruleVersion: "insights@1", ruleCode: "SCORE_CHANGE_UNUSUAL", classId: "c1", studentId: "s1", evidenceIds: ["t1", "t2", "t3", "t4"] }));
+  });
+
+  it("keeps the across-work wording for different tests, for the same test spread over more than 24 hours, and for quizzes", () => {
+    expect(scoreChange([retake("t1", 0, 35, "a1"), retake("t2", 10, 35, "a2"), retake("t3", 20, 35, "a3"), retake("t4", 30, 75, "a4")]).values.context).toBe("ACROSS_WORK");
+    const spread = scoreChange([retake("t1", 0, 35), retake("t2", 60, 35), retake("t3", 120, 35), retake("t4", (24 * hour) / 60_000 + 1, 75)]);
+    expect(spread.values.context).toBe("ACROSS_WORK");
+    expect(spread.message).toBe(INSIGHT_MESSAGES.SCORE_CHANGE_UNUSUAL);
+    expect(scoreChange(scores([35, 35, 35, 75])).values.context).toBe("ACROSS_WORK");
   });
 });
 
@@ -191,10 +215,11 @@ describe("fingerprints and determinism", () => {
     expect(list.every((i) => i.ruleVersion === "insights@1" && i.studentId === "s1" && i.computedAt === now.toISOString())).toBe(true);
   });
   it("keeps insights@1 callable through the registry", () => {
-    expect(ACTIVE_INSIGHT_VERSIONS).toEqual(["insights@1", "insights@2", "insights@3"]);
+    expect(ACTIVE_INSIGHT_VERSIONS).toEqual(["insights@1", "insights@2", "insights@3", "insights@4"]);
     expect(engineFor("insights@1")).toBe(evaluateInsightsV1);
     expect(engineFor("insights@2")).toBe(evaluateInsightsV2);
     expect(engineFor("insights@3")).toBe(evaluateInsightsV3);
+    expect(engineFor("insights@4")).toBe(evaluateInsightsV4);
     expect(engineFor("insights@9")).toBeUndefined();
   });
 });

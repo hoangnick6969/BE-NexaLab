@@ -1,3 +1,4 @@
+import { assessmentResourceKind, EXAM_CONTENT_TYPE, studentExamContent, writtenContentType } from "../../classes/application/exam-contract";
 import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Inject, NotFoundException, Optional, Param, Post, Put, Query, Req } from "@nestjs/common";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
@@ -16,12 +17,24 @@ import { scoreTest, studentTestContent, TEST_CONTENT_TYPE, testSubmissionSchema 
 import { currentDeadlines, deadlineStates } from "../../classes/application/assignment-test-state";
 import { normalizeWrittenResponses, studentGradeCriteria, studentWrittenAssignmentContent, WRITTEN_CONTENT_TYPE, writtenSubmissionSchema } from "../../classes/application/assignment-written-contract";
 import { lock } from "../../classes/application/class-common";
+import { canResubmitExplore, isLateExplore, studentExploreSnapshot, verifyExploreSnapshot } from "../../classes/application/class-explore-contract";
+import { assessmentSummary, isGraded, resultVisible, SESSION_GRACE_MS } from "../../classes/application/assessment-policy";
+import { attemptSummaries, draftBodySchema, examAttempts, examDraftSchema, examSubmissionData, finalizeExpiredSessions, gradedSubmissionData, openSessionOrThrow, sessionView, startSession, testDraftSchema, writtenDraftSchema } from "../../classes/application/assessment-session";
 import { audit } from "../../../common/audit";
 import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { notify } from "../../notifications/application/notify";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { requestBasicExerciseHint, requestLessonQuestionHint } from "../application/lesson-hint";
 import { STUDENT_AI_PROVIDER, type StudentAiProvider } from "../../student-ai/application/student-llm";
+
+/** TAI-07: a graded submission names its session; answers may be partial (the timer can end mid-paper). */
+const gradedSubmissionSchema = z
+  .object({ sessionId: z.string().min(1).max(64), answers: testDraftSchema.optional(), responses: writtenDraftSchema.optional(), exam: examDraftSchema.optional() })
+  .strict()
+  .refine((b) => !(b.answers && b.responses), { message: "Chỉ gửi answers (trắc nghiệm) hoặc responses (tự luận)" });
+
+const sessionRequired = () =>
+  new BadRequestException({ code: "ASSESSMENT_SESSION_REQUIRED", message: "Bài kiểm tra lấy điểm phải được làm trong phiên có tính giờ" });
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -641,7 +654,7 @@ export class LearningController {
   /** A published class test stays readable through its assignment even after the resource is archived. */
   private async testState(a: { contentId: string; classId: string; contentType?: string }) {
     // TAI2-T2: a written assignment reads its WRITTEN_TASK resource the same way.
-    const kind = a.contentType === WRITTEN_CONTENT_TYPE ? "WRITTEN_TASK" : "TEST";
+    const kind = assessmentResourceKind(a.contentType ?? TEST_CONTENT_TYPE);
     const test = await this.db.classResource.findFirst({ where: { id: a.contentId, classId: a.classId, kind, status: { not: "DRAFT" } } });
     return test ? { state: "AVAILABLE" as const, test } : { state: "UNAVAILABLE" as const, test: null };
   }
@@ -657,10 +670,11 @@ export class LearningController {
     // availability check and the catalog summary, avoiding per-assignment
     // detail reads while keeping the existing student authorization query.
     // TAI2-T2: written assignments are class resources with the same deadline lifecycle as tests.
-    const tests = rows.filter((a) => a.contentType === TEST_CONTENT_TYPE || a.contentType === WRITTEN_CONTENT_TYPE);
+    const tests = rows.filter((a) => a.contentType === TEST_CONTENT_TYPE || writtenContentType(a.contentType));
     const testResourceIds = [...new Set(tests.filter((a) => a.contentType === TEST_CONTENT_TYPE).map((a) => a.contentId))];
-    const writtenResourceIds = [...new Set(tests.filter((a) => a.contentType === WRITTEN_CONTENT_TYPE).map((a) => a.contentId))];
-    const labIds = [...new Set(rows.filter((a) => a.contentType === "lab").map((a) => a.contentId))];
+    const writtenResourceIds = [...new Set(tests.filter((a) => writtenContentType(a.contentType)).map((a) => a.contentId))];
+    // Class Explore assignments point at their Lab, so they list like lab assignments (P0 C3.4).
+    const labIds = [...new Set(rows.filter((a) => a.contentType === "lab" || a.contentType === "explore_lab").map((a) => a.contentId))];
     const testResources = testResourceIds.length
       ? await this.db.$queryRaw<Array<{ id: string; classId: string; lessonId: string | null; thumbnailUrl: string | null }>>(Prisma.sql`
           SELECT id, "classId", "lessonId", content->>'thumbnailUrl' AS "thumbnailUrl"
@@ -671,7 +685,7 @@ export class LearningController {
     // TAI2-T2: written resources are read separately, so the TEST query stays unchanged.
     const writtenResources = writtenResourceIds.length
       ? await this.db.classResource.findMany({
-          where: { id: { in: writtenResourceIds }, kind: "WRITTEN_TASK", status: { not: "DRAFT" } },
+          where: { id: { in: writtenResourceIds }, kind: tests.some((a) => a.contentType === EXAM_CONTENT_TYPE) ? { in: ["WRITTEN_TASK", "EXAM"] } : "WRITTEN_TASK", status: { not: "DRAFT" } },
           select: { id: true, classId: true, lessonId: true },
         })
       : [];
@@ -679,7 +693,7 @@ export class LearningController {
     const writtenByClassAndId = new Map(writtenResources.map((resource: any) => [`${resource.classId}:${resource.id}`, resource]));
     const testResourceByAssignment = new Map(tests.map((assignment) => [
       assignment.id,
-      (assignment.contentType === WRITTEN_CONTENT_TYPE ? writtenByClassAndId : resourceByClassAndId).get(`${assignment.classId}:${assignment.contentId}`) ?? null,
+      (writtenContentType(assignment.contentType) ? writtenByClassAndId : resourceByClassAndId).get(`${assignment.classId}:${assignment.contentId}`) ?? null,
     ]));
     const testLessonIds = tests
       .map((assignment) => testResourceByAssignment.get(assignment.id)?.lessonId)
@@ -709,20 +723,25 @@ export class LearningController {
     const contentByType = {
       lesson: new Map(lessons.map((content: any) => [content.id, content])),
       lab: new Map(labs.map((content: any) => [content.id, content])),
+      explore_lab: new Map(labs.map((content: any) => [content.id, content])),
     };
     const testStateByAssignment = new Map<string, any>();
+    // TAI-07: auto-submit this student's expired graded sessions before deriving statuses.
+    const gradedIds = tests.filter((a) => isGraded(a.assessmentType)).map((a) => a.id);
+    if (gradedIds.length) await finalizeExpiredSessions(this.db, { assignmentIds: gradedIds, studentId: req.user.sub });
+    const attemptsByAssignment = await attemptSummaries(this.db, gradedIds, req.user.sub, now);
     if (tests.length) {
       const { states, key } = await deadlineStates(this.db, tests, [req.user.sub], now);
       for (const test of tests) testStateByAssignment.set(test.id, states.get(key(test.id, req.user.sub)));
     }
     const items: any[] = [];
     for (const a of rows) {
-      const isWritten = a.contentType === WRITTEN_CONTENT_TYPE;
+      const isWritten = writtenContentType(a.contentType);
       const isTest = a.contentType === TEST_CONTENT_TYPE || isWritten;
       const testResource = isTest ? testResourceByAssignment.get(a.id) : null;
       const content = isTest
         ? (testResource?.lessonId ? contentByType.lesson.get(testResource.lessonId) : null)
-        : contentByType[a.contentType as "lesson" | "lab"]?.get(a.contentId) ?? null;
+        : contentByType[a.contentType as "lesson" | "lab" | "explore_lab"]?.get(a.contentId) ?? null;
       const state = isTest
         ? (testResource ? "AVAILABLE" as const : "UNAVAILABLE" as const)
         : (await this.contentState(a, req.user.sub, content, true)).state;
@@ -738,7 +757,7 @@ export class LearningController {
           contentTitle: content.title,
           subject: { id: content.subject.id, name: content.subject.name },
           grade: content.grade,
-          ...(a.contentType === "lab" ? { topicCode: content.topicCode } : {}),
+          ...(a.contentType === "lab" || a.contentType === "explore_lab" ? { topicCode: content.topicCode } : {}),
           chapter: lessonContext ? content.chapter : null,
           topic: content.topic,
           curriculumOrder: lessonContext ? content.curriculumOrder : null,
@@ -755,6 +774,7 @@ export class LearningController {
         ...(isWritten
           ? { writtenStatus: this.testSummary(testStateByAssignment.get(a.id)) }
           : isTest ? { testStatus: this.testSummary(testStateByAssignment.get(a.id)) } : {}),
+        ...(isTest ? { assessment: assessmentSummary(a, attemptsByAssignment.get(a.id)) } : {}),
       });
     }
     return items;
@@ -765,7 +785,8 @@ export class LearningController {
   ) {
     const a = await this.applicableAssignment(id, req.user.sub);
     if (a.contentType === TEST_CONTENT_TYPE) return this.testAssignment(a, req.user.sub);
-    if (a.contentType === WRITTEN_CONTENT_TYPE) return this.writtenAssignment(a, req.user.sub);
+    if (writtenContentType(a.contentType)) return this.writtenAssignment(a, req.user.sub);
+    if (a.contentType === "explore_lab") return this.exploreAssignment(a, req.user.sub);
     const { state, content } = await this.contentState(a, req.user.sub);
     if (!content) throw new NotFoundException("Nội dung không còn khả dụng");
     if (state === "ARCHIVED_NOT_STARTED")
@@ -797,12 +818,35 @@ export class LearningController {
       },
     };
   }
+  /** Class Explore (P0 C3.4): the pinned bench and requirements from the assignment snapshot, and the student's own submission. */
+  private async exploreAssignment(a: any, studentId: string) {
+    const snapshot = verifyExploreSnapshot(a.exploreSnapshot);
+    const lab = await this.db.lab.findUnique({ where: { id: snapshot.labId }, include: { subject: { select: { id: true, name: true } } } });
+    if (!lab || !["published", "archived"].includes(lab.status)) throw new NotFoundException("Nội dung không còn khả dụng");
+    const row = await this.db.classExploreSubmission.findUnique({ where: { assignmentId_studentId: { assignmentId: a.id, studentId } } });
+    return {
+      id: a.id,
+      title: a.title,
+      contentType: a.contentType,
+      dueDate: a.dueDate,
+      createdAt: a.createdAt,
+      overdue: isOverdue(a.dueDate),
+      classroom: a.classroom,
+      content: { id: lab.id, title: lab.title, subject: { id: lab.subject.id, name: lab.subject.name }, grade: lab.grade, topic: lab.topic },
+      explore: {
+        snapshot: studentExploreSnapshot(snapshot),
+        submission: row ? { id: row.id, answers: row.answers, status: row.status, submittedAt: row.submittedAt, feedback: row.feedback ?? null, reviewedAt: row.reviewedAt ?? null,
+          late: isLateExplore(row.submittedAt, a.dueDate), canResubmit: canResubmitExplore(row.status, a.dueDate) } : null,
+      },
+    };
+  }
   private testSummary(state: any) {
     if (!state) return null;
-    return { status: state.status, dueAt: state.dueAt, revision: state.revision, extended: state.extended, dueSoon: state.dueSoon, score: state.current?.score ?? null };
+    return { status: state.status, dueAt: state.dueAt, revision: state.revision, extended: state.extended, dueSoon: state.dueSoon, score: state.current?.score ?? null, score10: state.current?.score10 ?? null, resultHidden: !!state.resultHidden };
   }
   /** TAI2-T2: content only through studentWrittenTaskContent; history carries the student's own responses, never the rubric. */
   private async writtenAssignment(a: any, studentId: string) {
+    const assessment = await this.studentAssessment(a, studentId);
     const [{ test: resource }, { states, key }] = await Promise.all([
       this.testState(a),
       deadlineStates(this.db, [a], [studentId], new Date(), { withResponses: true, withGrade: true }),
@@ -820,10 +864,33 @@ export class LearningController {
       contentState: "AVAILABLE" as const,
       deadline: { revision: state.revision, dueAt: state.dueAt },
       state,
-      content: studentWrittenAssignmentContent(resource),
+      ...assessment.view,
+      content: a.contentType === EXAM_CONTENT_TYPE
+        ? { id: resource.id, title: resource.title, version: resource.version, ...(assessment.showPaper
+          ? studentExamContent(resource.content as any)
+          : { questions: [], prompts: [], labs: [] }) }
+        : assessment.showPaper ? studentWrittenAssignmentContent(resource) : { ...studentWrittenAssignmentContent(resource), prompts: [] },
+    };
+  }
+  /**
+   * TAI-07: graded paper is shown only inside an open session or after scores are published, so the questions cannot
+   * be previewed before the timer starts. Expired sessions of this student are auto-submitted first.
+   */
+  private async studentAssessment(a: any, studentId: string) {
+    const now = new Date();
+    if (!isGraded(a.assessmentType)) return { showPaper: true, view: { assessment: assessmentSummary(a), serverNow: now } };
+    await finalizeExpiredSessions(this.db, { assignmentIds: [a.id], studentId }, now);
+    const summary = (await attemptSummaries(this.db, [a.id], studentId, now)).get(a.id)!;
+    const open = summary.openSession
+      ? await this.db.assessmentSession.findUnique({ where: { id: summary.openSession.id } })
+      : null;
+    return {
+      showPaper: !!open || resultVisible(a),
+      view: { assessment: { ...assessmentSummary(a, summary), openSession: open ? { ...sessionView(open), ...(a.contentType === EXAM_CONTENT_TYPE ? { labAttempts: (await examAttempts(this.db, open)).map(({ itemId, id }) => ({ itemId, id })) } : {}) } : null }, serverNow: now },
     };
   }
   private async testAssignment(a: any, studentId: string) {
+    const assessment = await this.studentAssessment(a, studentId);
     const [{ test }, { states, key }] = await Promise.all([this.testState(a), deadlineStates(this.db, [a], [studentId])]);
     if (!test) throw new NotFoundException("Nội dung không còn khả dụng");
     const state = states.get(key(a.id, studentId))!;
@@ -838,17 +905,28 @@ export class LearningController {
       contentState: "AVAILABLE" as const,
       deadline: { revision: state.revision, dueAt: state.dueAt },
       state,
-      content: { id: test.id, title: test.title, version: test.version, questionCount: content.questions.length, questions: content.questions },
+      ...assessment.view,
+      content: { id: test.id, title: test.title, version: test.version, questionCount: content.questions.length, questions: assessment.showPaper ? content.questions : [] },
     };
   }
   @Roles("STUDENT") @Post("assignments/:id/submissions")
   @ApiOperation({ summary: "Submit an assigned test; server scores it and decides on-time versus late (late needs a reason)" })
   async submitTest(@Param("id") id: string, @Req() req: any, @Body() body: unknown) {
+    // TAI-07: a body with `sessionId` is a graded attempt (test or written).
+    if (body && typeof body === "object" && !Array.isArray(body) && "sessionId" in body) return this.submitGraded(id, req, body);
     // TAI2-T2: a written body ({ responses }) takes the written branch; every other body keeps the TEST path unchanged.
     if (body && typeof body === "object" && !Array.isArray(body) && "responses" in body) return this.submitWritten(id, req, body);
-    const b = testSubmissionSchema.parse(body);
+    const parsed = testSubmissionSchema.safeParse(body);
     const studentId = req.user.sub;
+    // TAI-07: a graded assignment answers a session-less body with the precise code, not a schema error.
+    if (!parsed.success) {
+      const graded = await this.db.assignment.findFirst({ where: { id, ...applicableAssignmentWhere(studentId) }, select: { assessmentType: true } });
+      if (isGraded(graded?.assessmentType)) throw sessionRequired();
+      throw parsed.error;
+    }
+    const b = parsed.data;
     const a = await this.applicableAssignment(id, studentId);
+    if (isGraded(a.assessmentType)) throw sessionRequired();
     if (a.contentType === WRITTEN_CONTENT_TYPE)
       throw new BadRequestException({ code: "WRITTEN_RESPONSES_INVALID", message: "Bài tự luận cần gửi câu trả lời cho từng câu", details: [] });
     if (a.contentType !== TEST_CONTENT_TYPE)
@@ -913,6 +991,7 @@ export class LearningController {
     const b = writtenSubmissionSchema.parse(body);
     const studentId = req.user.sub;
     const a = await this.applicableAssignment(id, studentId);
+    if (isGraded(a.assessmentType)) throw sessionRequired();
     if (a.contentType !== WRITTEN_CONTENT_TYPE)
       throw a.contentType === TEST_CONTENT_TYPE
         ? new BadRequestException({ code: "TEST_ANSWERS_INVALID", message: "Cần trả lời mỗi câu đúng một lần bằng một phương án có trong đề" })
@@ -973,4 +1052,114 @@ export class LearningController {
     });
   }
 
+
+  // ---------- TAI-07 (TAI7-T1) graded sessions ----------
+
+  @Roles("STUDENT") @Post("assignments/:id/sessions")
+  @ApiOperation({ summary: "TAI-07: start or resume the timed attempt of a graded assignment (server sets expiresAt)" })
+  async startAssessmentSession(@Param("id") id: string, @Req() req: any) {
+    const studentId = req.user.sub;
+    const a = await this.applicableAssignment(id, studentId);
+    if (a.contentType !== TEST_CONTENT_TYPE && !writtenContentType(a.contentType))
+      throw new BadRequestException({ code: "NOT_A_TEST_ASSIGNMENT", message: "Bài được giao này không phải bài kiểm tra" });
+    const ctx = { actorId: studentId, key: readIdempotencyKey(req), scope: "POST assignments/:id/sessions:" + id, payload: {} };
+    return idempotent(this.db, ctx, async (tx) => {
+      await lock(tx, "assignment-deadline:" + id);
+      const current = await tx.assignment.findFirst({ where: { id, ...applicableAssignmentWhere(studentId) } });
+      if (!current) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
+      const now = new Date();
+      const { session, resumed } = await startSession(tx, current, studentId, now);
+      if (!resumed)
+        await audit(tx, {
+          actor: req.user,
+          action: "assessment.session.start",
+          targetType: "AssessmentSession",
+          targetId: session.id,
+          after: { assignmentId: id, attemptNo: session.attemptNo, expiresAt: session.expiresAt, retakeGrantId: session.retakeGrantId },
+        });
+      return { session: sessionView(session), resumed, serverNow: now, graceSeconds: SESSION_GRACE_MS / 1000 };
+    });
+  }
+
+  @Roles("STUDENT") @Put("assignments/:id/sessions/:sessionId/draft")
+  @ApiOperation({ summary: "TAI-07: autosave the draft of an open graded session (client every 20 s)" })
+  async saveAssessmentDraft(@Param("id") id: string, @Param("sessionId") sessionId: string, @Req() req: any, @Body() body: unknown) {
+    const b = draftBodySchema.parse(body);
+    const studentId = req.user.sub;
+    const assignment = await this.applicableAssignment(id, studentId);
+    if ((assignment.contentType === EXAM_CONTENT_TYPE) === Array.isArray(b.answers))
+      throw new BadRequestException({ code: "ASSESSMENT_DRAFT_INVALID" });
+    return this.db.$transaction(async (tx: any) => {
+      await lock(tx, "assignment-deadline:" + id);
+      const now = new Date();
+      const session = await openSessionOrThrow(tx, id, studentId, sessionId, now);
+      await tx.assessmentSession.update({ where: { id: session.id }, data: { draftAnswers: b.answers, draftSavedAt: now } });
+      return { savedAt: now, expiresAt: session.expiresAt, serverNow: now };
+    });
+  }
+
+  /** TAI-07 graded submit: inside the open session (+ grace), one attempt, partial answers allowed, always ON_TIME. */
+  private async submitGraded(id: string, req: any, body: unknown) {
+    const b = gradedSubmissionSchema.parse(body);
+    const studentId = req.user.sub;
+    const a = await this.applicableAssignment(id, studentId);
+    if (!isGraded(a.assessmentType))
+      throw new BadRequestException({ code: "ASSESSMENT_SESSION_NOT_ALLOWED", message: "Bài luyện tập không dùng phiên làm bài" });
+    const isWritten = writtenContentType(a.contentType);
+    const isExam = a.contentType === EXAM_CONTENT_TYPE;
+    if (isExam ? b.answers || b.responses : b.exam || (isWritten && b.answers) || (!isWritten && b.responses))
+      throw new BadRequestException({ code: isWritten ? "WRITTEN_RESPONSES_INVALID" : "TEST_ANSWERS_INVALID", message: "Câu trả lời không đúng dạng của bài" });
+    const ctx = { actorId: studentId, key: readIdempotencyKey(req), scope: "POST assignments/:id/submissions:" + id, payload: b };
+    return idempotent(this.db, ctx, async (tx) => {
+      await lock(tx, "assignment-deadline:" + id);
+      const current = await tx.assignment.findFirst({ where: { id, ...applicableAssignmentWhere(studentId) }, select: { id: true, dueDate: true } });
+      if (!current) throw new NotFoundException({ code: "ASSIGNMENT_NOT_FOUND", message: "Không tìm thấy bài được giao" });
+      const now = new Date();
+      const session = await openSessionOrThrow(tx, id, studentId, b.sessionId, now);
+      const deadline = (await currentDeadlines(tx, [current])).get(id);
+      const resource = await tx.classResource.findFirst({ where: { id: a.contentId, classId: a.classId, kind: assessmentResourceKind(a.contentType), status: { not: "DRAFT" } } });
+      if (!deadline?.id || !resource) throw new NotFoundException("Nội dung không còn khả dụng");
+      const data = isExam
+        ? await examSubmissionData(tx, session, resource.content as any, b.exam ?? session.draftAnswers)
+        : gradedSubmissionData(a.contentType, resource, (isWritten ? b.responses : b.answers) ?? []);
+      // Inside the grace window the receive time is clamped to the expiry, so a delayed packet never looks late.
+      const submittedAt = now.getTime() > session.expiresAt.getTime() ? session.expiresAt : now;
+      const submission = await tx.assignmentSubmission.create({
+        data: {
+          assignmentId: id,
+          studentId,
+          deadlineRevisionId: deadline.id,
+          resourceVersion: resource.version,
+          ...data,
+          timing: "ON_TIME",
+          lateReason: null,
+          submittedAt,
+          sessionId: session.id,
+          autoSubmitted: false,
+        },
+      });
+      await tx.assessmentSession.update({ where: { id: session.id }, data: { status: "SUBMITTED", draftAnswers: isExam ? b.exam ?? session.draftAnswers : data.answers, draftSavedAt: now } });
+      await audit(tx, {
+        actor: req.user,
+        action: "assessment.submit",
+        targetType: "AssignmentSubmission",
+        targetId: submission.id,
+        after: { assignmentId: id, sessionId: session.id, attemptNo: session.attemptNo, autoSubmitted: false, gradingMode: data.gradingMode },
+      });
+      const [owner, me] = await Promise.all([
+        tx.classroom.findUnique({ where: { id: a.classId }, select: { teacherId: true } }),
+        tx.user.findUnique({ where: { id: studentId }, select: { fullName: true } }),
+      ]);
+      await notify(tx, [{
+        recipientId: owner?.teacherId ?? "",
+        type: "SUBMISSION_RECEIVED",
+        title: `${me?.fullName} đã nộp "${a.title}"`,
+        link: "/classes",
+        dedupKey: `submission:${submission.id}`,
+      }]);
+      const { states, key } = await deadlineStates(tx, [{ ...current, contentType: a.contentType }], [studentId], submittedAt, { withResponses: isWritten });
+      const state = states.get(key(id, studentId))!;
+      return { submission: state.history.find((row: any) => row.id === submission.id), state };
+    });
+  }
 }

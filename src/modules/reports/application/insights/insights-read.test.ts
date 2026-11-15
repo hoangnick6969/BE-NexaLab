@@ -170,7 +170,7 @@ describe("InsightsService and controller", () => {
     t.classroom![0]!.status = "ARCHIVED";
     quiz(t, "s1", 1, 60);
     const db = makeDb(t);
-    const s = new InsightsService(db, { showSuddenUnaidedPass: false });
+    const s = new InsightsService(db, { showSuddenUnaidedPass: false, includeRetired: true });
     const list = await s.classInsights("c1", {}, teacher);
     expect(list).toMatchObject({ classArchived: true, students: [{ studentId: "s1", insights: [] }] });
     const one = await s.studentInsights("c1", "s1", {}, teacher);
@@ -487,7 +487,7 @@ describe("TAI4-T3 replay and as-of evidence", () => {
     const fp = await fpOf(svc, "HIGH_HINT_DEPENDENCE");
     ackAt(5);
     await svc.acknowledge("c1", "s1", fp, req(KEY(1)), { action: "DISMISSED" });
-    const hidden = await new InsightsService(makeDb(t), { showSuddenUnaidedPass: false }).replay("c1", "s1", fp, teacher);
+    const hidden = await new InsightsService(makeDb(t), { showSuddenUnaidedPass: false, includeRetired: true }).replay("c1", "s1", fp, teacher);
     expect(hidden.pattern).toBeUndefined();
     expect(hidden.status).toBe("INFORMATIONAL");
     expect(hidden.fingerprint).toBe(fp);

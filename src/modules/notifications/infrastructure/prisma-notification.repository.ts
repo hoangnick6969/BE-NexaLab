@@ -3,7 +3,7 @@ import { Db } from "../../../db/db";
 import { applicableAssignmentWhere } from "../../classes/application/class-access";
 import { TEST_CONTENT_TYPE } from "../../classes/application/assignment-test-contract";
 import { deadlineStates } from "../../classes/application/assignment-test-state";
-import { WRITTEN_CONTENT_TYPE } from "../../classes/application/assignment-written-contract";
+import { DEADLINE_CONTENT_TYPES } from "../../classes/application/assignment-written-contract";
 import { notify, type NotificationInput } from "../application/notify";
 import type { AssignedTestState, NotificationRepository } from "../application/notification.repository";
 
@@ -41,7 +41,7 @@ export class PrismaNotificationRepository implements NotificationRepository {
   }
   async assignedTestStates(studentId: string): Promise<AssignedTestState[]> {
     const rows = await this.db.assignment.findMany({
-      where: { ...applicableAssignmentWhere(studentId), contentType: { in: [TEST_CONTENT_TYPE, WRITTEN_CONTENT_TYPE] } },
+      where: { ...applicableAssignmentWhere(studentId), contentType: { in: [...DEADLINE_CONTENT_TYPES] } },
       select: { id: true, title: true, dueDate: true, contentType: true, classroom: { select: { name: true } } },
     });
     if (!rows.length) return [];
