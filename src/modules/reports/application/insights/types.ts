@@ -33,6 +33,8 @@ export type InsightEvidence = {
   outcomeCodes: string[];
   /** The evidence item's lesson (null when it has none); insights@3 links MCQ and practical evidence to a written grade by lesson. */
   lessonId?: string | null;
+  /** TEST: the assignment the submission belongs to; tells a retake of the same test from a different test. */
+  assignmentId?: string | null;
 };
 
 /**

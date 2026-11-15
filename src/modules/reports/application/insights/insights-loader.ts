@@ -138,7 +138,7 @@ export async function loadClassEvidence(db: any, classId: string, options: LoadO
     const status = submissionStatus({ timing: s.timing, decision });
     if (status !== "SCORED" && status !== "ACCEPTED_BY_EXTENSION") continue;
     const lessonId = resourceLesson.get(assignmentResource.get(s.assignmentId) ?? "") ?? null;
-    push(s.studentId, { kind: "TEST", id: s.id, at: s.submittedAt, score: s.score, outcomeCodes: outcomesOf(lessonId), lessonId });
+    push(s.studentId, { kind: "TEST", id: s.id, at: s.submittedAt, score: s.score, outcomeCodes: outcomesOf(lessonId), lessonId, assignmentId: s.assignmentId });
   }
 
   if (writtenIds.length) {

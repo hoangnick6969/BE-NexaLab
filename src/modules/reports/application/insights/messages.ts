@@ -2,6 +2,8 @@
 export const INSIGHT_MESSAGES = {
   INSUFFICIENT_EVIDENCE: "Chưa đủ bài có điểm để so sánh kết quả của học sinh này.",
   SCORE_CHANGE_UNUSUAL: "Kết quả gần nhất khác đáng kể so với các lần trước",
+  /** SCORE_CHANGE_UNUSUAL when every compared result is a resubmission of one assigned test within a short window. */
+  SCORE_CHANGE_RETAKE: "Điểm thay đổi lớn giữa các lần làm lại cùng một bài; nên xem học sinh đã nắm vững kiến thức hay chỉ nhớ đáp án đề cũ.",
   HIGH_HINT_DEPENDENCE: "Nhiều lần thực hành cần gợi ý ở mức cao.",
   SUDDEN_UNAIDED_PASS: "Lần thực hành gần nhất đạt mà không cần gợi ý, sau nhiều lần cần gợi ý ở mức cao; nên xem lại các lần làm.",
   OBJECTIVE_MASTERY_INCONSISTENT: "Kết quả ở các loại bài khác nhau cho cùng một mục tiêu chưa thống nhất; nên xem lại các bài liên quan.",

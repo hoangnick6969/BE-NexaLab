@@ -7,7 +7,7 @@ import { z } from "zod";
  * allowlisted lab and parameter values; the engine and `challengeParamErrors` stay authoritative.
  */
 export const LAB_CHALLENGE_PURPOSE = "DRAFT_LAB_CHALLENGE" as const;
-export const LAB_CHALLENGE_PROMPT_VERSION = "draft-lab-challenge@1";
+export const LAB_CHALLENGE_PROMPT_VERSION = "draft-lab-challenge@2";
 export const LAB_CHALLENGE_SCHEMA_VERSION = "lab-challenge-proposals@1";
 export const LAB_CHALLENGE_INPUT_VERSION = "lab-challenge-input@1";
 export const MAX_PROPOSALS_PER_JOB = 3;

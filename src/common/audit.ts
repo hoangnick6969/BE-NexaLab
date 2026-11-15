@@ -136,6 +136,16 @@ export const AUDIT_FIELDS = new Set([
   "evidenceRef",
   // TAI-06 lab challenge apply. Numbers, ids and the engine version only; never rationale or provider text.
   "engineVersion",
+  // TAI-07 assessment mode. Settings, attempt numbers and instants only; the retake reason travels in AuditLog.reason.
+  "assessmentType",
+  "durationMinutes",
+  "attemptNo",
+  "expiresAt",
+  "autoSubmitted",
+  "sessionId",
+  "scoresPublishedAt",
+  "retakeGrantId",
+  "studentId",
 ]);
 
 const credentialLike = [

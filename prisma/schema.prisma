@@ -122,6 +122,9 @@ model User {
   labReleaseReviews           LabReleaseReview[]           @relation("LabReleaseReviewer")
   /// TAI-04 (TAI4-T3): acknowledgements that concern this student as the subject (cascade on user deletion).
   insightAcknowledgements     InsightAcknowledgement[]
+  /// TAI-07 (TAI7-T1): timed graded attempts and teacher retake grants of this student.
+  assessmentSessions          AssessmentSession[]
+  assessmentRetakeGrants      AssessmentRetakeGrant[]
 }
 
 model Session {
@@ -738,6 +741,15 @@ model Assignment {
   stepProgress                StepProgress[]
   classLabAdditionalResponses ClassLabAdditionalResponse[]
   insightDisagreements        HintInsightDisagreement[]
+  /// TAI-07 (TAI7-T1): PRACTICE keeps the I3/TAI-02 lifecycle; REGULAR_15M / MIDTERM_45M are graded (AD-19). Fixed at creation.
+  assessmentType              AssessmentType               @default(PRACTICE)
+  /// Graded only: minutes per attempt (policy bounds in assessment-policy.ts); null for PRACTICE.
+  durationMinutes             Int?
+  /// Graded only: results stay hidden from students and parents until set (append-once).
+  scoresPublishedAt           DateTime?
+  scoresPublishedById         String?
+  assessmentSessions          AssessmentSession[]
+  retakeGrants                AssessmentRetakeGrant[]
 
   @@index([classId, status, dueDate])
   @@index([contentType, contentId, status])
@@ -812,10 +824,66 @@ model AssignmentSubmission {
   /// TAI-02 (TAI2-T4): ASSESS_SUBMISSION jobs and their suggestions die with the submission (redacted snapshot included).
   aiJobs             AiJob[]
   aiSuggestions      AiAssessmentSuggestion[]
+  /// TAI-07 (TAI7-T1): the graded session this submission closed (unique, so a session is submitted at most once).
+  sessionId          String?                     @unique
+  session            AssessmentSession?          @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  /// TAI-07: true when the server submitted the session draft at expiry.
+  autoSubmitted      Boolean                     @default(false)
 
   @@index([assignmentId, studentId, submittedAt])
   @@index([studentId, submittedAt])
   @@index([deadlineRevisionId])
+}
+
+/// TAI-07 (TAI7-T1): kind of assessment an assignment is (AD-19).
+enum AssessmentType {
+  PRACTICE
+  REGULAR_15M
+  MIDTERM_45M
+}
+
+enum AssessmentSessionStatus {
+  OPEN
+  SUBMITTED
+}
+
+/// TAI-07 (TAI7-T1): one server-timed attempt at a graded assignment. expiresAt = min(startedAt + duration, dueAt).
+/// The draft holds only the student's own answers; an expired OPEN session is auto-submitted once from it.
+model AssessmentSession {
+  id            String                  @id @default(cuid())
+  assignmentId  String
+  assignment    Assignment              @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       User                    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  attemptNo     Int
+  startedAt     DateTime                @default(now())
+  expiresAt     DateTime
+  draftAnswers  Json                    @default("[]")
+  draftSavedAt  DateTime?
+  status        AssessmentSessionStatus @default(OPEN)
+  /// The retake grant this attempt consumed; null for the first attempt.
+  retakeGrantId String?                 @unique
+  retakeGrant   AssessmentRetakeGrant?  @relation(fields: [retakeGrantId], references: [id], onDelete: SetNull)
+  submission    AssignmentSubmission?
+
+  @@unique([assignmentId, studentId, attemptNo])
+  @@index([status, expiresAt])
+}
+
+/// TAI-07 (TAI7-T1): append-only teacher permission for one extra graded attempt; consumed by the session it opens.
+model AssessmentRetakeGrant {
+  id           String             @id @default(cuid())
+  assignmentId String
+  assignment   Assignment         @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      User               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  grantedById  String
+  reason       String
+  createdAt    DateTime           @default(now())
+  consumedAt   DateTime?
+  session      AssessmentSession?
+
+  @@index([assignmentId, studentId, createdAt])
 }
 
 /// TAI-02 (TAI2-T3): how a written submission was graded.

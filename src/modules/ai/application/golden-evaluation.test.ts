@@ -43,7 +43,7 @@ describe("golden evaluation harness (TAI-T6)", () => {
       expect(call.maxTokens).toBe(GENERATE_RESOURCE_MAX_OUTPUT_TOKENS);
       expect(call.timeoutMs).toBe(RUNNER_TIMINGS.providerTimeoutMs);
     }
-    expect(report).toMatchObject({ synthetic: true, provider: "fake", model: "fake-model", promptVersion: "generate-resource@1", outputSchemaVersion: "resource-items@1", labelProblems: [], pass: true });
+    expect(report).toMatchObject({ synthetic: true, provider: "fake", model: "fake-model", promptVersion: "generate-resource@2", outputSchemaVersion: "resource-items@1", labelProblems: [], pass: true });
     // Each lesson: 23 returned, 2 VR drops and 1 OVER_COUNT, 20 reviewed.
     expect(report.jobs.map((j) => [j.lessonId, j.returned, j.survived, j.dropped.map((d) => d.reasonCodes[0])])).toEqual([
       ["lesson-circuit", 23, 20, ["GROUNDING_REF_INVALID", "OPTION_PATTERN_FORBIDDEN", "OVER_COUNT"]],

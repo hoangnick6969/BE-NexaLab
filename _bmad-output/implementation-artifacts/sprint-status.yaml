@@ -216,6 +216,12 @@ development_status:
   tai-06-t3-draft-lab-challenge-job-routes: done
   tai-06-t4-teacher-proposal-review-ux: done
   tai-06-t5-golden-evaluation-e2e: done
+  epic-tai-07-assessment-mode: in-progress
+  tai-07-t1-assessment-mode-sessions: in-progress
+  tai-07-t2-insights-v4-teaching-flow: backlog
+  tai-07-t3-gradebook-lock-export: backlog
+  tai-07-t4-composite-exam: backlog
+  tai-07-t5-ai-assessment-generation: backlog
   # Student AI increment (SAI) — plan ../planning-artifacts/increment-sai-student-ai.md; SG-1 closed 2026-11-08 (SAI-T0).
   epic-sai-01a-checkpoint-hints: review
   sai-01a-t1-checkpoint-hint-rules-and-misconceptions: done
@@ -378,6 +384,7 @@ teacher_ai_tracking:
     tai-04: ../specs/spec-teacher-ai-evidence-insights/SPEC.md
     tai-05: ../specs/spec-teacher-ai-credits/SPEC.md
     tai-06: ../specs/spec-teacher-ai-lab-drafting/SPEC.md
+    tai-07: ../specs/spec-teacher-ai-assessment-mode/SPEC.md
   gates:
     G-1: 'closed 2026-10-30 (synced to fl05 2026-11-05) — PO approved FR-21 activation; PRD §10.17 and spine Deferred amended, AD-17 added (tai-01-t0).'
     G-2: 'closed 2026-11-09 theo quyết định của team lead, dựa trên giả định áp dụng PII scrubbing/anonymization (chỉ gửi nội dung bài làm và rubric, ẩn danh tuyệt đối định danh học sinh) kết hợp kiến trúc privacy 3 lớp, chờ pháp lý/giảng viên xác nhận lại. Không phải phê duyệt của PO, giảng viên hay pháp lý. Unblocks tai-02-t0, t4..t7 and tai-04-t5 for dev/test.'
@@ -385,6 +392,7 @@ teacher_ai_tracking:
     G-4: 'closed 2026-11-09 theo quyết định của team lead, dựa trên giả định áp dụng bộ safe parameter bounds mặc định theo schema hiện hành của các bài lab KHTN, chờ PO và reviewer xác nhận lại. Unblocks tai-06-t0..t5.'
     G-5: 'closed 2026-11-06 — PO approved the insights@1 thresholds in insight-rules.md unchanged and chose to HIDE SUDDEN_UNAIDED_PASS in the pilot (logic and tests kept, display off by default behind a configuration flag; the supervising lecturer reviews it later). Unblocks tai-04-t1..t4, t6 and t7; t5 still waits for G-2.'
     G-6: 'closed 2026-11-09 theo quyết định của team lead, dựa trên giả định sử dụng provider adapter chuẩn hiện tại của dự án cho golden eval & e2e, chờ PO/giảng viên xác nhận lại khi golive. Không phải phê duyệt của PO hay giảng viên. Unblocks tai-01-t6 and tai-06 for dev/test.'
+    AM-G1: 'closed 2026-11-15 by the project owner in the TAI-07 planning session: composite EXAM, 10-point scale from raw points (half-up 1 decimal at display/lock), CSV UTF-8 BOM export, autosave 20 s + 30 s grace, absent shown as Vắng with per-student retake grant, order T1..T5. Also requests the G-5 amendment retiring insights@1 SCORE_CHANGE_UNUSUAL (TAI7-T2). Recorded in spec-teacher-ai-assessment-mode/.memlog.md. Unblocks tai-07-t1..t5.'
   decided:
     - 'Planned adapter: Gemini API via GEMINI_API_KEY / GEMINI_MODEL (2026-10-28 design choice). Not an approved provider or tier: no live call until G-6, and never student data on the free tier.'
     - 'Duplicates: exact and near duplicates (same class, batch, cross-class, library) are warnings only; teacher keeps, edits or rejects (2026-11-05).'
