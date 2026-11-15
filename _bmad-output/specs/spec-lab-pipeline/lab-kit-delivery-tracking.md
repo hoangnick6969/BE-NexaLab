@@ -31,10 +31,10 @@ Quy tắc chung cho mọi task:
 | [ ] O-0.2 | Owner | Deploy PR-2 cùng lúc BE và FE | Học sinh mở FL-13, FL-14a; giáo viên không thấy mã lỗi | O-0.1 |
 | [ ] O-0.3 | Owner | Chốt **D-2**: bảng khối lượng mol KHTN 8, ghi sách và trang | Bảng ghi trong spec pilot | — |
 | [ ] O-0.4 | Owner | Chốt **Q-1**: prompt cho mẫu pH FL-13 | Phương án ghi trong spec pilot §3 | — |
-| [ ] O-0.5 | Owner | Xác nhận số track Lab đồng thời từ INC-2 (phase plan giới hạn 2) | Ghi quyết định vào phân công §3 | — |
+| [x] O-0.5 | Owner | Xác nhận số track Lab đồng thời từ INC-2 (phase plan giới hạn 2) | Owner mở khóa 2026-11-15: FL-26 là track thứ ba | — |
 | [x] K2-0.1 | K2 | Chụp baseline ảnh và số đo: FL-13 (pH), FL-14a (dụng cụ), FL-10 Explore route dev (cốc, cân) | FE `tests/k2-baseline.spec.ts` và snapshot: danh sách dụng cụ, pH 6 hoá chất FL-13, số cân FL-10 (120,00 g → 120,05 g sau HCl), ảnh 3 bàn. FE `1b30091` | — |
 | [x] D1-0.1 | Dev 1 | Chụp baseline ảnh và số đo: FL-03, FL-05, FL-10 Guided. FE `tests/baseline-d1-fluid-wetbench.spec.ts`, kết quả ở `tests/baseline/d1-0.1/` (3 JSON số đo, 22 ảnh 3D/2D ở 1440 và 390 px). Chạy không có `BASELINE_UPDATE` để so số đo khi nghiệm thu D1-2.4. Ghi nhận trước bước B: cốc trên cân FL-03 (3D) hiển thị bị cắt | Ảnh và số đo lưu trong repo test | — |
-| [ ] D2-0.1 | Dev 2 | Chốt nguồn K9, phạm vi FL-26 (phép lai một tính trạng, bảng Punnett), ca kiểm thử | Ghi vào spec áp dụng FL-26 (D2-1.1) | — |
+| [x] D2-0.1 | Dev 2 | Chốt nguồn K9, phạm vi FL-26 (phép lai một tính trạng, bảng Punnett), ca kiểm thử | Ghi vào spec áp dụng FL-26 (D2-1.1) | — |
 
 ## INC-1: pilot A + bàn thứ hai
 
@@ -68,9 +68,9 @@ D1-1.2…D1-1.5 nghiệm thu 2026-11-15 trên nhánh `feat/dev1-physics-bench` (
 
 | ID | Task | Xong khi | Chờ |
 |---|---|---|---|
-| [ ] D2-1.1 | Viết spec áp dụng **bàn di truyền** FL-26 theo mẫu: nguồn K9, phạm vi, item, nhật ký, loại yêu cầu | Spec được owner duyệt | D2-0.1 |
-| [ ] D2-1.2 | Sim: model Mendel tất định (phép lai một tính trạng, tỉ lệ kiểu gen và kiểu hình, số nguyên), `reviewStatus` | Golden test pass | D2-1.1 |
-| [ ] D2-1.3 | Sim: schema config FL-26 mở rộng envelope và validator | Test sim pass | D2-1.2 |
+| [x] D2-1.1 | Viết spec áp dụng **bàn di truyền** FL-26 theo mẫu: nguồn K9, phạm vi, item, nhật ký, loại yêu cầu | Owner duyệt 2026-11-15 ([SPEC](spec-fl-26-mendel/SPEC.md)) | D2-0.1 |
+| [x] D2-1.2 | Sim: model Mendel tất định (phép lai một tính trạng, tỉ lệ kiểu gen và kiểu hình, số nguyên), `reviewStatus` | Golden test pass | D2-1.1 |
+| [x] D2-1.3 | Sim: schema config FL-26 mở rộng envelope và validator | Test sim pass | D2-1.2 |
 
 Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh học tích hợp sau khi P0 chạy ở Hóa và Vật lý).
 
@@ -117,7 +117,7 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 
 | ID | Người | Task | Chờ |
 |---|---|---|---|
-| [ ] O-3.1 | Owner | Contract hai mode **D-5** (gộp F0-7b) | — |
+| [x] O-3.1 | Owner | Contract hai mode **D-5** (gộp F0-7b) | Owner mở khóa 2026-11-15 (chưa có văn bản D-5 riêng) | — |
 | [ ] K2-3.1 | K2 | FL-14 mở rộng (14b/14c sau khi chốt `SPLIT`) | — |
 | [ ] K2-3.2 | K2 | FL-10 phần mol | K2-1.6, O-3.1 |
 | [~] K2-3.3 | K2 | FL-11 (ống đong vào thư viện chung), FL-12 (nhiệt kế, đồng hồ bấm giờ vào thư viện chung). **FL-11 xong 2026-11-16**: ba item chung (ống đong, nhiệt kế, đồng hồ bấm giờ) và bàn FL-11 (`wet-bench@1.1.0`, sim 1.11.0) đã merge (BE #79, #80; FE #66); Lab `solution-concentration` v1 đã phát hành, resolver `ok: true`; dữ liệu là bản nháp chờ reviewer Hóa. Thẻ trên /labs, ảnh bìa, bài học liên quan và danh mục "Dụng cụ theo bộ Kit" chờ merge ở FE `fix/lab-library-fl-11-card` và BE `fix/explore-lab-lesson-links`. **FL-12 đã làm trên dev, chưa phát hành** ([spec](fl-12-reaction-rate-explore-spec.md); sim 1.13.0, `wet-bench@1.2.0`, nhánh `feat/fl-12-reaction-rate`): chờ reviewer Hóa duyệt mô hình tốc độ trước khi phát hành | — |
