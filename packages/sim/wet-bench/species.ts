@@ -63,3 +63,7 @@ export const SPECIES: Readonly<Record<SpeciesId, Species>> = Object.freeze({
 /** Mass in micrograms for an amount in nanomoles (g/mol = µg/µmol). Rounded to whole µg. */
 export const microgramsOf = (species: SpeciesId, nanomoles: number) =>
   Math.round((nanomoles * SPECIES[species].molarMassTenthsGramsPerMol) / 10_000);
+
+/** Amount in nanomoles for a mass in micrograms; the inverse of microgramsOf. Rounded to whole nmol. */
+export const nanomolesOf = (species: SpeciesId, micrograms: number) =>
+  Math.round((micrograms * 10_000) / SPECIES[species].molarMassTenthsGramsPerMol);

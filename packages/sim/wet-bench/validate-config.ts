@@ -1,5 +1,5 @@
 /** Validates a K2 Lab config against the kit enums, reagent registry and reaction catalog. */
-import { chemistryLabConfigSchema, MEASUREMENT_TOOL, VESSEL_SPECS, type ChemistryLabConfig, type VesselKind } from "./contracts";
+import { chemistryLabConfigSchema, ENGINE_1_1_KINDS, MEASUREMENT_TOOL, VESSEL_SPECS, WET_BENCH_ENGINE, type ChemistryLabConfig, type VesselKind } from "./contracts";
 import { FL13_REVIEW } from "./fl13-acid-base.data";
 import { K2_REACTIONS, type StoichiometricReaction } from "./reactions";
 import { reagentById } from "./reagents";
@@ -29,11 +29,26 @@ export function validateChemistryLabConfig(raw: unknown): ConfigValidation {
     for (const content of item.initial?.contents ?? []) {
       const reagent = reagentById(content.reagentId);
       if (!reagent) { errors.push(`${item.id}: unknown initial reagent ${content.reagentId}`); continue; }
+      if (reagent.composition.kind === "powder") errors.push(`${item.id}: powder ${content.reagentId} cannot be initial contents; the learner weighs it`);
       if (!(item.kind in VESSEL_SPECS)) errors.push(`${item.id}: only vessels can hold initial contents`);
       else if ((content.microliters ?? 0) > VESSEL_SPECS[item.kind as VesselKind].capacityMicroliters) errors.push(`${item.id}: initial volume exceeds capacity`);
     }
     if (item.initial?.stoppered && !(item.kind in VESSEL_SPECS && VESSEL_SPECS[item.kind as VesselKind].stopperable)) errors.push(`${item.id}: cannot be stoppered`);
   }
+
+  // Engine 1.1.0 features: solutions by mass and volume (FL-11).
+  const powderOnShelf = shelf.filter((reagentId) => reagentById(reagentId)?.composition.kind === "powder");
+  const usesSolutions = config.enabledApparatus.some((item) => ENGINE_1_1_KINDS.includes(item.kind)) || config.measurements.includes("volume")
+    || Boolean(config.solutes?.length) || Boolean(config.targets?.length) || powderOnShelf.length > 0;
+  if (usesSolutions && config.engine === WET_BENCH_ENGINE) errors.push(`engine: ${WET_BENCH_ENGINE} has no powders, solubility, volume reading or volumetric flask; use wet-bench@1.1.0`);
+  const solutes = config.solutes ?? [];
+  for (const value of duplicates(solutes.map((item) => item.reagentId))) errors.push(`solutes: duplicate ${value}`);
+  for (const item of solutes) if (!powderOnShelf.includes(item.reagentId)) errors.push(`solutes: ${item.reagentId} is not a powder on the shelf`);
+  for (const reagentId of powderOnShelf) if (!solutes.some((item) => item.reagentId === reagentId)) errors.push(`solutes: powder ${reagentId} needs a solubility constant`);
+  if (powderOnShelf.length && !config.enabledApparatus.some((item) => item.kind === "spatula")) errors.push("enabledApparatus: a powder on the shelf needs a spatula");
+  const targets = config.targets ?? [];
+  for (const value of duplicates(targets.map((item) => item.id))) errors.push(`targets: duplicate id ${value}`);
+  for (const target of targets) if (!powderOnShelf.includes(target.reagentId)) errors.push(`targets.${target.id}: ${target.reagentId} is not a powder on the shelf`);
 
   const known = new Set(K2_REACTIONS.map((rule) => rule.id));
   for (const reactionId of config.allowedReactions) if (!known.has(reactionId)) errors.push(`allowedReactions: unknown ${reactionId}`);
@@ -47,7 +62,7 @@ export function validateChemistryLabConfig(raw: unknown): ConfigValidation {
   for (const reagentId of [...shelf, ...config.enabledApparatus.flatMap((item) => (item.initial?.contents ?? []).map((content) => content.reagentId))]) {
     const composition = reagentById(reagentId)?.composition;
     if (composition?.kind === "solution" && composition.solute) suppliedSpecies.add(composition.solute);
-    if (composition?.kind === "solid") suppliedSpecies.add(composition.species);
+    if (composition?.kind === "solid" || composition?.kind === "powder") suppliedSpecies.add(composition.species);
   }
   for (const rule of K2_REACTIONS) {
     if (rule.kind !== "stoichiometric" || !config.allowedReactions.includes(rule.id)) continue;

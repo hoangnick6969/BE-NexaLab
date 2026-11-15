@@ -15,6 +15,8 @@ export type ClassDerivation =
 type ExploreBench = {
   kit: string;
   modelRef: string;
+  /** The model a validated config runs on, when a kit has more than one engine version (the wet bench: 1.0.0 and 1.1.0). */
+  modelRefOf?: (config: any) => string;
   validate: (raw: unknown) => BenchValidation;
   /** Absent when the bench has no Class Explore templates yet. */
   deriveClass?: (config: unknown, selection: unknown) => ClassDerivation;
@@ -56,6 +58,7 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
   "k2-wet-bench@1": {
     kit: "k2-wet-bench@1",
     modelRef: "wet-bench@1.0.0",
+    modelRefOf: (config) => config.engine,
     validate: (raw) => {
       const result = validateChemistryLabConfig(raw);
       if (!result.ok) return { ok: false, errors: result.errors };
@@ -112,11 +115,12 @@ export async function publishExploreLab(db: PrismaClient, input: PublishExploreI
   const spec = exploreActivitySpecSchema.parse({ ...bench.activitySpec(config), explore: config });
   const digest = activityDigest(spec);
   const key = `${config.labId}-explore`;
+  const modelRef = bench.modelRefOf?.(config) ?? bench.modelRef;
 
   return db.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:explore-publish:" + config.labId);
     const existing = await tx.lab.findUnique({ where: { id: config.labId }, select: { simulationModelRef: true, _count: { select: { releases: true, challenges: true } } } });
-    if (existing && (existing._count.challenges || existing._count.releases || existing.simulationModelRef !== bench.modelRef))
+    if (existing && (existing._count.challenges || existing._count.releases || existing.simulationModelRef !== modelRef))
       throw new ConflictException({ code: "EXPLORE_LAB_HAS_GUIDED", message: "Lab đã có challenge, release hoặc mô hình khác; không ghi Explore lên Lab này" });
     if (await tx.foundationalCourseLesson.findFirst({ where: { foundationalLabId: config.labId, courseVersion: { status: "active" } }, select: { lessonId: true } }))
       throw new ConflictException({ code: "EXPLORE_LAB_IN_COURSE", message: "Lab đang là foundationalLabId của một khóa active" });
@@ -133,7 +137,7 @@ export async function publishExploreLab(db: PrismaClient, input: PublishExploreI
     const data = {
       subjectId: topic.chapter.subjectId, grade: topic.chapter.grade, title: config.title, topic: topic.title, topicCode: topic.code,
       learningObjective: spec.outcomes[0], status: "published", scope: "SHARED_LIBRARY" as const, releaseCleared: true, synthetic: false,
-      simulationModelRef: bench.modelRef, config: labConfig,
+      simulationModelRef: modelRef, config: labConfig,
     };
     await tx.lab.upsert({ where: { id: config.labId }, create: { id: config.labId, ...data }, update: data });
     await audit(tx, { actor: input.actor, action: "lab.explore.publish", targetType: "Lab", targetId: config.labId, reason: input.reason,
