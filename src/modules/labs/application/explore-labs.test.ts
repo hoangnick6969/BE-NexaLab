@@ -9,6 +9,8 @@ import { EXPLORE_BENCHES, exploreActivitySpecSchema, publishExploreLab, resolveE
 import { FL06_LEVER_EXPLORE_CONFIG } from "../../../../packages/sim/mechanics";
 import { FL04_PRESSURE_EXPLORE_CONFIG } from "../../../../packages/sim/fluid";
 import { loadFluidExploreTargets } from "../../../../scripts/fluid-explore-targets";
+import { FL08_HEAT_TRANSFER_EXPLORE_CONFIG } from "../../../../packages/sim/thermal";
+import { loadThermalExploreTargets } from "../../../../scripts/thermal-explore-targets";
 
 vi.mock("../../../common/audit", () => ({ audit: vi.fn(), changedFields: vi.fn(() => ({})) }));
 
@@ -116,7 +118,7 @@ describe("publishExploreLab (P0 C1.3)", () => {
     await expect(publishExploreLab(db, input(guided))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
     await expect(publishExploreLab(db, input({ ...exploreConfig(), kit: "k9@1" }))).rejects.toMatchObject({ response: { code: "EXPLORE_KIT_UNSUPPORTED" } });
     expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
-    expect(Object.keys(EXPLORE_BENCHES)).toEqual(["k2-wet-bench@1", "k5-lever-bench@1", "k3-fluid-bench@1"]);
+    expect(Object.keys(EXPLORE_BENCHES)).toEqual(["k2-wet-bench@1", "k5-lever-bench@1", "k3-fluid-bench@1", "k4-thermal-bench@1"]);
   });
 
   it("is ADMIN-only and validates the body against the route Lab", () => {
@@ -192,6 +194,46 @@ describe("fluid bench k3-fluid-bench@1 (FL-04 Explore, D1-3.2)", () => {
 
   it("seeds FL-04 on topic KHTN8-L16 through the fluid bench targets", async () => {
     expect(await loadFluidExploreTargets()).toEqual([{ config: expect.objectContaining({ labId: "liquid-pressure", kit: "k3-fluid-bench@1" }), topicCode: "KHTN8-L16" }]);
+  });
+});
+
+describe("thermal bench k4-thermal-bench@1 (FL-08 Explore, D1-3.2)", () => {
+  const thermal = (patch: object = {}) => ({ ...structuredClone(FL08_HEAT_TRANSFER_EXPLORE_CONFIG), ...patch });
+  const thermalInput = (config: unknown) => ({ config, topicCode: "KHTN8-L28", actor, reason: "test publish" });
+
+  it("validates the packaged config and builds a spec the Explore schema accepts, citing Bảng 28.1", () => {
+    const bench = EXPLORE_BENCHES["k4-thermal-bench@1"];
+    expect(bench.validate(thermal()).ok).toBe(true);
+    const spec = exploreActivitySpecSchema.parse({ ...bench.activitySpec(thermal()), explore: thermal() });
+    expect(spec).toMatchObject({ modality: "explore", scored: false, engine: "heat-transfer@1.0.0", kit: "k4-thermal-bench@1", materials: { reagents: [] } });
+    expect(spec.materials.apparatus).toEqual(expect.arrayContaining([expect.objectContaining({ id: "rack", rods: ["Đồng", "Nhôm", "Thép", "Thuỷ tinh", "Gỗ"], maxRods: 3 })]));
+    expect(spec.sources).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "sgk", status: "verified" })]));
+    for (const station of ["Trạm dẫn nhiệt", "Trạm đối lưu", "Trạm bức xạ"]) expect(spec.setup).toContain(station);
+    expect(bench.deriveClass).toBeUndefined();
+  });
+
+  it("publishes heat-transfer as a new Lab (no Guided, no D-5) and pins the heat-transfer model", async () => {
+    const { db, tx } = fakeDb();
+    const result = await publishExploreLab(db, thermalInput(thermal()));
+    expect(result).toMatchObject({ activity: { key: "heat-transfer-explore", version: 1 } });
+    expect(tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "heat-transfer@1.0.0", config: { mode: "explore", kit: "k4-thermal-bench@1" } });
+  });
+
+  it("refuses to write Explore onto FL-07 (thermal-energy keeps its Guided release and model)", async () => {
+    const { db, tx } = fakeDb({ simulationModelRef: "thermal-bench@1.0.0", _count: { challenges: 1, releases: 1 } });
+    await expect(publishExploreLab(db, thermalInput(thermal({ labId: "thermal-energy" })))).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
+    expect(tx.lab.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid thermal config before opening a transaction", async () => {
+    const { db, tx } = fakeDb();
+    const bad = thermal({ radiation: { ...FL08_HEAT_TRANSFER_EXPLORE_CONFIG.radiation!, absorptance: { black: 20, silver: 60 } } });
+    await expect(publishExploreLab(db, thermalInput(bad))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
+    expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  it("seeds FL-08 on topic KHTN8-L28 through the thermal bench targets", async () => {
+    expect(await loadThermalExploreTargets()).toEqual([{ config: expect.objectContaining({ labId: "heat-transfer", kit: "k4-thermal-bench@1" }), topicCode: "KHTN8-L28" }]);
   });
 });
 

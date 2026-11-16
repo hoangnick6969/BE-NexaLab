@@ -1,6 +1,6 @@
 {
   "name": "@nexalab/sim",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
@@ -35,7 +35,12 @@
     "fluid/contracts.ts",
     "fluid/pressure.ts",
     "fluid/validate-config.ts",
-    "fluid/fl04-pressure.data.ts"
+    "fluid/fl04-pressure.data.ts",
+    "thermal/index.ts",
+    "thermal/contracts.ts",
+    "thermal/transfer.ts",
+    "thermal/validate-config.ts",
+    "thermal/fl08-heat-transfer.data.ts"
   ],
   "dependencies": {
     "zod": "^3.25.0"
