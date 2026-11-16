@@ -16,7 +16,7 @@ const db = testUrl ? new PrismaClient({ datasourceUrl: testUrl }) : null;
 afterAll(async () => { await db?.$disconnect(); });
 
 describe.skipIf(!db)("Explore publish on isolated PostgreSQL (P0 C1.3)", () => {
-  it("API and seed share one version, refuse Guided Labs, and Explore creates no LabRun, Attempt or Progress", async () => {
+  it("API and seed share one version, attach Explore beside a Guided Lab (D-5), and Explore creates no LabRun, Attempt or Progress", async () => {
     const p = db!;
     const labId = `p0-explore-${randomUUID().slice(0, 8)}`;
     const guidedId = `${labId}-g`;
@@ -39,8 +39,15 @@ describe.skipIf(!db)("Explore publish on isolated PostgreSQL (P0 C1.3)", () => {
       await p.lab.create({ data: { id: guidedId, subjectId: lab.subjectId, grade: lab.grade, title: "Guided fixture", topic: lab.topic, topicCode: lab.topicCode,
         learningObjective: "fixture", status: "draft", scope: "CLASS_PRIVATE", releaseCleared: false, synthetic: true, simulationModelRef: "wet-bench@1.0.0" } });
       await p.challenge.create({ data: { id: `${guidedId}-c`, labId: guidedId, objective: "fixture", constraints: {} } });
-      await expect(publishExploreLab(p, { config: exploreConfig(guidedId), topicCode: topic.code, actor, reason: "P0 isolated test" }))
-        .rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
+      // D-5 (lab-two-mode-d5-spec.md §2.3): Explore is attached to the Guided Lab as config.explore; its model, challenge,
+      // status and scope stay, and publishing still creates no LabRun, Attempt or Progress.
+      const attached = await publishExploreLab(p, { config: exploreConfig(guidedId), topicCode: topic.code, actor, reason: "P0 isolated test" });
+      expect(attached).toMatchObject({ labId: guidedId, labCreated: false, modes: ["guided", "explore"] });
+      const guided = await p.lab.findUniqueOrThrow({ where: { id: guidedId } });
+      expect(guided).toMatchObject({ status: "draft", scope: "CLASS_PRIVATE", releaseCleared: false, simulationModelRef: "wet-bench@1.0.0" });
+      expect(guided.config).toEqual({ explore: { kit: "k2-wet-bench@1", engine: "wet-bench@1.0.0", activity: attached.activity } });
+      expect(await p.challenge.count({ where: { labId: guidedId } })).toBe(1);
+      expect(await p.auditLog.count({ where: { action: "lab.explore.attach", targetId: guidedId } })).toBe(1);
       expect(await counts()).toEqual(before);
     } finally {
       await p.challenge.deleteMany({ where: { labId: guidedId } });
