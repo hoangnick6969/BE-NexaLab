@@ -7,6 +7,9 @@ import { deriveLeverEffectiveConfig, LEVER_ENGINE, LEVER_KIT, validateLeverLabCo
 import { FLUID_ENGINE, FLUID_KIT, validateFluidLabConfig, type FluidLabConfig } from "../../../../packages/sim/fluid";
 import { CONDUCTIVITY_TABLE, THERMAL_ENGINE, THERMAL_KIT, validateThermalLabConfig, type ThermalLabConfig } from "../../../../packages/sim/thermal";
 import type { ExploreRequirement } from "../../../../packages/sim/explore/requirements";
+import { dioramaExploreSchema, fl16ExploreSchema, fl27ExploreSchema } from "../../../../packages/sim/explore-kits";
+import { fl26MendelConfigSchema, type Fl26MendelConfig } from "../../../../packages/sim/mendel-config";
+import { MENDEL_VERSION } from "../../../../packages/sim/mendel-cross";
 import { activityDigest } from "./sim-packs";
 
 /** Fields every Explore bench config carries (P0 C1). */
@@ -18,7 +21,8 @@ export type ClassDerivation =
   | { ok: false; errors: string[] };
 type ExploreBench = {
   kit: string;
-  modelRef: string;
+  /** One model per bench, or a function when one kit holds Labs on different models (k8-diorama). */
+  modelRef: string | ((config: any) => string);
   /** The model a validated config runs on, when a kit has more than one engine version (the wet bench: 1.0.0 and 1.1.0). */
   modelRefOf?: (config: any) => string;
   validate: (raw: unknown) => BenchValidation;
@@ -155,7 +159,99 @@ function thermalBenchSpec(config: ThermalLabConfig) {
 }
 
 /** Server bench registry (P0 C2.3): only benches listed here can be published or resolved. */
+/** Shared Explore spec for the INC-3 benches: the same fields as the wet bench, with no reagents. */
+function benchSpec(config: any, setup: string, procedure: string, sourceText: string) {
+  const prompts: Array<{ textVi: string }> = config.pedagogy?.observationPrompts ?? [];
+  return {
+    objective: config.outcomeSummary.join(" "),
+    outcomes: config.outcomeSummary,
+    materials: { reagents: [], apparatus: config.enabledApparatus.map((item: any) => ({ id: item.id, kind: item.kind, label: item.labelVi ?? item.kind })) },
+    setup, procedure,
+    observations: prompts.map((prompt) => prompt.textVi),
+    observationPrompts: prompts,
+    safety: { simulation: config.safetyBriefing.simulation, realLab: config.safetyBriefing.realLab, reagentNotes: [] },
+    limitations: config.limitations,
+    modality: "explore",
+    scored: false,
+    outcomeCodes: [],
+    sources: [{ kind: "technical_draft", status: "unverified", description: sourceText }],
+    engine: config.engine,
+    kit: config.kit,
+    configVersion: config.configVersion,
+  };
+}
+
+function mendelSpec(config: Fl26MendelConfig) {
+  const prompts = config.pedagogy.observationPrompts ?? [];
+  return {
+    objective: config.outcomeSummary.join(" "),
+    outcomes: config.outcomeSummary,
+    materials: {
+      reagents: [],
+      apparatus: config.enabledApparatus.map((item) => ({ id: item.id, kind: item.kind, label: item.labelVi ?? item.kind })),
+    },
+    setup: "Bàn di truyền: vườn thực nghiệm đậu Hà Lan mô phỏng và ma trận Punnett.",
+    procedure: "Khám phá tự do: chọn cặp bố mẹ trong danh sách cho phép, quan sát ma trận Punnett và tỉ lệ đời con.",
+    observations: prompts.map((prompt) => prompt.textVi),
+    observationPrompts: prompts,
+    safety: { simulation: config.safetyBriefing.simulation, realLab: config.safetyBriefing.realLab, reagentNotes: [] },
+    limitations: config.limitations,
+    modality: "explore",
+    scored: false,
+    outcomeCodes: [],
+    sources: [{ kind: "technical_draft", status: "unverified", description: `Lai Mendel một tính trạng (${MENDEL_VERSION}); chờ reviewer sinh học duyệt và kiểm tra provenance K9.` }],
+    engine: config.engine,
+    kit: config.kit,
+    configVersion: config.configVersion,
+  };
+}
+
+
 export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
+  "k8-garden": {
+    kit: "k8-garden",
+    modelRef: `mendel-cross@${MENDEL_VERSION}`,
+    validate: (raw) => {
+      const result = fl26MendelConfigSchema.safeParse(raw);
+      if (!result.success) return { ok: false, errors: result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`) };
+      return { ok: true, config: result.data };
+    },
+    activitySpec: mendelSpec,
+  },
+  "k8-diorama": {
+    kit: "k8-diorama",
+    /** One kit, two models (FL-20 ecology-tolerance, FL-21 food-web): the config names the one it runs on. */
+    modelRef: "food-web@1.0.0",
+    modelRefOf: (config) => config.spec.model,
+    validate: (raw) => {
+      const result = dioramaExploreSchema.safeParse(raw);
+      if (!result.success) return { ok: false, errors: result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`) };
+      return { ok: true, config: result.data };
+    },
+    activitySpec: (config) => config.catalogId === "FL-21"
+      ? benchSpec(config, "Bàn sinh thái: lưới thức ăn mô phỏng với 11 loài.", "Khám phá tự do: bỏ một loài có trong danh sách cho phép và xem các loài bị ảnh hưởng trực tiếp.", "Lưới thức ăn minh hoạ; quan hệ và vai trò theo SGK KHTN 8 (food-web@1.0.0), chờ reviewer sinh học duyệt.")
+      : benchSpec(config, "Bàn sinh thái: giới hạn nhiệt độ của một loài.", "Khám phá tự do: đặt nhiệt độ và xem vùng sống của loài.", "Giới hạn nhiệt độ minh hoạ (ecology-tolerance@1.0.0), chờ reviewer sinh học duyệt."),
+  },
+  "k7-molecular": {
+    kit: "k7-molecular",
+    modelRef: "gene-expression@1.0.0",
+    validate: (raw) => {
+      const result = fl27ExploreSchema.safeParse(raw);
+      if (!result.success) return { ok: false, errors: result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`) };
+      return { ok: true, config: result.data };
+    },
+    activitySpec: (config) => benchSpec(config, "Bàn phân tử: một gene mô phỏng với mạch khuôn và mRNA.", "Khám phá tự do: chọn biến thể gene và xem đột biến đổi codon và axit amin như thế nào.", "Gene minh hoạ, không phải gene thật (gene-expression@1.0.0), chờ reviewer sinh học duyệt."),
+  },
+  anatomy: {
+    kit: "anatomy",
+    modelRef: "eye-optics@1.0.0",
+    validate: (raw) => {
+      const result = fl16ExploreSchema.safeParse(raw);
+      if (!result.success) return { ok: false, errors: result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`) };
+      return { ok: true, config: result.data };
+    },
+    activitySpec: (config) => benchSpec(config, "Studio cấu tạo mắt: mô hình quang học của mắt.", "Khám phá tự do: chọn một kịch bản và xem độ tụ cần có của thể thuỷ tinh.", "Mô hình quang học rút gọn (eye-optics@1.0.0), chờ SME duyệt theo checklist FL-16."),
+  },
   "k2-wet-bench@1": {
     kit: "k2-wet-bench@1",
     modelRef: "wet-bench@1.0.0",
@@ -247,7 +343,7 @@ export async function publishExploreLab(db: PrismaClient, input: PublishExploreI
   const spec = exploreActivitySpecSchema.parse({ ...bench.activitySpec(config), explore: config });
   const digest = activityDigest(spec);
   const key = `${config.labId}-explore`;
-  const modelRef = bench.modelRefOf?.(config) ?? bench.modelRef;
+  const modelRef = bench.modelRefOf?.(config) ?? (typeof bench.modelRef === "function" ? bench.modelRef(config) : bench.modelRef);
 
   return db.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:explore-publish:" + config.labId);

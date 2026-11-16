@@ -118,7 +118,7 @@ describe("publishExploreLab (P0 C1.3)", () => {
     await expect(publishExploreLab(db, input(guided))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
     await expect(publishExploreLab(db, input({ ...exploreConfig(), kit: "k9@1" }))).rejects.toMatchObject({ response: { code: "EXPLORE_KIT_UNSUPPORTED" } });
     expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
-    expect(Object.keys(EXPLORE_BENCHES)).toEqual(["k2-wet-bench@1", "k5-lever-bench@1", "k3-fluid-bench@1", "k4-thermal-bench@1"]);
+    expect(Object.keys(EXPLORE_BENCHES).sort()).toEqual(["anatomy", "k2-wet-bench@1", "k3-fluid-bench@1", "k4-thermal-bench@1", "k5-lever-bench@1", "k7-molecular", "k8-diorama", "k8-garden"]);
   });
 
   it("is ADMIN-only and validates the body against the route Lab", () => {

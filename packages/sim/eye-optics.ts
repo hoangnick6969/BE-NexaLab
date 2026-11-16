@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eyeParts } from "./index";
+import { eyeParts } from "./eye-parts";
 
 /**
  * eye-optics@1.0.0 — deterministic reduced-eye model for the FL-16 Lab.

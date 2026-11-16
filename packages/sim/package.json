@@ -1,6 +1,6 @@
 {
   "name": "@nexalab/sim",
-  "version": "1.17.0",
+  "version": "1.18.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
@@ -40,7 +40,11 @@
     "thermal/contracts.ts",
     "thermal/transfer.ts",
     "thermal/validate-config.ts",
-    "thermal/fl08-heat-transfer.data.ts"
+    "thermal/fl08-heat-transfer.data.ts",
+    "mendel-cross.ts",
+    "mendel-config.ts",
+    "explore-kits.ts",
+    "eye-parts.ts"
   ],
   "dependencies": {
     "zod": "^3.25.0"
