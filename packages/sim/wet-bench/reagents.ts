@@ -5,7 +5,7 @@ import type { SpeciesId } from "./species";
 export type HazardLevel = "none" | "caution" | "warning" | "danger";
 export type HazardTag = "corrosive" | "irritant" | "toxic_if_swallowed" | "flammable";
 export type IndicatorId = "phenolphthalein";
-export type SolidShape = "granule" | "chips" | "nail" | "foil";
+export type SolidShape = "granule" | "chips" | "nail" | "foil" | "powder";
 
 export type ReagentComposition =
   | { kind: "solution"; solute: SpeciesId | null; millimolar: number; densityMicrogramsPerMicroliter: number }
@@ -96,8 +96,16 @@ const powders: Reagent[] = [
     "Bột màu xanh, tan cho dung dịch xanh.", "Độc khi nuốt, gây kích ứng mắt: đeo kính và găng tay, rửa tay sau khi làm."),
 ];
 
+/** FL-12 (engine 1.2.0): a second acid strength and the same limestone as a fine powder. Draft data. */
+const rateReagents: Reagent[] = [
+  solution("HCl_0_2M", "Dung dịch HCl 0,2 M", "HCl", 200, "#eef5f6", { level: "warning", tags: ["corrosive"] },
+    "Acid đặc gấp đôi dung dịch 0,1 M.", "Ăn mòn: đeo kính và găng tay, rót từ từ."),
+  { ...solid("CaCO3_powder", "Đá vôi (CaCO₃) dạng bột", "CaCO3", 10_000_000, "powder", "#efe9dc", { level: "none", tags: [] },
+    "Mỗi muỗng khoảng 1 g, cùng khối lượng với một viên đá vôi.", "Bột mịn dễ bay: không hít, dùng thìa sạch, khô."), dispenser: "spatula" },
+];
+
 export const REAGENTS: Readonly<Record<string, Reagent>> = Object.freeze(
-  Object.fromEntries([...fl13, indicator, ...others, ...powders].map((reagent) => [reagent.id, Object.freeze(reagent)])),
+  Object.fromEntries([...fl13, indicator, ...others, ...powders, ...rateReagents].map((reagent) => [reagent.id, Object.freeze(reagent)])),
 );
 
 export const reagentById = (id: string): Reagent | null => (Object.hasOwn(REAGENTS, id) ? REAGENTS[id] : null);

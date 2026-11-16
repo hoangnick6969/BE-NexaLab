@@ -60,7 +60,7 @@ export const K2_REACTIONS: readonly ReactionRule[] = Object.freeze([
   rxn({ id: "gas.caco3-hcl", equationDisplay: "CaCO₃ + 2HCl → CaCl₂ + CO₂↑ + H₂O",
     reactants: [{ species: "CaCO3", coeff: 1 }, { species: "HCl", coeff: 2 }],
     products: [{ species: "CaCl2", coeff: 1, fate: "dissolved" }, { species: "CO2", coeff: 1, fate: "gas" }, { species: "H2O", coeff: 1, fate: "solvent" }],
-    gasVigor: { chips: "vigorous" }, phenomenonVi: "Viên đá vôi sủi bọt khí mạnh" }),
+    gasVigor: { chips: "vigorous", powder: "vigorous" }, phenomenonVi: "Viên đá vôi sủi bọt khí mạnh" }),
 ]);
 
 export type ReactionId = string;
