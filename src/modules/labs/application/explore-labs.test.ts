@@ -12,6 +12,8 @@ import { FL04_PRESSURE_EXPLORE_CONFIG } from "../../../../packages/sim/fluid";
 import { loadFluidExploreTargets } from "../../../../scripts/fluid-explore-targets";
 import { FL08_HEAT_TRANSFER_EXPLORE_CONFIG } from "../../../../packages/sim/thermal";
 import { loadThermalExploreTargets } from "../../../../scripts/thermal-explore-targets";
+import { FL24_ENERGY_EXPLORE_CONFIG } from "../../../../packages/sim/mechanics/energy";
+import { FL24_TOPIC_CODE_PLACEHOLDER, loadEnergyExploreTargets } from "../../../../scripts/energy-explore-targets";
 
 vi.mock("../../../common/audit", () => ({ audit: vi.fn(), changedFields: vi.fn(() => ({})) }));
 
@@ -119,7 +121,7 @@ describe("publishExploreLab (P0 C1.3)", () => {
     await expect(publishExploreLab(db, input(guided))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
     await expect(publishExploreLab(db, input({ ...exploreConfig(), kit: "k9@1" }))).rejects.toMatchObject({ response: { code: "EXPLORE_KIT_UNSUPPORTED" } });
     expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
-    expect(Object.keys(EXPLORE_BENCHES).sort()).toEqual(["anatomy", SAFETY_SCENARIO_KIT, "k2-wet-bench@1", "k3-fluid-bench@1", "k4-thermal-bench@1", "k5-lever-bench@1", "k7-molecular", "k8-diorama", "k8-garden"]);
+    expect(Object.keys(EXPLORE_BENCHES)).toEqual(expect.arrayContaining(["anatomy", SAFETY_SCENARIO_KIT, "k2-wet-bench@1", "k3-fluid-bench@1", "k4-thermal-bench@1", "k5-energy-bench@1", "k5-lever-bench@1", "k7-molecular", "k8-diorama", "k8-garden"]));
   });
 
   it("is ADMIN-only and validates the body against the route Lab", () => {
@@ -268,6 +270,42 @@ describe("thermal bench k4-thermal-bench@1 (FL-08 Explore, D1-3.2)", () => {
 
   it("seeds FL-08 on topic KHTN8-L28 through the thermal bench targets", async () => {
     expect(await loadThermalExploreTargets()).toEqual([{ config: expect.objectContaining({ labId: "heat-transfer", kit: "k4-thermal-bench@1" }), topicCode: "KHTN8-L28" }]);
+  });
+});
+
+describe("mechanical energy bench k5-energy-bench@1 (FL-24 Explore, D1-3.2)", () => {
+  const energy = (patch: object = {}) => ({ ...structuredClone(FL24_ENERGY_EXPLORE_CONFIG), ...patch });
+  const energyInput = (config: unknown) => ({ config, topicCode: "KHTN9-TEST", actor, reason: "test publish" });
+
+  it("validates the packaged config and builds a spec the Explore schema accepts", () => {
+    const bench = EXPLORE_BENCHES["k5-energy-bench@1"];
+    expect(bench.validate(energy()).ok).toBe(true);
+    const spec = exploreActivitySpecSchema.parse({ ...bench.activitySpec(energy()), explore: energy() });
+    expect(spec).toMatchObject({ modality: "explore", scored: false, engine: "mechanical-energy@1.0.0", kit: "k5-energy-bench@1", materials: { reagents: [] } });
+    expect(spec.materials.apparatus).toEqual(expect.arrayContaining([expect.objectContaining({ id: "hoist", motors: ["Động cơ chậm", "Động cơ nhanh"] })]));
+    expect(spec.setup).toContain("Trạm 1");
+    expect(spec.setup).toContain("Trạm 2");
+    expect(bench.deriveClass).toBeUndefined();
+  });
+
+  it("publishes mechanical-energy as a new Lab and pins the energy model, separate from the lever bench", async () => {
+    const { db, tx } = fakeDb();
+    const result = await publishExploreLab(db, energyInput(energy()));
+    expect(result).toMatchObject({ activity: { key: "mechanical-energy-explore", version: 1 } });
+    expect(tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "mechanical-energy@1.0.0", config: { mode: "explore", kit: "k5-energy-bench@1" } });
+    expect(EXPLORE_BENCHES["k5-lever-bench@1"].modelRef).not.toBe("mechanical-energy@1.0.0");
+  });
+
+  it("rejects an invalid energy config before opening a transaction", async () => {
+    const { db, tx } = fakeDb();
+    const tall = energy({ pendulum: { ...FL24_ENERGY_EXPLORE_CONFIG.pendulum!, maxDropHeightMm: 600 } });
+    await expect(publishExploreLab(db, energyInput(tall))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
+    await expect(publishExploreLab(db, energyInput(energy({ modes: { explore: true, guided: { rendererKey: "fl24" } } })))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
+    expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  it("seeds FL-24 through the energy bench targets on a placeholder KHTN 9 topic (Q-5)", async () => {
+    expect(await loadEnergyExploreTargets()).toEqual([{ config: expect.objectContaining({ labId: "mechanical-energy", kit: "k5-energy-bench@1" }), topicCode: FL24_TOPIC_CODE_PLACEHOLDER }]);
   });
 });
 

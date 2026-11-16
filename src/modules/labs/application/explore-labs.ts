@@ -6,6 +6,7 @@ import { deriveWetBenchEffectiveConfig, reagentById, validateChemistryLabConfig,
 import { deriveLeverEffectiveConfig, LEVER_ENGINE, LEVER_KIT, validateLeverLabConfig, type LeverLabConfig } from "../../../../packages/sim/mechanics";
 import { FLUID_ENGINE, FLUID_KIT, validateFluidLabConfig, type FluidLabConfig } from "../../../../packages/sim/fluid";
 import { CONDUCTIVITY_TABLE, THERMAL_ENGINE, THERMAL_KIT, validateThermalLabConfig, type ThermalLabConfig } from "../../../../packages/sim/thermal";
+import { ENERGY_ENGINE, ENERGY_KIT, validateEnergyLabConfig, type EnergyLabConfig } from "../../../../packages/sim/mechanics/energy";
 import type { ExploreRequirement } from "../../../../packages/sim/explore/requirements";
 import { dioramaExploreSchema, fl16ExploreSchema, fl27ExploreSchema } from "../../../../packages/sim/explore-kits";
 import { fl26MendelConfigSchema, type Fl26MendelConfig } from "../../../../packages/sim/mendel-config";
@@ -331,6 +332,15 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
     },
     activitySpec: thermalBenchSpec,
   },
+  [ENERGY_KIT]: {
+    kit: ENERGY_KIT,
+    modelRef: ENERGY_ENGINE,
+    validate: (raw) => {
+      const result = validateEnergyLabConfig(raw);
+      return result.ok ? { ok: true, config: result.config } : { ok: false, errors: result.errors };
+    },
+    activitySpec: energyBenchSpec,
+  },
   [SAFETY_SCENARIO_KIT]: {
     kit: SAFETY_SCENARIO_KIT,
     modelRef: SAFETY_SCENARIO_ENGINE,
@@ -338,6 +348,42 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
     activitySpec: safetyScenarioSpec,
   },
 };
+
+const ENERGY_STATION_SETUP = {
+  pendulum: "Trạm 1: con lắc đơn, quả nặng 100–500 g thả từ độ cao h₀ so với điểm thấp nhất; thanh năng lượng Wđ, Wt, W tại năm mốc của một lần dao động.",
+  hoist: "Trạm 2: tời kéo vật thẳng đứng với hai động cơ nhanh và chậm; lực kế, thước và đồng hồ để đọc F, s, t.",
+} as const;
+
+function energyBenchSpec(config: EnergyLabConfig) {
+  return {
+    objective: config.outcomeSummary.join(" "),
+    outcomes: config.outcomeSummary,
+    materials: {
+      reagents: [],
+      apparatus: config.enabledApparatus.map((item) => ({
+        id: item.id, kind: item.kind, label: item.labelVi ?? item.kind,
+        ...(item.kind === "pendulum" && config.pendulum ? { massesG: config.pendulum.massesG } : {}),
+        ...(item.kind === "hoist" && config.hoist ? { massesG: config.hoist.massesG, motors: config.hoist.motors.map((motor) => motor.labelVi) } : {}),
+      })),
+    },
+    setup: `Bàn năng lượng cơ học K5. ${config.stations.map((station) => ENERGY_STATION_SETUP[station]).join(" ")}`,
+    procedure: "Khám phá tự do: học sinh chọn quả nặng và độ cao thả, xem con lắc ở từng mốc; chọn vật, quãng đường và động cơ của tời rồi tự tính công và công suất; không có trình tự bắt buộc.",
+    observations: (config.pedagogy.observationPrompts ?? []).map((prompt) => prompt.textVi),
+    observationPrompts: config.pedagogy.observationPrompts ?? [],
+    safety: { simulation: config.safetyBriefing.simulation, realLab: config.safetyBriefing.realLab, reagentNotes: [] },
+    limitations: config.limitations,
+    modality: "explore",
+    scored: false,
+    outcomeCodes: [],
+    sources: [
+      { kind: "curriculum", status: "verified", description: "Yêu cầu cần đạt KHTN 9 (chương trình 2018), chủ đề Năng lượng cơ học 1–6." },
+      { kind: "technical_assumption", status: "unverified", description: "Quy ước P = 10·m, con lắc không ma sát và tốc độ hai động cơ là giả định kỹ thuật, chờ SGK KHTN 9 và reviewer Lý." },
+    ],
+    engine: config.engine,
+    kit: config.kit,
+    configVersion: config.configVersion,
+  };
+}
 
 const line = z.string().min(1);
 /** Explore-only activity spec. Guided specs keep using `activitySpecSchema`. */
