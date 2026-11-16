@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-8 như đề xuất (CAT-5: chỉ dựng hình, công thức sau cờ config). **Đã làm trên dev/fixture** (sim 1.25.0, BE+FE `feat/dev1-fl23-lens`, §12); config `reviewed`, phát hành sau khi merge |
+| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-8 như đề xuất (CAT-5: chỉ dựng hình, công thức sau cờ config). **Đã làm trên dev/fixture** (sim 1.25.0, BE+FE `feat/dev1-fl23-lens`, §12); config `reviewed`. **Đã merge (BE #103, FE #86) và phát hành lên DB dev 2026-11-16** (`thin-lens`, topic `KHTN9-CH02-T01`, Admin API, 201) |
 | Người viết | Dev 1 (Kit Vật lý), task D1-3.2 |
 | Cập nhật | 2026-11-16 |
 | Theo mẫu | [Mẫu spec áp dụng Explore](lab-explore-bench-spec-template.md) · cùng khuôn [FL-23 khúc xạ](fl-23-refraction-explore-spec.md), [FL-24](fl-24-mechanical-energy-explore-spec.md) |
@@ -143,4 +143,5 @@ Nếu đồng ý cả tám đề xuất, chỉ cần trả lời "duyệt".
 | Sim | `packages/sim/optics/lens`: `imageOf`, `blurRadiusMm`, `magnifierPower`, `evaluateRays/Image/Focal/Magnifier`; validator (thấu kính hội tụ và 2f với tới được cho trạm đo tiêu cự, kính lúp hội tụ và đặt được trong tiêu cự, dụng cụ theo trạm). Golden L-01..L-08, E-01..E-03; 17 test. Sim 1.25.0 chỉ thêm 5 file `optics/lens/` |
 | BE | `EXPLORE_BENCHES["k6-lens-bench@1"]` + `lensBenchSpec` (setup từ config, công thức chỉ khi bật cờ), seed target `KHTN9-CH02-T01`, `npm run publish:fl23-lens-explore`; không bật `allowModelUpgrade`. Vitest `packages/sim` + `src/modules/labs` 698 passed; dry run hợp lệ |
 | FE | `physics/optics/lens/`: 2D giá quang học với lưới tỉ lệ thật (1 ô = 10 mm), bốn trạm (tia đặc biệt sau dự đoán; dựng ảnh bằng hai trong ba tia, tính chất ảnh, kiểm tra d′ và h′ ±5 mm; đo tiêu cự với thấu kính ẩn tên A/B; kính lúp với ô nhìn qua kính và G); 3D giá quang học trong hộp tối. Unit 6/6 (giao điểm hai tia bất kỳ trùng ảnh của công thức); Playwright `lens-explore` 4/4 |
-| Chưa làm | Phát hành (sau merge); đối chiếu SGK KHTN 9; Class Explore |
+| Phát hành (2026-11-16) | `publish:fl23-lens-explore -- --publish` từ `main`: 201, activity `thin-lens-explore` v1. `GET /labs` của admin và `student.active`: `thin-lens`, `explore.ok: true`, bốn trạm, `reviewed`. Trình duyệt thật với `student.active` (FE `main`): bốn tab, L-01 ảnh thật ngược chiều nhỏ hơn vật, L-07 L = 400 mm rõ nét và bằng vật, không có thông báo giả định, không gọi API run |
+| Chưa làm | Đối chiếu SGK KHTN 9; Class Explore |
