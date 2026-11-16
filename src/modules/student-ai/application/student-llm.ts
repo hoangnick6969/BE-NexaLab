@@ -71,12 +71,9 @@ const positiveInt = (value: string | undefined, fallback: number) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-/**
- * The kill switch is honoured only in an explicit development/test environment while SG-2 is open
- * (owner 2026-11-08: "Chỉ bật ở dev/test"); production, pilot and staging stay rules-only whatever the flag says.
- */
+/** The demo flag uses APP_ENV so a development/demo deployment can keep production HTTP settings. */
 export function studentAiConfig(env: NodeJS.ProcessEnv = process.env): StudentAiConfig {
-  const devOrTest = env.NODE_ENV !== "production" && ["development", "test"].includes(env.APP_ENV ?? "");
+  const devOrTest = ["development", "test"].includes(env.APP_ENV ?? "");
   return {
     llmEnabled: devOrTest && env.STUDENT_AI_LLM_ENABLED === "true",
     hintsPer10Min: positiveInt(env.STUDENT_AI_HINTS_PER_10_MIN, 8),
