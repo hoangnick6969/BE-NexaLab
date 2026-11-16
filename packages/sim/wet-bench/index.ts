@@ -11,7 +11,7 @@ export {
 export { solveAcidBase } from "./acid-base";
 export type { AcidBaseResult } from "./acid-base";
 export {
-  applyOperation, assessSolution, createBench, emptyVessel, engineContextFor, isDissolved, litmusColour, measure, phenolphthaleinBand, observeVessel, readVolume, scaleReadingMicrograms,
+  applyOperation, assessSolution, createBench, emptyVessel, engineContextFor, isDissolved, litmusColour, measure, phenolphthaleinBand, observeVessel, readGasVolume, readVolume, scaleReadingMicrograms,
 } from "./engine";
 export type { EngineContext, SolutionAssessment } from "./engine";
 export { validateChemistryLabConfig } from "./validate-config";

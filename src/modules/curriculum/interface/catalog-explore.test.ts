@@ -12,12 +12,13 @@ function pinned(labId: string, explore: unknown = exploreConfig(labId)) {
 }
 const guided = { id: "density", status: "published", challenges: [], config: null };
 
-async function catalog(role: string, items: Array<{ lab: any; version?: any }>, extra: any[] = [guided]) {
+async function catalog(role: string, items: Array<{ lab: any; version?: any }>, extra: any[] = [guided], lessons: any[] = []) {
   const findMany = vi.fn(async () => items.flatMap((item) => (item.version ? [item.version] : [])));
   const db: any = {
     lab: { findMany: async () => [...items.map((item) => item.lab), ...extra] },
     labRelease: { findMany: async () => [], groupBy: async () => [] },
     practicalActivityVersion: { findMany },
+    lesson: { findMany: vi.fn(async () => lessons) },
   };
   const rows = await new CatalogController(db).labs({ user: { role } });
   return { rows, byId: new Map(rows.map((row: any) => [row.id, row])), versionQueries: findMany.mock.calls.length };
@@ -74,5 +75,33 @@ describe("GET /labs Explore contract (P0 C1.2)", () => {
     const { byId } = await catalog("TEACHER", [malformed, none]);
     expect(byId.get("x-lab").explore).toEqual({ ok: false, code: "EXPLORE_VERSION_MISSING" });
     expect(byId.get("y-lab").explore).toEqual({ ok: false, code: "EXPLORE_VERSION_MISSING" });
+  });
+});
+
+describe("GET /labs related lessons for Explore Labs", () => {
+  const withTopic = (labId: string, topicCode: string | null) => {
+    const item = pinned(labId);
+    (item.lab as any).topicCode = topicCode;
+    return item;
+  };
+  const lesson = (id: string, title: string, curriculumTopicCode: string) => ({ id, title, curriculumTopicCode });
+
+  it("links the released lesson of the topic to an Explore Lab with no release, by mode (no rendererKey needed)", async () => {
+    const { byId } = await catalog("STUDENT", [withTopic("solution-concentration", "KHTN8-L04")], [guided], [lesson("l4", "Dung dịch và nồng độ", "KHTN8-L04")]);
+    expect(byId.get("solution-concentration").lessonLinks).toEqual([{ lessonId: "l4", title: "Dung dịch và nồng độ", topicCode: "KHTN8-L04" }]);
+  });
+
+  it("leaves lessonLinks out when the topic has no released lesson, and never links a Lab without a topic", async () => {
+    const none = await catalog("STUDENT", [withTopic("acid-base-indicators", "KHTN8-L09")], [guided], []);
+    expect(none.byId.get("acid-base-indicators").lessonLinks).toBeUndefined();
+    const noTopic = await catalog("STUDENT", [withTopic("metal-reactivity", null)], [guided], [lesson("l9", "Base. Thang pH", "KHTN8-L09")]);
+    expect(noTopic.byId.get("metal-reactivity").lessonLinks).toBeUndefined();
+  });
+
+  it("matches each Lab to its own topic", async () => {
+    const lessons = [lesson("l9", "Base. Thang pH", "KHTN8-L09"), lesson("l11", "Muối", "KHTN8-L11")];
+    const { byId } = await catalog("STUDENT", [withTopic("acid-base-indicators", "KHTN8-L09"), withTopic("metal-reactivity", "KHTN8-L11")], [guided], lessons);
+    expect(byId.get("acid-base-indicators").lessonLinks.map((link: any) => link.lessonId)).toEqual(["l9"]);
+    expect(byId.get("metal-reactivity").lessonLinks.map((link: any) => link.lessonId)).toEqual(["l11"]);
   });
 });
