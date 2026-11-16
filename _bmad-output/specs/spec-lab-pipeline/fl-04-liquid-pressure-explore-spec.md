@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Bản nháp, chờ owner duyệt** (Q-1 đến Q-6 ở §11). Chưa code |
+| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-6. **Đã làm trên dev/fixture** (F04-1 đến F04-5, §13); chưa seed, chưa phát hành |
 | Người viết | Dev 1 (Kit Vật lý), task D1-3.2 |
 | Cập nhật | 2026-11-16 |
 | Theo mẫu | [Mẫu spec áp dụng Explore](lab-explore-bench-spec-template.md) |
@@ -170,11 +170,11 @@ v1 chưa hỗ trợ. Đề xuất sau (cần quyết định riêng): mẫu `dep
 | Dữ liệu chưa duyệt | Mô hình là giả định kĩ thuật; cần reviewer Lý xác nhận quy ước 10 Pa/mm và cách hiện mức biến dạng trước khi bỏ nhãn |
 | Phát hành sớm | Lab mới nên phát hành được ngay sau nghiệm thu, nhưng owner vẫn cần tự kiểm trên fixture như FL-11 |
 
-## 11. Câu hỏi cho owner
+## 11. Quyết định của owner
 
-Đề xuất của Dev 1 ở cột cuối. Nếu đồng ý cả sáu, chỉ cần trả lời "duyệt".
+Owner duyệt ngày 2026-11-16, chấp nhận cả sáu đề xuất.
 
-| ID | Câu hỏi | Đề xuất |
+| ID | Câu hỏi | Quyết định |
 |---|---|---|
 | Q-1 | v1 gồm những thí nghiệm nào? | Trạm 1 (màng cao su theo độ sâu) và Trạm 2 (Pascal). Áp suất khí quyển (TN3, Hình 16.8) để v2 `fluid-pressure@1.1.0` |
 | Q-2 | Có hiện số áp suất (Pa) cho học sinh không? | Mặc định **không**, bám SGK định tính: chỉ thấy mức biến dạng và hướng pit-tông. Config `display.pressureReading` bật được (sau này qua C3) |
@@ -192,3 +192,15 @@ v1 chưa hỗ trợ. Đề xuất sau (cần quyết định riêng): mẫu `dep
 | F04-3 | Registry FE, trang, cảnh 3D/2D, item, `listFluidKitItems`, dev preview | `runtime/explore-registry.ts`, `physics/fluid/pressure/*`, `App.tsx` |
 | F04-4 | Nhật ký `describeFluidChange`, export | `physics/fluid/pressure/pressure-log.ts` |
 | F04-5 | Playwright §9, hồi quy; phát hành qua Admin API và kiểm chỉ-SELECT | `tests/fluid-pressure-explore.spec.ts` |
+
+## 13. Ghi chú triển khai (2026-11-16)
+
+| Task | Kết quả |
+|---|---|
+| F04-1 | BE `packages/sim/fluid/` (`contracts.ts`, `pressure.ts`, `validate-config.ts`, `fl04-pressure.data.ts`, golden và test validator). Mức biến dạng `ceil(p × 5 / (10 × maxDepthMm))`; pit-tông so `n₁·w·S₂` với `n₂·w·S₁`. Sim **1.16.0**, tarball đồng bộ sang FE |
+| F04-2 | `EXPLORE_BENCHES["k3-fluid-bench@1"]` + `fluidBenchSpec` (không có `deriveClass`). Seed target `scripts/fluid-explore-targets.ts`, `npm run db:seed:explore -- --kit k3-fluid-bench@1`, topic `KHTN8-L16` |
+| F04-3 | FE `physics/fluid/pressure/`: `FluidExploreBench`, `PressureStage3D` (camera riêng cho mỗi trạm, màng lõm theo mức, pit-tông dời theo hướng), `PressureStage2D` (mặt cắt SVG, mũi tên theo mức), `listFluidKitItems`, trang `/labs/:id`, dev `/dev/lab-kits/fluid-explore`. FL-03/FL-05 không đổi |
+| F04-4 | `pressure-log.ts`: dòng trạm 1 và trạm 2, kéo thanh trượt gộp một dòng, export `scored: false` |
+| F04-5 | Playwright `tests/fluid-pressure-explore.spec.ts` 4/4 (registry, G-02/G-03/G-06/G-08, thao tác bị chặn, nhật ký sau F5 và export, không `/lab-runs`, config một trạm, `pressureReading`, config sai, 2D/3D cùng trạng thái, reduced motion, 390 px) |
+
+Nhánh: BE `feat/dev1-fl04-liquid-pressure` (chồng lên `docs/dev1-fl04-explore-spec`, tức PR B của D1-3.1), FE `feat/dev1-fl04-liquid-pressure` (chồng lên PR B FE). Còn lại: merge PR A, PR B rồi PR này (BE và FE cùng lúc); owner seed trên DB cô lập, tự kiểm, rồi phát hành qua `publishExploreLab` (`topicCode: "KHTN8-L16"`) và kiểm chỉ-SELECT; xác nhận topic `KHTN8-L16` có trong DB; sửa dòng FL-04 trong catalog (bỏ `p = d·h`).
