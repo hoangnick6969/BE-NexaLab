@@ -28,7 +28,12 @@
     "mechanics/index.ts",
     "mechanics/contracts.ts",
     "mechanics/validate-config.ts",
-    "mechanics/fl06-lever.data.ts"
+    "mechanics/fl06-lever.data.ts",
+    "safety-scenario/index.ts",
+    "safety-scenario/contracts.ts",
+    "safety-scenario/validate-config.ts",
+    "safety-scenario/engine.ts",
+    "safety-scenario/fl15-safety.data.ts"
   ],
   "dependencies": {
     "zod": "^3.25.0"

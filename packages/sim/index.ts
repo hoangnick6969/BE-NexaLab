@@ -3,6 +3,7 @@ export { evaluateMassConservation } from "./mass-conservation";
 export { simulateBuoyancy } from "./buoyancy";
 export { evaluateLeverBench, classifyLeverCase } from "./lever-bench";
 export { evaluateThermalBench } from "./thermal-bench";
+export * from "./safety-scenario";
 export * from "./gene-expression";
 export { ecologyTolerance, ecologyToleranceSchema, ECOLOGY_SPECIES, ECOLOGY_SITES, ECOLOGY_POPULATIONS, ECOLOGY_AGE_SAMPLES, fraction, pyramidFor } from "./ecology-tolerance";
 export type { EcologyToleranceState, Fraction } from "./ecology-tolerance";
