@@ -166,3 +166,17 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 - INC-3 (Dev 2): code và test cho FL-20, FL-21, FL-27, FL-16 trên nhánh feat/fl26-mendel-sim (BE) và feat/fl26-mendel-bench (FE, sim 1.12.2). Chưa seed, chưa publish.
 - D1-1.5 (FL-06 Explore qua registry) chưa làm: đây là việc của Dev 1, owner chỉ mở khóa cổng. Bàn FL-26 là bàn thứ hai thật trong registry.
 - Topic code: FL-26 và FL-27 dùng `KHTN9-CH11-T01`; FL-21 `KHTN8-L44`; FL-20 `KHTN8-L41`; FL-16 `KHTN8-L37`. Đã đối chiếu với `catalog-registry.json` và các script release: khớp.
+
+## Cập nhật 2026-11-16 (Dev 2, chờ owner xác nhận): hai mode tạm thời trên /labs
+
+- **Lệch spec đã thấy.** FL-20, FL-21, FL-27, FL-16 đã có Guided, nên theo [phân công 20 slot §2](lab-kit-20-slot-delivery-spec.md) Explore phải "công bố trên cùng Lab ID chờ D-5". Dev 2 lại phát hành trên dev thành Lab ID riêng (`fl-xx-explore`), nên /labs hiện hai thẻ cho một slot. FL-26 là Lab mới, chưa có Guided, nên thẻ riêng là đúng.
+- **Cách xử lý tạm ở FE** (không đổi BE, không phát hành lại): `lab-info.ts` ghi `exploreOf` cho bốn Lab trên; `lab-modes.ts` gộp thẻ Explore vào thẻ Guided cùng slot (badge "2 chế độ", hàng "Có hướng dẫn / Khám phá tự do"); trang Lab có nút chuyển mode ở header khi người dùng mở được cả hai Lab ID. Khi D-5 có văn bản và Explore được phát hành trên cùng Lab ID, bỏ `exploreOf` và các Lab ID `fl-xx-explore`.
+- **D-5 vẫn cần owner chốt:** cách khai báo hai mode trên một Lab ID, mode mặc định (tạm thời là Guided), và nút chuyển (tạm thời ở header Lab Space).
+- **Explore khác Guided** (theo story K8-FL20, K8-FL21, K7-FL27, EX-FL16 của backlog Explore), đều không chấm điểm: FL-16 Studio có trạm cấu tạo (mặt cắt, bóc lớp, chọn bộ phận), gắn thẻ tên và đèn chiếu tự đặt khoảng cách vật; FL-27 cho tự thay một base bất kỳ và ghi bảng so sánh; FL-21 có bỏ loài qua hoạt động con người và dựng chuỗi tự do kèm năng lượng từng bậc; FL-20 có bảng đo tự khoanh giới hạn và so sánh cá nhập nội A, B, C. FL-26 thêm cảnh 3D tuỳ chọn trên sân khấu K8 (spec chỉ yêu cầu 2D; 2D giữ làm dự phòng).
+
+## Cập nhật 2026-11-16 (owner): phát hành v2, bỏ nhãn bản nháp
+
+- Theo yêu cầu và ủy quyền của owner, 5 Lab `fl-16-explore`, `fl-20-explore`, `fl-21-explore`, `fl-26-explore`, `fl-27-explore` đã phát hành **version 2** qua `POST /admin/labs/:id/explore-versions` (script `publish-explore.ts`, API local nối DB dùng chung): 201 cả 5; `GET /labs` trả `explore.ok`, `activity.version` 2.
+- Thay đổi duy nhất trong config: `configVersion` 2 và `review.status: "reviewed"`, nên học sinh không còn thấy nhãn "Bản nháp · chờ duyệt".
+- **Lưu ý:** `reviewed` ở đây là **quyết định sản phẩm của owner**, chưa phải chữ ký của reviewer bộ môn. FL-16 vẫn còn checklist SME ([fl-16-sme-review-checklist.md](fl-16-sme-review-checklist.md)); dữ liệu FL-26 và các số liệu minh hoạ FL-20/21/27 vẫn chưa có reviewer duyệt. Khi reviewer ký, ghi lại ở đây; nếu reviewer yêu cầu sửa, phát hành version mới.
+- Trước v2, cả 5 Lab đã PUBLISHED v1 (`review.status: "draft"`); nhãn đến từ config, không phải từ trạng thái phát hành.
