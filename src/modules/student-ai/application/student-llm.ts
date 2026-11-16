@@ -78,7 +78,9 @@ export function studentAiConfig(env: NodeJS.ProcessEnv = process.env): StudentAi
     llmEnabled: devOrTest && env.STUDENT_AI_LLM_ENABLED === "true",
     hintsPer10Min: positiveInt(env.STUDENT_AI_HINTS_PER_10_MIN, 8),
     dailyProviderCalls: positiveInt(env.STUDENT_AI_DAILY_PROVIDER_CALLS, 60),
-    providerTimeoutMs: positiveInt(env.STUDENT_AI_PROVIDER_TIMEOUT_MS, 8000),
+    // 20 s: on 2026-11-17 gemini-3.5-flash with minimal thinking took 7.3-16.7 s (2.4 s on 2026-11-09), so the old 8 s
+    // limit turned most tutor replies into the fallback. STUDENT_AI_PROVIDER_TIMEOUT_MS still overrides it.
+    providerTimeoutMs: positiveInt(env.STUDENT_AI_PROVIDER_TIMEOUT_MS, 20000),
     cacheTtlDays: positiveInt(env.STUDENT_AI_CACHE_TTL_DAYS, 30),
   };
 }
