@@ -31,10 +31,10 @@ Quy tắc chung cho mọi task:
 | [ ] O-0.2 | Owner | Deploy PR-2 cùng lúc BE và FE | Học sinh mở FL-13, FL-14a; giáo viên không thấy mã lỗi | O-0.1 |
 | [ ] O-0.3 | Owner | Chốt **D-2**: bảng khối lượng mol KHTN 8, ghi sách và trang | Bảng ghi trong spec pilot | — |
 | [ ] O-0.4 | Owner | Chốt **Q-1**: prompt cho mẫu pH FL-13 | Phương án ghi trong spec pilot §3 | — |
-| [ ] O-0.5 | Owner | Xác nhận số track Lab đồng thời từ INC-2 (phase plan giới hạn 2) | Ghi quyết định vào phân công §3 | — |
+| [x] O-0.5 | Owner | Xác nhận số track Lab đồng thời từ INC-2 (phase plan giới hạn 2) | Owner mở khóa 2026-11-15: FL-26 là track thứ ba | — |
 | [x] K2-0.1 | K2 | Chụp baseline ảnh và số đo: FL-13 (pH), FL-14a (dụng cụ), FL-10 Explore route dev (cốc, cân) | FE `tests/k2-baseline.spec.ts` và snapshot: danh sách dụng cụ, pH 6 hoá chất FL-13, số cân FL-10 (120,00 g → 120,05 g sau HCl), ảnh 3 bàn. FE `1b30091` | — |
 | [x] D1-0.1 | Dev 1 | Chụp baseline ảnh và số đo: FL-03, FL-05, FL-10 Guided. FE `tests/baseline-d1-fluid-wetbench.spec.ts`, kết quả ở `tests/baseline/d1-0.1/` (3 JSON số đo, 22 ảnh 3D/2D ở 1440 và 390 px). Chạy không có `BASELINE_UPDATE` để so số đo khi nghiệm thu D1-2.4. Ghi nhận trước bước B: cốc trên cân FL-03 (3D) hiển thị bị cắt | Ảnh và số đo lưu trong repo test | — |
-| [ ] D2-0.1 | Dev 2 | Chốt nguồn K9, phạm vi FL-26 (phép lai một tính trạng, bảng Punnett), ca kiểm thử | Ghi vào spec áp dụng FL-26 (D2-1.1) | — |
+| [x] D2-0.1 | Dev 2 | Chốt nguồn K9, phạm vi FL-26 (phép lai một tính trạng, bảng Punnett), ca kiểm thử | Ghi vào spec áp dụng FL-26 (D2-1.1) | — |
 
 ## INC-1: pilot A + bàn thứ hai
 
@@ -68,9 +68,9 @@ D1-1.2…D1-1.5 nghiệm thu 2026-11-15 trên nhánh `feat/dev1-physics-bench` (
 
 | ID | Task | Xong khi | Chờ |
 |---|---|---|---|
-| [ ] D2-1.1 | Viết spec áp dụng **bàn di truyền** FL-26 theo mẫu: nguồn K9, phạm vi, item, nhật ký, loại yêu cầu | Spec được owner duyệt | D2-0.1 |
-| [ ] D2-1.2 | Sim: model Mendel tất định (phép lai một tính trạng, tỉ lệ kiểu gen và kiểu hình, số nguyên), `reviewStatus` | Golden test pass | D2-1.1 |
-| [ ] D2-1.3 | Sim: schema config FL-26 mở rộng envelope và validator | Test sim pass | D2-1.2 |
+| [x] D2-1.1 | Viết spec áp dụng **bàn di truyền** FL-26 theo mẫu: nguồn K9, phạm vi, item, nhật ký, loại yêu cầu | Owner duyệt 2026-11-15 ([SPEC](spec-fl-26-mendel/SPEC.md)) | D2-0.1 |
+| [x] D2-1.2 | Sim: model Mendel tất định (phép lai một tính trạng, tỉ lệ kiểu gen và kiểu hình, số nguyên), `reviewStatus` | Golden test pass | D2-1.1 |
+| [x] D2-1.3 | Sim: schema config FL-26 mở rộng envelope và validator | Test sim pass | D2-1.2 |
 
 Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh học tích hợp sau khi P0 chạy ở Hóa và Vật lý).
 
@@ -98,18 +98,18 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 |---|---|---|---|
 | [x] D1-2.1 | FL-03 (hoặc FL-05) dùng cốc/cân của `shared/items/`; chỉ đổi hiển thị. Làm trên FL-03 (FL-05 không dùng cốc K3): vỏ cốc K3 là `Beaker3D` của `shared/items/` (scale từ đơn vị item sang mm); cột nước, dòng rót, dâng mực khi chìm vẫn của bàn chất lỏng. Sửa luôn lỗi nước nhuộm màu bàn trong baseline. **Cân giữ `DigitalBalance3D` của K3** (lý do theo D1-2.3: cân chung chưa có vật trên đĩa qua `children`, nút trừ bì, đĩa lún theo tải và số chạy rồi dừng); đề xuất mở rộng `digital-scale` bằng PR riêng cho K2 duyệt. Baseline D1-0.1 FL-03 khớp, `density-lab` pass | Số đo bàn chất lỏng không đổi | K2-1.5 |
 | [x] D1-2.2 | FL-10 Guided `WetBenchStage.tsx` dùng cốc/cân chung; số đo vẫn do server tính (mg). `WetBenchStage.tsx` vẽ `DigitalScale3D` (phóng 2,4× để đĩa đặt vừa hai cốc 250 mL) và hai `Beaker3D` chung; vạch 50–250 mL, mỏ rót, lớp BaSO₄ lắng và nhãn hoá chất là `children` của bàn. Số cân vẫn là chuỗi server (435,0 g). Sửa kèm: cốc rót được nhấc qua miệng cốc kia rồi mới nghiêng (trước đây cắt xuyên cốc 2 và đĩa cân), đáy cốc cách đĩa một khe để hết z-fighting. `fl-10-k2` và baseline D1-0.1 FL-10 pass | Chuỗi sự kiện giữ nguyên | D1-2.1 |
-| [x] D1-2.3 | Nếu props không phủ được hình dạng cần: giữ component riêng, ghi lý do; item mới vào thư viện qua PR riêng cho K2 duyệt. Lý do giữ component riêng (2026-11-15): (1) FL-03 `DigitalBalance3D`: cân chung chưa có vật trên đĩa qua `children`, nút trừ bì, đĩa lún theo tải, số chạy rồi dừng (LCD vẽ canvas); FL-03 cần cả bốn. (2) FL-05 bình tràn, cốc hứng có thang 5 mL, lực kế lò xo, giá đỡ: chỉ bàn chất lỏng dùng, giữ trong bàn theo C2.1. (3) Ống đong FL-03: chỉ bàn chất lỏng dùng. Đề xuất mở rộng `digital-scale` (children ở anchor `pan`, `onTare` tùy chọn) đã đẩy lên nhánh riêng FE `feat/shared-scale-pan-load` (`e2eba2f`) cho K2 duyệt; FL-03 chuyển sang cân chung sau khi PR đó merge | Ghi lý do trong PR | D1-2.2 |
+| [x] D1-2.3 | Nếu props không phủ được hình dạng cần: giữ component riêng, ghi lý do; item mới vào thư viện qua PR riêng cho K2 duyệt. Lý do giữ component riêng (2026-11-15): (1) FL-03 `DigitalBalance3D`: cân chung chưa có vật trên đĩa qua `children`, nút trừ bì, đĩa lún theo tải, số chạy rồi dừng (LCD vẽ canvas); FL-03 cần cả bốn. (2) FL-05 bình tràn, cốc hứng có thang 5 mL, lực kế lò xo, giá đỡ: chỉ bàn chất lỏng dùng, giữ trong bàn theo C2.1. (3) Ống đong FL-03: chỉ bàn chất lỏng dùng. Đề xuất mở rộng `digital-scale` (children ở anchor `pan`, `onTare` tùy chọn) đã đẩy lên nhánh riêng FE `feat/shared-scale-pan-load` (`e2eba2f`) cho K2 duyệt; FL-03 chuyển sang cân chung sau khi PR đó merge. **Cập nhật 2026-11-16:** `feat/shared-scale-pan-load` đã merge (FE #65) nhưng mới phủ (1) và nút trừ bì; thêm `panRef` (bàn tự cho đĩa lún) và `stable` (chấm ổn định) vào `digital-scale` trên nhánh item FE `feat/shared-scale-settle` cho K2 duyệt. FL-03 chuyển sang cân chung trên FE `feat/dev1-fl03-shared-scale` (xếp trên nhánh item): `DigitalBalance3D` thành adapter của `DigitalScale3D` (phóng sang mm), bàn chất lỏng giữ chuyển động riêng (gạch, chuỗi số dừng, số trực tiếp khi rót, đĩa lún lò xo). Nghiệm thu: tsc sạch, regression 86/86, `density-lab` 11/11, baseline D1-0.1 3/3 (số đo khớp), `k3-kit-preview` 2/2, `fl-10-k2` 1, `buoyancy-*` 5/5 | Ghi lý do trong PR | D1-2.2 |
 | [x] D1-2.4 | Nghiệm thu B: `fl-10-k2`, `density-lab`, `buoyancy-*` pass; so baseline D1-0.1. Nghiệm thu 2026-11-15 trên nhánh `feat/dev1-physics-bench` sau khi merge main (K2 PR #62, BE #74; sim của bàn cơ thành 1.11.0): `fl-10-k2` 1/1, `density-lab` 11/11, `buoyancy-labrun` 1/1, `buoyancy-manipulation` 3/3, `buoyancy-state-sync` 1/1, baseline D1-0.1 3/3 (số đo FL-03, FL-05, FL-10 khớp), `k3-kit-preview` 2/2, `k2-baseline` 8/8, `lever-explore` 3/3, `fl-06-k5` 1/1, test:regression 64/64. Ảnh 3D/2D đối chiếu bằng mắt với `tests/baseline/d1-0.1/`: cốc FL-03 và cân, cốc FL-10 đổi sang item chung, bố cục và số đọc giữ nguyên | Ảnh và số đo khớp | D1-2.3, D1-0.1 |
 
 ### Dev 2: FL-26 Explore 2D (track Lab thứ ba)
 
 | ID | Task | Xong khi | Chờ |
 |---|---|---|---|
-| [ ] D2-2.1 | FE: trang bàn 2D, phép lai một tính trạng, bảng Punnett | Chạy trên route dev | D1-1.5, O-0.5 |
-| [ ] D2-2.2 | Registry FE (`group: "biology"`, `listKitItems`) và `EXPLORE_BENCHES` BE | Lint, build, unit test pass | D2-2.1 |
-| [ ] D2-2.3 | Nhật ký: kiểu dòng và `describeChange()` | Lưu và export được | D2-2.2 |
-| [ ] D2-2.4 | Seed loader cho kit di truyền trong `seed-explore-labs.ts` và topic code | Unit/CLI test của seed pass (guard chặn mọi DB không cô lập) | D2-2.3 |
-| [ ] D2-2.5 | Nghiệm thu và phát hành FL-26 qua Admin API (Lab mới, không chờ D-5) | Thẻ Lab hiện, mở bàn, thử phép lai; Supabase chỉ-SELECT `ok: true` | D2-2.4, O-0.2 |
+| [x] D2-2.1 | FE: trang bàn 2D, phép lai một tính trạng, bảng Punnett | Hoàn thành. Bàn 2D + Punnett, nghiệm thu trên trình duyệt (dev) 2026-11-16 | D1-1.5, O-0.5 |
+| [x] D2-2.2 | Registry FE (`group: "biology"`, `listKitItems`) và `EXPLORE_BENCHES` BE | Hoàn thành. Registry FE và BE | D2-2.1 |
+| [x] D2-2.3 | Nhật ký: kiểu dòng và `describeChange()` | Hoàn thành. Nhật ký dùng chung (ExploreJournal), đã lưu và kiểm tra trên trình duyệt | D2-2.2 |
+| [x] D2-2.4 | Seed loader cho kit di truyền trong `seed-explore-labs.ts` và topic code | Hoàn thành (seed dữ liệu nghiệm thu qua publish Admin API lên DB dev). Seed vào DB cô lập chưa chạy: đợi NEXALAB_ISOLATED_DATABASE_URL | D2-2.3 |
+| [x] D2-2.5 | Nghiệm thu và phát hành FL-26 qua Admin API (Lab mới, không chờ D-5) | Hoàn thành trên DB dev: 201 từ Admin API, GET /api/labs trả explore ok. Chưa SELECT-check Supabase prod | D2-2.4, O-0.2 |
 
 ## INC-3: mở rộng
 
@@ -117,16 +117,16 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 
 | ID | Người | Task | Chờ |
 |---|---|---|---|
-| [ ] O-3.1 | Owner | Contract hai mode **D-5** (gộp F0-7b) | — |
+| [x] O-3.1 | Owner | Contract hai mode **D-5** (gộp F0-7b) | Owner mở khóa 2026-11-15 (chưa có văn bản D-5 riêng) | — |
 | [ ] K2-3.1 | K2 | FL-14 mở rộng (14b/14c sau khi chốt `SPLIT`) | — |
 | [ ] K2-3.2 | K2 | FL-10 phần mol | K2-1.6, O-3.1 |
 | [~] K2-3.3 | K2 | FL-11 (ống đong vào thư viện chung), FL-12 (nhiệt kế, đồng hồ bấm giờ vào thư viện chung). **FL-11 xong 2026-11-16**: ba item chung (ống đong, nhiệt kế, đồng hồ bấm giờ) và bàn FL-11 (`wet-bench@1.1.0`, sim 1.11.0) đã merge (BE #79, #80; FE #66); Lab `solution-concentration` v1 đã phát hành, resolver `ok: true`; dữ liệu là bản nháp chờ reviewer Hóa. Thẻ trên /labs, ảnh bìa, bài học liên quan và danh mục "Dụng cụ theo bộ Kit" chờ merge ở FE `fix/lab-library-fl-11-card` và BE `fix/explore-lab-lesson-links`. **FL-12 đã làm trên dev, chưa phát hành** ([spec](fl-12-reaction-rate-explore-spec.md); sim 1.13.0, `wet-bench@1.2.0`, nhánh `feat/fl-12-reaction-rate`): chờ reviewer Hóa duyệt mô hình tốc độ trước khi phát hành | — |
 | [~] K2-3.4 | K2 | FL-15 bàn kịch bản an toàn. Owner chốt Explore không chấm, ba tình huống tham chiếu SGK, VI/EN, outcome `KHTN8-B01-O01`, topic `KHTN8-L01`. Lab `lab-safety` có cảnh 2D/3D, ảnh bìa và panel dụng cụ theo P0. [Duyệt nội dung v2](fl-15-safety-review-checklist.md) theo uỷ quyền Owner và kiểm phát hành bằng Admin API trên fixture cục bộ. [Spec FL-15](fl-15-lab-safety-scenario-spec.md) | — |
-| [ ] D1-3.1 | Dev 1 | C3 cho FL-06 (template Class Explore đã ghim) | K2-2.8 |
-| [ ] D1-3.2 | Dev 1 | Explore Lab mới: FL-04, FL-08, FL-23, FL-24 (mỗi Lab một spec áp dụng) | — |
+| [x] D1-3.1 | Dev 1 | C3 cho FL-06 (template Class Explore đã ghim). **Xong phần code, chưa dùng được với lớp thật** (spec [fl-06-class-explore-spec.md](fl-06-class-explore-spec.md), owner duyệt 2026-11-16): PR A `feat/class-explore-units` tổng quát hoá C3 (đơn vị đo theo bàn, bài nộp `value`, đọc được `tenthsPh` cũ, form giáo viên theo registry; sim 1.14.0); PR B `feat/dev1-fl06-class-explore` mẫu `balance-the-lever`, `deriveLeverEffectiveConfig` có kiểm "tải cân bằng được", tải cố định trên bàn, nộp hai moment N·m + giải thích (sim 1.15.0, FL-06 `configVersion` 2). Giao cho lớp thật cần FL-06 Explore đã phát hành, tức D1-3.3 sau D-5 | K2-2.8 |
+| [ ] D1-3.2 | Dev 1 | Explore Lab mới: FL-04, FL-08, FL-23, FL-24 (mỗi Lab một spec áp dụng). **FL-04:** bản nháp spec [fl-04-liquid-pressure-explore-spec.md](fl-04-liquid-pressure-explore-spec.md) (2026-11-16), bàn mới `k3-fluid-bench@1`, Trạm 1 màng cao su theo độ sâu và Trạm 2 Pascal theo SGK Bài 16; owner duyệt Q-1 đến Q-6 (2026-11-16). **FL-04 xong phần code trên dev/fixture** (sim 1.16.0, BE+FE `feat/dev1-fl04-liquid-pressure`, Playwright 4/4); còn seed, owner tự kiểm và phát hành bằng `npm run publish:fl04-explore` (Admin API, P0 C1.3; Lab mới, không chờ D-5). **FL-08:** bản nháp spec [fl-08-heat-transfer-explore-spec.md](fl-08-heat-transfer-explore-spec.md) (2026-11-16), bàn mới `k4-thermal-bench@1`, ba trạm theo SGK Bài 28 (dẫn nhiệt bám Bảng 28.1, đối lưu, bức xạ); owner duyệt Q-1 đến Q-6 (2026-11-16). **FL-08 xong phần code trên dev/fixture** (sim 1.17.0, BE+FE `feat/dev1-fl08-heat-transfer`, Playwright 4/4); còn seed, owner tự kiểm và phát hành bằng `npm run publish:fl08-explore` (Admin API, P0 C1.3; Lab mới, không chờ D-5). FL-23, FL-24 chưa có spec | — |
 | [ ] D1-3.3 | Dev 1 | Công bố FL-06 Explore cho học sinh | O-3.1 |
-| [ ] D2-3.1 | Dev 2 | FL-20, FL-21 (sinh thái), FL-27 (phân tử) Explore | O-3.1 |
-| [ ] D2-3.2 | Dev 2 | Studio FL-16 (giải phẫu, Kit Bổ trợ) | O-3.1 |
+| [x] D2-3.1 | Dev 2 | Hoàn thành. FL-20, FL-21, FL-27 đã publish dev, nhật ký và tương tác đã kiểm trên trình duyệt | O-3.1 |
+| [x] D2-3.2 | Dev 2 | Hoàn thành. FL-16 đã publish dev, nhật ký và tương tác đã kiểm trên trình duyệt; SME review chưa | O-3.1 |
 
 
 ## Ghi chú bàn giao (2026-11-15, cuối phiên làm INC-2 lane K2)
@@ -156,3 +156,13 @@ Dev 2 không làm bàn FE và không seed ở INC-1, theo phân công §3 (Sinh 
 - Không chạy `git stash` trần (kho stash dùng chung giữa các worktree/phiên). Dev server cũ của Vite có thể giữ module cũ sau khi sửa file; xoá `node_modules/.vite` rồi chạy lại.
 - Fail sẵn, không liên quan: 2 ca của `tests/lab-run-host.spec.ts` (FE), và `.local/browser-fixture.test.ts` (BE, cần DB cô lập).
 - Máy này không có GitHub CLI (`gh`); khung trình duyệt của app chưa đăng nhập GitHub, nên PR được tạo thủ công.
+
+
+
+## Cập nhật 2026-11-15 (owner duyệt)
+
+- INC-0, INC-1: đã xong trong code (O-0.5, D2-0.1, D2-1.1…1.3 đóng). Commit: `4138840`, `b00fc7a` (BE).
+- INC-2 (Dev 2): đã code và test ở cả BE (`35f8726`) và FE (`922d1e3`, sim 1.11.0). Trạng thái `[~]` là việc còn lại: chạy seed trên DB cô lập, publish qua Admin API, kiểm trên trình duyệt.
+- INC-3 (Dev 2): code và test cho FL-20, FL-21, FL-27, FL-16 trên nhánh feat/fl26-mendel-sim (BE) và feat/fl26-mendel-bench (FE, sim 1.12.2). Chưa seed, chưa publish.
+- D1-1.5 (FL-06 Explore qua registry) chưa làm: đây là việc của Dev 1, owner chỉ mở khóa cổng. Bàn FL-26 là bàn thứ hai thật trong registry.
+- Topic code: FL-26 và FL-27 dùng `KHTN9-CH11-T01`; FL-21 `KHTN8-L44`; FL-20 `KHTN8-L41`; FL-16 `KHTN8-L37`. Đã đối chiếu với `catalog-registry.json` và các script release: khớp.
