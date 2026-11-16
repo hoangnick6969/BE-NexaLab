@@ -1,6 +1,6 @@
 {
   "name": "@nexalab/sim",
-  "version": "1.14.0",
+  "version": "1.15.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
@@ -29,6 +29,7 @@
     "mechanics/index.ts",
     "mechanics/contracts.ts",
     "mechanics/validate-config.ts",
+    "mechanics/class-template.ts",
     "mechanics/fl06-lever.data.ts"
   ],
   "dependencies": {
