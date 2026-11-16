@@ -1,6 +1,6 @@
 {
   "name": "@nexalab/sim",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
@@ -30,7 +30,12 @@
     "mechanics/contracts.ts",
     "mechanics/validate-config.ts",
     "mechanics/class-template.ts",
-    "mechanics/fl06-lever.data.ts"
+    "mechanics/fl06-lever.data.ts",
+    "fluid/index.ts",
+    "fluid/contracts.ts",
+    "fluid/pressure.ts",
+    "fluid/validate-config.ts",
+    "fluid/fl04-pressure.data.ts"
   ],
   "dependencies": {
     "zod": "^3.25.0"

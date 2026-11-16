@@ -4,6 +4,7 @@ import { z } from "zod";
 import { audit, type AuditActor } from "../../../common/audit";
 import { deriveWetBenchEffectiveConfig, reagentById, validateChemistryLabConfig, type ChemistryLabConfig } from "../../../../packages/sim/wet-bench";
 import { deriveLeverEffectiveConfig, LEVER_ENGINE, LEVER_KIT, validateLeverLabConfig, type LeverLabConfig } from "../../../../packages/sim/mechanics";
+import { FLUID_ENGINE, FLUID_KIT, validateFluidLabConfig, type FluidLabConfig } from "../../../../packages/sim/fluid";
 import type { ExploreRequirement } from "../../../../packages/sim/explore/requirements";
 import { activityDigest } from "./sim-packs";
 
@@ -84,6 +85,38 @@ function leverBenchSpec(config: LeverLabConfig) {
   };
 }
 
+const STATION_SETUP = {
+  "depth-probe": "Trạm 1: bể nước trong suốt và bình trụ có ba màng cao su A, B (thành) và C (đáy); hạ bình theo độ sâu và dời ngang.",
+  pistons: "Trạm 2: hai xi lanh thông nhau, tiết diện pit-tông (1) gấp đôi pit-tông (2), bộ quả nặng giống nhau đặt lên đĩa.",
+} as const;
+
+function fluidBenchSpec(config: FluidLabConfig) {
+  return {
+    objective: config.outcomeSummary.join(" "),
+    outcomes: config.outcomeSummary,
+    materials: {
+      reagents: [],
+      apparatus: config.enabledApparatus.map((item) => ({
+        id: item.id, kind: item.kind, label: item.labelVi ?? item.kind,
+        ...(item.kind === "weight_set" && config.pistons ? { forces: [newtons(config.pistons.weightMilliNewtons)], count: config.pistons.weightCount } : {}),
+      })),
+    },
+    setup: `Bàn chất lỏng K3. ${config.stations.map((station) => STATION_SETUP[station]).join(" ")}`,
+    procedure: "Khám phá tự do: học sinh nhúng bình trụ ở các độ sâu và vị trí khác nhau, đặt quả nặng lên hai pit-tông và quan sát; không có trình tự bắt buộc.",
+    observations: (config.pedagogy.observationPrompts ?? []).map((prompt) => prompt.textVi),
+    observationPrompts: config.pedagogy.observationPrompts ?? [],
+    safety: { simulation: config.safetyBriefing.simulation, realLab: config.safetyBriefing.realLab, reagentNotes: [] },
+    limitations: config.limitations,
+    modality: "explore",
+    scored: false,
+    outcomeCodes: [],
+    sources: [{ kind: "technical_assumption", status: "unverified", description: "Mô hình áp suất chất lỏng (d = 10 000 N/m³, mức biến dạng màng) là giả định kỹ thuật, chờ reviewer Lý." }],
+    engine: config.engine,
+    kit: config.kit,
+    configVersion: config.configVersion,
+  };
+}
+
 /** Server bench registry (P0 C2.3): only benches listed here can be published or resolved. */
 export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
   "k2-wet-bench@1": {
@@ -114,6 +147,15 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
       return checked.ok ? deriveLeverEffectiveConfig(checked.config, selection) : { ok: false, errors: checked.errors };
     },
     activitySpec: leverBenchSpec,
+  },
+  [FLUID_KIT]: {
+    kit: FLUID_KIT,
+    modelRef: FLUID_ENGINE,
+    validate: (raw) => {
+      const result = validateFluidLabConfig(raw);
+      return result.ok ? { ok: true, config: result.config } : { ok: false, errors: result.errors };
+    },
+    activitySpec: fluidBenchSpec,
   },
 };
 
