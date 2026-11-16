@@ -204,3 +204,14 @@ Owner duyệt ngày 2026-11-16, chấp nhận cả sáu đề xuất.
 | F04-5 | Playwright `tests/fluid-pressure-explore.spec.ts` 4/4 (registry, G-02/G-03/G-06/G-08, thao tác bị chặn, nhật ký sau F5 và export, không `/lab-runs`, config một trạm, `pressureReading`, config sai, 2D/3D cùng trạng thái, reduced motion, 390 px) |
 
 Nhánh: BE `feat/dev1-fl04-liquid-pressure` (chồng lên `docs/dev1-fl04-explore-spec`, tức PR B của D1-3.1), FE `feat/dev1-fl04-liquid-pressure` (chồng lên PR B FE). Còn lại: merge PR A, PR B rồi PR này (BE và FE cùng lúc); owner seed trên DB cô lập, tự kiểm, rồi phát hành qua `publishExploreLab` (`topicCode: "KHTN8-L16"`) và kiểm chỉ-SELECT; xác nhận topic `KHTN8-L16` có trong DB; sửa dòng FL-04 trong catalog (bỏ `p = d·h`).
+
+## 14. Phát hành theo P0 C1.3 (cập nhật 2026-11-16)
+
+Chỉ có hai lối ghi, cả hai qua `publishExploreLab`:
+
+| | Lệnh | Ghi chú |
+|---|---|---|
+| Seed, DB cô lập | `npm run db:seed:explore -- --kit k3-fluid-bench@1` | `assertIsolatedDatabase()` chạy trước mọi lệnh ghi |
+| Phát hành, DB dùng chung | `npm run publish:fl04-explore` (dry run, ghi file request) rồi `npm run publish:fl04-explore -- --publish --reason "..."` với `NEXALAB_ADMIN_API_URL` và `NEXALAB_ADMIN_TOKEN` | Script `scripts/publish-explore.ts` gọi `POST /admin/labs/liquid-pressure/explore-versions` (ADMIN, Zod, audit); không ghi DB trực tiếp |
+
+Dry run trên `main` (2026-11-16): config hợp lệ với validator của bàn và schema request của Admin API. Topic `KHTN8-L16` chưa đối chiếu được vì máy không có `NEXA-LAB_Content tool/catalog-registry.json`; owner kiểm topic có trong DB trước khi `--publish`.
