@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Bản nháp, chờ owner duyệt** (Q-1 đến Q-7 ở §11). Chưa code |
+| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-7 như đề xuất. **Đã làm trên dev/fixture** (sim 1.23.0, BE+FE `feat/dev1-fl23-refraction`, Playwright 4/4, §12). Config `review.status: reviewed` (Q-7); **chưa phát hành**: cần merge để API dev có bàn `k6-optics-bench@1` |
 | Người viết | Dev 1 (Kit Vật lý), task D1-3.2 |
 | Cập nhật | 2026-11-16 |
 | Theo mẫu | [Mẫu spec áp dụng Explore](lab-explore-bench-spec-template.md) · cùng khuôn [FL-04](fl-04-liquid-pressure-explore-spec.md), [FL-08](fl-08-heat-transfer-explore-spec.md), [FL-24](fl-24-mechanical-energy-explore-spec.md) |
@@ -126,3 +126,13 @@ Nếu đồng ý cả bảy đề xuất, chỉ cần trả lời "duyệt".
 | Q-5 | Hiện số cho học sinh | Góc khúc xạ đọc trên đĩa luôn thấy. Cột `sin i`, `sin r`, tỉ số ẩn mặc định để học sinh tự tính; config bật được. Góc tới hạn chỉ hiện sau "Kiểm tra" |
 | Q-6 | 2D hay 3D làm cảnh chính | 2D là cảnh chính (đọc góc chính xác, đúng "2D-first" của catalog); 3D giảm sáng để quan sát |
 | Q-7 | Phát hành | Làm và nghiệm thu trên dev/fixture, rồi phát hành lên DB dev trên `KHTN9-CH02-T01` khi owner duyệt dữ liệu (như FL-24), **hoặc** chờ đối chiếu SGK KHTN 9. Đề xuất: theo cách của FL-24, ghi rõ "chưa đối chiếu SGK KHTN 9" trong `review.notes` |
+
+## 12. Kết quả nghiệm thu trên dev/fixture (2026-11-16)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Sim | `packages/sim/optics`: golden G-01..G-09, E-01..E-02, bảng đo (tối đa 6 lần mỗi khối, một dòng mỗi góc), kiểm tra góc tới hạn ±1°; validator (E-03, trạm và dụng cụ, Trạm 2 phải tới được phản xạ toàn phần với mọi khối). Sim 1.23.0 chỉ thêm 5 file `optics/` so với 1.22.0 |
+| BE | `EXPLORE_BENCHES["k6-optics-bench@1"]` + `refractionBenchSpec` (setup lấy môi trường và khoảng góc từ config), seed target `KHTN9-CH02-T01`, `npm run publish:fl23-explore`; dry run hợp lệ. Vitest `packages/sim` + `src/modules/labs` 665 passed, tsc sạch |
+| FE | `physics/optics/refraction/`: 2D đĩa chia độ là cảnh mặc định (`useLabRendererMode` có thêm tham số mặc định, các bàn khác giữ 3D), 3D đĩa trong hộp tối với tia laser theo độ sáng Fresnel, bảng đo, thẻ tốc độ, "Kiểm tra" góc tới hạn, nhật ký cục bộ. Unit 7/7; Playwright `refraction-explore` 4/4 |
+| Hồi quy FE | energy, fluid-pressure, heat-transfer, lever-explore, fl06-class-explore, explore-pinned-config, explore-lab-space, biology-explore-benches cùng FL-23: 39 passed; build OK |
+| Chưa làm | Phát hành (sau merge); đối chiếu SGK KHTN 9; Class Explore; lăng kính (v1.1) |

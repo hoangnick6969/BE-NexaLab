@@ -14,7 +14,7 @@ const fl16 = { ...envelope, labId: "fl-16-explore", catalogId: "FL-16", kit: "an
 
 describe("INC-3 benches in the server registry", () => {
   it("registers the three kits next to the existing benches", () => {
-    expect(Object.keys(EXPLORE_BENCHES)).toEqual(expect.arrayContaining(["anatomy", "k2-safety-scenario@1", "k2-wet-bench@1", "k3-fluid-bench@1", "k4-thermal-bench@1", "k5-energy-bench@1", "k5-lever-bench@1", "k7-molecular", "k8-diorama", "k8-garden"]));
+    expect(Object.keys(EXPLORE_BENCHES)).toEqual(expect.arrayContaining(["anatomy", "k2-safety-scenario@1", "k2-wet-bench@1", "k3-fluid-bench@1", "k4-thermal-bench@1", "k5-energy-bench@1", "k5-lever-bench@1", "k6-optics-bench@1", "k7-molecular", "k8-diorama", "k8-garden"]));
   });
 
   it("k8-diorama answers with the model of each Lab (food web for FL-21, tolerance for FL-20)", () => {
