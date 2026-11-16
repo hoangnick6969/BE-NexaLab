@@ -14,6 +14,8 @@ import { FL08_HEAT_TRANSFER_EXPLORE_CONFIG } from "../../../../packages/sim/ther
 import { loadThermalExploreTargets } from "../../../../scripts/thermal-explore-targets";
 import { FL24_ENERGY_EXPLORE_CONFIG } from "../../../../packages/sim/mechanics/energy";
 import { FL24_TOPIC_CODE, loadEnergyExploreTargets } from "../../../../scripts/energy-explore-targets";
+import { FL23_REFRACTION_EXPLORE_CONFIG } from "../../../../packages/sim/optics";
+import { FL23_TOPIC_CODE, loadOpticsExploreTargets } from "../../../../scripts/optics-explore-targets";
 
 vi.mock("../../../common/audit", () => ({ audit: vi.fn(), changedFields: vi.fn(() => ({})) }));
 
@@ -121,7 +123,7 @@ describe("publishExploreLab (P0 C1.3)", () => {
     await expect(publishExploreLab(db, input(guided))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
     await expect(publishExploreLab(db, input({ ...exploreConfig(), kit: "k9@1" }))).rejects.toMatchObject({ response: { code: "EXPLORE_KIT_UNSUPPORTED" } });
     expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
-    expect(Object.keys(EXPLORE_BENCHES)).toEqual(expect.arrayContaining(["anatomy", SAFETY_SCENARIO_KIT, "k2-wet-bench@1", "k3-fluid-bench@1", "k4-thermal-bench@1", "k5-energy-bench@1", "k5-lever-bench@1", "k7-molecular", "k8-diorama", "k8-garden"]));
+    expect(Object.keys(EXPLORE_BENCHES)).toEqual(expect.arrayContaining(["anatomy", SAFETY_SCENARIO_KIT, "k2-wet-bench@1", "k3-fluid-bench@1", "k4-thermal-bench@1", "k5-energy-bench@1", "k5-lever-bench@1", "k6-optics-bench@1", "k7-molecular", "k8-diorama", "k8-garden"]));
   });
 
   it("is ADMIN-only and validates the body against the route Lab", () => {
@@ -415,5 +417,43 @@ describe("publishExploreLab: wet-bench engine versions", () => {
     await expect(publishExploreLab(existing.db, input(solutionConfig()))).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
     const wrongEngine = fakeDb();
     await expect(publishExploreLab(wrongEngine.db, input({ ...solutionConfig(), engine: "wet-bench@1.0.0" }))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
+  });
+});
+
+describe("optics bench k6-optics-bench@1 (FL-23 Explore, D1-3.2)", () => {
+  const optics = (patch: object = {}) => ({ ...structuredClone(FL23_REFRACTION_EXPLORE_CONFIG), ...patch });
+  const opticsInput = (config: unknown) => ({ config, topicCode: "KHTN9-TEST", actor, reason: "test publish" });
+
+  it("validates the packaged config and builds a spec the Explore schema accepts, with setup text from the config", () => {
+    const bench = EXPLORE_BENCHES["k6-optics-bench@1"];
+    expect(bench.validate(optics()).ok).toBe(true);
+    const spec = exploreActivitySpecSchema.parse({ ...bench.activitySpec(optics()), explore: optics() });
+    expect(spec).toMatchObject({ modality: "explore", scored: false, engine: "refraction@1.0.0", kit: "k6-optics-bench@1", materials: { reagents: [] } });
+    expect(spec.materials.apparatus).toEqual(expect.arrayContaining([expect.objectContaining({ id: "block", media: ["Thuỷ tinh", "Nước"] })]));
+    expect(spec.setup).toContain("thuỷ tinh (n = 1,50), nước (n = 1,333)");
+    expect(spec.setup).toContain("góc tới 0–80°");
+    expect(spec.setup).toContain("Trạm 2");
+    const glassOnly = optics({ media: [FL23_REFRACTION_EXPLORE_CONFIG.media[0]], stations: ["into-block"], outOfBlock: undefined });
+    expect(bench.activitySpec(glassOnly).setup).not.toContain("Trạm 2");
+    expect(bench.deriveClass).toBeUndefined();
+  });
+
+  it("publishes light-refraction as a new Lab and pins the refraction model, separate from eye optics", async () => {
+    const { db, tx } = fakeDb();
+    const result = await publishExploreLab(db, opticsInput(optics()));
+    expect(result).toMatchObject({ activity: { key: "light-refraction-explore", version: 1 } });
+    expect(tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "refraction@1.0.0", config: { mode: "explore", kit: "k6-optics-bench@1" } });
+  });
+
+  it("rejects an invalid optics config before opening a transaction", async () => {
+    const { db, tx } = fakeDb();
+    await expect(publishExploreLab(db, opticsInput(optics({ outOfBlock: { maxIncidenceDeg: 40, criticalToleranceDeg: 1 } })))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
+    await expect(publishExploreLab(db, opticsInput(optics({ modes: { explore: true, guided: { rendererKey: "fl23" } } })))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
+    expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  it("seeds FL-23 on the KHTN 9 Ánh sáng topic with the owner-reviewed config", async () => {
+    expect(FL23_TOPIC_CODE).toBe("KHTN9-CH02-T01");
+    expect(await loadOpticsExploreTargets()).toEqual([{ config: expect.objectContaining({ labId: "light-refraction", kit: "k6-optics-bench@1", review: expect.objectContaining({ status: "reviewed" }) }), topicCode: FL23_TOPIC_CODE }]);
   });
 });

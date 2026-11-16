@@ -7,6 +7,7 @@ import { deriveLeverEffectiveConfig, LEVER_ENGINE, LEVER_KIT, validateLeverLabCo
 import { FLUID_ENGINE, FLUID_KIT, validateFluidLabConfig, type FluidLabConfig } from "../../../../packages/sim/fluid";
 import { CONDUCTIVITY_TABLE, THERMAL_ENGINE, THERMAL_KIT, validateThermalLabConfig, type ThermalLabConfig } from "../../../../packages/sim/thermal";
 import { ENERGY_ENGINE, ENERGY_KIT, validateEnergyLabConfig, type EnergyLabConfig } from "../../../../packages/sim/mechanics/energy";
+import { OPTICS_KIT, REFRACTION_ENGINE, validateRefractionLabConfig, type RefractionLabConfig } from "../../../../packages/sim/optics";
 import type { ExploreRequirement } from "../../../../packages/sim/explore/requirements";
 import { dioramaExploreSchema, fl16ExploreSchema, fl27ExploreSchema } from "../../../../packages/sim/explore-kits";
 import { fl26MendelConfigSchema, type Fl26MendelConfig } from "../../../../packages/sim/mendel-config";
@@ -341,6 +342,15 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
     },
     activitySpec: energyBenchSpec,
   },
+  [OPTICS_KIT]: {
+    kit: OPTICS_KIT,
+    modelRef: REFRACTION_ENGINE,
+    validate: (raw) => {
+      const result = validateRefractionLabConfig(raw);
+      return result.ok ? { ok: true, config: result.config } : { ok: false, errors: result.errors };
+    },
+    activitySpec: refractionBenchSpec,
+  },
   [SAFETY_SCENARIO_KIT]: {
     kit: SAFETY_SCENARIO_KIT,
     modelRef: SAFETY_SCENARIO_ENGINE,
@@ -383,6 +393,43 @@ function energyBenchSpec(config: EnergyLabConfig) {
     sources: [
       { kind: "curriculum", status: "verified", description: "Yêu cầu cần đạt KHTN 9 (chương trình 2018), chủ đề Năng lượng cơ học 1–6." },
       { kind: "technical_assumption", status: "unverified", description: "Quy ước P = 10·m (theo SGK KHTN 8), con lắc không ma sát và tốc độ hai động cơ là giả định kỹ thuật; owner duyệt 2026-11-16, chưa đối chiếu SGK KHTN 9." },
+    ],
+    engine: config.engine,
+    kit: config.kit,
+    configVersion: config.configVersion,
+  };
+}
+
+/** Station setup text from the config (media, angle ranges), like energyStationSetup. */
+function refractionStationSetup(config: RefractionLabConfig, station: RefractionLabConfig["stations"][number]) {
+  const media = config.media.map((medium) => `${medium.labelVi.toLowerCase()} (n = ${(medium.indexMilli / 1000).toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 3 })})`).join(", ");
+  if (station === "into-block") return `Trạm 1: tia sáng từ không khí tới tâm mặt phẳng của khối bán trụ ${media} trên đĩa chia độ, góc tới 0–${config.intoBlock?.maxIncidenceDeg ?? 0}°; bảng đo i, r và thẻ tốc độ v = c/n.`;
+  return `Trạm 2: tia sáng đi theo bán kính trong khối rồi ló ra không khí, góc tới 0–${config.outOfBlock?.maxIncidenceDeg ?? 0}°; tìm góc tới hạn của phản xạ toàn phần.`;
+}
+
+function refractionBenchSpec(config: RefractionLabConfig) {
+  return {
+    objective: config.outcomeSummary.join(" "),
+    outcomes: config.outcomeSummary,
+    materials: {
+      reagents: [],
+      apparatus: config.enabledApparatus.map((item) => ({
+        id: item.id, kind: item.kind, label: item.labelVi ?? item.kind,
+        ...(item.kind === "half_cylinder" ? { media: config.media.map((medium) => medium.labelVi) } : {}),
+      })),
+    },
+    setup: `Bàn quang học K6. ${config.stations.map((station) => refractionStationSetup(config, station)).join(" ")}`,
+    procedure: "Khám phá tự do: học sinh chọn khối và hướng chiếu, đổi góc tới, đọc góc khúc xạ trên đĩa và ghi bảng đo; ở trạm 2 tăng dần góc tới để tìm góc tới hạn; không có trình tự bắt buộc.",
+    observations: (config.pedagogy.observationPrompts ?? []).map((prompt) => prompt.textVi),
+    observationPrompts: config.pedagogy.observationPrompts ?? [],
+    safety: { simulation: config.safetyBriefing.simulation, realLab: config.safetyBriefing.realLab, reagentNotes: [] },
+    limitations: config.limitations,
+    modality: "explore",
+    scored: false,
+    outcomeCodes: [],
+    sources: [
+      { kind: "curriculum", status: "verified", description: "Yêu cầu cần đạt KHTN 9 (chương trình 2018), chủ đề Ánh sáng 1–3." },
+      { kind: "technical_assumption", status: "unverified", description: "Chiết suất (nước 1,333, thuỷ tinh 1,500, không khí 1), c = 300 000 km/s và bố trí đĩa chia độ với khối bán trụ là giả định kỹ thuật; owner duyệt 2026-11-16, chưa đối chiếu SGK KHTN 9." },
     ],
     engine: config.engine,
     kit: config.kit,
