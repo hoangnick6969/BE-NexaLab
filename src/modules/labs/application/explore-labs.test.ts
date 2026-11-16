@@ -285,6 +285,12 @@ describe("mechanical energy bench k5-energy-bench@1 (FL-24 Explore, D1-3.2)", ()
     expect(spec.materials.apparatus).toEqual(expect.arrayContaining([expect.objectContaining({ id: "hoist", motors: ["Động cơ chậm", "Động cơ nhanh"] })]));
     expect(spec.setup).toContain("Trạm 1");
     expect(spec.setup).toContain("Trạm 2");
+    expect(spec.setup).toContain("quả nặng 100–500 g");
+    expect(spec.setup).toContain("bằng động cơ chậm và động cơ nhanh");
+    // The setup text follows the config, not a fixed range.
+    const narrow = energy({ pendulum: { ...FL24_ENERGY_EXPLORE_CONFIG.pendulum!, massesG: [200, 300] }, hoist: { ...FL24_ENERGY_EXPLORE_CONFIG.hoist!, motors: [FL24_ENERGY_EXPLORE_CONFIG.hoist!.motors[1]] } });
+    expect(bench.activitySpec(narrow).setup).toContain("quả nặng 200–300 g");
+    expect(bench.activitySpec(narrow).setup).toContain("bằng động cơ nhanh;");
     expect(bench.deriveClass).toBeUndefined();
   });
 
@@ -304,8 +310,8 @@ describe("mechanical energy bench k5-energy-bench@1 (FL-24 Explore, D1-3.2)", ()
     expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
   });
 
-  it("seeds FL-24 through the energy bench targets on a placeholder KHTN 9 topic (Q-5)", async () => {
-    expect(await loadEnergyExploreTargets()).toEqual([{ config: expect.objectContaining({ labId: "mechanical-energy", kit: "k5-energy-bench@1" }), topicCode: FL24_TOPIC_CODE_PLACEHOLDER }]);
+  it("seeds FL-24 through the energy bench targets on a placeholder KHTN 9 topic, blocked from publishing until Q-6", async () => {
+    expect(await loadEnergyExploreTargets()).toEqual([{ config: expect.objectContaining({ labId: "mechanical-energy", kit: "k5-energy-bench@1" }), topicCode: FL24_TOPIC_CODE_PLACEHOLDER, publishBlocked: expect.stringContaining("Q-6") }]);
   });
 });
 

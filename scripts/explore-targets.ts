@@ -11,7 +11,8 @@ import { loadThermalExploreTargets } from "./thermal-explore-targets";
 import { ENERGY_KIT } from "../packages/sim/mechanics/energy/contracts";
 import { loadEnergyExploreTargets } from "./energy-explore-targets";
 
-export type ExploreTarget = { config: { labId: string; kit: string } & Record<string, unknown>; topicCode: string };
+/** `publishBlocked` holds the reason a target must not be published yet (owner decision pending); the publish script refuses it. */
+export type ExploreTarget = { config: { labId: string; kit: string } & Record<string, unknown>; topicCode: string; publishBlocked?: string };
 
 export const EXPLORE_TARGETS: ReadonlyMap<string, () => Promise<ExploreTarget[]>> = new Map<string, () => Promise<ExploreTarget[]>>([
   [SAFETY_SCENARIO_KIT, loadSafetyScenarioTargets],

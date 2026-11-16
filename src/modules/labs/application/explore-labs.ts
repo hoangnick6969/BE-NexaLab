@@ -349,10 +349,15 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
   },
 };
 
-const ENERGY_STATION_SETUP = {
-  pendulum: "Trạm 1: con lắc đơn, quả nặng 100–500 g thả từ độ cao h₀ so với điểm thấp nhất; thanh năng lượng Wđ, Wt, W tại năm mốc của một lần dao động.",
-  hoist: "Trạm 2: tời kéo vật thẳng đứng với hai động cơ nhanh và chậm; lực kế, thước và đồng hồ để đọc F, s, t.",
-} as const;
+/** Station setup text from the config itself (masses, motors), so a teacher-facing spec never states a range the bench does not offer. */
+function energyStationSetup(config: EnergyLabConfig, station: EnergyLabConfig["stations"][number]) {
+  if (station === "pendulum") {
+    const masses = config.pendulum ? `${Math.min(...config.pendulum.massesG)}–${Math.max(...config.pendulum.massesG)} g` : "";
+    return `Trạm 1: con lắc đơn, quả nặng ${masses} thả từ độ cao h₀ so với điểm thấp nhất; thanh năng lượng Wđ, Wt, W tại năm mốc của một lần dao động.`;
+  }
+  const motors = config.hoist?.motors.map((motor) => motor.labelVi.toLowerCase()).join(" và ") ?? "";
+  return `Trạm 2: tời kéo vật thẳng đứng bằng ${motors}; lực kế, thước và đồng hồ để đọc F, s, t.`;
+}
 
 function energyBenchSpec(config: EnergyLabConfig) {
   return {
@@ -366,7 +371,7 @@ function energyBenchSpec(config: EnergyLabConfig) {
         ...(item.kind === "hoist" && config.hoist ? { massesG: config.hoist.massesG, motors: config.hoist.motors.map((motor) => motor.labelVi) } : {}),
       })),
     },
-    setup: `Bàn năng lượng cơ học K5. ${config.stations.map((station) => ENERGY_STATION_SETUP[station]).join(" ")}`,
+    setup: `Bàn năng lượng cơ học K5. ${config.stations.map((station) => energyStationSetup(config, station)).join(" ")}`,
     procedure: "Khám phá tự do: học sinh chọn quả nặng và độ cao thả, xem con lắc ở từng mốc; chọn vật, quãng đường và động cơ của tời rồi tự tính công và công suất; không có trình tự bắt buộc.",
     observations: (config.pedagogy.observationPrompts ?? []).map((prompt) => prompt.textVi),
     observationPrompts: config.pedagogy.observationPrompts ?? [],
