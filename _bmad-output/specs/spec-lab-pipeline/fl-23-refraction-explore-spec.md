@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-7 như đề xuất. **Đã làm trên dev/fixture** (sim 1.23.0, BE+FE `feat/dev1-fl23-refraction`, Playwright 4/4, §12). Config `review.status: reviewed` (Q-7); **chưa phát hành**: cần merge để API dev có bàn `k6-optics-bench@1` |
+| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-7 như đề xuất. **Đã làm trên dev/fixture** (sim 1.23.0, BE+FE `feat/dev1-fl23-refraction`, Playwright 4/4, §12). Config `review.status: reviewed` (Q-7). **Đã merge** (BE PR #100, FE PR #84) và **đã phát hành lên DB dev 2026-11-16** (`light-refraction`, topic `KHTN9-CH02-T01`, Admin API, 201) |
 | Người viết | Dev 1 (Kit Vật lý), task D1-3.2 |
 | Cập nhật | 2026-11-16 |
 | Theo mẫu | [Mẫu spec áp dụng Explore](lab-explore-bench-spec-template.md) · cùng khuôn [FL-04](fl-04-liquid-pressure-explore-spec.md), [FL-08](fl-08-heat-transfer-explore-spec.md), [FL-24](fl-24-mechanical-energy-explore-spec.md) |
@@ -135,4 +135,5 @@ Nếu đồng ý cả bảy đề xuất, chỉ cần trả lời "duyệt".
 | BE | `EXPLORE_BENCHES["k6-optics-bench@1"]` + `refractionBenchSpec` (setup lấy môi trường và khoảng góc từ config), seed target `KHTN9-CH02-T01`, `npm run publish:fl23-explore`; dry run hợp lệ. Vitest `packages/sim` + `src/modules/labs` 665 passed, tsc sạch |
 | FE | `physics/optics/refraction/`: 2D đĩa chia độ là cảnh mặc định (`useLabRendererMode` có thêm tham số mặc định, các bàn khác giữ 3D), 3D đĩa trong hộp tối với tia laser theo độ sáng Fresnel, bảng đo, thẻ tốc độ, "Kiểm tra" góc tới hạn, nhật ký cục bộ. Unit 7/7; Playwright `refraction-explore` 4/4 |
 | Hồi quy FE | energy, fluid-pressure, heat-transfer, lever-explore, fl06-class-explore, explore-pinned-config, explore-lab-space, biology-explore-benches cùng FL-23: 39 passed; build OK |
-| Chưa làm | Phát hành (sau merge); đối chiếu SGK KHTN 9; Class Explore; lăng kính (v1.1) |
+| Phát hành (2026-11-16) | `npm run publish:fl23-explore -- --publish` từ `main` qua API dev: 201, activity `light-refraction-explore` v1. `GET /labs` của admin và `student.active` có `light-refraction`, `explore.ok: true`, `review.status: reviewed`. Trình duyệt thật với `student.active` (FE `main`): mở 2D mặc định, G-02 r = 19,5°, Trạm 2 ở 42° phản xạ toàn phần, không có thông báo giả định, không gọi API run |
+| Chưa làm | Đối chiếu SGK KHTN 9; Class Explore; lăng kính và tán sắc (v1.1, Q-1); Lab thấu kính (spec riêng) |
