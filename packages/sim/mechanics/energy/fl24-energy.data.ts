@@ -58,5 +58,5 @@ export const FL24_ENERGY_EXPLORE_CONFIG: EnergyLabConfig = {
       { id: "power", kind: "free_text", textVi: "Cùng vật và quãng đường, hai động cơ có thực hiện cùng một công không? Động cơ nào có công suất lớn hơn?", challenge: true },
     ],
   },
-  review: { status: "draft", notes: "Quy ước P = 10·m và cách trình bày chờ đối chiếu SGK KHTN 9 và reviewer Lý." },
+  review: { status: "reviewed", notes: "Owner duyệt dữ liệu và cho phát hành 2026-11-16 (Q-6 bỏ chờ): P = 10·m theo SGK KHTN 8, chưa đối chiếu SGK KHTN 9; tốc độ hai động cơ là giả định kỹ thuật." },
 };

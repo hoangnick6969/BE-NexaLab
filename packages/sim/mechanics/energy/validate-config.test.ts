@@ -8,8 +8,14 @@ const errorsOf = (raw: unknown) => {
 };
 
 describe("validateEnergyLabConfig", () => {
-  it("accepts the packaged FL-24 config with the draft warning only", () => {
+  it("accepts the packaged FL-24 config, owner-reviewed, without warnings", () => {
     const result = validateEnergyLabConfig(base);
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("warns while a config is still a draft", () => {
+    const result = validateEnergyLabConfig({ ...base, review: { status: "draft" } });
     expect(result.ok).toBe(true);
     expect(result.warnings).toEqual([expect.stringContaining("review.status: draft")]);
   });
