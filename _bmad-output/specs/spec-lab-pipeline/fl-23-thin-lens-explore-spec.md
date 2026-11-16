@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Bản nháp, chờ owner duyệt** (Q-1 đến Q-8 ở §11). Chưa code |
+| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-8 như đề xuất (CAT-5: chỉ dựng hình, công thức sau cờ config). **Đã làm trên dev/fixture** (sim 1.25.0, BE+FE `feat/dev1-fl23-lens`, §12); config `reviewed`, phát hành sau khi merge |
 | Người viết | Dev 1 (Kit Vật lý), task D1-3.2 |
 | Cập nhật | 2026-11-16 |
 | Theo mẫu | [Mẫu spec áp dụng Explore](lab-explore-bench-spec-template.md) · cùng khuôn [FL-23 khúc xạ](fl-23-refraction-explore-spec.md), [FL-24](fl-24-mechanical-energy-explore-spec.md) |
@@ -135,3 +135,12 @@ Nếu đồng ý cả tám đề xuất, chỉ cần trả lời "duyệt".
 | Q-6 | Phương pháp đo tiêu cự | Vật và màn đối xứng, ảnh nét và bằng vật thì f = L/4; tiêu cự của thấu kính đo được ẩn |
 | Q-7 | Kính lúp | Ghi số bội giác G = 25/f (f tính bằng cm), không yêu cầu học sinh tính G |
 | Q-8 | Phát hành | Như FL-23 và FL-24: owner duyệt dữ liệu thì `reviewed` với ghi chú "chưa đối chiếu SGK KHTN 9", phát hành sau khi merge |
+
+## 12. Kết quả nghiệm thu trên dev/fixture (2026-11-16)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Sim | `packages/sim/optics/lens`: `imageOf`, `blurRadiusMm`, `magnifierPower`, `evaluateRays/Image/Focal/Magnifier`; validator (thấu kính hội tụ và 2f với tới được cho trạm đo tiêu cự, kính lúp hội tụ và đặt được trong tiêu cự, dụng cụ theo trạm). Golden L-01..L-08, E-01..E-03; 17 test. Sim 1.25.0 chỉ thêm 5 file `optics/lens/` |
+| BE | `EXPLORE_BENCHES["k6-lens-bench@1"]` + `lensBenchSpec` (setup từ config, công thức chỉ khi bật cờ), seed target `KHTN9-CH02-T01`, `npm run publish:fl23-lens-explore`; không bật `allowModelUpgrade`. Vitest `packages/sim` + `src/modules/labs` 698 passed; dry run hợp lệ |
+| FE | `physics/optics/lens/`: 2D giá quang học với lưới tỉ lệ thật (1 ô = 10 mm), bốn trạm (tia đặc biệt sau dự đoán; dựng ảnh bằng hai trong ba tia, tính chất ảnh, kiểm tra d′ và h′ ±5 mm; đo tiêu cự với thấu kính ẩn tên A/B; kính lúp với ô nhìn qua kính và G); 3D giá quang học trong hộp tối. Unit 6/6 (giao điểm hai tia bất kỳ trùng ảnh của công thức); Playwright `lens-explore` 4/4 |
+| Chưa làm | Phát hành (sau merge); đối chiếu SGK KHTN 9; Class Explore |

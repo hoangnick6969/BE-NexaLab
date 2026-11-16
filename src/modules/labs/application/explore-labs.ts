@@ -8,6 +8,7 @@ import { FLUID_ENGINE, FLUID_KIT, validateFluidLabConfig, type FluidLabConfig } 
 import { CONDUCTIVITY_TABLE, THERMAL_ENGINE, THERMAL_KIT, validateThermalLabConfig, type ThermalLabConfig } from "../../../../packages/sim/thermal";
 import { ENERGY_ENGINE, ENERGY_KIT, validateEnergyLabConfig, type EnergyLabConfig } from "../../../../packages/sim/mechanics/energy";
 import { OPTICS_KIT, REFRACTION_ENGINE, validateRefractionLabConfig, type RefractionLabConfig } from "../../../../packages/sim/optics";
+import { LENS_ENGINE, LENS_KIT, validateLensLabConfig, type LensLabConfig } from "../../../../packages/sim/optics/lens";
 import type { ExploreRequirement } from "../../../../packages/sim/explore/requirements";
 import { dioramaExploreSchema, fl16ExploreSchema, fl27ExploreSchema } from "../../../../packages/sim/explore-kits";
 import { fl26MendelConfigSchema, type Fl26MendelConfig } from "../../../../packages/sim/mendel-config";
@@ -359,6 +360,15 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
     },
     activitySpec: refractionBenchSpec,
   },
+  [LENS_KIT]: {
+    kit: LENS_KIT,
+    modelRef: LENS_ENGINE,
+    validate: (raw) => {
+      const result = validateLensLabConfig(raw);
+      return result.ok ? { ok: true, config: result.config } : { ok: false, errors: result.errors };
+    },
+    activitySpec: lensBenchSpec,
+  },
   [SAFETY_SCENARIO_KIT]: {
     kit: SAFETY_SCENARIO_KIT,
     modelRef: SAFETY_SCENARIO_ENGINE,
@@ -461,6 +471,45 @@ function refractionBenchSpec(config: RefractionLabConfig) {
     sources: [
       { kind: "curriculum", status: "verified", description: `Yêu cầu cần đạt KHTN 9 (chương trình 2018), chủ đề Ánh sáng ${config.stations.includes("prism") ? "1–5" : "1–3"}.` },
       { kind: "technical_assumption", status: "unverified", description: "Chiết suất (nước 1,333, thuỷ tinh 1,500, không khí 1, chiết suất theo màu minh hoạ), c = 300 000 km/s, lăng kính đều 60° và bố trí đĩa chia độ là giả định kỹ thuật; owner duyệt 2026-11-16, chưa đối chiếu SGK KHTN 9." },
+    ],
+    engine: config.engine,
+    kit: config.kit,
+    configVersion: config.configVersion,
+  };
+}
+
+/** Station setup text from the config (lenses, distance ranges), like refractionStationSetup. */
+function lensStationSetup(config: LensLabConfig, station: LensLabConfig["stations"][number]) {
+  const names = (ids: readonly string[] | undefined) => (ids ?? []).map((id) => config.lenses.find((lens) => lens.id === id)?.labelVi.toLowerCase() ?? id).join(", ");
+  if (station === "rays") return `Trạm 1: ba tia sáng đặc biệt qua ${names(config.rays?.lensIds)}; quang tâm, trục chính, tiêu điểm, tiêu cự.`;
+  if (station === "image") return `Trạm 2: dựng ảnh của vật cao ${config.image?.objectHeightMm ?? 0} mm đặt cách thấu kính ${config.image?.minDistanceMm ?? 0}–${config.image?.maxDistanceMm ?? 0} mm (${names(config.image?.lensIds)}); đọc d′, h′ trên lưới tỉ lệ${config.display.lensFormula ? ", kèm công thức 1/f = 1/d + 1/d′" : ""}.`;
+  if (station === "focal") return `Trạm 3: đo tiêu cự thấu kính hội tụ chưa biết bằng vật và màn đối xứng (ảnh rõ nét và bằng vật thì f = L/4).`;
+  return `Trạm 4: kính lúp (${names(config.magnifier?.lensIds)}), vật trong khoảng tiêu cự cho ảnh ảo lớn hơn vật; số bội giác G = 25/f.`;
+}
+
+function lensBenchSpec(config: LensLabConfig) {
+  return {
+    objective: config.outcomeSummary.join(" "),
+    outcomes: config.outcomeSummary,
+    materials: {
+      reagents: [],
+      apparatus: config.enabledApparatus.map((item) => ({
+        id: item.id, kind: item.kind, label: item.labelVi ?? item.kind,
+        ...(item.kind === "lens" ? { focalLengthsMm: config.lenses.map((lens) => lens.focalMm) } : {}),
+      })),
+    },
+    setup: `Bàn thấu kính K6, giá quang học có thước. ${config.stations.map((station) => lensStationSetup(config, station)).join(" ")}`,
+    procedure: "Khám phá tự do: học sinh dự đoán rồi xem tia ló, dựng ảnh và đọc số trên lưới, dịch vật và màn để đo tiêu cự, dùng kính lúp; không có trình tự bắt buộc.",
+    observations: (config.pedagogy.observationPrompts ?? []).map((prompt) => prompt.textVi),
+    observationPrompts: config.pedagogy.observationPrompts ?? [],
+    safety: { simulation: config.safetyBriefing.simulation, realLab: config.safetyBriefing.realLab, reagentNotes: [] },
+    limitations: config.limitations,
+    modality: "explore",
+    scored: false,
+    outcomeCodes: [],
+    sources: [
+      { kind: "curriculum", status: "verified", description: "Yêu cầu cần đạt KHTN 9 (chương trình 2018), chủ đề Ánh sáng 6–10." },
+      { kind: "technical_assumption", status: "unverified", description: "Bộ thấu kính, phương pháp đo tiêu cự (vật và màn đối xứng), quy ước dấu và G = 25/f là giả định kỹ thuật; owner duyệt 2026-11-16, chưa đối chiếu SGK KHTN 9." },
     ],
     engine: config.engine,
     kit: config.kit,
