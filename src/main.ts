@@ -3,6 +3,7 @@ import "dotenv/config";
 import { NestFactory } from "@nestjs/core";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import helmet from "helmet";
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import express from "express";
 import { AppModule } from "./app.module";
@@ -21,6 +22,9 @@ async function bootstrap() {
   app.use(express.json({ limit: "3mb" }));
   app.use(express.urlencoded({ extended: true, limit: "100kb" }));
   app.use(helmet());
+  // Perf review 2026-11-16 item 8: gzip JSON responses (GET /api/labs is ~85 KB raw). Skips small bodies (threshold 1 KB) and
+  // anything already marked no-transform; Server-Sent Events are not used by this API.
+  app.use(compression({ threshold: 1024 }));
   app.use(cookieParser());
   const configuredOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:5173")
     .split(",")
