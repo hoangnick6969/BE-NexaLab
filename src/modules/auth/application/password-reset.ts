@@ -2,6 +2,7 @@ import { BadRequestException } from "@nestjs/common";
 import * as argon from "argon2";
 import { hashToken, token } from "../interface/auth";
 import type { Deliver } from "../../mail/infrastructure/mail";
+import { forgetUser } from "../interface/session-cache";
 
 /** C2-T4 / D12: adult password reset by a one-time link. */
 export const RESET_TTL_MS = 60 * 60 * 1000;
@@ -73,5 +74,6 @@ export async function completePasswordReset(db: any, rawToken: string, password:
       data: { passwordHash, mustChangePassword: false, temporaryPasswordExpiresAt: null },
     });
     await tx.session.deleteMany({ where: { userId: session.userId } });
-  });
+    return session.userId as string;
+  }).then((userId: string) => forgetUser(userId));
 }
