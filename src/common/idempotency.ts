@@ -1,3 +1,4 @@
+import { jwtSecret } from "./jwt-secret";
 import { BadRequestException, ConflictException } from "@nestjs/common";
 import { createHmac } from "node:crypto";
 
@@ -40,7 +41,7 @@ export function stableStringify(value: unknown): string {
 
 /** Keyed so a stored request hash cannot be used to guess a submitted secret. */
 export function requestHash(scope: string, payload: unknown) {
-  const secret = process.env.JWT_SECRET ?? "nexalab-development-only";
+  const secret = jwtSecret();
   return createHmac("sha256", secret).update(scope + "\n" + stableStringify(payload)).digest("hex");
 }
 

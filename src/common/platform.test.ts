@@ -14,6 +14,9 @@ import {
 } from "../modules/classes/application/join-code";
 import { targetHash } from "../modules/classes/application/class-access";
 
+// Idempotency keys are HMACs: the tests set their own secret (production code no longer falls back to a known one).
+process.env.JWT_SECRET ??= "platform-test-only-secret";
+
 const env = { JWT_SECRET: "x".repeat(40) } as NodeJS.ProcessEnv;
 
 describe("audit allowlist and redaction (B0P-T2)", () => {

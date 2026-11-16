@@ -14,7 +14,7 @@ import { deadlineStates } from "../../classes/application/assignment-test-state"
 import { DEADLINE_CONTENT_TYPES } from "../../classes/application/assignment-written-contract";
 import { notify } from "../../notifications/application/notify";
 import { overdueNotice } from "../../notifications/application/time-based-notices";
-import { PARENT_CONSENT_HASH, PARENT_CONSENT_VERSION, parentCode, parentCodeHash } from "../application/parent-codes";
+import { parentConsentHash, PARENT_CONSENT_VERSION, parentCode, parentCodeHash } from "../application/parent-codes";
 import { summarizeHelpSeeking } from "../application/help-seeking";
 import { approvePendingLinks, confirmEmailVerification, issueEmailVerification, linkPrerequisites } from "../application/parent-links";
 
@@ -57,11 +57,11 @@ export class ParentsController {
     return confirmEmailVerification(this.db, b.token);
   }
   @Roles("PARENT") @Get("auth/consents/parent-child-progress") parentConsentTerms() {
-    return { purpose: "PARENT_CHILD_PROGRESS", version: PARENT_CONSENT_VERSION, contentHash: PARENT_CONSENT_HASH };
+    return { purpose: "PARENT_CHILD_PROGRESS", version: PARENT_CONSENT_VERSION, contentHash: parentConsentHash() };
   }
   @Roles("PARENT") @Post("auth/consents") async acceptParentConsent(@Req() req: any, @Body() body: unknown) {
     const b = z.object({ purpose: z.literal("PARENT_CHILD_PROGRESS"), version: z.string().min(1), contentHash: z.string().min(1) }).parse(body);
-    if (b.version !== PARENT_CONSENT_VERSION || (b.contentHash !== PARENT_CONSENT_HASH && !(process.env.NODE_ENV !== "production" && b.contentHash === "dev"))) throw new BadRequestException("Phiên bản đồng ý không hợp lệ");
+    if (b.version !== PARENT_CONSENT_VERSION || (b.contentHash !== parentConsentHash() && !(process.env.NODE_ENV !== "production" && b.contentHash === "dev"))) throw new BadRequestException("Phiên bản đồng ý không hợp lệ");
     // Pending links are approved only when the email is verified as well (C1 SPEC).
     return this.db.$transaction(async (tx) => {
       const consent = await tx.parentConsent.create({ data: { userId: req.user.sub, purpose: b.purpose, version: b.version, contentHash: b.contentHash, actorId: req.user.sub } });

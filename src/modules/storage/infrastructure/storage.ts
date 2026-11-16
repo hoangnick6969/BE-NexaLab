@@ -1,3 +1,4 @@
+import { jwtSecret } from "../../../common/jwt-secret";
 import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
@@ -163,7 +164,7 @@ class S3Storage implements ObjectStorage {
 // ───────────────────────── local (development/test) ─────────────────────────
 type LocalGrant = { op: "put" | "get" | "part"; key: string; exp: number; ct?: string; uploadId?: string; part?: number; name?: string };
 const localSecret = () =>
-  createHmac("sha256", process.env.JWT_SECRET ?? "dev")
+  createHmac("sha256", jwtSecret())
     .update("nexalab:local-storage")
     .digest();
 export function signLocalGrant(grant: LocalGrant) {

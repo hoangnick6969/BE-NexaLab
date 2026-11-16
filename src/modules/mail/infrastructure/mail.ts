@@ -11,7 +11,9 @@ export const smtpDeliver: Deliver = async (mail) => {
   await createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT ?? 1025),
-    secure: false,
+    // Mailpit in development speaks plain SMTP; production must use TLS (implicit with SMTP_SECURE=true / port 465, otherwise STARTTLS is required).
+    secure: process.env.SMTP_SECURE === "true" || Number(process.env.SMTP_PORT) === 465,
+    requireTLS: process.env.NODE_ENV === "production" || process.env.APP_ENV === "production",
     ...(process.env.SMTP_USER ? { auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD } } : {}),
   }).sendMail({ from: process.env.SMTP_FROM, ...mail });
 };
