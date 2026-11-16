@@ -11,6 +11,7 @@ import { smtpDeliver } from "../../mail/infrastructure/mail";
 import { issueEmailVerification } from "../../parents/application/parent-links";
 import { RequestRateLimiter } from "../../../common/request-rate-limiter";
 import { email, password, text, username } from "../../../common/validation";
+import { forgetSession, forgetUser } from "./session-cache";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
@@ -134,6 +135,7 @@ export class AuthController {
     )
       throw new UnauthorizedException();
     const deleted = await this.db.session.deleteMany({ where: { id: s.id } });
+    forgetSession(s.id);
     if (!deleted.count) throw new UnauthorizedException();
     return this.session(s.user, res, s.remember);
   }
@@ -141,9 +143,10 @@ export class AuthController {
     @Req() req: any,
     @Res({ passthrough: true }) res: any,
   ) {
-    await this.db.session.deleteMany({
-      where: { tokenHash: hashToken(req.cookies.refresh ?? "") },
-    });
+    const tokenHash = hashToken(req.cookies.refresh ?? "");
+    const ending = await this.db.session.findUnique({ where: { tokenHash }, select: { id: true } });
+    await this.db.session.deleteMany({ where: { tokenHash } });
+    if (ending) forgetSession(ending.id);
     res.clearCookie("refresh", { path: "/api/auth" });
     return { ok: true };
   }
@@ -177,6 +180,7 @@ export class AuthController {
       }),
       this.db.session.deleteMany({ where: { userId: u.id } }),
     ]);
+    forgetUser(u.id);
     const refreshedUser = await this.db.user.findUniqueOrThrow({
       where: { id: u.id },
     });

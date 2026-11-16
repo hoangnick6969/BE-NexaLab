@@ -10,6 +10,7 @@ import { Reflector } from "@nestjs/core";
 import { Db } from "../../../db/db";
 import { verify, sign } from "jsonwebtoken";
 import { createHash, randomBytes } from "node:crypto";
+import { readSession, rememberSession } from "./session-cache";
 export const hashToken = (s: string) =>
   createHash("sha256").update(s).digest("hex");
 export const token = () => randomBytes(32).toString("hex");
@@ -53,25 +54,28 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException("Vui lòng đăng nhập lại");
     }
     if (typeof req.user.sid !== "string") throw new UnauthorizedException();
-    const session = await this.db.session.findFirst({
-      where: {
-        id: req.user.sid,
-        userId: req.user.sub,
-        kind: "refresh",
-        expiresAt: { gt: new Date() },
-      },
-      select: {
-        user: {
-          select: { role: true, status: true, mustChangePassword: true, grade: true },
+    // One round trip for the session and its owner, cached per session id for a few seconds (session-cache.ts).
+    let user = readSession(req.user.sid, req.user.sub);
+    if (!user) {
+      const session = await this.db.session.findFirst({
+        where: {
+          id: req.user.sid,
+          userId: req.user.sub,
+          kind: "refresh",
+          expiresAt: { gt: new Date() },
         },
-      },
-    });
-    if (!session)
-      throw new UnauthorizedException("Phiên đã hết hạn hoặc bị thu hồi");
-    // Fetch the session and its owner in one database round trip. This keeps
-    // revocation/status checks authoritative while avoiding a second remote
-    // query on every authenticated request.
-    const user = session.user;
+        select: {
+          expiresAt: true,
+          user: {
+            select: { role: true, status: true, mustChangePassword: true, grade: true },
+          },
+        },
+      });
+      if (!session)
+        throw new UnauthorizedException("Phiên đã hết hạn hoặc bị thu hồi");
+      user = session.user;
+      rememberSession(req.user.sid, req.user.sub, session.user, session.expiresAt);
+    }
     if (user.status !== "active")
       throw new UnauthorizedException("Tài khoản đã bị khóa");
     req.user.role = user.role;

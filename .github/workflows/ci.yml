@@ -19,6 +19,10 @@ jobs:
       JWT_SECRET: ci-only-secret-not-for-production-0123456789
       SEED_PASSWORD: IntegrationPassword2026!
       WEB_ORIGIN: http://localhost:5173
+      # The integration scripts write rows directly and read them back at once; the short-TTL caches (perf review items
+      # 10, 11) are covered by unit tests and turned off for the API they run against.
+      SESSION_CACHE_TTL_MS: "0"
+      CATALOG_CACHE_TTL_MS: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

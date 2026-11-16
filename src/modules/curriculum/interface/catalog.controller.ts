@@ -5,19 +5,24 @@ import { Controller, Get, Inject, Param, Req } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../../common/decorators";
 import { Db } from "../../../db/db";
+import { sharedCached } from "../../../common/shared-cache";
 
 @ApiTags("NexaLab")
 @ApiBearerAuth()
 @Controller()
 export class CatalogController {
   constructor(@Inject(Db) private db: Db) {}
+  // Both responses are identical for every caller, so they are served from the shared cache (perf review item 11).
   @Get("subjects") subjects() {
-    return this.db.subject.findMany({
+    return sharedCached("catalog:subjects", () => this.db.subject.findMany({
       include: { ebookEditions: { orderBy: [{ version: "asc" }, { id: "asc" }] } },
-    });
+    }));
   }
   @Roles("STUDENT")
-  @Get("open-curriculum") async openCurriculum() {
+  @Get("open-curriculum") openCurriculum() {
+    return sharedCached("catalog:open-curriculum", () => this.loadOpenCurriculum());
+  }
+  private async loadOpenCurriculum() {
     const rawLessons = await this.db.lesson.findMany({
       where: {
         status: "published", scope: "SHARED_LIBRARY", synthetic: false,

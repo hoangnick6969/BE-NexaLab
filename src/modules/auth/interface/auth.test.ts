@@ -35,7 +35,7 @@ describe("AuthGuard", () => {
     expect(findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ id: "session-1", userId: "student-1", kind: "refresh" }),
-        select: { user: { select: { role: true, status: true, mustChangePassword: true, grade: true } } },
+        select: { expiresAt: true, user: { select: { role: true, status: true, mustChangePassword: true, grade: true } } },
       }),
     );
     expect(request.user.role).toBe("STUDENT");

@@ -12,6 +12,7 @@ import { JOIN_LIMITS, clear, hit, limiterKey, lockedAny, sweep } from "../../../
 import { Db } from "../../../db/db";
 import { notify } from "../../notifications/application/notify";
 import { readTtl, storage } from "../../storage/infrastructure/storage";
+import { forgetUser } from "../../auth/interface/session-cache";
 
 const username = z
   .string()
@@ -354,6 +355,7 @@ export class EnrollmentsService {
         after: { classId: id, studentId },
       });
     });
+    forgetUser(studentId);
     return {
       credentials: {
         username: enrollment.student.username,

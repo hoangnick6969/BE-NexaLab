@@ -238,9 +238,9 @@ export class GradebookService {
         throw new ConflictException({ code: "GRADEBOOK_NOT_READY", message: "Còn bài đang làm, chưa đến hạn hoặc chưa chấm; hãy xử lý trước khi chốt sổ", details: blockers });
       const now = new Date();
       const version = (a.gradebookLockVersion ?? 0) + 1;
-      for (const r of rows)
-        await tx.gradebookEntry.create({
-          data: {
+      // Perf review 2026-11-16 item 12: one INSERT for the whole class instead of one round trip per student.
+      await tx.gradebookEntry.createMany({
+        data: rows.map((r) => ({
             assignmentId,
             studentId: r.student.id,
             lockVersion: version,
@@ -253,8 +253,8 @@ export class GradebookService {
             sourceGradeId: r.grade?.id ?? null,
             lockedById: req.user.sub,
             lockedAt: now,
-          },
-        });
+        })),
+      });
       const updated = await tx.assignment.update({
         where: { id: assignmentId },
         data: { gradebookLockedAt: now, gradebookLockedById: req.user.sub, gradebookLockVersion: version },

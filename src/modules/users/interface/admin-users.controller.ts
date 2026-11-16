@@ -38,6 +38,7 @@ import {
 } from "../application/admin-policy";
 import { lessonOperationData } from "../../lessons/application/lesson-moderation";
 import { reassignClassFingerprints, syncLibraryLessonFingerprints } from "../../ai/application/question-fingerprints";
+import { forgetUser } from "../../auth/interface/session-cache";
 
 const email = z
   .string()
@@ -231,7 +232,7 @@ export class AdminUsersController {
         after: { ...(diff.after ?? {}), nameChanged: before.fullName !== user.fullName },
       });
       return adminUser(user);
-    });
+    }).finally(() => forgetUser(id));
   }
 
   @Post("users/:id/disable")
@@ -289,7 +290,7 @@ export class AdminUsersController {
         return { user: adminUser(user), alreadyDisabled: false, applied, sessionsRevoked: sessions.count };
       },
       { timeout: 20000 },
-    );
+    ).finally(() => forgetUser(id));
   }
   /** Active reassignment targets, checked before the transaction. */
   private async reassignTargets(disabledId: string, resolutions: Array<{ action: string; newOwnerId?: string }>) {
@@ -419,7 +420,7 @@ export class AdminUsersController {
         return { deleted: true, id, report: { ...blockers, sessionsRevoked: sessions.count } };
       },
       { timeout: 20000 },
-    );
+    ).finally(() => forgetUser(id));
     // The avatar is personal data: remove the private object once the account row is gone (D-ACC-03).
     if (avatarKey) await storage().delete(avatarKey).catch(() => undefined);
     return result;

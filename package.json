@@ -132,6 +132,7 @@
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^10.0.10",
     "pg": "^8.23.1",
+    "prisma": "^6.19.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^3.25.0"
@@ -145,7 +146,6 @@
     "@types/nodemailer": "^7.0.0",
     "@types/smtp-server": "^3.5.13",
     "prettier": "^3.9.8",
-    "prisma": "^6.19.0",
     "smtp-server": "^3.19.13",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
