@@ -101,7 +101,12 @@ export function createStudentAiProvider(env: NodeJS.ProcessEnv = process.env): S
       throw new Error("STUDENT_AI_PROVIDER=fake is allowed only with APP_ENV development or test, never in production");
     return new FakeStudentProvider(env.STUDENT_AI_FAKE_REPLY);
   }
-  if (kind === "gemini") return env.GEMINI_API_KEY && env.GEMINI_MODEL ? new GeminiStudentProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL, undefined, env.GEMINI_THINKING_LEVEL || "minimal") : null;
+  if (kind === "gemini") {
+    const model = env.STUDENT_AI_GEMINI_MODEL?.trim() || env.GEMINI_MODEL?.trim();
+    return env.GEMINI_API_KEY && model
+      ? new GeminiStudentProvider(env.GEMINI_API_KEY, model, undefined, env.GEMINI_THINKING_LEVEL || "minimal")
+      : null;
+  }
   if (kind !== "anthropic") throw new Error(`Unknown STUDENT_AI_PROVIDER: ${kind}`);
   return env.ANTHROPIC_API_KEY && env.ANTHROPIC_MODEL ? new AnthropicStudentProvider(env.ANTHROPIC_API_KEY, env.ANTHROPIC_MODEL) : null;
 }

@@ -103,6 +103,7 @@ describe("student-hint@1 LLM layer (owner 2026-11-08: LLM writes, rules plan and
     // Gemini is the default provider (owner 2026-11-09).
     expect(createStudentAiProvider({ GEMINI_API_KEY: "k" } as any)).toBeNull();
     expect(createStudentAiProvider({ GEMINI_API_KEY: "k", GEMINI_MODEL: "g" } as any)).toMatchObject({ name: "gemini", model: "g" });
+    expect(createStudentAiProvider({ GEMINI_API_KEY: "k", GEMINI_MODEL: "g", STUDENT_AI_GEMINI_MODEL: "fast" } as any)).toMatchObject({ name: "gemini", model: "fast" });
     expect(() => createStudentAiProvider({ STUDENT_AI_PROVIDER: "openai" } as any)).toThrow(/Unknown/);
   });
 
