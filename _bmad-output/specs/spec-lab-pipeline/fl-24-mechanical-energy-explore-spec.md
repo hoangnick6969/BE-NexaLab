@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Owner chấp nhận Q-1 đến Q-5 như đề xuất** (2026-11-16). **Đã merge vào `main`** (2026-11-16, BE PR #96, FE PR #80; sim 1.21.0, Playwright 4/4). **Chưa seed, chưa phát hành** (Q-6: chờ SGK KHTN 9; mã topic K9 còn là placeholder) |
+| Trạng thái | **Owner chấp nhận Q-1 đến Q-5 như đề xuất** (2026-11-16). **Đã merge vào `main`** (2026-11-16, BE PR #96, FE PR #80; sim 1.21.0, Playwright 4/4). **Owner duyệt dữ liệu và cho phát hành 2026-11-16** (bỏ chờ Q-6): config `review.status: reviewed`, sim 1.22.0. **Đã phát hành lên DB dev 2026-11-16** (`mechanical-energy`, topic `KHTN9-CH01-T01`, Admin API, 201). Quy ước `P = 10·m` theo SGK KHTN 8, **chưa đối chiếu SGK KHTN 9** |
 | Người viết | Dev 1 (Kit Vật lý), task D1-3.2 |
 | Cập nhật | 2026-11-16 |
 | Theo mẫu | [Mẫu spec áp dụng Explore](lab-explore-bench-spec-template.md) · cùng khuôn [FL-04](fl-04-liquid-pressure-explore-spec.md), [FL-08](fl-08-heat-transfer-explore-spec.md) |
@@ -89,7 +89,8 @@ Theo đúng khuôn FL-04 và FL-08:
 | FE Playwright | `tests/energy-explore.spec.ts` 4/4: mở qua registry, G-01..G-05 trên thanh năng lượng (số ẩn mặc định), G-06/G-07 lực kế, thước, đồng hồ, "Kiểm tra", so sánh hai động cơ, nhật ký giữ sau F5, xuất `scored: false`, không gọi API run; config chỉ trạm con lắc có số; config sai (`modes.guided`) dừng bàn; 2D, reduced motion; 390 px |
 | Hồi quy FE | fluid-pressure, heat-transfer, lever-explore, fl06-class-explore, explore-pinned-config, biology-explore-benches, fl15-safety: 34 passed cùng FL-24, 3 skipped (ca FL-15 cần server live cô lập) |
 | Cảnh 3D | Con lắc treo trên giá một trụ phía sau mặt phẳng dao động (thả tới h₀ = L/2, 60°, không chạm giá); con lắc và thanh năng lượng vẽ ở 1/2 tỉ lệ, tời ở 0,3; camera riêng cho từng trạm và cho màn hẹp |
-| Chưa làm | Seed và phát hành (Q-6); Class Explore (v1 chưa hỗ trợ); BE trên Postgres cô lập cho FL-24 chưa chạy riêng |
+| Phát hành (2026-11-16) | Owner duyệt, bỏ chờ Q-6. `npm run publish:fl24-explore -- --publish` qua API dev (code `main` + nhánh `feat/dev1-fl24-publish`): 201, activity `mechanical-energy-explore` v1. `GET /labs` của admin và `student.active` có `mechanical-energy`, `explore.ok: true`, `review.status: reviewed`. Trình duyệt thật với `student.active`: mở bàn `k5-energy-bench@1`, không có thông báo giả định, không gọi API run |
+| Chưa làm | Đối chiếu SGK KHTN 9 khi có sách (quy ước `P = 10·m`, thí nghiệm minh hoạ); Class Explore (v1 chưa hỗ trợ); BE trên Postgres cô lập cho FL-24 chưa chạy riêng |
 
 ## 10. Phụ thuộc và rủi ro
 
