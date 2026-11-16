@@ -4,8 +4,12 @@ import { PrismaClient } from "@prisma/client";
 import { K2_KIT } from "../packages/sim/wet-bench/contracts";
 import { publishExploreLab } from "../src/modules/labs/application/explore-labs";
 import { loadK2ExploreTargets } from "./k2-explore-targets";
+import { FLUID_KIT } from "../packages/sim/fluid/contracts";
+import { loadFluidExploreTargets } from "./fluid-explore-targets";
+import { THERMAL_KIT } from "../packages/sim/thermal/contracts";
+import { loadThermalExploreTargets } from "./thermal-explore-targets";
 
-const targetsByKit = new Map<string, typeof loadK2ExploreTargets>([[K2_KIT, loadK2ExploreTargets]]);
+const targetsByKit = new Map<string, typeof loadK2ExploreTargets>([[K2_KIT, loadK2ExploreTargets], [FLUID_KIT, loadFluidExploreTargets], [THERMAL_KIT, loadThermalExploreTargets]]);
 const adminId = "admin";
 
 export async function runExploreSeed(args: string[]) {
