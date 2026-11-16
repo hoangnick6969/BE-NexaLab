@@ -1,5 +1,5 @@
 /** Validates a K2 Lab config against the kit enums, reagent registry and reaction catalog. */
-import { chemistryLabConfigSchema, ENGINE_1_1_KINDS, MEASUREMENT_TOOL, VESSEL_SPECS, WET_BENCH_ENGINE, type ChemistryLabConfig, type VesselKind } from "./contracts";
+import { chemistryLabConfigSchema, ENGINE_1_1_KINDS, ENGINE_1_2_KINDS, MEASUREMENT_TOOL, VESSEL_SPECS, WET_BENCH_ENGINE, WET_BENCH_ENGINE_V1_2, type ChemistryLabConfig, type VesselKind } from "./contracts";
 import { FL13_REVIEW } from "./fl13-acid-base.data";
 import { K2_REACTIONS, type StoichiometricReaction } from "./reactions";
 import { reagentById } from "./reagents";
@@ -41,6 +41,21 @@ export function validateChemistryLabConfig(raw: unknown): ConfigValidation {
   const usesSolutions = config.enabledApparatus.some((item) => ENGINE_1_1_KINDS.includes(item.kind)) || config.measurements.includes("volume")
     || Boolean(config.solutes?.length) || Boolean(config.targets?.length) || powderOnShelf.length > 0;
   if (usesSolutions && config.engine === WET_BENCH_ENGINE) errors.push(`engine: ${WET_BENCH_ENGINE} has no powders, solubility, volume reading or volumetric flask; use wet-bench@1.1.0`);
+  // Engine 1.2.0 features: reaction rate over simulated time (FL-12).
+  const usesRate = Boolean(config.rateModel) || config.measurements.includes("time") || config.measurements.includes("gas_volume")
+    || config.enabledApparatus.some((item) => ENGINE_1_2_KINDS.includes(item.kind));
+  if (usesRate && config.engine !== WET_BENCH_ENGINE_V1_2) errors.push(`engine: a reaction rate model, stopwatch, thermometer, time and gas volume need ${WET_BENCH_ENGINE_V1_2}`);
+  if (config.rateModel) {
+    const model = config.rateModel;
+    for (const reactionId of model.kinetic) {
+      const rule = K2_REACTIONS.find((item) => item.id === reactionId);
+      if (!rule || rule.kind !== "stoichiometric") errors.push(`rateModel.kinetic: ${reactionId} is not a stoichiometric reaction`);
+      else if (!config.allowedReactions.includes(reactionId)) errors.push(`rateModel.kinetic: ${reactionId} is not in allowedReactions`);
+    }
+    const shapes = new Set(shelf.flatMap((reagentId) => { const composition = reagentById(reagentId)?.composition; return composition?.kind === "solid" ? [composition.shape] : []; }));
+    for (const shape of shapes) if (model.surface[shape] === undefined) errors.push(`rateModel.surface: no factor for the solid shape ${shape} on the shelf`);
+    if (!config.measurements.includes("time")) errors.push("rateModel: a rate Lab needs the time measurement (stopwatch)");
+  }
   const solutes = config.solutes ?? [];
   for (const value of duplicates(solutes.map((item) => item.reagentId))) errors.push(`solutes: duplicate ${value}`);
   for (const item of solutes) if (!powderOnShelf.includes(item.reagentId)) errors.push(`solutes: ${item.reagentId} is not a powder on the shelf`);
