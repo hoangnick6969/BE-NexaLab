@@ -19,7 +19,8 @@ export type ClassDerivation =
   | { ok: false; errors: string[] };
 type ExploreBench = {
   kit: string;
-  modelRef: string;
+  /** One model per bench, or a function when one kit holds Labs on different models (k8-diorama). */
+  modelRef: string | ((config: any) => string);
   /** The model a validated config runs on, when a kit has more than one engine version (the wet bench: 1.0.0 and 1.1.0). */
   modelRefOf?: (config: any) => string;
   validate: (raw: unknown) => BenchValidation;
@@ -253,7 +254,7 @@ export async function publishExploreLab(db: PrismaClient, input: PublishExploreI
   const spec = exploreActivitySpecSchema.parse({ ...bench.activitySpec(config), explore: config });
   const digest = activityDigest(spec);
   const key = `${config.labId}-explore`;
-  const modelRef = bench.modelRefOf?.(config) ?? bench.modelRef;
+  const modelRef = bench.modelRefOf?.(config) ?? (typeof bench.modelRef === "function" ? bench.modelRef(config) : bench.modelRef);
 
   return db.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:explore-publish:" + config.labId);
