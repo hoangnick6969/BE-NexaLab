@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Bản nháp, chờ owner duyệt** (Q-1 đến Q-6 ở §11). Chưa code |
+| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-6. **Đã làm trên dev/fixture** (F08-1 đến F08-5, §13); chưa seed, chưa phát hành |
 | Người viết | Dev 1 (Kit Vật lý), task D1-3.2 |
 | Cập nhật | 2026-11-16 |
 | Theo mẫu | [Mẫu spec áp dụng Explore](lab-explore-bench-spec-template.md) |
@@ -93,7 +93,7 @@ Bump `@nexalab/sim` lên **1.17.0** (1.16.0 là FL-04). Fetch `main` và chọn 
 | Gỗ (7) | không rơi | không | không | không | không |
 
 - **Trạm 2.** `melted(t) = heatBelowWax && t ≥ meltSeconds`. Không có nhiệt độ, chỉ có trạng thái sáp.
-- **Trạm 3.** Nhiệt độ tiến dần về đích theo hằng số thời gian `τ`: khi được chiếu, đích là `start + rise × absorptance`; khi chắn hoặc tắt, đích là `start`. Mô hình tính theo từng bước 1 giây bằng số nguyên phần mười độ (`T += round((đích − T) / τ)`, với bước tối thiểu ±1 khi còn chênh), nên tua nhanh và chạy từng giây cho cùng kết quả.
+- **Trạm 3.** Nhiệt độ tiến dần về đích theo hằng số thời gian `τ`: khi được chiếu, đích là `start + rise × absorptance`; khi chắn hoặc tắt, đích là `start`. Trong mỗi đoạn giữa hai lần đổi đèn, tấm gỗ hay mặt ngoài, `T(t) = đích + (T₀ − đích)·e^(−t/τ)` tính dạng đóng; số đọc làm tròn phần mười độ. Vì không cộng dồn theo bước, tua nhanh và chạy từng giây cho cùng kết quả (G-10).
 - `limitations`: `illustrative_time_scale`, `no_heat_loss`, `rule_based_convection`, `radiation_constants_assumed`.
 
 ### 3.3 Golden và ca lỗi
@@ -106,9 +106,9 @@ Bump `@nexalab/sim` lên **1.17.0** (1.16.0 là FL-04). Fetch `main` và chọn 
 | G-04 | Thép, t = 600 s | Cả 5 đinh rơi; đinh e lúc 350 s |
 | G-05 | Ống (1): sáp ở đáy, đun gần miệng, t = 600 s | Sáp không chảy |
 | G-06 | Ống (2): sáp ở miệng, đun dưới đáy | t = 39 s chưa chảy, t = 40 s chảy |
-| G-07 | Phủ đen, chiếu 60 s từ 25,0 °C | Khoảng 30,0 °C (golden chốt số đúng sau khi code); tăng đơn điệu |
-| G-08 | Tráng bạc, chiếu 60 s | Thấp hơn G-07 và tăng tối đa 2,0 °C |
-| G-09 | G-07 rồi đặt tấm gỗ 120 s | Giảm đơn điệu, về gần 25,0 °C |
+| G-07 | Phủ đen, chiếu 60 s từ 25,0 °C | 30,1 °C; tăng đơn điệu |
+| G-08 | Tráng bạc, chiếu 60 s | 26,3 °C; tối đa 27,0 °C |
+| G-09 | G-07 rồi đặt tấm gỗ 120 s | 25,7 °C; giảm đơn điệu |
 | G-10 | Chạy 600 lần × 1 s và nhảy thẳng 600 s | Cùng trạng thái ở cả 3 trạm |
 | E-01 | Vật liệu ngoài Bảng 28.1, hai thanh trùng giá, quá `maxRods` | Từ chối |
 | E-02 | Đinh ngoài thanh hoặc không tăng dần | Config sai |
@@ -176,11 +176,11 @@ v1 chưa hỗ trợ. Đề xuất sau: mẫu "So sánh dẫn nhiệt" (giáo vi�
 | Hiệu năng | Đinh rơi và ngọn lửa là chuyển động liên tục; dùng frameloop theo yêu cầu, chỉ chạy khung hình khi đồng hồ chạy hoặc vật đang rơi |
 | Bump sim | 1.17.0 phụ thuộc thứ tự merge sau FL-04 |
 
-## 11. Câu hỏi cho owner
+## 11. Quyết định của owner
 
-Đề xuất của Dev 1 ở cột cuối. Nếu đồng ý cả sáu, chỉ cần trả lời "duyệt".
+Owner duyệt ngày 2026-11-16, chấp nhận cả sáu đề xuất.
 
-| ID | Câu hỏi | Đề xuất |
+| ID | Câu hỏi | Quyết định |
 |---|---|---|
 | Q-1 | v1 gồm những trạm nào? | Cả ba: dẫn nhiệt (bám Bảng 28.1), đối lưu và bức xạ (theo quy tắc). Bài 28 yêu cầu ví dụ cả ba cách truyền nhiệt (B28-O01). Phương án nhỏ hơn: chỉ trạm 1, hai trạm kia để v1.1 |
 | Q-2 | Thời gian rơi đinh tính từ đâu? | `t = 16 × x² / K` với K của Bảng 28.1: thứ tự và vật cách nhiệt đúng SGK, giây là minh hoạ. Không dùng hệ số khuếch tán (cần số liệu ngoài SGK) |
@@ -198,3 +198,15 @@ v1 chưa hỗ trợ. Đề xuất sau: mẫu "So sánh dẫn nhiệt" (giáo vi�
 | F08-3 | Registry FE, trang, đồng hồ mô phỏng, cảnh 3D/2D ba trạm, item | `physics/thermal/transfer/*`, `App.tsx` |
 | F08-4 | Nhật ký sự kiện theo thời điểm mô phỏng, export | `physics/thermal/transfer/transfer-log.ts` |
 | F08-5 | Playwright §9, hồi quy, toàn bộ test BE; phát hành qua Admin API | `tests/heat-transfer-explore.spec.ts` |
+
+## 13. Ghi chú triển khai (2026-11-16)
+
+| Task | Kết quả |
+|---|---|
+| F08-1 | BE `packages/sim/thermal/` (`contracts.ts` với `CONDUCTIVITY_TABLE` = Bảng 28.1, `transfer.ts`, `validate-config.ts`, `fl08-heat-transfer.data.ts`, golden và test validator). Trạm 3 dùng dạng đóng theo đoạn (§3.2). Sim **1.17.0**, tarball đồng bộ sang FE |
+| F08-2 | `EXPLORE_BENCHES["k4-thermal-bench@1"]` + `thermalBenchSpec` (nguồn: Bảng 28.1 `verified`, thang thời gian và hằng số `unverified`; không có `deriveClass`). Seed target `scripts/thermal-explore-targets.ts`, topic `KHTN8-L28`. FL-07 bị từ chối làm đích Explore (`EXPLORE_LAB_HAS_GUIDED`) |
+| F08-3 | FE `physics/thermal/transfer/`: `ThermalExploreBench` (ba trạm, đồng hồ riêng mỗi trạm với Chạy/Dừng, ×1/×10/×30, "Tua thêm 60 s"), `ThermalStage3D` (camera riêng mỗi trạm, đinh rơi, ngọn lửa, ống nghiệm, bình thuốc tím trên kiềng, đèn, bình phủ đen hoặc tráng bạc, tấm gỗ; `thermometer` và `stopwatch` của thư viện chung), `ThermalStage2D`, `listThermalKitItems`, trang `/labs/:id`, dev `/dev/lab-kits/thermal-explore`. FL-07 không đổi |
+| F08-4 | `transfer-log.ts`: dòng thao tác và dòng sự kiện theo thời điểm mô phỏng (đinh rơi, sáp chảy, hết 600 s), ghi đủ khi tua; export `scored: false` |
+| F08-5 | Playwright `tests/heat-transfer-explore.spec.ts` 4/4; toàn bộ test BE trên Postgres cô lập |
+
+Nhánh: BE `feat/dev1-fl08-heat-transfer` (chồng lên `docs/dev1-fl08-explore-spec`, tức FL-04), FE `feat/dev1-fl08-heat-transfer` (chồng lên FE `feat/dev1-fl04-liquid-pressure`). Còn lại: merge sau FL-04 (BE và FE cùng lúc); owner seed `--kit k4-thermal-bench@1`, tự kiểm, phát hành qua `publishExploreLab` (`topicCode: "KHTN8-L28"`), xác nhận topic có trong DB.
