@@ -382,7 +382,7 @@ function energyBenchSpec(config: EnergyLabConfig) {
     outcomeCodes: [],
     sources: [
       { kind: "curriculum", status: "verified", description: "Yêu cầu cần đạt KHTN 9 (chương trình 2018), chủ đề Năng lượng cơ học 1–6." },
-      { kind: "technical_assumption", status: "unverified", description: "Quy ước P = 10·m, con lắc không ma sát và tốc độ hai động cơ là giả định kỹ thuật, chờ SGK KHTN 9 và reviewer Lý." },
+      { kind: "technical_assumption", status: "unverified", description: "Quy ước P = 10·m (theo SGK KHTN 8), con lắc không ma sát và tốc độ hai động cơ là giả định kỹ thuật; owner duyệt 2026-11-16, chưa đối chiếu SGK KHTN 9." },
     ],
     engine: config.engine,
     kit: config.kit,

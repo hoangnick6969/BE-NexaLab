@@ -48,7 +48,7 @@ export function validateEnergyLabConfig(raw: unknown): EnergyConfigValidation {
   } else if (hoist) errors.push("hoist: set without the hoist station");
 
   if (config.modes.guided) errors.push("modes.guided: the energy bench config is Explore-only");
-  if (config.review.status === "draft") warnings.push("review.status: draft (the P = 10·m convention waits for SGK KHTN 9 and a physics reviewer)");
+  if (config.review.status === "draft") warnings.push("review.status: draft (the P = 10·m convention and the motor speeds wait for owner review)");
 
   return errors.length ? { ok: false, errors, warnings } : { ok: true, config, warnings };
 }

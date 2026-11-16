@@ -13,7 +13,7 @@ import { loadFluidExploreTargets } from "../../../../scripts/fluid-explore-targe
 import { FL08_HEAT_TRANSFER_EXPLORE_CONFIG } from "../../../../packages/sim/thermal";
 import { loadThermalExploreTargets } from "../../../../scripts/thermal-explore-targets";
 import { FL24_ENERGY_EXPLORE_CONFIG } from "../../../../packages/sim/mechanics/energy";
-import { FL24_TOPIC_CODE_PLACEHOLDER, loadEnergyExploreTargets } from "../../../../scripts/energy-explore-targets";
+import { FL24_TOPIC_CODE, loadEnergyExploreTargets } from "../../../../scripts/energy-explore-targets";
 
 vi.mock("../../../common/audit", () => ({ audit: vi.fn(), changedFields: vi.fn(() => ({})) }));
 
@@ -310,8 +310,9 @@ describe("mechanical energy bench k5-energy-bench@1 (FL-24 Explore, D1-3.2)", ()
     expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
   });
 
-  it("seeds FL-24 through the energy bench targets on a placeholder KHTN 9 topic, blocked from publishing until Q-6", async () => {
-    expect(await loadEnergyExploreTargets()).toEqual([{ config: expect.objectContaining({ labId: "mechanical-energy", kit: "k5-energy-bench@1" }), topicCode: FL24_TOPIC_CODE_PLACEHOLDER, publishBlocked: expect.stringContaining("Q-6") }]);
+  it("seeds FL-24 on the KHTN 9 Năng lượng cơ học topic with the owner-reviewed config", async () => {
+    expect(FL24_TOPIC_CODE).toBe("KHTN9-CH01-T01");
+    expect(await loadEnergyExploreTargets()).toEqual([{ config: expect.objectContaining({ labId: "mechanical-energy", kit: "k5-energy-bench@1", review: expect.objectContaining({ status: "reviewed" }) }), topicCode: FL24_TOPIC_CODE }]);
   });
 });
 
