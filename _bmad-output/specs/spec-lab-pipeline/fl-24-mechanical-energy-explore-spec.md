@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Owner chấp nhận Q-1 đến Q-5 như đề xuất** (2026-11-16). **Đã làm trên dev/fixture** (sim 1.21.0, BE+FE `feat/dev1-fl24-mechanical-energy`, Playwright 4/4). **Chưa seed, chưa phát hành** (Q-6: chờ SGK KHTN 9; mã topic K9 còn là placeholder) |
+| Trạng thái | **Owner chấp nhận Q-1 đến Q-5 như đề xuất** (2026-11-16). **Đã merge vào `main`** (2026-11-16, BE PR #96, FE PR #80; sim 1.21.0, Playwright 4/4). **Chưa seed, chưa phát hành** (Q-6: chờ SGK KHTN 9; mã topic K9 còn là placeholder) |
 | Người viết | Dev 1 (Kit Vật lý), task D1-3.2 |
 | Cập nhật | 2026-11-16 |
 | Theo mẫu | [Mẫu spec áp dụng Explore](lab-explore-bench-spec-template.md) · cùng khuôn [FL-04](fl-04-liquid-pressure-explore-spec.md), [FL-08](fl-08-heat-transfer-explore-spec.md) |
