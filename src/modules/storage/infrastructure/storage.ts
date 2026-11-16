@@ -27,7 +27,7 @@ import { pipeline } from "node:stream/promises";
  */
 export type HeadResult = { bytes: number; etag: string | null; contentType: string | null };
 export interface ObjectStorage {
-  readonly kind: "r2" | "local";
+  readonly kind: "r2" | "supabase" | "local";
   readonly bucket: string;
   presignPut(key: string, contentType: string, ttlSeconds: number): Promise<string>;
   createMultipart(key: string, contentType: string): Promise<string>;
@@ -66,17 +66,19 @@ export const objectKeys = (assetId: string, versionId: string, fileName: string,
 });
 
 // ───────────────────────── R2 (S3 API) ─────────────────────────
-class R2Storage implements ObjectStorage {
-  readonly kind = "r2" as const;
+class S3Storage implements ObjectStorage {
   private client: S3Client;
   constructor(
     readonly bucket: string,
     endpoint: string,
     accessKeyId: string,
     secretAccessKey: string,
+    readonly kind: "r2" | "supabase",
+    region: string,
   ) {
     this.client = new S3Client({
-      region: "auto",
+      region,
+      forcePathStyle: kind === "supabase",
       endpoint,
       credentials: { accessKeyId, secretAccessKey },
       // R2 does not implement the newer default CRC32 request checksums for presigned uploads.
@@ -275,18 +277,33 @@ class LocalStorage implements ObjectStorage {
 }
 
 let cached: ObjectStorage | null = null;
-/** ASSET_STORAGE=r2 needs every R2_* variable; anything else falls back to the local driver. */
+/** Cloud storage uses the shared S3 driver. Local storage serves files through the API. */
 export function storage(): ObjectStorage {
   if (cached) return cached;
-  if ((process.env.ASSET_STORAGE ?? "local") === "r2") {
+  const backend = process.env.ASSET_STORAGE ?? "local";
+  if (backend === "supabase") {
+    const required = ["SUPABASE_S3_BUCKET", "SUPABASE_S3_ENDPOINT", "SUPABASE_S3_ACCESS_KEY_ID", "SUPABASE_S3_SECRET_ACCESS_KEY", "SUPABASE_S3_REGION"] as const;
+    const missing = required.filter((name) => !process.env[name]?.trim() || process.env[name]!.includes("<"));
+    if (missing.length) throw new Error("Supabase Storage S3 is not configured: missing " + missing.join(", "));
+    cached = new S3Storage(
+      process.env.SUPABASE_S3_BUCKET!,
+      process.env.SUPABASE_S3_ENDPOINT!,
+      process.env.SUPABASE_S3_ACCESS_KEY_ID!,
+      process.env.SUPABASE_S3_SECRET_ACCESS_KEY!,
+      "supabase",
+      process.env.SUPABASE_S3_REGION!,
+    );
+  } else if (backend === "r2") {
     const required = ["R2_BUCKET", "R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"] as const;
     const missing = required.filter((name) => !process.env[name] || process.env[name]!.includes("<"));
     if (missing.length) throw new Error("R2 storage is not configured: missing " + missing.join(", "));
-    cached = new R2Storage(
+    cached = new S3Storage(
       process.env.R2_BUCKET!,
       process.env.R2_ENDPOINT!,
       process.env.R2_ACCESS_KEY_ID!,
       process.env.R2_SECRET_ACCESS_KEY!,
+      "r2",
+      "auto",
     );
   } else {
     const root = resolve(process.env.UPLOAD_DIR ?? "uploads", "objects");
