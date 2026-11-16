@@ -5,12 +5,12 @@ import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { Db } from "../../../db/db";
 import { applicableAssignmentWhere, ownedClass } from "./class-access";
 import { lock } from "./class-common";
-import { assertExploreAnswers, canResubmitExplore, exploreAnswersSchema, isLateExplore, verifyExploreSnapshot } from "./class-explore-contract";
+import { assertExploreAnswers, canResubmitExplore, exploreAnswersSchema, isLateExplore, readStoredAnswers, verifyExploreSnapshot } from "./class-explore-contract";
 
 const reviewSchema = z.object({ feedback: z.string().trim().min(1).max(2000) }).strict();
 
 const submissionView = (row: any, dueDate: Date | null, now = new Date()) => ({
-  id: row.id, assignmentId: row.assignmentId, answers: row.answers, status: row.status, submittedAt: row.submittedAt,
+  id: row.id, assignmentId: row.assignmentId, answers: readStoredAnswers(row.answers), status: row.status, submittedAt: row.submittedAt,
   feedback: row.feedback ?? null, reviewedAt: row.reviewedAt ?? null,
   late: isLateExplore(row.submittedAt, dueDate), canResubmit: canResubmitExplore(row.status, dueDate, now),
 });
@@ -52,7 +52,7 @@ export class ClassExploreService {
       const due: Date | null = assignment.dueDate ?? null;
       const now = new Date();
       if (existing) {
-        if (sameAnswers(existing.answers, answers)) return { submission: submissionView(existing, due, now), replayed: true };
+        if (sameAnswers(readStoredAnswers(existing.answers), answers)) return { submission: submissionView(existing, due, now), replayed: true };
         if (existing.status === "REVIEWED")
           throw new ConflictException({ code: "EXPLORE_ALREADY_REVIEWED", message: "Giáo viên đã nhận xét bài này; em không nộp lại được." });
         if (!canResubmitExplore(existing.status, due, now))
@@ -87,7 +87,7 @@ export class ClassExploreService {
     const rows = await this.db.classExploreSubmission.findMany({ where: { assignmentId }, orderBy: { submittedAt: "asc" } });
     const students = new Map(assignment.targets.map((target: any) => [target.studentId, target.student]));
     return {
-      assignment: { id: assignment.id, title: assignment.title, dueDate: assignment.dueDate, requirements: snapshot.requirements, instructions: snapshot.instructions },
+      assignment: { id: assignment.id, title: assignment.title, dueDate: assignment.dueDate, requirements: snapshot.requirements, instructions: snapshot.instructions, effectiveConfig: snapshot.effectiveConfig },
       submissions: rows.map((row: any) => ({ ...submissionView(row, assignment.dueDate ?? null), student: students.get(row.studentId) ?? { id: row.studentId, fullName: null, username: null } })),
       pending: [...students.values()].filter((student: any) => !rows.some((row: any) => row.studentId === student.id)),
     };

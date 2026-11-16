@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { exploreConfig } from "../../labs/interface/explore-lab.fixture";
+import { FL06_LEVER_EXPLORE_CONFIG } from "../../../../packages/sim/mechanics";
 import { publishExploreLab } from "../../labs/application/explore-labs";
 import { AssignmentsService, assignmentInput } from "./assignments.service";
 import { ClassExploreService } from "./class-explore.service";
 import {
-  assertExploreAnswers, buildExploreResource, buildExploreSnapshot, exploreInputOf, exploreResourceContentSchema, studentExploreSnapshot, verifyExploreSnapshot,
+  assertExploreAnswers, buildExploreResource, buildExploreSnapshot, exploreInputOf, exploreResourceContentSchema, studentExploreSnapshot, verifyExploreSnapshot, exploreAnswersSchema, exploreRequirementSchema, readStoredAnswers,
 } from "./class-explore-contract";
 import { normalizeResourceContent, studentResource } from "./class-resource-contract";
 
@@ -23,7 +24,7 @@ const withTemplate = () => ({
 const selection = { templateId: "ph-two", reagents: { samples: ["NaOH_0_1M", "HCl_0_1M"] }, promptId: "p1" };
 
 /** Publish through the real write path, then expose what the Lab and version rows look like to the read helpers. */
-async function world(config: unknown = withTemplate()) {
+async function world(config: unknown = withTemplate(), labId = "acid-base-indicators") {
   const versions: any[] = [];
   const tx: any = {
     $executeRawUnsafe: vi.fn(),
@@ -39,7 +40,7 @@ async function world(config: unknown = withTemplate()) {
   await publishExploreLab({ $transaction: (work: any) => work(tx) } as any, { config, topicCode: "KHTN8-L09", actor: { sub: "admin", role: "ADMIN" }, reason: "test" });
   let labConfig = tx.lab.upsert.mock.calls[0][0].update.config;
   const read: any = {
-    lab: { findFirst: vi.fn(async ({ where }: any) => (where.id === "acid-base-indicators" ? { id: where.id, title: "FL-13", grade: 8, config: labConfig } : null)), findUnique: vi.fn(async () => ({ grade: 8 })) },
+    lab: { findFirst: vi.fn(async ({ where }: any) => (where.id === labId ? { id: where.id, title: "FL-13", grade: 8, config: labConfig } : null)), findUnique: vi.fn(async () => ({ grade: 8 })) },
     practicalActivityVersion: { findMany: vi.fn(async ({ where }: any) => versions.filter((v) => where.id.in.includes(v.id))) },
   };
   return { read, versions, repoint: (next: any) => { labConfig = next; } };
@@ -130,6 +131,32 @@ describe("Class Explore snapshot (C3.4)", () => {
   });
 });
 
+describe("FL-06 Class Explore on the mechanics bench (D1-3.1)", () => {
+  const leverSelection = { templateId: "balance-the-lever", loadPresetId: "load-2n-left-200", weightOptionIndex: 0, gauge: true, momentTable: false, promptId: "explain-balance" };
+  const leverInput = { source: { labId: "lever-equilibrium" }, selection: leverSelection, instructions: "" };
+
+  it("pins a lever resource with two moments and an explanation, and the snapshot carries the locked load", async () => {
+    const { read } = await world(structuredClone(FL06_LEVER_EXPLORE_CONFIG), "lever-equilibrium");
+    const content = await buildExploreResource(read, leverInput);
+    expect(content.requirements).toEqual([
+      { kind: "measure", itemId: "moment-left", measurement: "moment", unit: "milliNewtonMetres" },
+      { kind: "measure", itemId: "moment-right", measurement: "moment", unit: "milliNewtonMetres" },
+      { kind: "explain" },
+    ]);
+    const snapshot = await buildExploreSnapshot(read, resourceRow(content));
+    expect(snapshot.effectiveConfig).toMatchObject({ kit: "k5-lever-bench@1", lockInitialAttachments: true, initialAttachments: [{ kind: "WEIGHT", positionMillimetres: -200, forceMilliNewtons: 2000 }] });
+    expect(verifyExploreSnapshot(snapshot).requirements).toHaveLength(3);
+    const moments = { measures: [{ itemId: "moment-left", value: 400 }, { itemId: "moment-right", value: 400 }], explanation: "Hai moment bằng nhau." };
+    expect(() => assertExploreAnswers(snapshot.requirements, exploreAnswersSchema.parse(moments))).not.toThrow();
+  });
+
+  it("refuses a load the chosen weights cannot level", async () => {
+    const { read } = await world(structuredClone(FL06_LEVER_EXPLORE_CONFIG), "lever-equilibrium");
+    await expect(buildExploreResource(read, { ...leverInput, selection: { ...leverSelection, loadPresetId: "load-05n-left-250", weightOptionIndex: 1, gauge: false } }))
+      .rejects.toMatchObject({ response: { code: "EXPLORE_SELECTION_INVALID", errors: [expect.stringMatching(/cannot be levelled/)] } });
+  });
+});
+
 describe("Class Explore answers", () => {
   const requirements = [
     { kind: "measure", itemId: "HCl_0_1M", measurement: "ph_meter", unit: "tenthsPh" },
@@ -144,6 +171,22 @@ describe("Class Explore answers", () => {
     expect(paths({ ...good, measures: [...good.measures, { itemId: "H2O_distilled", tenthsPh: 70 }] })).toEqual(["measures.H2O_distilled"]);
     expect(paths({ ...good, measures: [...good.measures, good.measures[0]] })).toEqual(["measures.HCl_0_1M"]);
     expect(paths({ measures: good.measures })).toEqual(["explanation"]);
+  });
+  it("takes `value` in the requirement's unit and checks its range; `tenthsPh` from the first clients still counts", () => {
+    const asValue = { ...good, measures: [{ itemId: "HCl_0_1M", value: 10 }, { itemId: "NaOH_0_1M", value: 130 }] };
+    expect(paths(asValue)).toEqual([]);
+    expect(paths({ ...asValue, measures: [{ itemId: "HCl_0_1M", value: 141 }, asValue.measures[1]] })).toEqual(["measures.HCl_0_1M"]);
+    expect(exploreAnswersSchema.parse(good).measures).toEqual(asValue.measures);
+    const moments = [{ kind: "measure", itemId: "moment-left", measurement: "moment", unit: "milliNewtonMetres" }] as const;
+    expect(() => assertExploreAnswers(moments, { measures: [{ itemId: "moment-left", value: 150 }] })).not.toThrow();
+    expect(() => assertExploreAnswers(moments, { measures: [{ itemId: "moment-left", value: -1 }] })).toThrow();
+  });
+  it("reads answers saved before units were general", () => {
+    expect(readStoredAnswers({ measures: [{ itemId: "HCl_0_1M", tenthsPh: 10 }], explanation: "x" })).toEqual({ measures: [{ itemId: "HCl_0_1M", value: 10 }], explanation: "x" });
+  });
+  it("accepts a requirement only when its unit matches the measurement", () => {
+    expect(exploreRequirementSchema.safeParse({ kind: "measure", itemId: "m", measurement: "moment", unit: "milliNewtonMetres" }).success).toBe(true);
+    expect(exploreRequirementSchema.safeParse({ kind: "measure", itemId: "m", measurement: "moment", unit: "tenthsPh" }).success).toBe(false);
   });
   it("refuses an explanation when none was asked", () => {
     expect(() => assertExploreAnswers(requirements.slice(0, 2), good)).toThrow(expect.objectContaining({ response: expect.objectContaining({ code: "EXPLORE_ANSWER_INVALID" }) }));
@@ -192,7 +235,7 @@ describe("ClassExploreService (C3.4)", () => {
   it("saves a submission in requirement order, and a retry with the same answers returns it instead of a second row", async () => {
     const { service, stored } = await setup();
     const first = await service.submit("a1", student(), answers);
-    expect(first).toMatchObject({ replayed: false, resubmitted: false, submission: { status: "SUBMITTED", late: false, canResubmit: true, answers: { measures: [{ itemId: "HCl_0_1M", tenthsPh: 10 }, { itemId: "NaOH_0_1M", tenthsPh: 130 }] } } });
+    expect(first).toMatchObject({ replayed: false, resubmitted: false, submission: { status: "SUBMITTED", late: false, canResubmit: true, answers: { measures: [{ itemId: "HCl_0_1M", value: 10 }, { itemId: "NaOH_0_1M", value: 130 }] } } });
     const retry = await service.submit("a1", student(), { ...answers, measures: [...answers.measures].reverse() });
     expect(retry).toMatchObject({ replayed: true, submission: { id: first.submission.id } });
     expect(stored).toHaveLength(1);

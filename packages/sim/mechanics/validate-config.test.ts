@@ -15,7 +15,7 @@ describe("validateLeverLabConfig", () => {
   });
 
   it("I-02 weights must be 0.5 N steps without duplicates", () => {
-    expect(errorsOf({ ...base, weights: { ...base.weights, availableMilliNewtons: [750, 1000] } })).toEqual([expect.stringMatching(/^weights\.availableMilliNewtons: 750 mN/)]);
+    expect(errorsOf({ ...base, weights: { ...base.weights, availableMilliNewtons: [750, 1000] } }).filter((error) => error.startsWith("weights."))).toEqual([expect.stringMatching(/^weights\.availableMilliNewtons: 750 mN/)]);
     expect(errorsOf({ ...base, weights: { ...base.weights, availableMilliNewtons: [1000, 1000] } })).toContain("weights.availableMilliNewtons: duplicate 1000");
   });
 

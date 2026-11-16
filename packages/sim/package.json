@@ -1,6 +1,6 @@
 {
   "name": "@nexalab/sim",
-  "version": "1.13.0",
+  "version": "1.15.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
@@ -15,6 +15,7 @@
     "eye-optics.ts",
     "food-web.ts",
     "explore/envelope.ts",
+    "explore/requirements.ts",
     "wet-bench/index.ts",
     "wet-bench/contracts.ts",
     "wet-bench/species.ts",
@@ -28,6 +29,7 @@
     "mechanics/index.ts",
     "mechanics/contracts.ts",
     "mechanics/validate-config.ts",
+    "mechanics/class-template.ts",
     "mechanics/fl06-lever.data.ts"
   ],
   "dependencies": {
