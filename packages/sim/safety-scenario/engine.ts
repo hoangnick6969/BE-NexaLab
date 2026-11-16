@@ -1,9 +1,9 @@
-import { reagentById } from "../wet-bench/reagents";
+import { safetyScenarioReagentById } from "../wet-bench/reagents";
 import type { SafetyScenarioItemRef, SafetyScenarioScene } from "./contracts";
 
 export function listSafetyScenarioReagents(refs: readonly SafetyScenarioItemRef[]) {
   const ids = new Set(refs.filter((ref) => ref.kind === "reagent").map((ref) => ref.id));
-  return [...ids].map(reagentById).filter((reagent) => reagent !== null);
+  return [...ids].map(safetyScenarioReagentById).filter((reagent) => reagent !== null);
 }
 
 type Step = SafetyScenarioScene["steps"][number];

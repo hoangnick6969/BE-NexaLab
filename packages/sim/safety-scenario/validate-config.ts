@@ -1,4 +1,4 @@
-import { reagentById } from "../wet-bench/reagents";
+import { safetyScenarioReagentById } from "../wet-bench/reagents";
 import { safetyScenarioConfigSchema, type SafetyScenarioConfig, type SafetyScenarioScene } from "./contracts";
 
 type Validation =
@@ -76,7 +76,11 @@ export function validateSafetyScenarioConfig(raw: unknown): Validation {
     validateScene(scene, errors);
     const refs = [...scene.itemRefs, ...scene.consequences.flatMap((consequence) => consequence.hazardRefs)];
     for (const ref of refs) {
-      const exists = ref.kind === "reagent" ? reagentById(ref.id) : apparatus.has(ref.id);
+      const reagent = ref.kind === "reagent" ? safetyScenarioReagentById(ref.id) : null;
+      const exists = ref.kind === "reagent" ? reagent !== null : apparatus.has(ref.id);
+      if (config.review.status === "reviewed" && reagent?.reviewStatus === "unverified") {
+        errors.push(`scenes.${scene.id}: unreviewed reagent reference ${ref.id}`);
+      }
       if (!exists) errors.push(`scenes.${scene.id}: unknown ${ref.kind} reference ${ref.id}`);
     }
   }

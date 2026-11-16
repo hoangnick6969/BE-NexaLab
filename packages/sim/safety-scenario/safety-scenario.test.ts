@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { reagentById } from "../wet-bench/reagents";
+import { safetyScenarioReagentById } from "../wet-bench/reagents";
 import { FL15_SAFETY_CONFIG, listSafetyScenarioReagents, replaySafetyScenario, validateSafetyScenarioConfig } from ".";
 
 const config = () => structuredClone(FL15_SAFETY_CONFIG);
 
-describe("FL-15 table-driven scenarios (draft)", () => {
+describe("FL-15 table-driven scenarios", () => {
   it("reports a draft warning and rejects apparatus with no supported renderer", () => {
-    expect(validateSafetyScenarioConfig(config())).toMatchObject({ ok: true, warnings: [expect.stringContaining("safety review")] });
+    expect(validateSafetyScenarioConfig({ ...config(), review: { status: "draft" } })).toMatchObject({ ok: true, warnings: [expect.stringContaining("safety review")] });
     const broken = { ...config(), enabledApparatus: [{ id: "goggles", kind: "unregistered", slot: "bench" }] };
     expect(validateSafetyScenarioConfig(broken)).toMatchObject({ ok: false, errors: [expect.stringContaining("enabledApparatus.0.kind")], warnings: [] });
   });
@@ -43,7 +43,16 @@ describe("FL-15 table-driven scenarios (draft)", () => {
     const refs = config().scenes[1].consequences[0].hazardRefs;
     const [acid] = listSafetyScenarioReagents([...refs, ...refs]);
     expect(listSafetyScenarioReagents(refs)).toHaveLength(1);
-    expect(acid).toBe(reagentById("H2SO4_0_05M"));
+    expect(acid).toBe(safetyScenarioReagentById("H2SO4_0_05M_6793"));
+    expect(acid.hazard.tags).toEqual(["corrosive_to_metals"]);
+    expect(listSafetyScenarioReagents(config().scenes[0].itemRefs)[0].hazard.tags).toEqual(["aquatic_long_lasting"]);
+  });
+
+  it("rejects an unreviewed label in a reviewed release and accepts it in a draft", () => {
+    const legacy = config();
+    legacy.scenes[0].itemRefs.push({ kind: "reagent", id: "CuSO4_0_1M" });
+    expect(validateSafetyScenarioConfig(legacy)).toMatchObject({ ok: false, errors: [expect.stringContaining("unreviewed reagent reference")] });
+    expect(validateSafetyScenarioConfig({ ...legacy, review: { status: "draft" } })).toMatchObject({ ok: true });
   });
 
   it.each(["reagent", "apparatus"] as const)("rejects an unknown %s in hazardRefs", (kind) => {

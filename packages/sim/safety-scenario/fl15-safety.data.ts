@@ -3,15 +3,15 @@ import { SAFETY_SCENARIO_ENGINE, SAFETY_SCENARIO_KIT, type SafetyScenarioConfig,
 const copy = (vi: string, en: string) => ({ vi, en });
 const apparatus = (id: string): SafetyScenarioItemRef => ({ kind: "apparatus", id });
 const reagent = (id: string): SafetyScenarioItemRef => ({ kind: "reagent", id });
-const copper = reagent("CuSO4_0_1M");
-const acid = reagent("H2SO4_0_05M");
+const copper = reagent("CuSO4_0_1M_CO0102");
+const acid = reagent("H2SO4_0_05M_6793");
 
-/** Draft adaptation for review. See fl-15-safety-review-checklist.md for source locations. */
+/** Owner-authorized review. See fl-15-safety-review-checklist.md for the source record. */
 export const FL15_SAFETY_CONFIG = {
   schema: "k2-safety-scenario-config/1",
   labId: "lab-safety",
   catalogId: "FL-15",
-  configVersion: 1,
+  configVersion: 2,
   kit: SAFETY_SCENARIO_KIT,
   engine: SAFETY_SCENARIO_ENGINE,
   title: "An toàn phòng thí nghiệm",
@@ -36,7 +36,7 @@ export const FL15_SAFETY_CONFIG = {
   ],
   measurements: [],
   pedagogy: {},
-  review: { status: "draft", notes: "Bản nháp song ngữ. Admin cần ký checklist an toàn trước khi phát hành." },
+  review: { status: "reviewed", notes: "Owner uỷ quyền duyệt FL-15. Đối chiếu SGK và SDS mục 2: Scharlab CO0102 (H412), Carl Roth 6793 (H290). Xem fl-15-safety-review-checklist.md." },
   scenes: [
     {
       id: "read-label",

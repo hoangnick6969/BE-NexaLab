@@ -1,13 +1,13 @@
 # Spec áp dụng: FL-15 An toàn phòng thí nghiệm (bàn kịch bản an toàn)
 
-Theo [mẫu spec áp dụng](lab-explore-bench-spec-template.md) cho bàn kịch bản của Kit Hóa học, slot 13 trong [phân công 20 slot](lab-kit-20-slot-delivery-spec.md). Owner đã chốt phạm vi v1. Bản song ngữ đang ở trạng thái `draft` và chờ admin ký [bản ghi duyệt an toàn](fl-15-safety-review-checklist.md).
+Theo [mẫu spec áp dụng](lab-explore-bench-spec-template.md) cho bàn kịch bản của Kit Hóa học, slot 13 trong [phân công 20 slot](lab-kit-20-slot-delivery-spec.md). Owner đã chốt phạm vi v1. Cấu hình song ngữ v2 có trạng thái `reviewed` theo uỷ quyền của Owner, với [bản ghi duyệt an toàn](fl-15-safety-review-checklist.md).
 
 | Phạm vi | Nội dung |
 |---|---|
 | Bàn và Kit | Bàn mới trong Kit Hóa học: `kit = k2-safety-scenario@1` (tên đề xuất), `group = chemistry`. FE `src/features/labs/chemistry/safety/`, sim `packages/sim/safety-scenario/`. Không dùng engine bàn ướt. |
 | Lab đầu tiên | FL-15, Lab ID `lab-safety`. Explore không chấm điểm. Outcome `KHTN8-B01-O01`, topic `KHTN8-L01`. Bài liên quan đã phát hành có cùng topic code. |
 | Cách mở | `/labs/:id` với config đã ghim. Lab mới, không phụ thuộc D-5. |
-| Mô hình | Máy trạng thái tất định cho bước, lựa chọn và hệ quả của kịch bản. Cảnh báo ở hệ quả đọc từ `hazard.tags`. Không mô phỏng vật lý hay hóa học. `review.status: draft`. |
+| Mô hình | Máy trạng thái tất định cho bước, lựa chọn và hệ quả của kịch bản. Cảnh báo ở hệ quả đọc từ `hazard.tags`. Không mô phỏng vật lý hay hóa học. `review.status: reviewed` cho v2. |
 
 ## Hoạt động v1
 
@@ -48,7 +48,7 @@ Dùng lại dữ liệu nguy hiểm của hóa chất K2, nên một cảnh báo
 
 ## Duyệt và kiểm thử
 
-- Bản nháp song ngữ diễn giải SGK và spec, nguồn theo từng nội dung ở [bản ghi duyệt](fl-15-safety-review-checklist.md) theo mẫu [FL-16](fl-16-sme-review-checklist.md). Admin phụ trách kiểm các lựa chọn, phản hồi và cảnh báo theo nồng độ trước khi ký.
+- Cấu hình song ngữ diễn giải SGK và spec. Nguồn theo từng nội dung ở [bản ghi duyệt](fl-15-safety-review-checklist.md) theo mẫu [FL-16](fl-16-sme-review-checklist.md). Các nhánh lựa chọn và cảnh báo theo mã sản phẩm đã được đối chiếu trước khi phát hành qua Admin API trên fixture.
 - Trên DB loopback cô lập đã migrate và seed tài khoản, chạy `npm run db:seed:explore -- --kit k2-safety-scenario@1`. Chạy lại cùng nội dung phải giữ nguyên version. Bản kiểm thử mở bằng BE 4011 và FE 5191.
 - Lệnh preflight theo Lab là `npx tsx scripts/publish-k2-explore.ts --lab lab-safety`. Admin API kiểm `review.status` trước khi ghi. Sau khi admin ký và owner đồng ý phát hành, chạy lại preflight trước bước apply.
 - Mẫu tích hợp bàn độc lập và tarball là [FL-06 của Dev 1](../../../packages/sim/mechanics/). Mẫu config và kiểm hồi quy Kit Hóa học là [FL-11](fl-11-solution-concentration-explore-spec.md).

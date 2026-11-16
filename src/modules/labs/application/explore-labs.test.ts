@@ -162,18 +162,29 @@ describe("mechanics bench k5-lever-bench@1 (FL-06 Explore, D1-1.3)", () => {
 describe("FL-15 safety scenario bench", () => {
   const safetyInput = { ...input(FL15_SAFETY_CONFIG), topicCode: "KHTN8-L01" };
 
+  const draftInput = { ...safetyInput, config: { ...FL15_SAFETY_CONFIG, review: { status: "draft" } } };
+
   it("blocks admin publication of a draft before opening a transaction", async () => {
     const { db, tx } = fakeDb();
     const controller = new AdminLabsController(db, {} as any);
     await expect(controller.publishExploreVersion("lab-safety", { user: actor }, {
-      config: safetyInput.config, topicCode: safetyInput.topicCode, reason: safetyInput.reason,
+      config: draftInput.config, topicCode: draftInput.topicCode, reason: draftInput.reason,
     })).rejects.toMatchObject({ response: { code: "EXPLORE_SAFETY_REVIEW_REQUIRED" } });
     expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
   });
 
+  it("accepts the reviewed release through the admin controller", async () => {
+    const { db, versions } = fakeDb();
+    const controller = new AdminLabsController(db, {} as any);
+    await controller.publishExploreVersion("lab-safety", { user: actor }, {
+      config: safetyInput.config, topicCode: safetyInput.topicCode, reason: safetyInput.reason,
+    });
+    expect(versions[0].spec).toMatchObject({ modality: "explore", scored: false });
+  });
+
   it("pins the isolated draft as an unscored activity without a Class Explore template", async () => {
     const { db, tx, versions } = fakeDb();
-    const result = await publishExploreLab(db, { ...safetyInput, isolatedFixture: true });
+    const result = await publishExploreLab(db, { ...draftInput, isolatedFixture: true });
     const written = tx.lab.upsert.mock.calls[0][0].update;
     expect(versions[0].spec).toMatchObject({ modality: "explore", scored: false, engine: "safety-scenario@1.0.0" });
     expect(EXPLORE_BENCHES[SAFETY_SCENARIO_KIT].deriveClass).toBeUndefined();
