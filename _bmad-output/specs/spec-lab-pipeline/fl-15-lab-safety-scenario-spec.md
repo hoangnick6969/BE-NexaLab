@@ -7,7 +7,7 @@ Theo [mẫu spec áp dụng](lab-explore-bench-spec-template.md) cho bàn kịch
 | Bàn và Kit | Bàn mới trong Kit Hóa học: `kit = k2-safety-scenario@1` (tên đề xuất), `group = chemistry`. FE `src/features/labs/chemistry/safety/`, sim `packages/sim/safety-scenario/`. Không dùng engine bàn ướt. |
 | Lab đầu tiên | FL-15, Lab ID `lab-safety`. Explore không chấm điểm. Outcome `KHTN8-B01-O01`, topic `KHTN8-L01`. Bài liên quan đã phát hành có cùng topic code. |
 | Cách mở | `/labs/:id` với config đã ghim. Lab mới, không phụ thuộc D-5. |
-| Mô hình | Máy trạng thái tất định cho kịch bản: bước, lựa chọn, hệ quả theo `hazard.tags`. Không mô phỏng vật lý hay hóa học. `reviewStatus: draft`. |
+| Mô hình | Máy trạng thái tất định cho bước, lựa chọn và hệ quả của kịch bản. Cảnh báo ở hệ quả đọc từ `hazard.tags`. Không mô phỏng vật lý hay hóa học. `review.status: draft`. |
 
 ## Hoạt động v1
 
@@ -30,16 +30,17 @@ Dùng lại dữ liệu nguy hiểm của hóa chất K2, nên một cảnh báo
 
 | Phần | Nội dung |
 |---|---|
-| Config/sim | Schema `SafetyScenarioConfig` mở rộng `ExploreLabEnvelope`: `scenes`, `steps`, `choices`, `consequences`, `hazardRefs` (id hóa chất hoặc dụng cụ, lấy tag từ `reagents.ts`). Validator: mọi `hazardRef` phải tồn tại, mọi bước đều tới được kết thúc. Golden theo kịch bản. |
+| Config/sim | Schema `SafetyScenarioConfig` mở rộng `ExploreLabEnvelope`: `scenes`, `steps`, `choices`, `consequences`, `hazardRefs` (id hóa chất hoặc dụng cụ, lấy tag từ `reagents.ts`). Validator trả cảnh báo trạng thái nháp theo P0 C2.3, kiểm kind dụng cụ, tham chiếu và đường tới kết thúc. Golden theo kịch bản. |
 | BE | Mục `EXPLORE_BENCHES["k2-safety-scenario@1"]` với validator, model và dựng activity spec; loader seed và topic code. |
-| FE | Mục registry `{ kit: "k2-safety-scenario@1", group: "chemistry", validate, loadPage, listKitItems }`. Trang kịch bản chủ yếu 2D, có thể dùng cảnh 3D phòng thí nghiệm chung (`PhysicalLabEnvironment`). |
-| Item | `listKitItems` trả dụng cụ, hóa chất và trang bị bảo hộ xuất hiện trong kịch bản, lấy cảnh báo từ `reagents.ts`. Trang bị bảo hộ (kính, găng, áo) chưa có trong thư viện; thêm riêng của bàn trước, vào `shared/items/` chỉ khi bàn khác cần. |
-| Nhật ký | Dòng mới theo bước và lựa chọn; `describeChange()` mô tả bằng lời của lựa chọn. Dùng lưu/đọc/export chung. |
+| FE | Mục registry `{ kit: "k2-safety-scenario@1", group: "chemistry", validate, loadPage, listKitItems }`. 2D là mặc định. Nút chuyển 2D/3D của `LabSpace` giữ nguyên cảnh và lượt lựa chọn. 3D dùng phòng `PhysicalLabEnvironment` qua `PhysicsStage`, chai và ống nghiệm từ Kit Hóa học, cốc từ `shared/items/`. Ảnh bìa `lab-safety.webp` chụp từ cảnh nhận diện nguy hiểm 3D. |
+| Item | `listKitItems` cấp thông tin dụng cụ, hóa chất và trang bị bảo hộ cho panel dùng chung “Dụng cụ và thành phần” (P0 C2.2) và danh mục Kit. Cảnh báo lấy từ `reagents.ts`. Kính, găng, áo, kẹp ống nghiệm và đèn cồn có mô hình riêng của FL-15. Cảnh 2D và 3D đọc cùng tập item của tình huống. |
+| Nhật ký | Khóa `labId@activity.id`. Mỗi lựa chọn thêm một dòng với bước, lựa chọn và giải thích từ bảng hệ quả. Dùng lưu/đọc/export chung. |
 | Class Explore | v1 chưa hỗ trợ. Đề xuất sau: yêu cầu `explain`; mẫu giáo viên chọn kịch bản. Cần quyết định riêng. |
 
 ## Nghiệm thu
 
 - Lab hiện trong danh mục sau khi phát hành và reviewer an toàn đã ký duyệt kịch bản; mở đúng renderer qua registry; panel liệt kê item của config đã ghim.
+- Học sinh đổi 2D/3D giữa hai bước và tiếp tục cùng kịch bản. Kiểm ảnh bìa, mục dụng cụ và liên kết bài học sau khi tải mới trang danh mục.
 - Validator và golden bao phủ mọi nhánh; kịch bản tham chiếu hóa chất không tồn tại bị từ chối.
 - Explore không chấm điểm, không tạo `LabRun`, `Attempt`, `Progress`.
 - Seed trên DB cô lập: chạy lại giữ version.

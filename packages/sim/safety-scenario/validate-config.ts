@@ -1,7 +1,9 @@
 import { reagentById } from "../wet-bench/reagents";
 import { safetyScenarioConfigSchema, type SafetyScenarioConfig, type SafetyScenarioScene } from "./contracts";
 
-type Validation = { ok: true; config: SafetyScenarioConfig } | { ok: false; errors: string[] };
+type Validation =
+  | { ok: true; config: SafetyScenarioConfig; warnings: string[] }
+  | { ok: false; errors: string[]; warnings: string[] };
 
 function indexById<T extends { id: string }>(rows: T[], path: string, errors: string[]) {
   const index = new Map<string, T>();
@@ -62,10 +64,11 @@ function validateScene(scene: SafetyScenarioScene, errors: string[]) {
 export function validateSafetyScenarioConfig(raw: unknown): Validation {
   const parsed = safetyScenarioConfigSchema.safeParse(raw);
   if (!parsed.success) {
-    return { ok: false, errors: parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`) };
+    return { ok: false, errors: parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`), warnings: [] };
   }
 
   const config = parsed.data;
+  const warnings = config.review.status === "draft" ? ["review.status: scenario content awaits safety review"] : [];
   const errors: string[] = [];
   const apparatus = indexById(config.enabledApparatus, "enabledApparatus", errors);
   indexById(config.scenes, "scenes", errors);
@@ -77,5 +80,5 @@ export function validateSafetyScenarioConfig(raw: unknown): Validation {
       if (!exists) errors.push(`scenes.${scene.id}: unknown ${ref.kind} reference ${ref.id}`);
     }
   }
-  return errors.length ? { ok: false, errors } : { ok: true, config };
+  return errors.length ? { ok: false, errors, warnings } : { ok: true, config, warnings };
 }

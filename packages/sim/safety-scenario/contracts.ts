@@ -3,6 +3,10 @@ import { exploreIdSchema as id, exploreLabEnvelopeSchema } from "../explore/enve
 
 export const SAFETY_SCENARIO_KIT = "k2-safety-scenario@1";
 export const SAFETY_SCENARIO_ENGINE = "safety-scenario@1.0.0";
+export const SAFETY_APPARATUS_KINDS = [
+  "safety_goggles", "protective_gloves", "lab_coat", "beaker_100ml", "test_tube", "test_tube_holder", "alcohol_lamp",
+] as const;
+export type SafetyApparatusKind = typeof SAFETY_APPARATUS_KINDS[number];
 
 const text = z.string().trim().min(1).max(600);
 const localized = z.object({ vi: text, en: text }).strict();
@@ -31,6 +35,7 @@ export const safetyScenarioConfigSchema = exploreLabEnvelopeSchema.extend({
   kit: z.literal(SAFETY_SCENARIO_KIT),
   engine: z.literal(SAFETY_SCENARIO_ENGINE),
   modes: z.object({ explore: z.literal(true) }).strict(),
+  enabledApparatus: z.array(exploreLabEnvelopeSchema.shape.enabledApparatus.element.extend({ kind: z.enum(SAFETY_APPARATUS_KINDS) })),
   titleEn: text,
   curriculumOutcomeCode: z.literal("KHTN8-B01-O01"),
   scenes: z.array(scene).min(1).max(12),

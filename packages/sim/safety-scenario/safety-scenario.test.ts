@@ -5,6 +5,11 @@ import { FL15_SAFETY_CONFIG, listSafetyScenarioReagents, replaySafetyScenario, v
 const config = () => structuredClone(FL15_SAFETY_CONFIG);
 
 describe("FL-15 table-driven scenarios (draft)", () => {
+  it("reports a draft warning and rejects apparatus with no supported renderer", () => {
+    expect(validateSafetyScenarioConfig(config())).toMatchObject({ ok: true, warnings: [expect.stringContaining("safety review")] });
+    const broken = { ...config(), enabledApparatus: [{ id: "goggles", kind: "unregistered", slot: "bench" }] };
+    expect(validateSafetyScenarioConfig(broken)).toMatchObject({ ok: false, errors: [expect.stringContaining("enabledApparatus.0.kind")], warnings: [] });
+  });
   const routes = [
     { id: "read-label", choices: ["ask", "label"], expected: ["verified", "read"] },
     { id: "read-label", choices: ["ask", "ignore"], expected: ["verified", "miss"] },
