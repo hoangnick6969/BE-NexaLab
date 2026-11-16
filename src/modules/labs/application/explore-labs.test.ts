@@ -7,6 +7,7 @@ import { activityDigest } from "./sim-packs";
 import { exploreConfig } from "../interface/explore-lab.fixture";
 import { EXPLORE_BENCHES, exploreActivitySpecSchema, publishExploreLab, resolveExplore } from "./explore-labs";
 import { FL06_LEVER_EXPLORE_CONFIG } from "../../../../packages/sim/mechanics";
+import { FL15_SAFETY_CONFIG, SAFETY_SCENARIO_KIT } from "../../../../packages/sim/safety-scenario";
 
 vi.mock("../../../common/audit", () => ({ audit: vi.fn(), changedFields: vi.fn(() => ({})) }));
 
@@ -114,7 +115,7 @@ describe("publishExploreLab (P0 C1.3)", () => {
     await expect(publishExploreLab(db, input(guided))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
     await expect(publishExploreLab(db, input({ ...exploreConfig(), kit: "k9@1" }))).rejects.toMatchObject({ response: { code: "EXPLORE_KIT_UNSUPPORTED" } });
     expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
-    expect(Object.keys(EXPLORE_BENCHES)).toEqual(["k2-wet-bench@1", "k5-lever-bench@1"]);
+    expect(Object.keys(EXPLORE_BENCHES)).toContain(SAFETY_SCENARIO_KIT);
   });
 
   it("is ADMIN-only and validates the body against the route Lab", () => {
@@ -155,6 +156,28 @@ describe("mechanics bench k5-lever-bench@1 (FL-06 Explore, D1-1.3)", () => {
     const { db, tx } = fakeDb();
     await expect(publishExploreLab(db, leverInput(lever({ initialAttachments: [{ kind: "WEIGHT", positionMillimetres: 75, forceMilliNewtons: 1000 }] })))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
     expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
+  });
+});
+
+describe("FL-15 safety scenario bench", () => {
+  const safetyInput = { ...input(FL15_SAFETY_CONFIG), topicCode: "KHTN8-L01" };
+
+  it("blocks admin publication of a draft before opening a transaction", async () => {
+    const { db, tx } = fakeDb();
+    const controller = new AdminLabsController(db, {} as any);
+    await expect(controller.publishExploreVersion("lab-safety", { user: actor }, {
+      config: safetyInput.config, topicCode: safetyInput.topicCode, reason: safetyInput.reason,
+    })).rejects.toMatchObject({ response: { code: "EXPLORE_SAFETY_REVIEW_REQUIRED" } });
+    expect(tx.$executeRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  it("pins the isolated draft as an unscored activity without a Class Explore template", async () => {
+    const { db, tx, versions } = fakeDb();
+    const result = await publishExploreLab(db, { ...safetyInput, isolatedFixture: true });
+    const written = tx.lab.upsert.mock.calls[0][0].update;
+    expect(versions[0].spec).toMatchObject({ modality: "explore", scored: false, engine: "safety-scenario@1.0.0" });
+    expect(EXPLORE_BENCHES[SAFETY_SCENARIO_KIT].deriveClass).toBeUndefined();
+    expect(resolveExplore({ id: result.labId, config: written.config }, versions[0])).toMatchObject({ ok: true, kit: SAFETY_SCENARIO_KIT });
   });
 });
 

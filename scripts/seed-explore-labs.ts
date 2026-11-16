@@ -2,10 +2,14 @@ import "dotenv/config";
 import { parseArgs } from "node:util";
 import { PrismaClient } from "@prisma/client";
 import { K2_KIT } from "../packages/sim/wet-bench/contracts";
+import { SAFETY_SCENARIO_KIT } from "../packages/sim/safety-scenario";
 import { publishExploreLab } from "../src/modules/labs/application/explore-labs";
-import { loadK2ExploreTargets } from "./k2-explore-targets";
+import { loadK2ExploreTargets, loadSafetyScenarioTargets } from "./k2-explore-targets";
 
-const targetsByKit = new Map<string, typeof loadK2ExploreTargets>([[K2_KIT, loadK2ExploreTargets]]);
+const targetsByKit = new Map<string, typeof loadK2ExploreTargets>([
+  [K2_KIT, loadK2ExploreTargets],
+  [SAFETY_SCENARIO_KIT, loadSafetyScenarioTargets],
+]);
 const adminId = "admin";
 
 export async function runExploreSeed(args: string[]) {
@@ -45,7 +49,7 @@ export async function runExploreSeed(args: string[]) {
           });
           report.push({ labId: config.labId, unpublished: count > 0 });
         } else {
-          report.push(await publishExploreLab(db, { config, topicCode, actor: { sub: adminId, role: "ADMIN" }, reason: `${kit} Explore seed (isolated database)` }));
+          report.push(await publishExploreLab(db, { config, topicCode, actor: { sub: adminId, role: "ADMIN" }, reason: `${kit} Explore seed (isolated database)`, isolatedFixture: true }));
         }
       }
       console.log(JSON.stringify({ kit, target, mode: dryRun ? "dry-run" : unpublish ? "unpublish" : "write", labs: report }, null, 1));

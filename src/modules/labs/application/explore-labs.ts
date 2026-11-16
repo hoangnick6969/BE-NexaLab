@@ -4,6 +4,7 @@ import { z } from "zod";
 import { audit, type AuditActor } from "../../../common/audit";
 import { deriveWetBenchEffectiveConfig, reagentById, validateChemistryLabConfig, type ChemistryLabConfig, type EffectiveRequirement } from "../../../../packages/sim/wet-bench";
 import { LEVER_ENGINE, LEVER_KIT, validateLeverLabConfig, type LeverLabConfig } from "../../../../packages/sim/mechanics";
+import { SAFETY_SCENARIO_ENGINE, SAFETY_SCENARIO_KIT, listSafetyScenarioReagents, validateSafetyScenarioConfig, type SafetyScenarioConfig } from "../../../../packages/sim/safety-scenario";
 import { activityDigest } from "./sim-packs";
 
 /** Fields every Explore bench config carries (P0 C1). */
@@ -83,6 +84,37 @@ function leverBenchSpec(config: LeverLabConfig) {
   };
 }
 
+function safetyScenarioSpec(config: SafetyScenarioConfig) {
+  const refs = config.scenes.flatMap((scene) => [...scene.itemRefs, ...scene.consequences.flatMap((consequence) => consequence.hazardRefs)]);
+  const reagents = listSafetyScenarioReagents(refs);
+  const apparatusIds = new Set(refs.filter((ref) => ref.kind === "apparatus").map((ref) => ref.id));
+  return {
+    objective: config.outcomeSummary.join(" "),
+    outcomes: config.outcomeSummary,
+    materials: {
+      reagents: reagents.map((reagent) => ({ id: reagent.id, label: reagent.labelVi, hazard: reagent.hazard })),
+      apparatus: config.enabledApparatus.filter((item) => apparatusIds.has(item.id)).map((item) => ({ id: item.id, kind: item.kind, label: item.labelVi ?? item.kind })),
+    },
+    setup: "Bàn kịch bản với hoá chất, dụng cụ và trang bị bảo hộ.",
+    procedure: "Chọn một tình huống, quan sát các vật trên bàn rồi đọc giải thích sau mỗi lựa chọn.",
+    observations: config.scenes.map((scene) => scene.title.vi),
+    observationPrompts: [],
+    safety: {
+      simulation: config.safetyBriefing.simulation,
+      realLab: config.safetyBriefing.realLab,
+      reagentNotes: reagents.map((reagent) => ({ id: reagent.id, sim: reagent.safetyNoteSim, realLab: reagent.safetyNoteRealLab })),
+    },
+    limitations: config.limitations,
+    modality: "explore",
+    scored: false,
+    outcomeCodes: [],
+    sources: [{ kind: "textbook_adaptation", status: config.review.status, description: "SGK Khoa học tự nhiên 8, Kết nối tri thức với cuộc sống, Bài 1. Cảnh báo hóa chất lấy từ danh mục K2." }],
+    engine: config.engine,
+    kit: config.kit,
+    configVersion: config.configVersion,
+  };
+}
+
 /** Server bench registry (P0 C2.3): only benches listed here can be published or resolved. */
 export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
   "k2-wet-bench@1": {
@@ -109,6 +141,12 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
       return result.ok ? { ok: true, config: result.config } : { ok: false, errors: result.errors };
     },
     activitySpec: leverBenchSpec,
+  },
+  [SAFETY_SCENARIO_KIT]: {
+    kit: SAFETY_SCENARIO_KIT,
+    modelRef: SAFETY_SCENARIO_ENGINE,
+    validate: validateSafetyScenarioConfig,
+    activitySpec: safetyScenarioSpec,
   },
 };
 
@@ -137,7 +175,7 @@ export const exploreActivitySpecSchema = z
   })
   .strict();
 
-export type PublishExploreInput = { config: unknown; topicCode: string; actor: NonNullable<AuditActor>; reason: string };
+export type PublishExploreInput = { config: unknown; topicCode: string; actor: NonNullable<AuditActor>; reason: string; isolatedFixture?: boolean };
 
 /**
  * The only write path for a Foundational Explore Lab (P0 C1.3). Seed and Admin API both call it.
@@ -151,6 +189,9 @@ export async function publishExploreLab(db: PrismaClient, input: PublishExploreI
   const validation = bench.validate(input.config);
   if (!validation.ok) throw new UnprocessableEntityException({ code: "EXPLORE_CONFIG_INVALID", errors: validation.errors });
   const config = validation.config;
+  if (kit === SAFETY_SCENARIO_KIT && !input.isolatedFixture && (config as SafetyScenarioConfig).review.status !== "reviewed") {
+    throw new UnprocessableEntityException({ code: "EXPLORE_SAFETY_REVIEW_REQUIRED", message: "Kịch bản FL-15 cần được duyệt an toàn trước khi phát hành." });
+  }
   const spec = exploreActivitySpecSchema.parse({ ...bench.activitySpec(config), explore: config });
   const digest = activityDigest(spec);
   const key = `${config.labId}-explore`;
