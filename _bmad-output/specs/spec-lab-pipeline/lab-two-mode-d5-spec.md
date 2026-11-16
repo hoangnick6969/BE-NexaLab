@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Đề xuất, chờ owner chốt** (Q-1 đến Q-6 ở §6). Chưa code |
+| Trạng thái | **Đã duyệt** (owner, 2026-11-16, Q-1 đến Q-6 như đề xuất). **Đã code** BE+FE `feat/dev1-two-mode-d5` (BE vitest 719 passed; FE Playwright two-mode-d5 3/3, hồi quy 47 passed); FL-06 phát hành sau khi merge (`npm run publish:fl06-explore`) |
 | Người viết | Dev 1, để gỡ D1-3.3 (phát hành FL-06 Explore) và các Lab Sinh học của Dev 2 |
 | Cập nhật | 2026-11-16 |
 | Liên quan | [Tracking O-3.1 và ghi chú hai mode tạm thời](lab-kit-delivery-tracking.md) · [phân công 20 slot §2](lab-kit-20-slot-delivery-spec.md) · [P0 C1](lab-mode-foundation-p0-spec.md) |

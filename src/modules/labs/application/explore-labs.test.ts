@@ -28,7 +28,7 @@ function fakeDb(lab: any = null, inCourse = false) {
   const versions: any[] = [];
   const tx: any = {
     $executeRawUnsafe: vi.fn(),
-    lab: { findUnique: vi.fn(async () => lab), upsert: vi.fn() },
+    lab: { findUnique: vi.fn(async () => lab), upsert: vi.fn(), update: vi.fn() },
     foundationalCourseLesson: { findFirst: vi.fn(async () => (inCourse ? { lessonId: "l1" } : null)) },
     curriculumTopic: { findUnique: vi.fn(async () => ({ code: "KHTN8-L09", title: "Base. Thang pH", chapter: { subjectId: "khtn", grade: 8 } })) },
     practicalActivityVersion: {
@@ -103,11 +103,12 @@ describe("publishExploreLab (P0 C1.3)", () => {
     expect(viaApi.activity.version).toBe(viaSeed.activity.version);
   });
 
-  it("refuses a Lab with challenges, releases or another model, and a Lab used as foundationalLabId", async () => {
+  it("refuses an Explore-only Lab with challenges, releases or another model, and a Lab used as foundationalLabId", async () => {
+    // An Explore-only Lab (config.mode explore) cannot pick up Guided parts or another model; Guided Labs take the D-5 attach path instead.
     for (const lab of [
-      { simulationModelRef: "wet-bench@1.0.0", _count: { challenges: 1, releases: 0 } },
-      { simulationModelRef: "wet-bench@1.0.0", _count: { challenges: 0, releases: 1 } },
-      { simulationModelRef: "chemistry@1.0.0", _count: { challenges: 0, releases: 0 } },
+      { simulationModelRef: "wet-bench@1.0.0", config: { mode: "explore" }, _count: { challenges: 1, releases: 0 } },
+      { simulationModelRef: "wet-bench@1.0.0", config: { mode: "explore" }, _count: { challenges: 0, releases: 1 } },
+      { simulationModelRef: "chemistry@1.0.0", config: { mode: "explore" }, _count: { challenges: 0, releases: 0 } },
     ]) {
       const { db, tx } = fakeDb(lab);
       await expect(publishExploreLab(db, input())).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
@@ -157,10 +158,16 @@ describe("mechanics bench k5-lever-bench@1 (FL-06 Explore, D1-1.3)", () => {
     expect(tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "lever-bench@1.0.0", config: { mode: "explore", kit: "k5-lever-bench@1" } });
   });
 
-  it("refuses lever-equilibrium while it has the Guided release (waits for D-5)", async () => {
-    const { db, tx } = fakeDb({ simulationModelRef: "lever-bench@1.0.0", _count: { challenges: 0, releases: 1 } });
-    await expect(publishExploreLab(db, leverInput(lever()))).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
+  it("D-5: attaches Explore to lever-equilibrium as config.explore and leaves its Guided model, release and config untouched (D1-3.3)", async () => {
+    const guidedConfig = { rendererKey: "fl-06-k5", notice: "guided" };
+    const { db, tx } = fakeDb({ simulationModelRef: "lever-bench@1.0.0", config: guidedConfig, _count: { challenges: 2, releases: 1 } });
+    const result = await publishExploreLab(db, leverInput(lever()));
+    expect(result).toMatchObject({ labId: "lever-equilibrium", labCreated: false, modes: ["guided", "explore"], activity: { key: "lever-equilibrium-explore", version: 1 } });
     expect(tx.lab.upsert).not.toHaveBeenCalled();
+    const update = tx.lab.update.mock.calls[0][0];
+    expect(Object.keys(update.data)).toEqual(["config"]);
+    expect(update.data.config).toMatchObject({ ...guidedConfig, explore: { kit: "k5-lever-bench@1", engine: "lever-bench@1.0.0", activity: { key: "lever-equilibrium-explore", version: 1 } } });
+    expect(update.data.config.mode).toBeUndefined();
   });
 
   it("rejects an invalid lever config before opening a transaction", async () => {
@@ -260,10 +267,11 @@ describe("thermal bench k4-thermal-bench@1 (FL-08 Explore, D1-3.2)", () => {
     expect(tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "heat-transfer@1.0.0", config: { mode: "explore", kit: "k4-thermal-bench@1" } });
   });
 
-  it("refuses to write Explore onto FL-07 (thermal-energy keeps its Guided release and model)", async () => {
-    const { db, tx } = fakeDb({ simulationModelRef: "thermal-bench@1.0.0", _count: { challenges: 1, releases: 1 } });
-    await expect(publishExploreLab(db, thermalInput(thermal({ labId: "thermal-energy" })))).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
+  it("D-5: Explore on FL-07 (thermal-energy) is attached beside Guided; the Guided model stays thermal-bench@1.0.0", async () => {
+    const { db, tx } = fakeDb({ simulationModelRef: "thermal-bench@1.0.0", config: null, _count: { challenges: 1, releases: 1 } });
+    await publishExploreLab(db, thermalInput(thermal({ labId: "thermal-energy" })));
     expect(tx.lab.upsert).not.toHaveBeenCalled();
+    expect(Object.keys(tx.lab.update.mock.calls[0][0].data)).toEqual(["config"]);
   });
 
   it("rejects an invalid thermal config before opening a transaction", async () => {
@@ -416,7 +424,7 @@ describe("publishExploreLab: wet-bench engine versions", () => {
   });
 
   it("refuses to move an existing 1.0.0 Lab to 1.1.0, and a 1.1.0 config on 1.0.0 features is invalid", async () => {
-    const existing = fakeDb({ simulationModelRef: "wet-bench@1.0.0", _count: { challenges: 0, releases: 0 } });
+    const existing = fakeDb({ simulationModelRef: "wet-bench@1.0.0", config: { mode: "explore" }, _count: { challenges: 0, releases: 0 } });
     await expect(publishExploreLab(existing.db, input(solutionConfig()))).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
     const wrongEngine = fakeDb();
     await expect(publishExploreLab(wrongEngine.db, input({ ...solutionConfig(), engine: "wet-bench@1.0.0" }))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
@@ -453,7 +461,7 @@ describe("optics bench k6-optics-bench@1 (FL-23 Explore, D1-3.2)", () => {
   });
 
   it("moves the published v1 Lab (refraction@1.0.0) to config v2 with the prism (refraction@1.1.0)", async () => {
-    const { db, tx } = fakeDb({ simulationModelRef: "refraction@1.0.0", _count: { challenges: 0, releases: 0 } });
+    const { db, tx } = fakeDb({ simulationModelRef: "refraction@1.0.0", config: { mode: "explore" }, _count: { challenges: 0, releases: 0 } });
     await publishExploreLab(db, opticsInput(optics()));
     expect(tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "refraction@1.1.0" });
     // A v1 config still publishes as 1.0.0.
@@ -473,9 +481,9 @@ describe("optics bench k6-optics-bench@1 (FL-23 Explore, D1-3.2)", () => {
     expect(isExploreModelUpgrade(null, "refraction@1.1.0")).toBe(false);
     expect(isExploreModelUpgrade("not-a-ref", "refraction@1.1.0")).toBe(false);
     // Downgrading the published Lab, or a Guided Lab on the same model, is still refused.
-    const down = fakeDb({ simulationModelRef: "refraction@1.2.0", _count: { challenges: 0, releases: 0 } });
+    const down = fakeDb({ simulationModelRef: "refraction@1.2.0", config: { mode: "explore" }, _count: { challenges: 0, releases: 0 } });
     await expect(publishExploreLab(down.db, opticsInput(optics()))).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
-    const guided = fakeDb({ simulationModelRef: "refraction@1.0.0", _count: { challenges: 0, releases: 1 } });
+    const guided = fakeDb({ simulationModelRef: "refraction@1.0.0", config: { mode: "explore" }, _count: { challenges: 0, releases: 1 } });
     await expect(publishExploreLab(guided.db, opticsInput(optics()))).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
     // Only benches that opt in may upgrade: wet-bench keeps its policy (see "refuses to move an existing 1.0.0 Lab").
     expect(EXPLORE_BENCHES["k6-optics-bench@1"].allowModelUpgrade).toBe(true);
@@ -527,5 +535,40 @@ describe("lens bench k6-lens-bench@1 (FL-23 thin lens Explore, D1-3.2)", () => {
 
   it("seeds FL-23 thin lens on the KHTN 9 Ánh sáng topic with the owner-reviewed config", async () => {
     expect(await loadLensExploreTargets()).toEqual([{ config: expect.objectContaining({ labId: "thin-lens", kit: "k6-lens-bench@1", review: expect.objectContaining({ status: "reviewed" }) }), topicCode: "KHTN9-CH02-T01" }]);
+  });
+});
+
+describe("D-5 two modes on one Lab ID (lab-two-mode-d5-spec.md)", () => {
+  const pointer = { kit: "k5-lever-bench@1", engine: "lever-bench@1.0.0", activity: { id: "pav-1", key: "lever-equilibrium-explore", version: 1, digest: "d" } };
+
+  it("declares modes from the config: Explore-only, Guided, and Guided with config.explore", async () => {
+    const { declaredModes, explorePointer } = await import("./explore-labs");
+    expect(declaredModes({ config: { mode: "explore", ...pointer } })).toEqual(["explore"]);
+    expect(declaredModes({ config: { rendererKey: "fl-06-k5" } })).toEqual(["guided"]);
+    expect(declaredModes({ config: null })).toEqual(["guided"]);
+    expect(declaredModes({ config: { rendererKey: "fl-06-k5", explore: pointer } })).toEqual(["guided", "explore"]);
+    expect(explorePointer({ config: { rendererKey: "x", explore: pointer } })).toEqual(pointer);
+    expect(explorePointer({ config: { rendererKey: "x" } })).toBeNull();
+  });
+
+  it("resolves the pinned Explore config of a two-mode Lab from config.explore", async () => {
+    const { resolveExploreLabs } = await import("./explore-labs");
+    const { db, versions } = fakeDb();
+    const published = await publishExploreLab(db, input());
+    const row = versions[0];
+    const labs = [{ id: published.labId, config: { rendererKey: "guided", explore: { kit: "k2-wet-bench@1", engine: row.spec.explore.engine, activity: { id: row.id, key: row.key, version: row.version, digest: row.digest } } } }];
+    const resolved = await resolveExploreLabs({ practicalActivityVersion: { findMany: vi.fn(async () => [row]) } } as any, labs);
+    expect(resolved.get(published.labId)).toMatchObject({ ok: true, kit: "k2-wet-bench@1" });
+  });
+
+  it("detaches Explore from a two-mode Lab and refuses a Lab that is not two-mode", async () => {
+    const { detachExploreLab } = await import("./explore-labs");
+    const tx: any = { lab: { findUnique: vi.fn(async () => ({ config: { rendererKey: "fl-06-k5", explore: pointer } })), update: vi.fn() } };
+    const db: any = { $transaction: (work: any) => work(tx) };
+    tx.auditLog = { create: vi.fn() };
+    await expect(detachExploreLab(db, { labId: "lever-equilibrium", reason: "test detach", actor })).resolves.toMatchObject({ modes: ["guided"] });
+    expect(tx.lab.update.mock.calls[0][0].data.config).toEqual({ rendererKey: "fl-06-k5" });
+    tx.lab.findUnique = vi.fn(async () => ({ config: { mode: "explore", ...pointer } }));
+    await expect(detachExploreLab(db, { labId: "x", reason: "test detach", actor })).rejects.toMatchObject({ response: { code: "LAB_NOT_TWO_MODE" } });
   });
 });

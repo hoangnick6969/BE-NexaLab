@@ -14,6 +14,8 @@ import { OPTICS_KIT } from "../packages/sim/optics/contracts";
 import { loadOpticsExploreTargets } from "./optics-explore-targets";
 import { LENS_KIT } from "../packages/sim/optics/lens/contracts";
 import { loadLensExploreTargets } from "./lens-explore-targets";
+import { LEVER_KIT } from "../packages/sim/mechanics/contracts";
+import { loadLeverExploreTargets } from "./lever-explore-targets";
 
 /** `publishBlocked` holds the reason a target must not be published yet (owner decision pending); the publish script refuses it. */
 export type ExploreTarget = { config: { labId: string; kit: string } & Record<string, unknown>; topicCode: string; publishBlocked?: string };
@@ -30,4 +32,5 @@ export const EXPLORE_TARGETS: ReadonlyMap<string, () => Promise<ExploreTarget[]>
   [ENERGY_KIT, loadEnergyExploreTargets as () => Promise<ExploreTarget[]>],
   [OPTICS_KIT, loadOpticsExploreTargets as () => Promise<ExploreTarget[]>],
   [LENS_KIT, loadLensExploreTargets as () => Promise<ExploreTarget[]>],
+  [LEVER_KIT, loadLeverExploreTargets as () => Promise<ExploreTarget[]>],
 ]);
