@@ -566,8 +566,10 @@ export async function publishExploreLab(db: PrismaClient, input: PublishExploreI
 
   return db.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:explore-publish:" + config.labId);
-    const existing = await tx.lab.findUnique({ where: { id: config.labId }, select: { simulationModelRef: true, _count: { select: { releases: true, challenges: true } } } });
-    if (existing && (existing._count.challenges || existing._count.releases || (existing.simulationModelRef !== modelRef && !(bench.allowModelUpgrade && isExploreModelUpgrade(existing.simulationModelRef, modelRef)))))
+    const existing = await tx.lab.findUnique({ where: { id: config.labId }, select: { simulationModelRef: true, config: true, _count: { select: { releases: true, challenges: true } } } });
+    // D-5 (lab-two-mode-d5-spec.md §2.3): a Guided Lab keeps its model, releases, challenges and config; Explore is attached as config.explore.
+    const attach = !!existing && declaredMode(existing) === "guided";
+    if (existing && !attach && (existing._count.challenges || existing._count.releases || (existing.simulationModelRef !== modelRef && !(bench.allowModelUpgrade && isExploreModelUpgrade(existing.simulationModelRef, modelRef)))))
       throw new ConflictException({ code: "EXPLORE_LAB_HAS_GUIDED", message: "Lab đã có challenge, release hoặc mô hình khác; không ghi Explore lên Lab này" });
     if (await tx.foundationalCourseLesson.findFirst({ where: { foundationalLabId: config.labId, courseVersion: { status: "active" } }, select: { lessonId: true } }))
       throw new ConflictException({ code: "EXPLORE_LAB_IN_COURSE", message: "Lab đang là foundationalLabId của một khóa active" });
@@ -580,7 +582,15 @@ export async function publishExploreLab(db: PrismaClient, input: PublishExploreI
       data: { key, version: (latest?.version ?? 0) + 1, digest, spec: spec as Prisma.InputJsonValue, reviews: [], createdById: input.actor.sub },
       select: { id: true, version: true },
     });
-    const labConfig = { mode: "explore", kit: config.kit, engine: config.engine, activity: { id: activity.id, key, version: activity.version, digest } };
+    const pointer = { kit: config.kit, engine: config.engine, activity: { id: activity.id, key, version: activity.version, digest } };
+    if (attach) {
+      const guidedConfig = (existing.config && typeof existing.config === "object" ? existing.config : {}) as Record<string, unknown>;
+      await tx.lab.update({ where: { id: config.labId }, data: { config: { ...guidedConfig, explore: pointer } as Prisma.InputJsonValue } });
+      await audit(tx, { actor: input.actor, action: "lab.explore.attach", targetType: "Lab", targetId: config.labId, reason: input.reason,
+        after: { labId: config.labId, modes: ["guided", "explore"], version: activity.version } });
+      return { labId: config.labId, activity: pointer.activity, activityCreated: !found, labCreated: false, modes: ["guided", "explore"] as const };
+    }
+    const labConfig = { mode: "explore", ...pointer };
     const data = {
       subjectId: topic.chapter.subjectId, grade: topic.chapter.grade, title: config.title, topic: topic.title, topicCode: topic.code,
       learningObjective: spec.outcomes[0], status: "published", scope: "SHARED_LIBRARY" as const, releaseCleared: true, synthetic: false,
@@ -589,13 +599,37 @@ export async function publishExploreLab(db: PrismaClient, input: PublishExploreI
     await tx.lab.upsert({ where: { id: config.labId }, create: { id: config.labId, ...data }, update: data });
     await audit(tx, { actor: input.actor, action: "lab.explore.publish", targetType: "Lab", targetId: config.labId, reason: input.reason,
       after: { labId: config.labId, mode: "explore", version: activity.version, status: "published", scope: "SHARED_LIBRARY" } });
-    return { labId: config.labId, activity: labConfig.activity, activityCreated: !found, labCreated: !existing };
+    return { labId: config.labId, activity: labConfig.activity, activityCreated: !found, labCreated: !existing, modes: ["explore"] as const };
+  });
+}
+
+/** D-5 §2.3: removes the Explore mode from a two-mode Lab (the activity versions stay as history). Explore-only Labs are not touched here. */
+export async function detachExploreLab(db: PrismaClient, input: { labId: string; reason: string; actor: { sub: string; role: string } }) {
+  return db.$transaction(async (tx) => {
+    const lab = await tx.lab.findUnique({ where: { id: input.labId }, select: { config: true } });
+    if (!lab) throw new BadRequestException({ code: "LAB_NOT_FOUND" });
+    if (!declaredModes(lab).includes("guided") || !declaredModes(lab).includes("explore")) throw new ConflictException({ code: "LAB_NOT_TWO_MODE" });
+    const { explore: _removed, ...guidedConfig } = lab.config as Record<string, unknown>;
+    await tx.lab.update({ where: { id: input.labId }, data: { config: guidedConfig as Prisma.InputJsonValue } });
+    await audit(tx, { actor: input.actor, action: "lab.explore.detach", targetType: "Lab", targetId: input.labId, reason: input.reason, after: { labId: input.labId, modes: ["guided"] } });
+    return { labId: input.labId, modes: ["guided"] as const };
   });
 }
 
 /** P0 C1.1: the mode a Lab declares on the library route. Never parses the config. */
 export const declaredMode = (lab: { config: unknown }): "guided" | "explore" =>
   (lab.config as { mode?: unknown } | null)?.mode === "explore" ? "explore" : "guided";
+
+/** D-5 §2.1: the Explore pointer of a Lab: the config itself for an Explore-only Lab, `config.explore` for a two-mode Guided Lab. */
+export function explorePointer(lab: { config: unknown }): unknown {
+  const config = lab.config as { mode?: unknown; explore?: unknown } | null;
+  if (config?.mode === "explore") return config;
+  return config?.explore && typeof config.explore === "object" ? config.explore : null;
+}
+
+/** D-5 §2.1: every mode a Lab declares. The first is the primary mode (`declaredMode`). */
+export const declaredModes = (lab: { config: unknown }): Array<"guided" | "explore"> =>
+  declaredMode(lab) === "explore" ? ["explore"] : explorePointer(lab) ? ["guided", "explore"] : ["guided"];
 
 export type ExploreResolveError = "EXPLORE_VERSION_MISSING" | "EXPLORE_IDENTITY_MISMATCH" | "EXPLORE_DIGEST_MISMATCH" | "EXPLORE_KIT_UNSUPPORTED" | "EXPLORE_CONFIG_INVALID";
 export type ExploreResolution =
@@ -612,7 +646,7 @@ const pointerSchema = z.object({
 /** P0 C1.2 ordered checks for one Explore Lab; stops at the first failure and never throws. */
 export function resolveExplore(lab: { id: string; config: unknown }, version: PinnedVersion | undefined): ExploreResolution {
   const fail = (code: ExploreResolveError) => ({ ok: false as const, code });
-  const pointer = pointerSchema.safeParse(lab.config);
+  const pointer = pointerSchema.safeParse(explorePointer(lab));
   if (!pointer.success || !version || version.id !== pointer.data.activity.id) return fail("EXPLORE_VERSION_MISSING");
   const { kit, engine, activity } = pointer.data;
   if (version.key !== `${lab.id}-explore` || version.key !== activity.key || version.version !== activity.version) return fail("EXPLORE_IDENTITY_MISMATCH");
@@ -632,13 +666,14 @@ export function resolveExplore(lab: { id: string; config: unknown }, version: Pi
 
 /** Resolves every Explore Lab in `labs` with one version query (P0 C1.2). */
 export async function resolveExploreLabs(db: Pick<PrismaClient, "practicalActivityVersion">, labs: Array<{ id: string; config: unknown }>) {
-  const explore = labs.filter((lab) => declaredMode(lab) === "explore");
-  const ids = explore.map((lab) => (lab.config as any)?.activity?.id).filter((id): id is string => typeof id === "string");
+  const explore = labs.filter((lab) => declaredModes(lab).includes("explore"));
+  const activityId = (lab: { config: unknown }) => (explorePointer(lab) as { activity?: { id?: unknown } } | null)?.activity?.id;
+  const ids = explore.map(activityId).filter((id): id is string => typeof id === "string");
   const versions = ids.length
     ? await db.practicalActivityVersion.findMany({ where: { id: { in: ids } }, select: { id: true, key: true, version: true, digest: true, spec: true } })
     : [];
   const byId = new Map(versions.map((version) => [version.id, version]));
-  return new Map(explore.map((lab) => [lab.id, resolveExplore(lab, byId.get((lab.config as any)?.activity?.id))]));
+  return new Map(explore.map((lab) => { const id = activityId(lab); return [lab.id, resolveExplore(lab, typeof id === "string" ? byId.get(id) : undefined)] as const; }));
 }
 
 /**
@@ -650,7 +685,7 @@ export async function loadPinnedExploreLab(db: Pick<PrismaClient, "lab" | "pract
     where: { id: labId, status: "published", scope: "SHARED_LIBRARY", releaseCleared: true, synthetic: false, topicCode: { not: null } },
     select: { id: true, title: true, grade: true, config: true },
   });
-  if (!lab || declaredMode(lab) !== "explore") throw new ConflictException({ code: "LAB_SOURCE_NOT_ELIGIBLE" });
+  if (!lab || !declaredModes(lab).includes("explore")) throw new ConflictException({ code: "LAB_SOURCE_NOT_ELIGIBLE" });
   const resolved = (await resolveExploreLabs(db, [lab])).get(lab.id)!;
   if (!resolved.ok) throw new ConflictException({ code: resolved.code });
   return { lab, resolved };

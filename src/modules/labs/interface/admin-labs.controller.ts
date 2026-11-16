@@ -10,6 +10,7 @@ import {
   Put,
   Req,
   UnprocessableEntityException,
+  Delete,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
@@ -37,7 +38,7 @@ import type { Fl10Event } from "../application/fl-10-events";
 import { evaluateFl07Activity } from "../application/fl-07-activity";
 import { canonical, digest, evaluateRunV1, executionSchema as labRunExecutionSchema, LEGACY_CHALLENGE_RUBRIC } from "../application/lab-run";
 import { labEvaluators } from "../application/evaluators/registry";
-import { publishExploreLab } from "../application/explore-labs";
+import { detachExploreLab, publishExploreLab } from "../application/explore-labs";
 /** PostgreSQL JSON numbers can round at the last floating-point digits. */
 function sameStoredResult(actual: any, expected: any): boolean {
   if (typeof actual === "number" && typeof expected === "number")
@@ -104,6 +105,13 @@ export class AdminLabsController {
   publishExploreVersion(@Param("id") labId: string, @Req() req: any, @Body() body: unknown) {
     const input = z.object({ config: z.object({ labId: z.literal(labId) }).passthrough(), topicCode: z.string().min(1).max(80), reason }).strict().parse(body);
     return publishExploreLab(this.db, { ...input, actor: req.user });
+  }
+
+  @Delete("labs/:id/explore")
+  @ApiOperation({ summary: "D-5: remove the Explore mode from a two-mode Lab; Guided and the Explore activity history stay" })
+  detachExplore(@Param("id") labId: string, @Req() req: any, @Body() body: unknown) {
+    const input = z.object({ reason }).strict().parse(body);
+    return detachExploreLab(this.db, { labId, reason: input.reason, actor: req.user });
   }
 
   // ───────────────────────── C2-T3 simulation versions ─────────────────────────

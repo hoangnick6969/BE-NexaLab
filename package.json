@@ -112,7 +112,8 @@
     "publish:fl08-explore": "tsx scripts/publish-explore.ts --kit k4-thermal-bench@1 --lab heat-transfer",
     "publish:fl24-explore": "tsx scripts/publish-explore.ts --kit k5-energy-bench@1 --lab mechanical-energy",
     "publish:fl23-explore": "tsx scripts/publish-explore.ts --kit k6-optics-bench@1 --lab light-refraction",
-    "publish:fl23-lens-explore": "tsx scripts/publish-explore.ts --kit k6-lens-bench@1 --lab thin-lens"
+    "publish:fl23-lens-explore": "tsx scripts/publish-explore.ts --kit k6-lens-bench@1 --lab thin-lens",
+    "publish:fl06-explore": "tsx scripts/publish-explore.ts --kit k5-lever-bench@1 --lab lever-equilibrium"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1140.0",
