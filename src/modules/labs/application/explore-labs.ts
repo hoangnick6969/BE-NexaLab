@@ -5,6 +5,7 @@ import { audit, type AuditActor } from "../../../common/audit";
 import { deriveWetBenchEffectiveConfig, reagentById, validateChemistryLabConfig, type ChemistryLabConfig } from "../../../../packages/sim/wet-bench";
 import { deriveLeverEffectiveConfig, LEVER_ENGINE, LEVER_KIT, validateLeverLabConfig, type LeverLabConfig } from "../../../../packages/sim/mechanics";
 import { FLUID_ENGINE, FLUID_KIT, validateFluidLabConfig, type FluidLabConfig } from "../../../../packages/sim/fluid";
+import { CONDUCTIVITY_TABLE, THERMAL_ENGINE, THERMAL_KIT, validateThermalLabConfig, type ThermalLabConfig } from "../../../../packages/sim/thermal";
 import type { ExploreRequirement } from "../../../../packages/sim/explore/requirements";
 import { activityDigest } from "./sim-packs";
 
@@ -117,6 +118,42 @@ function fluidBenchSpec(config: FluidLabConfig) {
   };
 }
 
+const THERMAL_STATION_SETUP = {
+  conduction: "Trạm dẫn nhiệt: giá ba thanh có đinh gắn sáp, đèn cồn đặt dưới đầu A; vật liệu theo Bảng 28.1.",
+  convection: "Trạm đối lưu: hai ống nghiệm đựng nước, ống (1) có sáp ở đáy, ống (2) có sáp ở miệng; đèn cồn đặt gần miệng hoặc dưới đáy.",
+  radiation: "Trạm bức xạ: đèn dây tóc chiếu vào bình thuỷ tinh phủ màu có nhiệt kế, tấm gỗ dày để chắn.",
+} as const;
+
+function thermalBenchSpec(config: ThermalLabConfig) {
+  return {
+    objective: config.outcomeSummary.join(" "),
+    outcomes: config.outcomeSummary,
+    materials: {
+      reagents: [],
+      apparatus: config.enabledApparatus.map((item) => ({
+        id: item.id, kind: item.kind, label: item.labelVi ?? item.kind,
+        ...(item.kind === "rod_rack" && config.conduction ? { rods: config.conduction.materials.map((material) => CONDUCTIVITY_TABLE[material].labelVi), maxRods: config.conduction.maxRods } : {}),
+      })),
+    },
+    setup: `Bàn nhiệt K4. ${config.stations.map((station) => THERMAL_STATION_SETUP[station]).join(" ")}`,
+    procedure: "Khám phá tự do: học sinh chọn thanh, chỗ đun và cách chiếu đèn, chạy đồng hồ mô phỏng và quan sát; không có trình tự bắt buộc.",
+    observations: (config.pedagogy.observationPrompts ?? []).map((prompt) => prompt.textVi),
+    observationPrompts: config.pedagogy.observationPrompts ?? [],
+    safety: { simulation: config.safetyBriefing.simulation, realLab: config.safetyBriefing.realLab, reagentNotes: [] },
+    limitations: config.limitations,
+    modality: "explore",
+    scored: false,
+    outcomeCodes: [],
+    sources: [
+      { kind: "sgk", status: "verified", description: "Bảng 28.1, SGK KHTN 8 Kết nối tri thức: khả năng dẫn nhiệt so với không khí." },
+      { kind: "technical_assumption", status: "unverified", description: "Thang thời gian dẫn nhiệt, quy tắc đối lưu và hằng số bức xạ là giả định kỹ thuật, chờ reviewer Lý." },
+    ],
+    engine: config.engine,
+    kit: config.kit,
+    configVersion: config.configVersion,
+  };
+}
+
 /** Server bench registry (P0 C2.3): only benches listed here can be published or resolved. */
 export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
   "k2-wet-bench@1": {
@@ -156,6 +193,15 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
       return result.ok ? { ok: true, config: result.config } : { ok: false, errors: result.errors };
     },
     activitySpec: fluidBenchSpec,
+  },
+  [THERMAL_KIT]: {
+    kit: THERMAL_KIT,
+    modelRef: THERMAL_ENGINE,
+    validate: (raw) => {
+      const result = validateThermalLabConfig(raw);
+      return result.ok ? { ok: true, config: result.config } : { ok: false, errors: result.errors };
+    },
+    activitySpec: thermalBenchSpec,
   },
 };
 
