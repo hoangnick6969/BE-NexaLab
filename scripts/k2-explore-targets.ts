@@ -13,6 +13,8 @@ const TARGETS = [
   { file: "fl-14a.config.ts", exportName: "fl14aConfig", topicCode: "KHTN8-L11" },
   { file: "fl-11.config.ts", exportName: "fl11Config", topicCode: "KHTN8-L04" },
   { file: "fl-12.config.ts", exportName: "fl12Config", topicCode: "KHTN8-L07" },
+  { file: "fl-14b.config.ts", exportName: "fl14bConfig", topicCode: "KHTN8-L11" },
+  { file: "fl-14c.config.ts", exportName: "fl14cConfig", topicCode: "KHTN8-L10" },
 ] as const;
 
 export async function loadSafetyScenarioTargets() {
