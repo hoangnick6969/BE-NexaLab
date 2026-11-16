@@ -10,7 +10,9 @@ import type { SpeciesId } from "./species";
 export const WET_BENCH_ENGINE = "wet-bench@1.0.0" as const;
 /** 1.1.0 adds solutions by mass and volume (FL-11). Labs pinned on 1.0.0 behave exactly as before. */
 export const WET_BENCH_ENGINE_V1_1 = "wet-bench@1.1.0" as const;
-export const WET_BENCH_ENGINES = [WET_BENCH_ENGINE, WET_BENCH_ENGINE_V1_1] as const;
+/** 1.2.0 adds reaction rate: a simulated time axis, a stopwatch and gas collected over time (FL-12). */
+export const WET_BENCH_ENGINE_V1_2 = "wet-bench@1.2.0" as const;
+export const WET_BENCH_ENGINES = [WET_BENCH_ENGINE, WET_BENCH_ENGINE_V1_1, WET_BENCH_ENGINE_V1_2] as const;
 export type WetBenchEngine = (typeof WET_BENCH_ENGINES)[number];
 export const K2_KIT = "k2-wet-bench@1" as const;
 export const K2_REACTION_CATALOG = "k2-reactions@1" as const;
@@ -21,18 +23,25 @@ export type VesselKind = (typeof VESSEL_KINDS)[number];
 export const APPARATUS_KINDS = [
   ...VESSEL_KINDS,
   "test_tube_rack_6", "dropper_pipette", "litmus_strip_dispenser", "digital_ph_meter", "tongs", "stopper", "electronic_scale",
-  "glass_rod", "spatula",
+  "glass_rod", "spatula", "stopwatch", "thermometer",
 ] as const;
 /** Kinds that exist only from engine 1.1.0. */
 export const ENGINE_1_1_KINDS: readonly ApparatusKind[] = ["graduated_cylinder_100ml", "volumetric_flask_100ml", "glass_rod", "spatula"];
+/** Kinds that exist only from engine 1.2.0. */
+export const ENGINE_1_2_KINDS: readonly ApparatusKind[] = ["stopwatch", "thermometer"];
 export type ApparatusKind = (typeof APPARATUS_KINDS)[number];
 
-export const MEASUREMENTS = ["ph_meter", "litmus_paper", "scale", "volume"] as const;
+export const MEASUREMENTS = ["ph_meter", "litmus_paper", "scale", "volume", "time", "gas_volume"] as const;
 export type MeasurementKind = (typeof MEASUREMENTS)[number];
 /** The apparatus a measurement needs on the bench. */
 export const MEASUREMENT_TOOL: Record<MeasurementKind, ApparatusKind> = {
   ph_meter: "digital_ph_meter", litmus_paper: "litmus_strip_dispenser", scale: "electronic_scale", volume: "graduated_cylinder_100ml",
+  time: "stopwatch", gas_volume: "erlenmeyer_flask_100ml",
 };
+
+/** Gas at 25 °C and 1 atm: 24,5 L per mole (KHTN 8). Whole µL from nmol. */
+export const GAS_MICROLITERS_PER_MILLIMOLE = 24_500;
+export const gasMicrolitersOf = (nanomoles: number) => Math.round((nanomoles * GAS_MICROLITERS_PER_MILLIMOLE) / 1_000_000);
 
 export type VesselSpec = { capacityMicroliters: number; tareMicrograms: number; stopperable: boolean };
 /** Technical presentation assumptions for K2 glassware (not reviewed laboratory data). */
@@ -54,6 +63,10 @@ export const operationSchema = z.discriminatedUnion("type", [
   /** Engine 1.1.0: powder by mass (mg) from a spatula. It stays undissolved until `stir`. */
   z.object({ type: z.literal("add_solid_mass"), vesselId: id, reagentId: id, milligrams: z.number().int().min(1).max(50_000) }).strict(),
   z.object({ type: z.literal("stir"), vesselId: id }).strict(),
+  /** Engine 1.2.0: the learner's stopwatch. It only shows time; it never changes what the reactions do. */
+  z.object({ type: z.literal("clock"), action: z.enum(["start", "stop", "reset"]) }).strict(),
+  /** Engine 1.2.0: let simulated seconds pass; kinetic reactions progress in every vessel, and the stopwatch counts if it runs. */
+  z.object({ type: z.literal("advance_time"), seconds: z.number().int().min(1).max(600) }).strict(),
   /** Engine 1.1.0: top a volumetric flask up to its mark with a water bottle. */
   z.object({ type: z.literal("fill_to_mark"), vesselId: id, reagentId: id }).strict(),
   z.object({ type: z.literal("pour_all"), fromVesselId: id, toVesselId: id }).strict(),
@@ -91,6 +104,22 @@ export const classTemplateSchema = z.object({
   requiresReactions: z.array(z.string()).max(8).optional(),
 }).strict();
 export type ClassTemplate = z.infer<typeof classTemplateSchema>;
+
+/**
+ * Engine 1.2.0 rate model: the listed reactions are not instant but progress each simulated second. Per second the
+ * reaction extent is k × S × [acid] × (solid left / solid at start), in whole nanomoles. `surface` is the factor S per solid shape.
+ * Every number is a draft assumption for a trend, not a measurement.
+ */
+export const rateModelSchema = z.object({
+  kinetic: z.array(z.string().min(1)).min(1).max(4),
+  /** nmol of solid that reacts per second per mmol/L of acid, for surface factor 1. */
+  kNanomolesPerSecondPerMillimolar: z.number().int().positive().max(1_000_000),
+  surface: z.record(z.enum(["granule", "chips", "nail", "foil", "powder"]), z.number().int().positive().max(100)),
+  /** Latest simulated second; `advance_time` past it is refused. */
+  maxSeconds: z.number().int().positive().max(3600),
+  atCelsius: z.number().int().min(0).max(100),
+}).strict();
+export type RateModel = z.infer<typeof rateModelSchema>;
 
 export const solubilitySchema = z.object({
   reagentId: id,
@@ -137,6 +166,8 @@ export const chemistryLabConfigSchema = exploreLabEnvelopeSchema.extend({
   solutes: z.array(solubilitySchema).max(4).optional(),
   /** Engine 1.1.0: goals the learner prepares; the achieved concentration is only shown after the learner concludes. */
   targets: z.array(solutionTargetSchema).max(4).optional(),
+  /** Engine 1.2.0: reactions that take time. */
+  rateModel: rateModelSchema.optional(),
 });
 export type ChemistryLabConfig = z.infer<typeof chemistryLabConfigSchema>;
 export type ObservationPrompt = NonNullable<ChemistryLabConfig["pedagogy"]["observationPrompts"]>[number];
@@ -172,7 +203,14 @@ export type VesselState = {
   added: Record<string, { microliters: number; pieces: number; drops: number; micrograms?: number }>;
 };
 
-export type Bench = { vessels: Record<string, VesselState>; nextPiece: number };
+export type Bench = {
+  vessels: Record<string, VesselState>;
+  nextPiece: number;
+  /** Engine 1.2.0: simulated seconds that have passed since the bench was set up. */
+  elapsedSeconds?: number;
+  /** Engine 1.2.0: the learner's stopwatch. */
+  clock?: { seconds: number; running: boolean };
+};
 
 export type OutOfScope = {
   code: "PAIR_NOT_IN_LAB_SCOPE" | "PAIR_UNREVIEWED";
@@ -186,12 +224,14 @@ export type Transition = {
   fired: Array<{ reactionId: string; extentNanomoles: number }>;
   gasProducedNanomoles: Partial<Record<SpeciesId, number>>;
   gasEscapedMicrograms: number;
+  /** Engine 1.2.0: gas made in the last simulated second, to draw how fast it bubbles. */
+  gasNanomolesPerSecond?: number;
 };
 
 export type ApplyResult =
   | { status: "applied"; bench: Bench; transitions: Transition[] }
   | { status: "out_of_scope"; bench: Bench; outOfScope: OutOfScope }
-  | { status: "rejected"; code: "INVALID_OPERATION" | "UNKNOWN_VESSEL" | "UNKNOWN_REAGENT" | "REAGENT_NOT_AVAILABLE" | "WRONG_REAGENT_FORM" | "VESSEL_FULL" | "NOT_STOPPERABLE" | "EMPTY_SOURCE" | "SAME_VESSEL" | "NOT_DISSOLVED" | "NO_MARK" };
+  | { status: "rejected"; code: "INVALID_OPERATION" | "UNKNOWN_VESSEL" | "UNKNOWN_REAGENT" | "REAGENT_NOT_AVAILABLE" | "WRONG_REAGENT_FORM" | "VESSEL_FULL" | "NOT_STOPPERABLE" | "EMPTY_SOURCE" | "SAME_VESSEL" | "NOT_DISSOLVED" | "NO_MARK" | "TIME_LIMIT" };
 
 export type MeasurementResult =
   | { kind: "ph_meter"; ok: true; tenthsPh: number; centiPh: number }

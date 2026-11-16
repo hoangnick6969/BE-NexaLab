@@ -11,6 +11,7 @@ const TARGETS = [
   { file: "fl-13.config.ts", exportName: "fl13Config", topicCode: "KHTN8-L09" },
   { file: "fl-14a.config.ts", exportName: "fl14aConfig", topicCode: "KHTN8-L11" },
   { file: "fl-11.config.ts", exportName: "fl11Config", topicCode: "KHTN8-L04" },
+  { file: "fl-12.config.ts", exportName: "fl12Config", topicCode: "KHTN8-L07" },
 ] as const;
 
 export async function loadK2ExploreTargets() {
