@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Bản nháp, chờ owner duyệt** (Q-1 đến Q-6 ở §11). Chưa code |
+| Trạng thái | **Owner chấp nhận Q-1 đến Q-5 như đề xuất** (2026-11-16). **Đã làm trên dev/fixture** (sim 1.21.0, BE+FE `feat/dev1-fl24-mechanical-energy`, Playwright 4/4). **Chưa seed, chưa phát hành** (Q-6: chờ SGK KHTN 9; mã topic K9 còn là placeholder) |
 | Người viết | Dev 1 (Kit Vật lý), task D1-3.2 |
 | Cập nhật | 2026-11-16 |
 | Theo mẫu | [Mẫu spec áp dụng Explore](lab-explore-bench-spec-template.md) · cùng khuôn [FL-04](fl-04-liquid-pressure-explore-spec.md), [FL-08](fl-08-heat-transfer-explore-spec.md) |
@@ -50,7 +50,7 @@ Ma sát và lực cản; lực xiên góc với hướng dịch chuyển (công 
 
 ## 3. Config và sim
 
-`packages/sim/mechanics/energy/`: `contracts.ts` (`ENERGY_KIT`, `ENERGY_ENGINE`, schema `k5-energy-config/1` mở rộng envelope), `energy.ts` (`evaluatePendulum`, `evaluateHoist`), `validate-config.ts`, `fl24-energy.data.ts`, golden và test validator. Bump sim lên **số trống kế tiếp sau `main`** (hiện `main` ở 1.19.0, nên dự kiến 1.20.0), theo quy trình đồng bộ một lần trong ghi chú `pack` của đợt.
+`packages/sim/mechanics/energy/`: `contracts.ts` (`ENERGY_KIT`, `ENERGY_ENGINE`, schema `k5-energy-config/1` mở rộng envelope), `energy.ts` (`evaluatePendulum`, `evaluateHoist`), `validate-config.ts`, `fl24-energy.data.ts`, golden và test validator. Bump sim lên **số trống kế tiếp sau `main`**: thực tế **1.21.0** (1.20.0 đã bị FL-14b/c của K2 dùng), theo quy trình đồng bộ một lần trong ghi chú `pack` của đợt.
 
 ### 3.1 Mô hình
 
@@ -79,6 +79,17 @@ Theo đúng khuôn FL-04 và FL-08:
 - **FE:** registry, trang, cảnh 3D theo `APPARATUS_RENDERERS` (kind: `pendulum`, `energy_bars`, `hoist`, `spring_gauge`, `ruler`, `stopwatch`; dùng lại `stopwatch` chung, thước và lực kế riêng của bàn), sơ đồ 2D cùng trạng thái, nhật ký cục bộ `scored: false`.
 - **Class Explore:** v1 chưa hỗ trợ; đề xuất sau yêu cầu `measure` (mJ, mW) và `explain`.
 - **Nghiệm thu:** golden; BE trên Postgres cô lập; Playwright (registry, G-02, G-03, G-07, config sai, 2D/3D, 390 px); hồi quy `lever-explore`, `fl06-class-explore`.
+
+### Kết quả nghiệm thu trên dev/fixture (2026-11-16)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Sim + BE | `packages/sim/mechanics/energy` golden G-01..G-07, E-01..E-03; vitest `packages/sim` + `src/modules/labs` 639 passed, tsc sạch (BE `8bc35d3`) |
+| FE unit | `energy-explore.test.ts` 7/7 (kit item, đơn vị SGK, nhật ký con lắc và tời, so khớp số học sinh nhập) |
+| FE Playwright | `tests/energy-explore.spec.ts` 4/4: mở qua registry, G-01..G-05 trên thanh năng lượng (số ẩn mặc định), G-06/G-07 lực kế, thước, đồng hồ, "Kiểm tra", so sánh hai động cơ, nhật ký giữ sau F5, xuất `scored: false`, không gọi API run; config chỉ trạm con lắc có số; config sai (`modes.guided`) dừng bàn; 2D, reduced motion; 390 px |
+| Hồi quy FE | fluid-pressure, heat-transfer, lever-explore, fl06-class-explore, explore-pinned-config, biology-explore-benches, fl15-safety: 34 passed cùng FL-24, 3 skipped (ca FL-15 cần server live cô lập) |
+| Cảnh 3D | Con lắc treo trên giá một trụ phía sau mặt phẳng dao động (thả tới h₀ = L/2, 60°, không chạm giá); con lắc và thanh năng lượng vẽ ở 1/2 tỉ lệ, tời ở 0,3; camera riêng cho từng trạm và cho màn hẹp |
+| Chưa làm | Seed và phát hành (Q-6); Class Explore (v1 chưa hỗ trợ); BE trên Postgres cô lập cho FL-24 chưa chạy riêng |
 
 ## 10. Phụ thuộc và rủi ro
 
