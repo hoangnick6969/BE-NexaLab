@@ -104,8 +104,28 @@ const rateReagents: Reagent[] = [
     "Mỗi muỗng khoảng 1 g, cùng khối lượng với một viên đá vôi.", "Bột mịn dễ bay: không hít, dùng thìa sạch, khô."), dispenser: "spatula" },
 ];
 
+/** FL-14b salts and FL-14c oxides (engine 1.0.0 and 1.1.0 Labs; no new engine feature). Draft data. */
+const reactionReagents: Reagent[] = [
+  solution("Na2CO3_0_1M", "Dung dịch Na₂CO₃ 0,1 M", "Na2CO3", 100, "#eef5f6", { level: "caution", tags: ["irritant"] },
+    "Dung dịch muối carbonate không màu.", "Gây kích ứng mắt: đeo kính, rửa tay sau khi làm."),
+  solution("AgNO3_0_1M", "Dung dịch AgNO₃ 0,1 M", "AgNO3", 100, "#eef5f6", { level: "warning", tags: ["corrosive", "irritant"] },
+    "Muối bạc không màu; bạc là kim loại quý, chỉ nhỏ giọt nhỏ.", "Làm đen da, kích ứng mắt, độc với thủy sinh: đeo găng tay và kính, không đổ xuống cống."),
+  solution("NaCl_0_1M", "Dung dịch NaCl 0,1 M", "NaCl", 100, "#eef5f6", { level: "none", tags: [] },
+    "Dung dịch muối ăn không màu.", "Đeo kính khi rót dung dịch."),
+  solution("FeCl3_0_1M", "Dung dịch FeCl₃ 0,1 M", "FeCl3", 100, "#e8cf7a", { level: "warning", tags: ["corrosive", "irritant"] },
+    "Dung dịch muối sắt(III) màu vàng nâu.", "Ăn mòn nhẹ, làm bẩn quần áo: đeo kính và găng tay."),
+  solution("H2SO4_0_1M", "Dung dịch H₂SO₄ loãng 0,1 M", "H2SO4", 100, "#eef5f6", { level: "warning", tags: ["corrosive"] },
+    "Acid mạnh loãng.", "Ăn mòn: rót acid vào nước, không làm ngược lại; đeo kính và găng tay."),
+  { ...solid("CuO_powder", "Đồng(II) oxide (CuO), bột đen", "CuO", 125_000, "powder", "#3b4452", { level: "caution", tags: ["irritant"] },
+    "Mỗi thìa nhỏ khoảng 10 mg.", "Bột mịn dễ bay: không hít, dùng thìa sạch, khô, rửa tay sau khi làm."), dispenser: "spatula" },
+  { ...solid("MgO_powder", "Magnesium oxide (MgO), bột trắng", "MgO", 250_000, "powder", "#f4f4f1", { level: "none", tags: [] },
+    "Mỗi thìa nhỏ khoảng 10 mg.", "Bột mịn dễ bay: không hít, dùng thìa sạch, khô."), dispenser: "spatula" },
+  { ...solid("Fe2O3_powder", "Sắt(III) oxide (Fe₂O₃), bột nâu đỏ", "Fe2O3", 62_500, "powder", "#b45a3c", { level: "none", tags: [] },
+    "Mỗi thìa nhỏ khoảng 10 mg.", "Bột mịn dễ bay: không hít, dùng thìa sạch, khô."), dispenser: "spatula" },
+];
+
 export const REAGENTS: Readonly<Record<string, Reagent>> = Object.freeze(
-  Object.fromEntries([...fl13, indicator, ...others, ...powders, ...rateReagents].map((reagent) => [reagent.id, Object.freeze(reagent)])),
+  Object.fromEntries([...fl13, indicator, ...others, ...powders, ...rateReagents, ...reactionReagents].map((reagent) => [reagent.id, Object.freeze(reagent)])),
 );
 
 export const reagentById = (id: string): Reagent | null => (Object.hasOwn(REAGENTS, id) ? REAGENTS[id] : null);

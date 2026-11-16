@@ -91,6 +91,14 @@ Giới hạn engine hiện tại: 25 °C cố định, phản ứng tức thời
 - Phản ứng: `metal-acid.zn-hcl`, `metal-acid.fe-hcl`, `displace.fe-cuso4`, `displace.zn-cuso4`; Cu + HCl khai báo trơ.
 - Còn mở: F0-6; FL-14 Full sẽ thay thế hoặc mở rộng config này.
 
+### K2-FL14b · Phản ứng của muối — `DONE` (dev, chưa phát hành)
+- Slot 12 (mode hẹp của FL-14 SPLIT) · labId `salt-reactions` · config `labs/fl-14b.config.ts` · topic `KHTN8-L11` · `wet-bench@1.0.0`.
+- Phản ứng: `gas.na2co3-hcl`, `precip.agno3-nacl`, `precip.fecl3-naoh`, `precip.cuso4-naoh`. Dữ liệu `draft`. Spec: `fl-14-reaction-modes-explore-spec.md`.
+
+### K2-FL14c · Oxide và acid — `DONE` (dev, chưa phát hành)
+- Slot 12 (mode hẹp của FL-14 SPLIT) · labId `oxide-reactions` · config `labs/fl-14c.config.ts` · topic `KHTN8-L10` · `wet-bench@1.1.0` (cái thìa).
+- Phản ứng: `oxide-acid.cuo-h2so4`, `oxide-acid.mgo-hcl`, `oxide-acid.fe2o3-hcl`; oxide với NaOH khai báo trơ.
+
 ### K2-FL10 · Bảo toàn khối lượng & mol — Explore `DONE` (config) · Guided `ACTIVE`
 - Slot 8 (SPLIT) · labId `mass-conservation` · config `labs/fl-10-explore.config.ts` có `modes.guided`, nên route chính
   vẫn mở Guided; Explore chỉ chạy ở `/dev/lab-kits/k2`.
