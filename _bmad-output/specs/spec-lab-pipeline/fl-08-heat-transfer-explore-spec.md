@@ -210,3 +210,14 @@ Owner duyệt ngày 2026-11-16, chấp nhận cả sáu đề xuất.
 | F08-5 | Playwright `tests/heat-transfer-explore.spec.ts` 4/4; toàn bộ test BE trên Postgres cô lập |
 
 Nhánh: BE `feat/dev1-fl08-heat-transfer` (chồng lên `docs/dev1-fl08-explore-spec`, tức FL-04), FE `feat/dev1-fl08-heat-transfer` (chồng lên FE `feat/dev1-fl04-liquid-pressure`). Còn lại: merge sau FL-04 (BE và FE cùng lúc); owner seed `--kit k4-thermal-bench@1`, tự kiểm, phát hành qua `publishExploreLab` (`topicCode: "KHTN8-L28"`), xác nhận topic có trong DB.
+
+## 14. Phát hành theo P0 C1.3 (cập nhật 2026-11-16)
+
+Chỉ có hai lối ghi, cả hai qua `publishExploreLab`:
+
+| | Lệnh | Ghi chú |
+|---|---|---|
+| Seed, DB cô lập | `npm run db:seed:explore -- --kit k4-thermal-bench@1` | `assertIsolatedDatabase()` chạy trước mọi lệnh ghi |
+| Phát hành, DB dùng chung | `npm run publish:fl08-explore` (dry run, ghi file request) rồi `npm run publish:fl08-explore -- --publish --reason "..."` với `NEXALAB_ADMIN_API_URL` và `NEXALAB_ADMIN_TOKEN` | Script `scripts/publish-explore.ts` gọi `POST /admin/labs/heat-transfer/explore-versions` (ADMIN, Zod, audit); không ghi DB trực tiếp |
+
+Dry run trên `main` (2026-11-16): config hợp lệ với validator của bàn và schema request của Admin API. Topic `KHTN8-L28` chưa đối chiếu được vì máy không có `NEXA-LAB_Content tool/catalog-registry.json`; owner kiểm topic có trong DB trước khi `--publish`.
