@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-7 như đề xuất. **Đã làm trên dev/fixture** (sim 1.23.0, BE+FE `feat/dev1-fl23-refraction`, Playwright 4/4, §12). Config `review.status: reviewed` (Q-7). **Đã merge** (BE PR #100, FE PR #84) và **đã phát hành lên DB dev 2026-11-16** (`light-refraction`, topic `KHTN9-CH02-T01`, Admin API, 201). **v1.1 lăng kính và tán sắc: bản nháp §13, chờ owner duyệt Q-8 đến Q-13** |
+| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-7 như đề xuất. **Đã làm trên dev/fixture** (sim 1.23.0, BE+FE `feat/dev1-fl23-refraction`, Playwright 4/4, §12). Config `review.status: reviewed` (Q-7). **Đã merge** (BE PR #100, FE PR #84) và **đã phát hành lên DB dev 2026-11-16** (`light-refraction`, topic `KHTN9-CH02-T01`, Admin API, 201). **v1.1 lăng kính và tán sắc: owner duyệt Q-8 đến Q-13 (2026-11-16); đã làm trên dev/fixture** (sim 1.24.0, BE+FE `feat/dev1-fl23-prism`, §13.5); phát hành config v2 sau khi merge |
 | Người viết | Dev 1 (Kit Vật lý), task D1-3.2 |
 | Cập nhật | 2026-11-16 |
 | Theo mẫu | [Mẫu spec áp dụng Explore](lab-explore-bench-spec-template.md) · cùng khuôn [FL-04](fl-04-liquid-pressure-explore-spec.md), [FL-08](fl-08-heat-transfer-explore-spec.md), [FL-24](fl-24-mechanical-energy-explore-spec.md) |
@@ -138,7 +138,7 @@ Nếu đồng ý cả bảy đề xuất, chỉ cần trả lời "duyệt".
 | Phát hành (2026-11-16) | `npm run publish:fl23-explore -- --publish` từ `main` qua API dev: 201, activity `light-refraction-explore` v1. `GET /labs` của admin và `student.active` có `light-refraction`, `explore.ok: true`, `review.status: reviewed`. Trình duyệt thật với `student.active` (FE `main`): mở 2D mặc định, G-02 r = 19,5°, Trạm 2 ở 42° phản xạ toàn phần, không có thông báo giả định, không gọi API run |
 | Chưa làm | Đối chiếu SGK KHTN 9; Class Explore; lăng kính và tán sắc (v1.1, Q-1); Lab thấu kính (spec riêng) |
 
-## 13. Bổ sung v1.1: lăng kính và tán sắc (bản nháp, chờ owner duyệt Q-8 đến Q-13)
+## 13. Bổ sung v1.1: lăng kính và tán sắc (owner duyệt Q-8 đến Q-13, 2026-11-16)
 
 Owner đã chốt ở Q-1 rằng lăng kính và tán sắc là **v1.1 trên cùng bàn K6**. Phần này mô tả v1.1 để owner duyệt trước khi code. Mọi phần của v1 (Trạm 1, Trạm 2, đã phát hành) giữ nguyên.
 
@@ -188,3 +188,12 @@ Nếu đồng ý cả sáu đề xuất, chỉ cần trả lời "duyệt".
 | Q-11 | Chiết suất theo màu | Bảy giá trị minh hoạ của thuỷ tinh crown (đỏ 1,513, cam 1,517, vàng 1,519, lục 1,523, lam 1,528, chàm 1,532, tím 1,538); chỉ dùng để vẽ dải màu và thứ tự lệch, không hiện số cho học sinh |
 | Q-12 | Phát hành | Cùng Lab `light-refraction`, config version 2 (ba trạm), `reviewed` với ghi chú "chưa đối chiếu SGK KHTN 9", phát hành sau khi merge như v1 |
 | Q-13 | Góc lệch D | Hiện D trên đĩa và trong panel (giúp thấy tia ló lệch về đáy); không đưa khái niệm góc lệch cực tiểu thành yêu cầu, chỉ là hiện tượng quan sát được |
+
+### 13.5 Kết quả nghiệm thu v1.1 trên dev/fixture (2026-11-16)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Sim | Engine `refraction@1.1.0`: `tracePrism`, `minExitIncidenceDeg`, `evaluatePrism`; schema nhận cả 1.0.0 và 1.1.0, trạm `prism` chỉ với 1.1.0; validator (mọi màu phải ló ra ở mặt thứ hai, thứ tự spectrum, màn hứng khi bật ánh sáng trắng). Golden P-01..P-07; `packages/sim/optics` 31 test. Config FL-23 version 2 (ba trạm). Sim 1.24.0 chỉ đổi các file `optics/` so với 1.23.0 |
+| BE | `refractionBenchSpec` mô tả Trạm 3 và lăng kính; `modelRefOf` theo engine của config. **Nâng model khi phát hành lại là tuỳ chọn theo bàn** (`allowModelUpgrade`, chỉ bàn K6 bật): Lab đã phát hành `refraction@1.0.0` được chuyển lên 1.1.0; khác tên model, khác major, hạ version, hoặc Lab có challenge/release vẫn bị từ chối. Wet-bench giữ chính sách cũ (test "refuses to move an existing 1.0.0 Lab" của K2 vẫn pass). Vitest `packages/sim` + `src/modules/labs` 677 passed; dry run hợp lệ |
+| FE | Trạm 3: chọn góc tới 35–80°, đèn laser hoặc ánh sáng trắng, dự đoán hướng tia ló rồi mới hiện đường truyền, bảng r₁, r₂, i₂, D (chỉ với laser), dải màu với ô phóng to giữ đúng vị trí tương đối; 2D vẽ bằng dò tia vector (unit test đối chiếu D = i₁ + i₂ − A), 3D lăng kính đùn từ cùng tam giác, màn hứng, chùm màu. Unit 10/10; Playwright `refraction-explore` 5/5 (config v1 vẫn mở hai trạm; trạm lăng kính với engine 1.0.0 bị từ chối) |
+| Chưa làm | Phát hành config v2 (sau merge); đối chiếu SGK KHTN 9; Lab thấu kính (spec riêng) |

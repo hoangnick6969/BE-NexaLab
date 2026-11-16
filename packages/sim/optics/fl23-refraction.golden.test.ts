@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  evaluatePrism, minExitIncidenceDeg, tracePrism, type PrismTrace,
   appendReading, checkCriticalGuess, criticalAngleDeg, evaluateRay, FL23_REFRACTION_EXPLORE_CONFIG as config, lightSpeedInMedium, refract, roundTenth, sineRatio,
   type RayReading, type RayState,
 } from "./index";
@@ -102,5 +103,64 @@ describe("refraction@1.0.0 errors (spec §3.2)", () => {
   it("E-02 refuses a medium outside the config and a station that is not enabled", () => {
     expect(evaluateRay(config, { station: "into-block", mediumId: "diamond", incidenceDeg: 30 })).toEqual({ ok: false, code: "MEDIUM_NOT_ALLOWED" });
     expect(evaluateRay({ ...config, stations: ["into-block"], outOfBlock: undefined }, { station: "out-of-block", mediumId: "glass", incidenceDeg: 30 })).toEqual({ ok: false, code: "STATION_NOT_ENABLED" });
+  });
+});
+
+describe("refraction@1.1.0 prism golden (spec §13.3)", () => {
+  const exits = (trace: PrismTrace) => {
+    if (trace.kind !== "exits") throw new Error("total");
+    return trace;
+  };
+  const prism = (incidenceDeg: number, light: "laser" | "white" = "laser") => {
+    const result = evaluatePrism(config, { incidenceDeg, light });
+    if (!result.ok) throw new Error(result.code);
+    return result;
+  };
+
+  it("P-01 i₁ = 40°: r₁ 25.4°, r₂ 34.6°, i₂ 58.5°, D 38.5°", () => {
+    const t = exits(prism(40).laser);
+    near(t.firstRefractionDeg, 25.37);
+    near(t.secondIncidenceDeg, 34.63);
+    near(t.exitDeg, 58.47);
+    near(t.deviationDeg, 38.47);
+  });
+  it("P-02 symmetric path at i₁ = 48.6°: r₁ = r₂ = 30°, D = 37.2° is the smallest deviation", () => {
+    const t = exits(tracePrism(1500, 60, 48.59));
+    near(t.firstRefractionDeg, 30);
+    near(t.secondIncidenceDeg, 30);
+    near(t.deviationDeg, 37.18);
+    for (let i = 35; i <= 80; i++) expect(exits(prism(i).laser).deviationDeg).toBeGreaterThanOrEqual(37.18 - 0.01);
+  });
+  it("P-03 i₁ = 60°: r₁ 35.3°, r₂ 24.7°, i₂ 38.9°, D 38.9°", () => {
+    const t = exits(prism(60).laser);
+    near(t.firstRefractionDeg, 35.26);
+    near(t.secondIncidenceDeg, 24.74);
+    near(t.exitDeg, 38.88);
+    near(t.deviationDeg, 38.88);
+  });
+  it("P-04 i₁ = 80°: i₂ 29.2°, D 49.2°; the ray always bends towards the base (D > 0)", () => {
+    near(exits(prism(80).laser).deviationDeg, 49.17);
+    for (let i = 35; i <= 80; i++) expect(exits(prism(i).laser).deviationDeg).toBeGreaterThan(0);
+  });
+  it("P-05 i₁ = 25° reflects totally at the second face; the threshold for glass is 27.9°", () => {
+    expect(tracePrism(1500, 60, 25).kind).toBe("total");
+    near(minExitIncidenceDeg(1500, 60), 27.92);
+    expect(minExitIncidenceDeg(1500, 20)).toBe(0);
+  });
+  it("P-06 white light at 50°: red 38.3°, violet 40.5°, deviation grows from red to violet", () => {
+    const spectrum = prism(50, "white").spectrum;
+    expect(spectrum.map((item) => item.colour.id)).toEqual(["red", "orange", "yellow", "green", "blue", "indigo", "violet"]);
+    const deviations = spectrum.map((item) => exits(item.trace).deviationDeg);
+    near(deviations[0], 38.32);
+    near(deviations[6], 40.53);
+    for (let k = 1; k < deviations.length; k++) expect(deviations[k]).toBeGreaterThan(deviations[k - 1]);
+    expect(prism(50).spectrum).toEqual([]);
+  });
+  it("refuses angles outside the prism range, white light when off, and the prism on engine 1.0.0", () => {
+    expect(evaluatePrism(config, { incidenceDeg: 34, light: "laser" })).toEqual({ ok: false, code: "INCIDENCE_OUT_OF_RANGE" });
+    expect(evaluatePrism(config, { incidenceDeg: 50.5, light: "laser" })).toEqual({ ok: false, code: "INCIDENCE_NOT_INTEGER" });
+    expect(evaluatePrism({ ...config, prism: { ...config.prism!, whiteLight: false } }, { incidenceDeg: 50, light: "white" })).toEqual({ ok: false, code: "WHITE_LIGHT_OFF" });
+    expect(evaluatePrism({ ...config, engine: "refraction@1.0.0" }, { incidenceDeg: 50, light: "laser" })).toEqual({ ok: false, code: "ENGINE_TOO_OLD" });
+    expect(evaluateRay(config, { station: "prism", mediumId: "glass", incidenceDeg: 30 })).toEqual({ ok: false, code: "STATION_NOT_ENABLED" });
   });
 });

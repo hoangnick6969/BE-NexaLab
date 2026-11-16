@@ -26,7 +26,7 @@ describe("validateRefractionLabConfig", () => {
     expect(errorsOf({ modes: { explore: true, guided: { rendererKey: "fl23" } } })).toEqual([expect.stringContaining("Explore-only")]);
     expect(errorsOf({ stations: ["into-block", "into-block"] })).toContain("stations: duplicate into-block");
     expect(errorsOf({ outOfBlock: undefined })).toContain("outOfBlock: required by the out-of-block station");
-    expect(errorsOf({ stations: ["out-of-block"], enabledApparatus: apparatus(["light_source", "protractor_disk", "half_cylinder"]) })).toContain("intoBlock: set without the into-block station");
+    expect(errorsOf({ stations: ["out-of-block"], prism: undefined, enabledApparatus: apparatus(["light_source", "protractor_disk", "half_cylinder"]) })).toContain("intoBlock: set without the into-block station");
   });
 
   it("E-02 rejects a block not denser than air and two media with the same id or index", () => {
@@ -38,14 +38,48 @@ describe("validateRefractionLabConfig", () => {
   it("keeps apparatus and stations consistent", () => {
     expect(errorsOf({ enabledApparatus: apparatus(["light_source", "protractor_disk", "half_cylinder", "speed_card"]) })).toContain("enabledApparatus: the stations need measurement_table");
     // A station-2-only bench cannot carry the table or the speed card.
-    expect(errorsOf({ stations: ["out-of-block"], intoBlock: undefined })).toEqual([
+    expect(errorsOf({ stations: ["out-of-block"], intoBlock: undefined, prism: undefined, enabledApparatus: apparatus(["light_source", "protractor_disk", "half_cylinder", "measurement_table", "speed_card"]) })).toEqual([
       "enabledApparatus: measurement_table belongs to a station that is not enabled",
       "enabledApparatus: speed_card belongs to a station that is not enabled",
     ]);
-    expect(errorsOf({ enabledApparatus: [...base.enabledApparatus.slice(0, 4), { ...base.enabledApparatus[0], id: "laser2" }] })).toContain("enabledApparatus: at most one light_source");
+    // Seven items at most: swap the screen for a second laser.
+    expect(errorsOf({ enabledApparatus: [...base.enabledApparatus.filter((item) => item.kind !== "screen"), { ...base.enabledApparatus[0], id: "laser2" }] })).toContain("enabledApparatus: at most one light_source");
   });
 
   it("station 2 must reach total internal reflection for every medium", () => {
     expect(errorsOf({ outOfBlock: { maxIncidenceDeg: 45, criticalToleranceDeg: 1 } })).toEqual(["outOfBlock.maxIncidenceDeg: water needs more than 48° to show total internal reflection"]);
+  });
+});
+
+describe("prism station (engine 1.1.0, spec §13)", () => {
+  const v1 = () => {
+    const config = structuredClone(base) as Record<string, unknown>;
+    return { ...config, engine: "refraction@1.0.0", configVersion: 1, stations: ["into-block", "out-of-block"], prism: undefined,
+      enabledApparatus: base.enabledApparatus.filter((item) => !["prism", "screen"].includes(item.kind)) };
+  };
+
+  it("P-07 a v1 config (engine 1.0.0, two stations) is still valid; the prism station on 1.0.0 is not", () => {
+    expect(validateRefractionLabConfig(v1()).ok).toBe(true);
+    expect(errorsOf({ engine: "refraction@1.0.0" })).toEqual(["engine: the prism station needs refraction@1.1.0"]);
+  });
+
+  it("rejects a prism whose smallest angle lets a colour reflect totally inside it", () => {
+    expect(errorsOf({ prism: { ...base.prism!, minIncidenceDeg: 30 } })).toEqual([
+      "prism.minIncidenceDeg: blue reflects totally inside the prism below 31°",
+      "prism.minIncidenceDeg: indigo reflects totally inside the prism below 31°",
+      "prism.minIncidenceDeg: violet reflects totally inside the prism below 31°",
+    ]);
+    // Without white light only the laser (glass 1.500, needs 27.9°) counts, and the screen is optional.
+    expect(errorsOf({ prism: { ...base.prism!, minIncidenceDeg: 30, whiteLight: false } })).toEqual([]);
+  });
+
+  it("checks the prism medium, the angle range, the spectrum order and the screen", () => {
+    expect(errorsOf({ prism: { ...base.prism!, mediumId: "diamond" } })).toContain("prism.mediumId: diamond is not one of the media");
+    expect(errorsOf({ prism: { ...base.prism!, minIncidenceDeg: 80 } })).toContain("prism: minIncidenceDeg must be below maxIncidenceDeg");
+    const swapped = [...base.prism!.spectrum];
+    [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
+    expect(errorsOf({ prism: { ...base.prism!, spectrum: swapped } })).toContain("prism.spectrum: red must bend more than orange (order from red to violet)");
+    expect(errorsOf({ enabledApparatus: base.enabledApparatus.filter((item) => item.kind !== "screen") })).toEqual(["enabledApparatus: white light needs a screen"]);
+    expect(errorsOf({ prism: undefined })).toContain("prism: required by the prism station");
   });
 });

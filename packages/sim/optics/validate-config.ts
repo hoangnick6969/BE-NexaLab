@@ -1,5 +1,6 @@
-/** Validates an optics bench config: schema, then the stations against the media and the apparatus. */
-import { refractionLabConfigSchema, type RefractionLabConfig } from "./contracts";
+/** Validates an optics bench config: schema, then the stations against the media, the prism and the apparatus. */
+import { REFRACTION_ENGINE, refractionLabConfigSchema, type RefractionLabConfig } from "./contracts";
+import { minExitIncidenceDeg } from "./refraction";
 
 export type RefractionConfigValidation =
   | { ok: true; config: RefractionLabConfig; warnings: string[] }
@@ -9,9 +10,10 @@ const duplicates = <T>(values: readonly T[]) => [...new Set(values.filter((value
 const STATION_APPARATUS = {
   "into-block": ["light_source", "protractor_disk", "half_cylinder", "measurement_table"],
   "out-of-block": ["light_source", "protractor_disk", "half_cylinder"],
+  prism: ["light_source", "protractor_disk", "prism"],
 } as const;
-/** Optional items and the station they belong to. */
-const OPTIONAL_APPARATUS = { speed_card: "into-block" } as const;
+/** Optional items and the station they belong to (the screen is required when white light is on). */
+const OPTIONAL_APPARATUS = { speed_card: "into-block", screen: "prism" } as const;
 
 export function validateRefractionLabConfig(raw: unknown): RefractionConfigValidation {
   const parsed = refractionLabConfigSchema.safeParse(raw);
@@ -45,7 +47,29 @@ export function validateRefractionLabConfig(raw: unknown): RefractionConfigValid
     }
   } else if (config.outOfBlock) errors.push("outOfBlock: set without the out-of-block station");
 
-  if (config.media.length < 2) warnings.push("media: one medium only, students cannot compare how much each one bends light");
+  const prism = config.prism;
+  if (config.stations.includes("prism")) {
+    if (config.engine !== REFRACTION_ENGINE) errors.push(`engine: the prism station needs ${REFRACTION_ENGINE}`);
+    if (!prism) errors.push("prism: required by the prism station");
+    else {
+      const medium = config.media.find((item) => item.id === prism.mediumId);
+      if (!medium) errors.push(`prism.mediumId: ${prism.mediumId} is not one of the media`);
+      if (prism.minIncidenceDeg >= prism.maxIncidenceDeg) errors.push("prism: minIncidenceDeg must be below maxIncidenceDeg");
+      for (const id of duplicates(prism.spectrum.map((colour) => colour.id))) errors.push(`prism.spectrum: duplicate id ${id}`);
+      prism.spectrum.forEach((colour, index) => {
+        if (index > 0 && colour.indexMilli <= prism.spectrum[index - 1].indexMilli) errors.push(`prism.spectrum: ${colour.id} must bend more than ${prism.spectrum[index - 1].id} (order from red to violet)`);
+      });
+      // Every ray the student can make, laser or any colour, must leave through the second face (spec §13.2).
+      const indices = [...(medium ? [{ id: medium.id, indexMilli: medium.indexMilli }] : []), ...(prism.whiteLight ? prism.spectrum : [])];
+      for (const item of indices) {
+        const least = minExitIncidenceDeg(item.indexMilli, prism.apexDeg);
+        if (prism.minIncidenceDeg < least) errors.push(`prism.minIncidenceDeg: ${item.id} reflects totally inside the prism below ${Math.ceil(least)}°`);
+      }
+      if (prism.whiteLight && !kinds.includes("screen")) errors.push("enabledApparatus: white light needs a screen");
+    }
+  } else if (prism) errors.push("prism: set without the prism station");
+
+  if (config.media.length < 2 && (config.stations.includes("into-block") || config.stations.includes("out-of-block"))) warnings.push("media: one medium only, students cannot compare how much each one bends light");
   if (config.modes.guided) errors.push("modes.guided: the optics bench config is Explore-only");
   if (config.review.status === "draft") warnings.push("review.status: draft (refractive indices and the disk setup wait for owner review)");
 

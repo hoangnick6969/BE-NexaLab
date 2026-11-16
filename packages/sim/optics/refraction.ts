@@ -4,7 +4,7 @@
  * critical angle sin i_gh = n₂ / n₁; speed v = c / n. Angles in are whole degrees, angles out are reals
  * (rounded to 0.1° for display and the notebook). Brightness (Fresnel, unpolarised) is for drawing only.
  */
-import { AIR_INDEX_MILLI, LIGHT_SPEED_KM_S, type Medium, type OpticsStation, type RefractionLabConfig } from "./contracts";
+import { AIR_INDEX_MILLI, LIGHT_SPEED_KM_S, REFRACTION_ENGINE, type Medium, type OpticsStation, type RefractionLabConfig, type SpectrumColour } from "./contracts";
 
 const RAD = Math.PI / 180;
 const sinDeg = (deg: number) => Math.sin(deg * RAD);
@@ -64,7 +64,7 @@ export type RayResult = ({ ok: true } & RayReading) | { ok: false; code: RayErro
 type RayConfig = Pick<RefractionLabConfig, "stations" | "media" | "intoBlock" | "outOfBlock">;
 
 export function evaluateRay(config: RayConfig, state: RayState): RayResult {
-  const settings = state.station === "into-block" ? config.intoBlock : config.outOfBlock;
+  const settings = state.station === "into-block" ? config.intoBlock : state.station === "out-of-block" ? config.outOfBlock : undefined;
   if (!config.stations.includes(state.station) || !settings) return { ok: false, code: "STATION_NOT_ENABLED" };
   const medium = config.media.find((item) => item.id === state.mediumId);
   if (!medium) return { ok: false, code: "MEDIUM_NOT_ALLOWED" };
@@ -93,4 +93,55 @@ export function appendReading(rows: readonly TableRow[], reading: RayReading, ma
 /** Whether a student's critical angle is within the tolerance of the model. */
 export function checkCriticalGuess(guessDeg: number, criticalDeg: number, toleranceDeg: number) {
   return Number.isFinite(guessDeg) && Math.abs(guessDeg - criticalDeg) <= toleranceDeg;
+}
+
+/* ---------- Prism (engine 1.1.0, spec §13) ---------- */
+
+export type PrismTrace =
+  | { kind: "exits"; firstRefractionDeg: number; secondIncidenceDeg: number; exitDeg: number; deviationDeg: number }
+  /** The ray reaches the second face beyond its critical angle and does not leave there. */
+  | { kind: "total"; firstRefractionDeg: number; secondIncidenceDeg: number };
+
+/** Ray through a prism of apex angle A in air: r₁ from Snell, r₂ = A − r₁, i₂ from Snell at the second face, D = i₁ + i₂ − A. */
+export function tracePrism(indexMilli: number, apexDeg: number, incidenceDeg: number): PrismTrace {
+  const firstRefractionDeg = Math.asin((AIR_INDEX_MILLI * sinDeg(incidenceDeg)) / indexMilli) / RAD;
+  const secondIncidenceDeg = apexDeg - firstRefractionDeg;
+  const s = (indexMilli * sinDeg(secondIncidenceDeg)) / AIR_INDEX_MILLI;
+  if (s > 1) return { kind: "total", firstRefractionDeg, secondIncidenceDeg };
+  const exitDeg = Math.asin(s) / RAD;
+  return { kind: "exits", firstRefractionDeg, secondIncidenceDeg, exitDeg, deviationDeg: incidenceDeg + exitDeg - apexDeg };
+}
+
+/** Smallest angle of incidence for which the ray still leaves through the second face (0 when every angle does). */
+export function minExitIncidenceDeg(indexMilli: number, apexDeg: number) {
+  const critical = Math.asin(AIR_INDEX_MILLI / indexMilli) / RAD;
+  const r1 = apexDeg - critical;
+  if (r1 <= 0) return 0;
+  return Math.asin(Math.min(1, (indexMilli * sinDeg(r1)) / AIR_INDEX_MILLI)) / RAD;
+}
+
+export type PrismLight = "laser" | "white";
+export type PrismState = { incidenceDeg: number; light: PrismLight };
+export type SpectrumTrace = { colour: SpectrumColour; trace: PrismTrace };
+export type PrismReading = { incidenceDeg: number; apexDeg: number; medium: Medium; light: PrismLight; laser: PrismTrace; spectrum: SpectrumTrace[] };
+export type PrismError = "STATION_NOT_ENABLED" | "ENGINE_TOO_OLD" | "MEDIUM_NOT_ALLOWED" | "WHITE_LIGHT_OFF" | "INCIDENCE_NOT_INTEGER" | "INCIDENCE_OUT_OF_RANGE";
+export type PrismResult = ({ ok: true } & PrismReading) | { ok: false; code: PrismError };
+
+type PrismConfig = Pick<RefractionLabConfig, "engine" | "stations" | "media" | "prism">;
+
+/** Station 3: the laser path always; with white light, one trace per colour of the spectrum (least to most deviated). */
+export function evaluatePrism(config: PrismConfig, state: PrismState): PrismResult {
+  const settings = config.prism;
+  if (!config.stations.includes("prism") || !settings) return { ok: false, code: "STATION_NOT_ENABLED" };
+  if (config.engine !== REFRACTION_ENGINE) return { ok: false, code: "ENGINE_TOO_OLD" };
+  const medium = config.media.find((item) => item.id === settings.mediumId);
+  if (!medium) return { ok: false, code: "MEDIUM_NOT_ALLOWED" };
+  if (state.light === "white" && !settings.whiteLight) return { ok: false, code: "WHITE_LIGHT_OFF" };
+  if (!Number.isInteger(state.incidenceDeg)) return { ok: false, code: "INCIDENCE_NOT_INTEGER" };
+  if (state.incidenceDeg < settings.minIncidenceDeg || state.incidenceDeg > settings.maxIncidenceDeg) return { ok: false, code: "INCIDENCE_OUT_OF_RANGE" };
+  return {
+    ok: true, incidenceDeg: state.incidenceDeg, apexDeg: settings.apexDeg, medium, light: state.light,
+    laser: tracePrism(medium.indexMilli, settings.apexDeg, state.incidenceDeg),
+    spectrum: state.light === "white" ? settings.spectrum.map((colour) => ({ colour, trace: tracePrism(colour.indexMilli, settings.apexDeg, state.incidenceDeg) })) : [],
+  };
 }
