@@ -61,6 +61,35 @@ export const K2_REACTIONS: readonly ReactionRule[] = Object.freeze([
     reactants: [{ species: "CaCO3", coeff: 1 }, { species: "HCl", coeff: 2 }],
     products: [{ species: "CaCl2", coeff: 1, fate: "dissolved" }, { species: "CO2", coeff: 1, fate: "gas" }, { species: "H2O", coeff: 1, fate: "solvent" }],
     gasVigor: { chips: "vigorous", powder: "vigorous" }, phenomenonVi: "Viên đá vôi sủi bọt khí mạnh" }),
+  // FL-14b (salts) and FL-14c (oxides). Appended last so the order of earlier reactions never changes.
+  rxn({ id: "gas.na2co3-hcl", equationDisplay: "Na₂CO₃ + 2HCl → 2NaCl + CO₂↑ + H₂O",
+    reactants: [{ species: "Na2CO3", coeff: 1 }, { species: "HCl", coeff: 2 }],
+    products: [{ species: "NaCl", coeff: 2, fate: "dissolved" }, { species: "CO2", coeff: 1, fate: "gas" }, { species: "H2O", coeff: 1, fate: "solvent" }],
+    phenomenonVi: "Dung dịch sủi bọt khí" }),
+  rxn({ id: "precip.agno3-nacl", equationDisplay: "AgNO₃ + NaCl → AgCl↓ + NaNO₃",
+    reactants: [{ species: "AgNO3", coeff: 1 }, { species: "NaCl", coeff: 1 }],
+    products: [{ species: "AgCl", coeff: 1, fate: "precipitate" }, { species: "NaNO3", coeff: 1, fate: "dissolved" }],
+    phenomenonVi: "Xuất hiện kết tủa trắng" }),
+  rxn({ id: "precip.fecl3-naoh", equationDisplay: "FeCl₃ + 3NaOH → Fe(OH)₃↓ + 3NaCl",
+    reactants: [{ species: "FeCl3", coeff: 1 }, { species: "NaOH", coeff: 3 }],
+    products: [{ species: "FeOH3", coeff: 1, fate: "precipitate" }, { species: "NaCl", coeff: 3, fate: "dissolved" }],
+    phenomenonVi: "Xuất hiện kết tủa màu nâu đỏ" }),
+  rxn({ id: "precip.cuso4-naoh", equationDisplay: "CuSO₄ + 2NaOH → Cu(OH)₂↓ + Na₂SO₄",
+    reactants: [{ species: "CuSO4", coeff: 1 }, { species: "NaOH", coeff: 2 }],
+    products: [{ species: "CuOH2", coeff: 1, fate: "precipitate" }, { species: "Na2SO4", coeff: 1, fate: "dissolved" }],
+    phenomenonVi: "Xuất hiện kết tủa màu xanh lam" }),
+  rxn({ id: "oxide-acid.cuo-h2so4", equationDisplay: "CuO + H₂SO₄ → CuSO₄ + H₂O",
+    reactants: [{ species: "CuO", coeff: 1 }, { species: "H2SO4", coeff: 1 }],
+    products: [{ species: "CuSO4", coeff: 1, fate: "dissolved" }, { species: "H2O", coeff: 1, fate: "solvent" }],
+    phenomenonVi: "Bột đen tan dần, dung dịch chuyển sang màu xanh lam" }),
+  rxn({ id: "oxide-acid.mgo-hcl", equationDisplay: "MgO + 2HCl → MgCl₂ + H₂O",
+    reactants: [{ species: "MgO", coeff: 1 }, { species: "HCl", coeff: 2 }],
+    products: [{ species: "MgCl2", coeff: 1, fate: "dissolved" }, { species: "H2O", coeff: 1, fate: "solvent" }],
+    phenomenonVi: "Bột trắng tan dần, dung dịch không màu, không sủi bọt" }),
+  rxn({ id: "oxide-acid.fe2o3-hcl", equationDisplay: "Fe₂O₃ + 6HCl → 2FeCl₃ + 3H₂O",
+    reactants: [{ species: "Fe2O3", coeff: 1 }, { species: "HCl", coeff: 6 }],
+    products: [{ species: "FeCl3", coeff: 2, fate: "dissolved" }, { species: "H2O", coeff: 3, fate: "solvent" }],
+    phenomenonVi: "Bột nâu đỏ tan dần, dung dịch chuyển sang màu vàng nâu" }),
 ]);
 
 export type ReactionId = string;
@@ -86,6 +115,20 @@ export const K2_INERT_PAIRS: ReadonlyArray<[SpeciesId, SpeciesId]> = Object.free
   ...pairs(["NaCl"], ["BaCl2", "Na2SO4", "CaCl2", "NaCl"]),
   ["CaCl2", "BaCl2"], ["CaCl2", "CaCl2"],
   ...pairs(["CaCO3"], ["NaCl", "CaCl2", "BaSO4", "CaCO3"]),
+  // FL-14b: spectator salts and insoluble products. Pairs that might react (Na₂CO₃ with AgNO₃, FeCl₃ or CuSO₄; AgNO₃ with
+  // HCl, FeCl₃, NaOH, CuSO₄ or Na₂SO₄; acids with the hydroxides) are deliberately absent: the engine reports them as unreviewed.
+  ...pairs(["NaCl", "NaNO3", "Na2SO4"], ["Na2CO3", "HCl", "FeCl3", "NaOH", "CuSO4", "NaCl", "NaNO3", "Na2SO4", "AgCl", "FeOH3", "CuOH2"]),
+  ["NaNO3", "AgNO3"],
+  ...pairs(["AgCl", "FeOH3", "CuOH2"], ["AgCl", "FeOH3", "CuOH2"]),
+  ...pairs(["HCl"], ["FeCl3", "AgCl"]),
+  ...pairs(["Na2CO3"], ["NaOH", "AgCl"]),
+  ["AgNO3", "AgCl"],
+  ...pairs(["FeCl3"], ["CuSO4", "AgCl", "FeOH3"]),
+  ...pairs(["NaOH"], ["FeOH3", "CuOH2"]),
+  ...pairs(["CuSO4"], ["AgCl", "FeOH3", "CuOH2", "FeCl3"]),
+  // FL-14c: oxides do not react with each other or with NaOH (the oxide–acid pairs that are not reactions stay unreviewed).
+  ...pairs(["CuO", "MgO", "Fe2O3"], ["CuO", "MgO", "Fe2O3", "NaOH", "CuSO4", "MgCl2", "FeCl3"]),
+  ...pairs(["CuSO4", "MgCl2", "FeCl3"], ["HCl", "H2SO4", "CuSO4", "MgCl2", "FeCl3"]),
 ]);
 
 /** Species that take part in pair checks. Water, indicators and gases never do. */

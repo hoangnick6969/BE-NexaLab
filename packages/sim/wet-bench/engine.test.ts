@@ -124,12 +124,14 @@ describe("wet-bench engine: FL-10 Explore mass bookkeeping (draft data)", () => 
 });
 
 describe("wet-bench species table: KHTN 8 molar-mass convention (P0 D-2)", () => {
-  const atomic = { H: 1, C: 12, O: 16, Na: 23, S: 32, Cl: 35.5, Ca: 40, Fe: 56, Cu: 64, Zn: 65, Ba: 137 } as const;
+  const atomic = { H: 1, C: 12, O: 16, Na: 23, S: 32, Cl: 35.5, Ca: 40, Fe: 56, Cu: 64, Zn: 65, Ba: 137, Ag: 108, N: 14, Mg: 24 } as const;
   const formula: Record<string, Partial<Record<keyof typeof atomic, number>>> = {
     H2O: { H: 2, O: 1 }, HCl: { H: 1, Cl: 1 }, H2SO4: { H: 2, S: 1, O: 4 }, CH3COOH: { C: 2, H: 4, O: 2 }, NaOH: { Na: 1, O: 1, H: 1 },
     CaOH2: { Ca: 1, O: 2, H: 2 }, NaCl: { Na: 1, Cl: 1 }, Na2SO4: { Na: 2, S: 1, O: 4 }, CuSO4: { Cu: 1, S: 1, O: 4 }, FeSO4: { Fe: 1, S: 1, O: 4 },
     ZnSO4: { Zn: 1, S: 1, O: 4 }, ZnCl2: { Zn: 1, Cl: 2 }, FeCl2: { Fe: 1, Cl: 2 }, CaCl2: { Ca: 1, Cl: 2 }, BaCl2: { Ba: 1, Cl: 2 },
     BaSO4: { Ba: 1, S: 1, O: 4 }, CaCO3: { Ca: 1, C: 1, O: 3 }, Zn: { Zn: 1 }, Fe: { Fe: 1 }, Cu: { Cu: 1 }, H2: { H: 2 }, CO2: { C: 1, O: 2 },
+    Na2CO3: { Na: 2, C: 1, O: 3 }, AgNO3: { Ag: 1, N: 1, O: 3 }, NaNO3: { Na: 1, N: 1, O: 3 }, FeCl3: { Fe: 1, Cl: 3 }, AgCl: { Ag: 1, Cl: 1 },
+    FeOH3: { Fe: 1, O: 3, H: 3 }, CuOH2: { Cu: 1, O: 2, H: 2 }, CuO: { Cu: 1, O: 1 }, MgO: { Mg: 1, O: 1 }, Fe2O3: { Fe: 2, O: 3 }, MgCl2: { Mg: 1, Cl: 2 },
   };
   it("every species is the sum of whole-number atomic masses (Cl = 35.5)", () => {
     expect(Object.keys(formula).sort()).toEqual(Object.keys(SPECIES).sort());
