@@ -41,6 +41,9 @@ async function bootstrap() {
   app.setGlobalPrefix("api");
   app.useGlobalFilters(new Errors());
   app.enableShutdownHooks();
+  // Swagger lists every route: off in production unless SWAGGER_ENABLED=true (security review 2026-11-16, item 5).
+  const production = process.env.NODE_ENV === "production" || process.env.APP_ENV === "production";
+  if (!production || process.env.SWAGGER_ENABLED === "true") {
   const spec = SwaggerModule.createDocument(
     app,
     new DocumentBuilder()
@@ -56,6 +59,7 @@ async function bootstrap() {
     ...labHintOpenApiSchemas,
   };
   SwaggerModule.setup("api/docs", app, spec);
+  }
   await app.listen(
     Number(process.env.PORT ?? 4100),
     process.env.HOST ?? "127.0.0.1",

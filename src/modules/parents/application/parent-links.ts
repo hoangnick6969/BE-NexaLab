@@ -1,7 +1,7 @@
 import { BadRequestException } from "@nestjs/common";
 import { hashToken, token } from "../../auth/interface/auth";
 import type { Deliver } from "../../mail/infrastructure/mail";
-import { PARENT_CONSENT_HASH, PARENT_CONSENT_VERSION } from "./parent-codes";
+import { parentConsentHash, PARENT_CONSENT_VERSION } from "./parent-codes";
 
 /** PRD §14 / C1 CAP-2: parent email verification proves mailbox control through a one-time mailed link. */
 export const EMAIL_VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -20,7 +20,7 @@ export const currentConsentWhere = (userId: string) => ({
   userId,
   purpose: "PARENT_CHILD_PROGRESS",
   version: PARENT_CONSENT_VERSION,
-  ...(process.env.NODE_ENV !== "production" ? { contentHash: { in: [PARENT_CONSENT_HASH, "dev"] } } : { contentHash: PARENT_CONSENT_HASH }),
+  ...(process.env.NODE_ENV !== "production" ? { contentHash: { in: [parentConsentHash(), "dev"] } } : { contentHash: parentConsentHash() }),
   withdrawnAt: null,
 });
 
