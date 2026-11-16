@@ -76,6 +76,7 @@ async function main() {
       path: `/admin/labs/${labId}/explore-versions`,
       topicCode: target.topicCode,
       topicInCatalog: codes ? codes.has(target.topicCode) : "catalog-not-found",
+      publishBlocked: target.publishBlocked ?? null,
       benchValid: bench_check.ok,
       benchErrors: bench_check.ok ? [] : bench_check.errors,
       requestValid: schema.success,
@@ -91,7 +92,7 @@ async function main() {
   const summary = requests.map(({ body: _body, ...rest }) => rest);
   console.log(JSON.stringify({ mode: values.publish ? "publish-requested" : "dry-run", payloadFile: outFile, requests: summary }, null, 1));
 
-  const blocked = requests.filter((r) => !r.benchValid || !r.requestValid || r.topicInCatalog === false);
+  const blocked = requests.filter((r) => !r.benchValid || !r.requestValid || r.topicInCatalog === false || r.publishBlocked);
   if (blocked.length) {
     console.error(`Blocked: ${blocked.map((r) => r.labId).join(", ")}`);
     process.exitCode = 1;

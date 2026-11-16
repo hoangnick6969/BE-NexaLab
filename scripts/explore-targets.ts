@@ -8,8 +8,11 @@ import { FLUID_KIT } from "../packages/sim/fluid/contracts";
 import { loadFluidExploreTargets } from "./fluid-explore-targets";
 import { THERMAL_KIT } from "../packages/sim/thermal/contracts";
 import { loadThermalExploreTargets } from "./thermal-explore-targets";
+import { ENERGY_KIT } from "../packages/sim/mechanics/energy/contracts";
+import { loadEnergyExploreTargets } from "./energy-explore-targets";
 
-export type ExploreTarget = { config: { labId: string; kit: string } & Record<string, unknown>; topicCode: string };
+/** `publishBlocked` holds the reason a target must not be published yet (owner decision pending); the publish script refuses it. */
+export type ExploreTarget = { config: { labId: string; kit: string } & Record<string, unknown>; topicCode: string; publishBlocked?: string };
 
 export const EXPLORE_TARGETS: ReadonlyMap<string, () => Promise<ExploreTarget[]>> = new Map<string, () => Promise<ExploreTarget[]>>([
   [SAFETY_SCENARIO_KIT, loadSafetyScenarioTargets],
@@ -20,4 +23,5 @@ export const EXPLORE_TARGETS: ReadonlyMap<string, () => Promise<ExploreTarget[]>
   ["anatomy", loadAnatomyTargets],
   [FLUID_KIT, loadFluidExploreTargets as () => Promise<ExploreTarget[]>],
   [THERMAL_KIT, loadThermalExploreTargets as () => Promise<ExploreTarget[]>],
+  [ENERGY_KIT, loadEnergyExploreTargets as () => Promise<ExploreTarget[]>],
 ]);
