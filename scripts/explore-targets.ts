@@ -3,6 +3,10 @@ import { K2_KIT } from "../packages/sim/wet-bench/contracts";
 import { loadK2ExploreTargets } from "./k2-explore-targets";
 import { loadFl26ExploreTargets } from "./fl26-explore-targets";
 import { loadAnatomyTargets, loadDioramaTargets, loadMolecularTargets } from "./explore-kit-targets";
+import { FLUID_KIT } from "../packages/sim/fluid/contracts";
+import { loadFluidExploreTargets } from "./fluid-explore-targets";
+import { THERMAL_KIT } from "../packages/sim/thermal/contracts";
+import { loadThermalExploreTargets } from "./thermal-explore-targets";
 
 export type ExploreTarget = { config: { labId: string; kit: string } & Record<string, unknown>; topicCode: string };
 
@@ -12,4 +16,6 @@ export const EXPLORE_TARGETS: ReadonlyMap<string, () => Promise<ExploreTarget[]>
   ["k8-diorama", loadDioramaTargets],
   ["k7-molecular", loadMolecularTargets],
   ["anatomy", loadAnatomyTargets],
+  [FLUID_KIT, loadFluidExploreTargets as () => Promise<ExploreTarget[]>],
+  [THERMAL_KIT, loadThermalExploreTargets as () => Promise<ExploreTarget[]>],
 ]);
