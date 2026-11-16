@@ -28,6 +28,11 @@ type ExploreBench = {
   modelRef: string | ((config: any) => string);
   /** The model a validated config runs on, when a kit has more than one engine version (the wet bench: 1.0.0 and 1.1.0). */
   modelRefOf?: (config: any) => string;
+  /**
+   * Opt-in: the bench's Explore Lab may move to a newer minor or patch of the same model on republish (FL-23 refraction@1.0.0 → 1.1.0).
+   * Off by default: wet-bench keeps a published 1.0.0 Lab on 1.0.0 (K2 policy, test "refuses to move an existing 1.0.0 Lab").
+   */
+  allowModelUpgrade?: boolean;
   validate: (raw: unknown) => BenchValidation;
   /** Absent when the bench has no Class Explore templates yet. */
   deriveClass?: (config: unknown, selection: unknown) => ClassDerivation;
@@ -345,6 +350,9 @@ export const EXPLORE_BENCHES: Record<string, ExploreBench> = {
   [OPTICS_KIT]: {
     kit: OPTICS_KIT,
     modelRef: REFRACTION_ENGINE,
+    // Configs pin refraction@1.0.0 (v1, two stations) or 1.1.0 (with the prism); the Lab records the one it runs.
+    modelRefOf: (config) => config.engine,
+    allowModelUpgrade: true,
     validate: (raw) => {
       const result = validateRefractionLabConfig(raw);
       return result.ok ? { ok: true, config: result.config } : { ok: false, errors: result.errors };
@@ -400,10 +408,32 @@ function energyBenchSpec(config: EnergyLabConfig) {
   };
 }
 
+const modelVersion = (ref: string) => {
+  const match = /^([a-z0-9-]+)@(\d+)\.(\d+)\.(\d+)$/.exec(ref);
+  return match ? { name: match[1], version: [Number(match[2]), Number(match[3]), Number(match[4])] } : null;
+};
+/**
+ * Whether `next` is a newer minor or patch of the same model as `existing` (FL-23 refraction@1.0.0 → 1.1.0 adds the prism and keeps
+ * every 1.0.0 result). Used only for benches with `allowModelUpgrade`; a different model, a new major or a downgrade is never an upgrade.
+ */
+export function isExploreModelUpgrade(existing: string | null | undefined, next: string) {
+  const from = existing ? modelVersion(existing) : null;
+  const to = modelVersion(next);
+  if (!from || !to || from.name !== to.name || from.version[0] !== to.version[0]) return false;
+  const [, fromMinor, fromPatch] = from.version;
+  const [, toMinor, toPatch] = to.version;
+  return toMinor > fromMinor || (toMinor === fromMinor && toPatch >= fromPatch);
+}
+
 /** Station setup text from the config (media, angle ranges), like energyStationSetup. */
 function refractionStationSetup(config: RefractionLabConfig, station: RefractionLabConfig["stations"][number]) {
   const media = config.media.map((medium) => `${medium.labelVi.toLowerCase()} (n = ${(medium.indexMilli / 1000).toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 3 })})`).join(", ");
   if (station === "into-block") return `Trạm 1: tia sáng từ không khí tới tâm mặt phẳng của khối bán trụ ${media} trên đĩa chia độ, góc tới 0–${config.intoBlock?.maxIncidenceDeg ?? 0}°; bảng đo i, r và thẻ tốc độ v = c/n.`;
+  if (station === "prism") {
+    const prism = config.prism;
+    const medium = config.media.find((item) => item.id === prism?.mediumId)?.labelVi.toLowerCase() ?? "";
+    return `Trạm 3: lăng kính ${medium} góc chiết quang ${prism?.apexDeg ?? 0}°, góc tới ${prism?.minIncidenceDeg ?? 0}–${prism?.maxIncidenceDeg ?? 0}°; dự đoán rồi xem đường truyền và góc lệch D${prism?.whiteLight ? "; ánh sáng trắng tách thành dải màu trên màn hứng" : ""}.`;
+  }
   return `Trạm 2: tia sáng đi theo bán kính trong khối rồi ló ra không khí, góc tới 0–${config.outOfBlock?.maxIncidenceDeg ?? 0}°; tìm góc tới hạn của phản xạ toàn phần.`;
 }
 
@@ -416,6 +446,7 @@ function refractionBenchSpec(config: RefractionLabConfig) {
       apparatus: config.enabledApparatus.map((item) => ({
         id: item.id, kind: item.kind, label: item.labelVi ?? item.kind,
         ...(item.kind === "half_cylinder" ? { media: config.media.map((medium) => medium.labelVi) } : {}),
+        ...(item.kind === "prism" && config.prism ? { apexDeg: config.prism.apexDeg } : {}),
       })),
     },
     setup: `Bàn quang học K6. ${config.stations.map((station) => refractionStationSetup(config, station)).join(" ")}`,
@@ -428,8 +459,8 @@ function refractionBenchSpec(config: RefractionLabConfig) {
     scored: false,
     outcomeCodes: [],
     sources: [
-      { kind: "curriculum", status: "verified", description: "Yêu cầu cần đạt KHTN 9 (chương trình 2018), chủ đề Ánh sáng 1–3." },
-      { kind: "technical_assumption", status: "unverified", description: "Chiết suất (nước 1,333, thuỷ tinh 1,500, không khí 1), c = 300 000 km/s và bố trí đĩa chia độ với khối bán trụ là giả định kỹ thuật; owner duyệt 2026-11-16, chưa đối chiếu SGK KHTN 9." },
+      { kind: "curriculum", status: "verified", description: `Yêu cầu cần đạt KHTN 9 (chương trình 2018), chủ đề Ánh sáng ${config.stations.includes("prism") ? "1–5" : "1–3"}.` },
+      { kind: "technical_assumption", status: "unverified", description: "Chiết suất (nước 1,333, thuỷ tinh 1,500, không khí 1, chiết suất theo màu minh hoạ), c = 300 000 km/s, lăng kính đều 60° và bố trí đĩa chia độ là giả định kỹ thuật; owner duyệt 2026-11-16, chưa đối chiếu SGK KHTN 9." },
     ],
     engine: config.engine,
     kit: config.kit,
@@ -487,7 +518,7 @@ export async function publishExploreLab(db: PrismaClient, input: PublishExploreI
   return db.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "nexalab:explore-publish:" + config.labId);
     const existing = await tx.lab.findUnique({ where: { id: config.labId }, select: { simulationModelRef: true, _count: { select: { releases: true, challenges: true } } } });
-    if (existing && (existing._count.challenges || existing._count.releases || existing.simulationModelRef !== modelRef))
+    if (existing && (existing._count.challenges || existing._count.releases || (existing.simulationModelRef !== modelRef && !(bench.allowModelUpgrade && isExploreModelUpgrade(existing.simulationModelRef, modelRef)))))
       throw new ConflictException({ code: "EXPLORE_LAB_HAS_GUIDED", message: "Lab đã có challenge, release hoặc mô hình khác; không ghi Explore lên Lab này" });
     if (await tx.foundationalCourseLesson.findFirst({ where: { foundationalLabId: config.labId, courseVersion: { status: "active" } }, select: { lessonId: true } }))
       throw new ConflictException({ code: "EXPLORE_LAB_IN_COURSE", message: "Lab đang là foundationalLabId của một khóa active" });

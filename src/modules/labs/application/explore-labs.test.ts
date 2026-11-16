@@ -15,6 +15,7 @@ import { loadThermalExploreTargets } from "../../../../scripts/thermal-explore-t
 import { FL24_ENERGY_EXPLORE_CONFIG } from "../../../../packages/sim/mechanics/energy";
 import { FL24_TOPIC_CODE, loadEnergyExploreTargets } from "../../../../scripts/energy-explore-targets";
 import { FL23_REFRACTION_EXPLORE_CONFIG } from "../../../../packages/sim/optics";
+import { isExploreModelUpgrade } from "./explore-labs";
 import { FL23_TOPIC_CODE, loadOpticsExploreTargets } from "../../../../scripts/optics-explore-targets";
 
 vi.mock("../../../common/audit", () => ({ audit: vi.fn(), changedFields: vi.fn(() => ({})) }));
@@ -428,12 +429,16 @@ describe("optics bench k6-optics-bench@1 (FL-23 Explore, D1-3.2)", () => {
     const bench = EXPLORE_BENCHES["k6-optics-bench@1"];
     expect(bench.validate(optics()).ok).toBe(true);
     const spec = exploreActivitySpecSchema.parse({ ...bench.activitySpec(optics()), explore: optics() });
-    expect(spec).toMatchObject({ modality: "explore", scored: false, engine: "refraction@1.0.0", kit: "k6-optics-bench@1", materials: { reagents: [] } });
+    expect(spec).toMatchObject({ modality: "explore", scored: false, engine: "refraction@1.1.0", kit: "k6-optics-bench@1", materials: { reagents: [] } });
     expect(spec.materials.apparatus).toEqual(expect.arrayContaining([expect.objectContaining({ id: "block", media: ["Thuỷ tinh", "Nước"] })]));
     expect(spec.setup).toContain("thuỷ tinh (n = 1,50), nước (n = 1,333)");
     expect(spec.setup).toContain("góc tới 0–80°");
     expect(spec.setup).toContain("Trạm 2");
-    const glassOnly = optics({ media: [FL23_REFRACTION_EXPLORE_CONFIG.media[0]], stations: ["into-block"], outOfBlock: undefined });
+    expect(spec.setup).toContain("Trạm 3: lăng kính thuỷ tinh góc chiết quang 60°, góc tới 35–80°");
+    expect(spec.materials.apparatus).toEqual(expect.arrayContaining([expect.objectContaining({ id: "prism", apexDeg: 60 })]));
+    const glassOnly = optics({ media: [FL23_REFRACTION_EXPLORE_CONFIG.media[0]], stations: ["into-block"], outOfBlock: undefined, prism: undefined,
+      enabledApparatus: FL23_REFRACTION_EXPLORE_CONFIG.enabledApparatus.filter((item) => !["prism", "screen"].includes(item.kind)) });
+    expect(bench.validate(glassOnly).ok).toBe(true);
     expect(bench.activitySpec(glassOnly).setup).not.toContain("Trạm 2");
     expect(bench.deriveClass).toBeUndefined();
   });
@@ -442,7 +447,37 @@ describe("optics bench k6-optics-bench@1 (FL-23 Explore, D1-3.2)", () => {
     const { db, tx } = fakeDb();
     const result = await publishExploreLab(db, opticsInput(optics()));
     expect(result).toMatchObject({ activity: { key: "light-refraction-explore", version: 1 } });
-    expect(tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "refraction@1.0.0", config: { mode: "explore", kit: "k6-optics-bench@1" } });
+    expect(tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "refraction@1.1.0", config: { mode: "explore", kit: "k6-optics-bench@1" } });
+  });
+
+  it("moves the published v1 Lab (refraction@1.0.0) to config v2 with the prism (refraction@1.1.0)", async () => {
+    const { db, tx } = fakeDb({ simulationModelRef: "refraction@1.0.0", _count: { challenges: 0, releases: 0 } });
+    await publishExploreLab(db, opticsInput(optics()));
+    expect(tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "refraction@1.1.0" });
+    // A v1 config still publishes as 1.0.0.
+    const v1 = optics({ engine: "refraction@1.0.0", configVersion: 1, stations: ["into-block", "out-of-block"], prism: undefined,
+      enabledApparatus: FL23_REFRACTION_EXPLORE_CONFIG.enabledApparatus.filter((item) => !["prism", "screen"].includes(item.kind)) });
+    const fresh = fakeDb();
+    await publishExploreLab(fresh.db, opticsInput(v1));
+    expect(fresh.tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "refraction@1.0.0" });
+  });
+
+  it("allows only same-model minor or patch upgrades for an Explore Lab", async () => {
+    expect(isExploreModelUpgrade("refraction@1.0.0", "refraction@1.1.0")).toBe(true);
+    expect(isExploreModelUpgrade("refraction@1.1.0", "refraction@1.1.2")).toBe(true);
+    expect(isExploreModelUpgrade("refraction@1.1.0", "refraction@1.0.0")).toBe(false);
+    expect(isExploreModelUpgrade("refraction@1.1.0", "refraction@2.0.0")).toBe(false);
+    expect(isExploreModelUpgrade("eye-optics@1.0.0", "refraction@1.1.0")).toBe(false);
+    expect(isExploreModelUpgrade(null, "refraction@1.1.0")).toBe(false);
+    expect(isExploreModelUpgrade("not-a-ref", "refraction@1.1.0")).toBe(false);
+    // Downgrading the published Lab, or a Guided Lab on the same model, is still refused.
+    const down = fakeDb({ simulationModelRef: "refraction@1.2.0", _count: { challenges: 0, releases: 0 } });
+    await expect(publishExploreLab(down.db, opticsInput(optics()))).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
+    const guided = fakeDb({ simulationModelRef: "refraction@1.0.0", _count: { challenges: 0, releases: 1 } });
+    await expect(publishExploreLab(guided.db, opticsInput(optics()))).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
+    // Only benches that opt in may upgrade: wet-bench keeps its policy (see "refuses to move an existing 1.0.0 Lab").
+    expect(EXPLORE_BENCHES["k6-optics-bench@1"].allowModelUpgrade).toBe(true);
+    expect(Object.entries(EXPLORE_BENCHES).filter(([, bench]) => bench.allowModelUpgrade).map(([kit]) => kit)).toEqual(["k6-optics-bench@1"]);
   });
 
   it("rejects an invalid optics config before opening a transaction", async () => {
