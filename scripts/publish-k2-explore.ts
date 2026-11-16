@@ -2,7 +2,7 @@
 // Admin API only (POST /admin/labs/:id/explore-versions), never a direct DB write. Read-only unless --apply.
 //   NEXALAB_API=https://.../api NEXALAB_ADMIN_PASSWORD=... npx tsx scripts/publish-k2-explore.ts [--apply] [--lab <labId> | --all]
 import "dotenv/config";
-import { loadK2ExploreTargets } from "./k2-explore-targets";
+import { loadK2ExploreTargets, loadSafetyScenarioTargets } from "./k2-explore-targets";
 
 const api = (process.env.NEXALAB_API ?? "http://127.0.0.1:4000/api").replace(/\/$/, "");
 const apply = process.argv.includes("--apply");
@@ -23,12 +23,15 @@ async function call(path: string, method = "GET", body?: unknown) {
 }
 
 async function main() {
-  const targets = await loadK2ExploreTargets();
+  const safetyTargets = await loadSafetyScenarioTargets();
+  const targets = safetyTargets.some(({ config }) => config.labId === onlyLab)
+    ? safetyTargets
+    : (await loadK2ExploreTargets()).filter(({ config }) => !onlyLab || config.labId === onlyLab);
+  if (!targets.length) throw new Error(`No K2 Explore target for ${onlyLab}`);
   token = (await call("/auth/admin/login", "POST", { email: process.env.NEXALAB_ADMIN_EMAIL ?? "admin@nexalab.local", password })).accessToken;
   if (!token) throw new Error("Admin login returned no token");
   const labs: Array<{ id: string; status: string; scope: string; config: unknown }> = await call("/admin/labs");
   for (const { config, topicCode } of targets) {
-    if (onlyLab && config.labId !== onlyLab) continue;
     const current = labs.find((lab) => lab.id === config.labId);
     console.log(JSON.stringify({ api, labId: config.labId, topicCode, current: current ? { status: current.status, scope: current.scope, config: current.config } : null }));
     if (!apply) continue;

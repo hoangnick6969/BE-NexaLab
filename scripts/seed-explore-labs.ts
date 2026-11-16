@@ -43,7 +43,7 @@ export async function runExploreSeed(args: string[]) {
           });
           report.push({ labId: config.labId, unpublished: count > 0 });
         } else {
-          report.push(await publishExploreLab(db, { config, topicCode, actor: { sub: adminId, role: "ADMIN" }, reason: `${kit} Explore seed (isolated database)` }));
+          report.push(await publishExploreLab(db, { config, topicCode, actor: { sub: adminId, role: "ADMIN" }, reason: `${kit} Explore seed (isolated database)`, isolatedFixture: true }));
         }
       }
       console.log(JSON.stringify({ kit, target, mode: dryRun ? "dry-run" : unpublish ? "unpublish" : "write", labs: report }, null, 1));

@@ -3,7 +3,7 @@ import { FL13_INDICATOR, FL13_REAGENTS } from "./fl13-acid-base.data";
 import type { SpeciesId } from "./species";
 
 export type HazardLevel = "none" | "caution" | "warning" | "danger";
-export type HazardTag = "corrosive" | "irritant" | "toxic_if_swallowed" | "flammable";
+export type HazardTag = "corrosive" | "irritant" | "toxic_if_swallowed" | "flammable" | "aquatic_long_lasting" | "corrosive_to_metals";
 export type IndicatorId = "phenolphthalein";
 export type SolidShape = "granule" | "chips" | "nail" | "foil" | "powder";
 
@@ -109,3 +109,22 @@ export const REAGENTS: Readonly<Record<string, Reagent>> = Object.freeze(
 );
 
 export const reagentById = (id: string): Reagent | null => (Object.hasOwn(REAGENTS, id) ? REAGENTS[id] : null);
+
+/** Product-specific labels for FL-15, from section 2 of the respective SDS. */
+const safetyScenarioProducts: readonly Reagent[] = [
+  {
+    ...solution("CuSO4_0_1M_CO0102", "Dung dịch CuSO₄ 0,1 M (Scharlab CO0102)", "CuSO4", 100, "#cfe4f5",
+      { level: "caution", tags: ["aquatic_long_lasting"] }, "Chai mẫu để đọc nhãn.",
+      "H412: Có hại lâu dài đối với sinh vật thủy sinh."),
+    reviewStatus: "reviewed",
+  },
+  {
+    ...solution("H2SO4_0_05M_6793", "Dung dịch H₂SO₄ 0,05 M (Carl Roth 6793)", "H2SO4", 50, "#eef5f6",
+      { level: "warning", tags: ["corrosive_to_metals"] }, "Chai mẫu để đọc nhãn.",
+      "H290: Có thể ăn mòn kim loại."),
+    reviewStatus: "reviewed",
+  },
+];
+
+export const safetyScenarioReagentById = (id: string): Reagent | null =>
+  safetyScenarioProducts.find((product) => product.id === id) ?? reagentById(id);

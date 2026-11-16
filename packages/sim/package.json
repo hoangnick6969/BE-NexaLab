@@ -1,6 +1,6 @@
 {
   "name": "@nexalab/sim",
-  "version": "1.18.0",
+  "version": "1.19.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
@@ -44,7 +44,12 @@
     "mendel-cross.ts",
     "mendel-config.ts",
     "explore-kits.ts",
-    "eye-parts.ts"
+    "eye-parts.ts",
+    "safety-scenario/index.ts",
+    "safety-scenario/contracts.ts",
+    "safety-scenario/validate-config.ts",
+    "safety-scenario/engine.ts",
+    "safety-scenario/fl15-safety.data.ts"
   ],
   "dependencies": {
     "zod": "^3.25.0"
