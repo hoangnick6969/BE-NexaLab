@@ -1,6 +1,6 @@
 # Spec áp dụng Explore: FL-12 Tốc độ phản ứng và chất xúc tác
 
-Theo [mẫu spec áp dụng](lab-explore-bench-spec-template.md). Nguồn: [phân công 20 slot](lab-kit-20-slot-delivery-spec.md) (slot 10), [lộ trình Kit Hóa học §5](lab-kit-assets-and-class-lab-spec.md), [catalog](lab-catalog-and-shared-kits-khtn8-9.md). Trạng thái: **bản nháp chờ owner và reviewer Hóa duyệt mô hình** (K2-3.3, 2026-11-15). Không code engine trước khi mô hình được duyệt: catalog ghi rõ "model choice needs model review".
+Theo [mẫu spec áp dụng](lab-explore-bench-spec-template.md). Nguồn: [phân công 20 slot](lab-kit-20-slot-delivery-spec.md) (slot 10), [lộ trình Kit Hóa học §5](lab-kit-assets-and-class-lab-spec.md), [catalog](lab-catalog-and-shared-kits-khtn8-9.md). Trạng thái: **đã làm trên dev (2026-11-16), chưa phát hành**. Mô hình là bản nháp (`reviewStatus: draft`) chờ reviewer Hóa duyệt; catalog ghi "model choice needs model review", nên cần duyệt trước khi bỏ nhãn "Dữ liệu chưa duyệt".
 
 | Phạm vi | Nội dung |
 |---|---|
@@ -46,19 +46,25 @@ Học sinh đặt hai ống phản ứng, cho chất rắn vào cùng lúc, bấ
 - Hồi quy: FL-13, FL-14a, FL-10 và FL-11 (nếu đã có) giữ nguyên kết quả.
 - Reviewer Hóa ký duyệt mô hình trước khi phát hành, bằng bản ghi `review` của activity.
 
-## Câu hỏi mở cho owner và reviewer
+## Đã làm và các lựa chọn mặc định (cần owner và reviewer xác nhận)
 
-1. Reviewer duyệt quy luật `v = k × [HCl] × S` và các hệ số, hay đổi sang mô hình khác? Đây là điều kiện chặn.
-2. Lát đầu có đúng là nồng độ và dạng chất rắn, hay muốn nhiệt độ trước (cần bể nước nóng ngay)?
-3. Số nguyên bước 1 giây có đủ mịn cho đường cong, hay cần bước 0,1 giây?
-4. Có đưa H₂O₂/MnO₂ vào INC này không? Đề xuất: không, chờ review an toàn của FL-15.
-5. Phiên bản engine: `1.2.0` sau FL-11 hay gộp chung `1.1.0`? (xem câu hỏi 2 của FL-11).
+Mô hình và config lấy đúng đề xuất của spec; năm câu mở được xử lý bằng mặc định dưới đây, có thể đổi mà không phải làm lại phần khung.
 
-## Task đề xuất sau khi duyệt
-
-| ID | Task | Chờ |
+| Câu | Mặc định đã dùng | Ở đâu |
 |---|---|---|
-| F12-1 | Reviewer Hóa duyệt mô hình và hệ số | Duyệt spec |
-| F12-2 | Sim: trục thời gian, mô hình tốc độ, validator, golden, bump sim, đồng bộ tarball | F12-1 |
-| F12-3 | FE: bộ thu khí, đồng hồ và nhiệt kế vào bàn, đồ thị, nhật ký | F12-2 |
-| F12-4 | Seed, phát hành, kiểm chỉ-SELECT | F12-3 |
+| 1. Mô hình | `v = k × [HCl] × S × (chất rắn còn lại / ban đầu)`, số nguyên nanomol mỗi giây; `k` = 33 nmol/s mỗi mmol/L, `S`: viên 1, bột 8 | `rateModel` trong `fl-12.config.ts`, `kineticSecond` trong sim |
+| 2. Lát đầu | Nồng độ HCl (0,1 M và 0,2 M) và dạng chất rắn (viên và bột), nhiệt độ cố định 25 °C; nhiệt độ làm yếu tố để lát sau | Ba bình có sẵn 20 mL acid; thí nghiệm A: Bình 1 và 2, thí nghiệm B: Bình 1 và 3 |
+| 3. Bước thời gian | 1 giây, học sinh chọn Chờ 5, 10, 30 hoặc 60 giây; tối đa 600 giây | `advance_time`, `maxSeconds` |
+| 4. Chất xúc tác | Không đưa H₂O₂ và MnO₂ vào INC này (chờ review an toàn của FL-15) | Chưa làm |
+| 5. Phiên bản engine | `wet-bench@1.2.0` (sim 1.13.0); FL-13, FL-14a, FL-10, FL-11 giữ nguyên | `WET_BENCH_ENGINES`, `modelRefOf` ở BE |
+
+Ví dụ đường cong (golden): sau 30 giây Bình 1, 2, 3 thu 2,3 mL, 4,6 mL và 13,3 mL khí; Bình 3 (bột) đạt 24,5 mL, đúng lượng của 2 mmol HCl, sau khoảng 4 phút.
+
+Điều khác với đề xuất ban đầu:
+- Không thêm kind "bộ thu khí": bình tam giác có nút cao su được coi là có ống dẫn khí. Thể tích khí đọc từ khí giữ trong bình có nút, quy về 25 °C, 1 atm (24,5 L/mol). Bình hở thì khí thoát ra ngoài và không đọc được.
+- Phản ứng `gas.caco3-hcl` của FL-10 vẫn tức thời ở mọi Lab không khai báo `rateModel`.
+- Đồng hồ bấm giờ chỉ hiển thị thời gian; thời gian phản ứng trôi theo nút Chờ, kể cả khi đồng hồ không chạy.
+- Nhiệt kế chỉ hiện 25,0 °C cố định, chưa là biến (lát 2).
+- Thêm đồ thị thể tích khí theo thời gian (SVG, có chú thích chữ cho trình đọc màn hình).
+
+Task: F12-1 reviewer duyệt mô hình (chờ), F12-2 sim 1.2.0 (xong), F12-3 FE bàn, đồng hồ, nhiệt kế, đồ thị, nhật ký (xong), F12-4 seed, phát hành, kiểm chỉ-SELECT (chờ reviewer và owner đồng ý). Chạy tại `/dev/lab-kits/k2?lab=fl-12`.

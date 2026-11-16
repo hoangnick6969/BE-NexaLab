@@ -229,6 +229,29 @@ describe("publishExploreLab: wet-bench engine versions", () => {
     expect(acid.tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "wet-bench@1.0.0" });
   });
 
+  it("records wet-bench@1.2.0 for a rate Lab and refuses rate parts on older engines", async () => {
+    const rateConfig = () => ({
+      ...exploreConfig("reaction-rate"),
+      catalogId: "FL-12",
+      engine: "wet-bench@1.2.0",
+      enabledApparatus: [
+        { id: "F1", kind: "erlenmeyer_flask_100ml", slot: "bench_1", initial: { contents: [{ reagentId: "HCl_0_1M", microliters: 20000 }] } },
+        { id: "clock", kind: "stopwatch", slot: "tool_1" },
+        { id: "tongs", kind: "tongs", slot: "tool_2" },
+      ],
+      availableReagents: [{ reagentId: "CaCO3_chips", shelfPosition: 1 }],
+      allowedReactions: ["gas.caco3-hcl"],
+      measurements: ["time", "gas_volume"],
+      rateModel: { kinetic: ["gas.caco3-hcl"], kNanomolesPerSecondPerMillimolar: 33, surface: { chips: 1 }, maxSeconds: 600, atCelsius: 25 },
+      pedagogy: { revealEquations: "never" },
+    });
+    const rate = fakeDb();
+    await publishExploreLab(rate.db, input(rateConfig()));
+    expect(rate.tx.lab.upsert.mock.calls[0][0].update).toMatchObject({ simulationModelRef: "wet-bench@1.2.0", config: { engine: "wet-bench@1.2.0" } });
+    const older = fakeDb();
+    await expect(publishExploreLab(older.db, input({ ...rateConfig(), engine: "wet-bench@1.1.0" }))).rejects.toMatchObject({ response: { code: "EXPLORE_CONFIG_INVALID" } });
+  });
+
   it("refuses to move an existing 1.0.0 Lab to 1.1.0, and a 1.1.0 config on 1.0.0 features is invalid", async () => {
     const existing = fakeDb({ simulationModelRef: "wet-bench@1.0.0", _count: { challenges: 0, releases: 0 } });
     await expect(publishExploreLab(existing.db, input(solutionConfig()))).rejects.toMatchObject({ response: { code: "EXPLORE_LAB_HAS_GUIDED" } });
