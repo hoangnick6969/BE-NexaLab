@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-7 như đề xuất. **Đã làm trên dev/fixture** (sim 1.23.0, BE+FE `feat/dev1-fl23-refraction`, Playwright 4/4, §12). Config `review.status: reviewed` (Q-7). **Đã merge** (BE PR #100, FE PR #84) và **đã phát hành lên DB dev 2026-11-16** (`light-refraction`, topic `KHTN9-CH02-T01`, Admin API, 201) |
+| Trạng thái | **Đã duyệt** (owner, 2026-11-16): chấp nhận Q-1 đến Q-7 như đề xuất. **Đã làm trên dev/fixture** (sim 1.23.0, BE+FE `feat/dev1-fl23-refraction`, Playwright 4/4, §12). Config `review.status: reviewed` (Q-7). **Đã merge** (BE PR #100, FE PR #84) và **đã phát hành lên DB dev 2026-11-16** (`light-refraction`, topic `KHTN9-CH02-T01`, Admin API, 201). **v1.1 lăng kính và tán sắc: bản nháp §13, chờ owner duyệt Q-8 đến Q-13** |
 | Người viết | Dev 1 (Kit Vật lý), task D1-3.2 |
 | Cập nhật | 2026-11-16 |
 | Theo mẫu | [Mẫu spec áp dụng Explore](lab-explore-bench-spec-template.md) · cùng khuôn [FL-04](fl-04-liquid-pressure-explore-spec.md), [FL-08](fl-08-heat-transfer-explore-spec.md), [FL-24](fl-24-mechanical-energy-explore-spec.md) |
@@ -137,3 +137,54 @@ Nếu đồng ý cả bảy đề xuất, chỉ cần trả lời "duyệt".
 | Hồi quy FE | energy, fluid-pressure, heat-transfer, lever-explore, fl06-class-explore, explore-pinned-config, explore-lab-space, biology-explore-benches cùng FL-23: 39 passed; build OK |
 | Phát hành (2026-11-16) | `npm run publish:fl23-explore -- --publish` từ `main` qua API dev: 201, activity `light-refraction-explore` v1. `GET /labs` của admin và `student.active` có `light-refraction`, `explore.ok: true`, `review.status: reviewed`. Trình duyệt thật với `student.active` (FE `main`): mở 2D mặc định, G-02 r = 19,5°, Trạm 2 ở 42° phản xạ toàn phần, không có thông báo giả định, không gọi API run |
 | Chưa làm | Đối chiếu SGK KHTN 9; Class Explore; lăng kính và tán sắc (v1.1, Q-1); Lab thấu kính (spec riêng) |
+
+## 13. Bổ sung v1.1: lăng kính và tán sắc (bản nháp, chờ owner duyệt Q-8 đến Q-13)
+
+Owner đã chốt ở Q-1 rằng lăng kính và tán sắc là **v1.1 trên cùng bàn K6**. Phần này mô tả v1.1 để owner duyệt trước khi code. Mọi phần của v1 (Trạm 1, Trạm 2, đã phát hành) giữ nguyên.
+
+| Yêu cầu cần đạt | Vai trò ở v1.1 | Trạm |
+|---|---|---|
+| `9/anh-sang/4` Vẽ được sơ đồ đường truyền của tia sáng qua lăng kính | chính | 3 |
+| `9/anh-sang/5` Giải thích định tính sự tán sắc ánh sáng Mặt Trời qua lăng kính | hỗ trợ | 3 |
+
+### 13.1 Trạm 3: Lăng kính
+
+- **Dụng cụ:** lăng kính thuỷ tinh tiết diện tam giác đều (góc chiết quang `A = 60°`) đặt trên cùng đĩa chia độ, đèn laser như hai trạm trước, thêm **màn hứng** phía sau lăng kính.
+- **Ánh sáng một màu (laser):** học sinh chọn góc tới `i₁` ở mặt bên thứ nhất (35–80°, bước 1°). Bàn vẽ đường truyền: khúc xạ lần 1 (`r₁`), đi trong lăng kính tới mặt bên thứ hai (`r₂ = A − r₁`), khúc xạ lần 2 ló ra (`i₂`). Tia ló **luôn lệch về phía đáy** lăng kính so với tia tới; bàn hiện góc lệch `D = i₁ + i₂ − A` trên đĩa.
+- **Vẽ trước rồi kiểm tra (Q-9):** mặc định bàn **ẩn đường truyền trong và sau lăng kính** cho tới khi học sinh chọn dự đoán hướng tia ló (lệch về đáy, lệch về đỉnh, đi thẳng) rồi bấm "Hiện đường truyền". Bản Explore không chấm điểm; dự đoán chỉ ghi vào nhật ký.
+- **Ánh sáng trắng (tán sắc, định tính):** đổi nguồn sang "Ánh sáng trắng": bảy chùm màu tách ra từ mặt thứ hai và rơi thành **dải màu đỏ → tím** trên màn. Tím lệch nhiều nhất, đỏ lệch ít nhất. Bàn chỉ mô tả định tính (thứ tự màu, màu nào lệch nhiều hơn); không yêu cầu học sinh tính với chiết suất từng màu (Q-11).
+
+### 13.2 Mô hình và contract
+
+- **Engine `refraction@1.1.0`:** thêm `tracePrism(nMilli, apexDeg, i₁)` (trả `r₁, r₂, i₂, D` hoặc phản xạ toàn phần ở mặt thứ hai) và `traceSpectrum`. Kết quả của `refract`, `criticalAngleDeg`, `evaluateRay` không đổi.
+- **Schema `k6-optics-config/1` mở rộng tương thích ngược:** `stations` thêm giá trị `"prism"`; thêm khối tuỳ chọn `prism` (`apexDeg` 30–70, `mediumId` trỏ tới một khối trong `media`, `minIncidenceDeg`, `maxIncidenceDeg`, `whiteLight` bật/tắt, `spectrum` 3–7 màu với `indexMilli`). `engine` nhận **cả** `refraction@1.0.0` và `refraction@1.1.0`; trạm `"prism"` chỉ hợp lệ với 1.1.0. Như vậy **config v1 đang chạy trên DB dev vẫn hợp lệ** sau khi FE và BE nâng lên (Q-10).
+- **Validator:** góc tới nhỏ nhất của Trạm 3 phải đủ lớn để **mọi màu** đều ló ra ở mặt thứ hai (không phản xạ toàn phần trong lăng kính); với `A = 60°`, thuỷ tinh 1,500 cần `i₁ ≥ 27,9°`, màu tím 1,538 cần `i₁ ≥ 30,8°`, nên mặc định 35°.
+- **Dụng cụ mới (kind):** `prism`, `screen`. Kit item và renderer 2D/3D theo `APPARATUS_RENDERERS`.
+- **Lab:** cùng Lab `light-refraction`, **config version 2** gồm ba trạm. Phát hành tạo activity version mới; nhật ký học sinh theo `labId@activity.id` nên bản v2 bắt đầu nhật ký mới (Q-12).
+
+### 13.3 Golden
+
+Lăng kính thuỷ tinh `n = 1,500`, `A = 60°`.
+
+| ID | Đầu vào | Kết quả |
+|---|---|---|
+| P-01 | i₁ = 40° | r₁ = 25,4°, r₂ = 34,6°, i₂ = 58,5°, D = 38,5° |
+| P-02 | i₁ = 48,6° (đối xứng) | r₁ = r₂ = 30,0°, i₂ = 48,6°, D = 37,2° (góc lệch nhỏ nhất) |
+| P-03 | i₁ = 60° | r₁ = 35,3°, r₂ = 24,7°, i₂ = 38,9°, D = 38,9° |
+| P-04 | i₁ = 80° | i₂ = 29,2°, D = 49,2°; D luôn > 0 (lệch về đáy) với mọi i₁ trong khoảng |
+| P-05 | i₁ = 25° | phản xạ toàn phần ở mặt thứ hai (ngoài khoảng mặc định; validator chặn config cho phép góc này) |
+| P-06 | Ánh sáng trắng, i₁ = 50°, chiết suất minh hoạ đỏ 1,513 … tím 1,538 | D đỏ 38,3°, tím 40,5°; thứ tự lệch tăng dần đỏ, cam, vàng, lục, lam, chàm, tím |
+| P-07 | Config v1 (engine 1.0.0, hai trạm) | vẫn hợp lệ; thêm trạm `prism` với engine 1.0.0 thì config sai |
+
+### 13.4 Câu hỏi cho owner (v1.1)
+
+Nếu đồng ý cả sáu đề xuất, chỉ cần trả lời "duyệt".
+
+| ID | Câu hỏi | Đề xuất |
+|---|---|---|
+| Q-8 | Lăng kính | Tam giác đều, `A = 60°`, thuỷ tinh 1,500 (cùng khối của Trạm 1); config cho phép A 30–70° |
+| Q-9 | Hỗ trợ "vẽ đường truyền" (`anh-sang/4`) | Ẩn đường truyền sau mặt thứ nhất cho tới khi học sinh chọn dự đoán hướng tia ló; dự đoán chỉ ghi nhật ký, không chấm. Phần vẽ có chấm (evidence) để cho Guided sau này |
+| Q-10 | Tương thích với bản đã phát hành | Schema nhận cả `refraction@1.0.0` và `1.1.0`; config v1 trên DB dev tiếp tục chạy sau khi nâng code |
+| Q-11 | Chiết suất theo màu | Bảy giá trị minh hoạ của thuỷ tinh crown (đỏ 1,513, cam 1,517, vàng 1,519, lục 1,523, lam 1,528, chàm 1,532, tím 1,538); chỉ dùng để vẽ dải màu và thứ tự lệch, không hiện số cho học sinh |
+| Q-12 | Phát hành | Cùng Lab `light-refraction`, config version 2 (ba trạm), `reviewed` với ghi chú "chưa đối chiếu SGK KHTN 9", phát hành sau khi merge như v1 |
+| Q-13 | Góc lệch D | Hiện D trên đĩa và trong panel (giúp thấy tia ló lệch về đáy); không đưa khái niệm góc lệch cực tiểu thành yêu cầu, chỉ là hiện tượng quan sát được |
