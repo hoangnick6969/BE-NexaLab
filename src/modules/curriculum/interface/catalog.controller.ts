@@ -145,10 +145,10 @@ export class CatalogController {
     const hasReleases = new Set(releaseCounts.filter((row) => row._count._all > 0).map((row) => row.labId));
     const boundLessonIds = [...new Set(activeReleases.flatMap((release) =>
       ((release.snapshot as any).lessonBindings ?? []).map((binding: any) => binding.lessonId as string)))];
-    // Explore-only wet bench Labs have no release snapshot; their seed supplies the curriculum topic.
+    // Explore-only Labs have no release snapshot; their curriculum topic (set when the Lab is published or seeded) links the lessons.
     const exploreTopic = (lab: (typeof labs)[number]) =>
-      !hasReleases.has(lab.id) && (lab.config as { rendererKey?: string } | null)?.rendererKey === "wet-bench-explore"
-        ? lab.topicCode
+      !hasReleases.has(lab.id) && (declaredMode(lab) === "explore" || (lab.config as { rendererKey?: string } | null)?.rendererKey === "wet-bench-explore")
+        ? lab.topicCode ?? null
         : null;
     const exploreTopics = [...new Set(labs.map(exploreTopic).filter((code) => code !== null))];
     const [checks, lessons, exploreLessons] = await Promise.all([
