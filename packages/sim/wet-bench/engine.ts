@@ -5,8 +5,8 @@
  */
 import { solveAcidBase } from "./acid-base";
 import {
-  CYLINDER_READING_MICROLITERS, operationSchema, VESSEL_SPECS, WET_BENCH_ENGINE,
-  type ApplyResult, type Bench, type ChemistryLabConfig, type MeasurementResult, type Operation, type OutOfScope,
+  CYLINDER_READING_MICROLITERS, gasMicrolitersOf, operationSchema, VESSEL_SPECS, WET_BENCH_ENGINE,
+  type ApplyResult, type Bench, type ChemistryLabConfig, type MeasurementResult, type Operation, type OutOfScope, type RateModel,
   type ReactionObservation, type SolutionTarget, type Transition, type VesselKind, type VesselState, type VesselVisualState,
 } from "./contracts";
 import { LITMUS_BANDS, PHENOLPHTHALEIN_BANDS } from "./fl13-acid-base.data";
@@ -19,6 +19,8 @@ export type EngineContext = {
   availableReagents: readonly string[];
   /** Engine 1.1.0: µg of powder that dissolves per µL of liquid, by species. A powder without an entry never dissolves. */
   solubilityMicrogramsPerMicroliter?: Partial<Record<SpeciesId, number>>;
+  /** Engine 1.2.0: reactions that progress with time instead of finishing at once. */
+  rate?: RateModel;
 };
 
 /** The engine context a Lab config implies: its shelf, its reactions and its solubility constants (mg/mL = µg/µL). */
@@ -28,7 +30,7 @@ export function engineContextFor(config: ChemistryLabConfig): EngineContext {
     const composition = reagentById(item.reagentId)?.composition;
     if (composition?.kind === "powder") solubility[composition.species] = item.maxMilligramsPerMilliliter;
   }
-  return { allowedReactions: config.allowedReactions, availableReagents: config.availableReagents.map((item) => item.reagentId), solubilityMicrogramsPerMicroliter: solubility };
+  return { allowedReactions: config.allowedReactions, availableReagents: config.availableReagents.map((item) => item.reagentId), solubilityMicrogramsPerMicroliter: solubility, ...(config.rateModel ? { rate: config.rateModel } : {}) };
 }
 
 const clone = (vessel: VesselState): VesselState => ({
@@ -139,6 +141,34 @@ function consume(vessel: VesselState, species: SpeciesId, nanomoles: number) {
   return first;
 }
 
+/** Applies a reaction of `extent` (in units of the stoichiometric formula) to one vessel and records it in the transition. */
+function applyExtent(vessel: VesselState, rule: StoichiometricReaction, extent: number, transition: Transition) {
+  let metalPiece: VesselState["solids"][number] | null = null;
+  for (const reactant of rule.reactants) {
+    const piece = consume(vessel, reactant.species, extent * reactant.coeff);
+    if (piece) metalPiece ??= piece;
+  }
+  for (const product of rule.products) {
+    const amount = extent * product.coeff;
+    if (product.fate === "dissolved") addAmount(vessel.dissolved, product.species, amount);
+    else if (product.fate === "precipitate") addAmount(vessel.precipitates, product.species, amount);
+    else if (product.fate === "coating" && metalPiece) {
+      metalPiece.coating = { species: product.species, nanomoles: (metalPiece.coating?.nanomoles ?? 0) + amount };
+    } else if (product.fate === "gas") {
+      addAmount(transition.gasProducedNanomoles, product.species, amount);
+      if (vessel.stoppered) addAmount(vessel.trappedGas, product.species, amount);
+      else {
+        const lost = microgramsOf(product.species, amount);
+        vessel.contentMicrograms -= lost;
+        transition.gasEscapedMicrograms += lost;
+      }
+    }
+  }
+  const fired = transition.fired.find((item) => item.reactionId === rule.id);
+  if (fired) fired.extentNanomoles += extent;
+  else transition.fired.push({ reactionId: rule.id, extentNanomoles: extent });
+}
+
 /** Runs allowed reactions to completion in one vessel. Returns the out-of-scope pair if any. */
 function settle(vessel: VesselState, context: EngineContext, transition: Transition): OutOfScope | null {
   for (let guard = 0; guard < 32; guard += 1) {
@@ -151,7 +181,7 @@ function settle(vessel: VesselState, context: EngineContext, transition: Transit
         if (verdict.kind === "not_in_lab_scope") return { code: "PAIR_NOT_IN_LAB_SCOPE", vesselId: vessel.vesselId, species: [present[i], present[j]] };
         if (verdict.kind === "reaction") {
           const rule = K2_REACTIONS.find((item) => item.id === verdict.reactionId) as StoichiometricReaction;
-          if (!runnable.includes(rule)) runnable.push(rule);
+          if (!context.rate?.kinetic.includes(rule.id) && !runnable.includes(rule)) runnable.push(rule);
         }
       }
     }
@@ -159,42 +189,55 @@ function settle(vessel: VesselState, context: EngineContext, transition: Transit
     const rule = runnable.find((item) => Math.min(...item.reactants.map((r) => Math.floor(available(vessel, r.species) / r.coeff))) > 0);
     if (!rule) return null;
     const extent = Math.min(...rule.reactants.map((r) => Math.floor(available(vessel, r.species) / r.coeff)));
-    let metalPiece: VesselState["solids"][number] | null = null;
-    for (const reactant of rule.reactants) {
-      const piece = consume(vessel, reactant.species, extent * reactant.coeff);
-      if (piece) metalPiece ??= piece;
-    }
-    for (const product of rule.products) {
-      const amount = extent * product.coeff;
-      if (product.fate === "dissolved") addAmount(vessel.dissolved, product.species, amount);
-      else if (product.fate === "precipitate") addAmount(vessel.precipitates, product.species, amount);
-      else if (product.fate === "coating" && metalPiece) {
-        metalPiece.coating = { species: product.species, nanomoles: (metalPiece.coating?.nanomoles ?? 0) + amount };
-      } else if (product.fate === "gas") {
-        addAmount(transition.gasProducedNanomoles, product.species, amount);
-        if (vessel.stoppered) addAmount(vessel.trappedGas, product.species, amount);
-        else {
-          const lost = microgramsOf(product.species, amount);
-          vessel.contentMicrograms -= lost;
-          transition.gasEscapedMicrograms += lost;
-        }
-      }
-    }
-    const fired = transition.fired.find((item) => item.reactionId === rule.id);
-    if (fired) fired.extentNanomoles += extent;
-    else transition.fired.push({ reactionId: rule.id, extentNanomoles: extent });
+    applyExtent(vessel, rule, extent, transition);
   }
   return null;
 }
 
 const newTransition = (vesselId: string): Transition => ({ vesselId, fired: [], gasProducedNanomoles: {}, gasEscapedMicrograms: 0 });
 
+/**
+ * One simulated second of the kinetic reactions in one vessel. Each solid piece reacts at k × S × [acid] × (left / start);
+ * the amount is bounded by what is left of each reactant (integer nanomoles, so the same inputs always give the same curve).
+ */
+function kineticSecond(vessel: VesselState, rate: RateModel, transition: Transition) {
+  transition.gasNanomolesPerSecond = 0;
+  if (vessel.solutionMicroliters <= 0) return;
+  for (const rule of K2_REACTIONS) {
+    if (rule.kind !== "stoichiometric" || !rate.kinetic.includes(rule.id)) continue;
+    const stoichiometric = rule as StoichiometricReaction;
+    const solid = stoichiometric.reactants.find((reactant) => SPECIES[reactant.species].phase === "s");
+    const acid = stoichiometric.reactants.find((reactant) => SPECIES[reactant.species].phase !== "s");
+    if (!solid || !acid) continue;
+    const acidNanomoles = vessel.dissolved[acid.species] ?? 0;
+    if (acidNanomoles <= 0) continue;
+    let wanted = 0;
+    for (const piece of vessel.solids) {
+      if (piece.species !== solid.species || piece.nanomoles <= 0) continue;
+      const surface = rate.surface[piece.shape] ?? 0;
+      const perMille = Math.floor((rate.kNanomolesPerSecondPerMillimolar * surface * acidNanomoles * 1000) / vessel.solutionMicroliters);
+      wanted += Math.floor((perMille * piece.nanomoles) / (piece.initialNanomoles * 1000));
+    }
+    const extent = Math.min(wanted, Math.floor(available(vessel, solid.species) / solid.coeff), Math.floor(acidNanomoles / acid.coeff));
+    if (extent <= 0) continue;
+    applyExtent(vessel, stoichiometric, extent, transition);
+    const gas = stoichiometric.products.find((product) => product.fate === "gas");
+    if (gas) transition.gasNanomolesPerSecond = (transition.gasNanomolesPerSecond ?? 0) + extent * gas.coeff;
+  }
+}
+
+/** Gas collected in a stoppered flask through its delivery tube, as a volume at 25 °C: tenths of a millilitre. */
+export function readGasVolume(vessel: VesselState): { ok: true; tenthsMilliliters: number } | { ok: false; code: "NOT_COLLECTING" } {
+  if (!vessel.stoppered) return { ok: false, code: "NOT_COLLECTING" };
+  return { ok: true, tenthsMilliliters: Math.round(gasMicrolitersOf(vessel.trappedGas.CO2 ?? 0) / 100) };
+}
+
 /** Applies one learner operation. Never mutates the input bench. */
 export function applyOperation(bench: Bench, raw: Operation, context: EngineContext): ApplyResult {
   const parsed = operationSchema.safeParse(raw);
   if (!parsed.success) return { status: "rejected", code: "INVALID_OPERATION" };
   const op = parsed.data;
-  const next: Bench = { vessels: { ...bench.vessels }, nextPiece: bench.nextPiece };
+  const next: Bench = { ...bench, vessels: { ...bench.vessels } };
   const take = (vesselId: string) => {
     const vessel = bench.vessels[vesselId];
     if (!vessel) return null;
@@ -203,6 +246,26 @@ export function applyOperation(bench: Bench, raw: Operation, context: EngineCont
     return copy;
   };
 
+  if (op.type === "clock") {
+    const clock = bench.clock ?? { seconds: 0, running: false };
+    next.clock = op.action === "start" ? { ...clock, running: true } : op.action === "stop" ? { ...clock, running: false } : { seconds: 0, running: false };
+    return { status: "applied", bench: next, transitions: [] };
+  }
+  if (op.type === "advance_time") {
+    const rate = context.rate;
+    if (!rate) return { status: "rejected", code: "INVALID_OPERATION" };
+    const elapsed = bench.elapsedSeconds ?? 0;
+    if (elapsed + op.seconds > rate.maxSeconds) return { status: "rejected", code: "TIME_LIMIT" };
+    const vessels = Object.fromEntries(Object.entries(bench.vessels).map(([id, vessel]) => [id, clone(vessel)]));
+    const transitions = Object.keys(vessels).map((id) => newTransition(id));
+    for (let second = 0; second < op.seconds; second += 1) {
+      Object.keys(vessels).sort().forEach((id, index) => kineticSecond(vessels[id], rate, transitions[index]));
+    }
+    next.vessels = vessels;
+    next.elapsedSeconds = elapsed + op.seconds;
+    if (bench.clock?.running) next.clock = { seconds: bench.clock.seconds + op.seconds, running: true };
+    return { status: "applied", bench: next, transitions: transitions.filter((item) => item.fired.length > 0) };
+  }
   if (op.type === "toggle_stopper") {
     const vessel = take(op.vesselId);
     if (!vessel) return { status: "rejected", code: "UNKNOWN_VESSEL" };
@@ -428,7 +491,10 @@ export function observeVessel(vessel: VesselState, last: Transition | null = nul
 
   const [gasId, gasAmount] = (Object.entries(last?.vesselId === vessel.vesselId ? last.gasProducedNanomoles : {}) as Array<[SpeciesId, number]>)[0] ?? [null, 0];
   let intensity: VesselVisualState["gasBubbles"]["intensity"] = "none";
-  if (gasId && gasAmount > 0) {
+  if (gasId && gasAmount > 0 && last?.gasNanomolesPerSecond !== undefined) {
+    const perSecond = last.gasNanomolesPerSecond;
+    intensity = perSecond <= 0 ? "none" : perSecond < 400 ? "low" : perSecond < 1500 ? "medium" : "vigorous";
+  } else if (gasId && gasAmount > 0) {
     const rule = K2_REACTIONS.find((item) => item.kind === "stoichiometric" && last!.fired.some((fired) => fired.reactionId === item.id) && item.products.some((p) => p.species === gasId)) as StoichiometricReaction | undefined;
     const shape = vessel.solids.find((piece) => piece.nanomoles > 0)?.shape ?? vessel.solids[0]?.shape;
     intensity = (shape && rule?.gasVigor?.[shape]) || "medium";
