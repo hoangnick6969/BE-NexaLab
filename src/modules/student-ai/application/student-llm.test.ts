@@ -28,7 +28,7 @@ describe("student-hint@1 LLM layer (owner 2026-11-08: LLM writes, rules plan and
     expect(studentAiConfig({ APP_ENV: "pilot", STUDENT_AI_LLM_ENABLED: "true" } as any).llmEnabled).toBe(false);
     expect(studentAiConfig({ APP_ENV: "development", NODE_ENV: "production", STUDENT_AI_LLM_ENABLED: "true" } as any).llmEnabled).toBe(true);
     expect(studentAiConfig({ APP_ENV: "production", NODE_ENV: "production", STUDENT_AI_LLM_ENABLED: "true" } as any).llmEnabled).toBe(false);
-    expect(studentAiConfig({ APP_ENV: "development" } as any)).toEqual({ llmEnabled: false, hintsPer10Min: 8, dailyProviderCalls: 60, providerTimeoutMs: 8000, cacheTtlDays: 30 });
+    expect(studentAiConfig({ APP_ENV: "development" } as any)).toEqual({ llmEnabled: false, hintsPer10Min: 8, dailyProviderCalls: 60, providerTimeoutMs: 20000, cacheTtlDays: 30 });
   });
 
   it.each([

@@ -29,7 +29,8 @@ export class AnthropicStudentProvider implements StudentAiProvider {
 /**
  * Google Gemini API adapter (owner 2026-11-09: "Chuyển sang dùng Gemini Flash"). Only the allowlisted payload is sent.
  * The prompts ask for JSON, so the response MIME type is JSON. Thinking defaults to `minimal` (GEMINI_THINKING_LEVEL):
- * measured 2026-11-09 on gemini-3.5-flash, default thinking took 8.3 s (over the 8 s timeout), minimal 2.4 s. Thinking
+ * measured 2026-11-09 on gemini-3.5-flash, default thinking took 8.3 s, minimal 2.4 s (2026-11-17: minimal 7.3-16.7 s, so the
+ * default provider timeout is now 20 s). Thinking
  * tokens count against the output limit, hence the headroom; thought parts are dropped. Note: the Gemini API Additional Terms bar apps directed to or
  * likely used by people under 18; recorded under SG-2, dev/test only until it closes.
  */
