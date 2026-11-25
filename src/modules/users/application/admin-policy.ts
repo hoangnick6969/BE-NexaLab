@@ -23,6 +23,7 @@ export const DELETION_BLOCKER_LABELS = {
   lessons: "bài học sở hữu",
   assets: "tệp sở hữu",
   auditReferences: "tham chiếu nhật ký kiểm toán",
+  creditTransactions: "giao dịch tín dụng",
 } as const;
 export type DeletionBlockers = Record<keyof typeof DELETION_BLOCKER_LABELS, number>;
 
@@ -44,6 +45,7 @@ export async function deletionBlockers(db: any, userId: string): Promise<Deletio
     lessons,
     assets,
     auditReferences,
+    creditTransactions,
   ] = await Promise.all([
     db.attempt.count({ where: { studentId: userId } }),
     db.quizAttempt.count({ where: { studentId: userId } }),
@@ -66,6 +68,7 @@ export async function deletionBlockers(db: any, userId: string): Promise<Deletio
         OR: [{ actorId: userId }, { targetId: userId, NOT: { targetType: "User", action: { startsWith: "user." } } }],
       },
     }),
+    db.creditTransaction.count({ where: { entries: { some: { account: { ownerId: userId, kind: { in: ["TEACHER_AVAILABLE", "TEACHER_RESERVED"] } } } } } }),
   ]);
   return {
     attempts,
@@ -83,6 +86,7 @@ export async function deletionBlockers(db: any, userId: string): Promise<Deletio
     lessons,
     assets,
     auditReferences,
+    creditTransactions,
   };
 }
 export const blockingKeys = (blockers: DeletionBlockers) =>

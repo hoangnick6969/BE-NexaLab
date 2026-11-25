@@ -456,7 +456,7 @@ describe("TAI5-T3 the flag", () => {
     expect(view.usage).toEqual({ inputTokens: 10, outputTokens: 20 });
     expect(view.model).toBe("fake-model");
     expect(view).not.toHaveProperty("credits");
-    expect(await credits.myCredits(req(), {})).toEqual({ enabled: false, available: 0, reserved: 0, transactions: [], nextCursor: null });
+    expect(await credits.myCredits(req(), {})).toEqual({ enabled: false, available: 0, reserved: 0, transactions: [], nextCursor: null, starterGrant: null });
   });
 
   it("a confirmedCredits sent while credits are off is accepted and ignored", async () => {
@@ -513,7 +513,7 @@ describe("TAI5-T5 teacher view never exposes tokens or providers", () => {
     expect(page2.transactions.map((t: Row) => ({ kind: t.kind, credits: t.credits }))).toEqual([{ kind: "GRANT", credits: 100 }]);
     expect(page2.nextCursor).toBeNull();
     expect(page2.available).toBe(93);
-    expect(Object.keys(page1.transactions[0]).sort()).toEqual(["charged", "createdAt", "credits", "id", "jobId", "kind"]);
+    expect(Object.keys(page1.transactions[0]).sort()).toEqual(["charged", "createdAt", "credits", "id", "jobId", "kind", "origin"]);
     await expect(credits.myCredits(req(), { limit: "0" })).rejects.toBeInstanceOf(ZodError);
     await expect(credits.myCredits(req(), { extra: "x" })).rejects.toBeInstanceOf(ZodError);
   });

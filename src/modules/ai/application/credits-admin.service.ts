@@ -1,8 +1,9 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { cursorWhere, page } from "../../../common/admin-api";
 import { audit } from "../../../common/audit";
 import { idempotent, readIdempotencyKey } from "../../../common/idempotency";
 import { Db } from "../../../db/db";
+import { AI_CREDITS_CONFIG, parseAiCreditsConfig, type AiCreditsConfig } from "../../../config/ai-credits";
 import { lock } from "../../classes/application/class-common";
 import { idempotencyKeyRequired } from "./ai-job-contract";
 import {
@@ -19,6 +20,7 @@ import {
   teacherNotFound,
 } from "./credits-contract";
 import { getAccount, LedgerError, post, teacherAccounts } from "./credits-ledger";
+import { creditOrigin, ensureStarterCredits } from "./credits-starter";
 
 const pricingView = (row: any) => ({
   id: row.id as string,
@@ -45,13 +47,14 @@ const pricingView = (row: any) => ({
  */
 @Injectable()
 export class AiCreditsAdminService {
-  constructor(@Inject(Db) private db: Db) {}
+  constructor(@Inject(Db) private db: Db, @Optional() @Inject(AI_CREDITS_CONFIG) private config: AiCreditsConfig = parseAiCreditsConfig({ AI_STARTER_CREDITS: "0" })) {}
 
   /** GET admin/credits/accounts?teacherId=: balances and recent transactions of one teacher. Credits only. */
   async account(rawQuery: unknown) {
     const query = adminAccountQuery.parse(rawQuery ?? {});
     const teacher = await this.db.user.findFirst({ where: { id: query.teacherId, role: "TEACHER" }, select: { id: true } });
     if (!teacher) throw teacherNotFound();
+    if (this.config.enabled) await ensureStarterCredits(this.db, query.teacherId, this.config);
     const accounts = await this.db.creditAccount.findMany({
       where: { ownerId: query.teacherId, kind: { in: ["TEACHER_AVAILABLE", "TEACHER_RESERVED"] } },
       select: { id: true, kind: true, balance: true },
@@ -64,7 +67,7 @@ export class AiCreditsAdminService {
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: query.limit + 1,
       select: {
-        id: true, kind: true, aiJobId: true, pricingVersionId: true, actorId: true, reason: true, createdAt: true,
+        id: true, kind: true, systemKey: true, aiJobId: true, pricingVersionId: true, actorId: true, reason: true, createdAt: true,
         entries: { select: { accountId: true, amount: true } },
       },
     });
@@ -79,6 +82,7 @@ export class AiCreditsAdminService {
         return {
           id: row.id as string,
           kind: row.kind as string,
+          origin: creditOrigin(row),
           credits: delta,
           charged: row.kind === "SETTLE" ? entries.filter((e) => e.accountId !== available.id && e.accountId !== reserved.id).reduce((s, e) => s + e.amount, 0) : null,
           jobId: (row.aiJobId ?? null) as string | null,

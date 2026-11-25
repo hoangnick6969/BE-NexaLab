@@ -17,7 +17,7 @@
  *  10 an amount mismatch between a job (estimatedCredits, chargedCredits) and its RESERVE/SETTLE entries
  */
 export type ReconcileAccount = { id: string; kind: string; ownerId: string | null; balance: number };
-export type ReconcileTransaction = { id: string; kind: string; aiJobId: string | null };
+export type ReconcileTransaction = { id: string; kind: string; aiJobId: string | null; actorId?: string | null; systemKey?: string | null };
 export type ReconcileEntry = { id: string; transactionId: string; accountId: string; amount: number };
 export type ReconcileJob = { id: string; status: string; estimatedCredits: number | null; chargedCredits: number | null; pricingVersionId: string | null };
 export type ReconcileInput = {
@@ -26,6 +26,7 @@ export type ReconcileInput = {
   entries: ReconcileEntry[];
   jobs: ReconcileJob[];
   pricingVersionIds: ReadonlyArray<string>;
+  userIds?: ReadonlyArray<string>;
 };
 export type Violation = { check: number; code: string; ids: string[]; detail: string };
 export type ReconcileReport = { ok: boolean; violations: Violation[]; counts: { accounts: number; transactions: number; entries: number; jobsWithCredits: number } };
@@ -55,6 +56,14 @@ export function reconcileCredits(input: ReconcileInput): ReconcileReport {
   add(3, "NEGATIVE_TEACHER_BALANCE", input.accounts.filter((a) => TEACHER_KINDS.has(a.kind) && a.balance < 0).map((a) => a.id), "teacher account balance below zero");
   // 9. dangling entries
   add(9, "DANGLING_ENTRY", input.entries.filter((e) => !txById.has(e.transactionId) || !accountById.has(e.accountId)).map((e) => e.id), "entry points to a missing transaction or account");
+  add(11, "INVALID_SYSTEM_POSTING", input.transactions.filter((t) => t.systemKey && (t.kind !== "GRANT" || t.actorId != null)).map((t) => t.id), "system posting must be a GRANT without an actor");
+  const starters = new Map<string, string[]>();
+  for (const tx of input.transactions) if (tx.systemKey?.startsWith("starter:")) {
+    const owners = new Set((entriesByTx.get(tx.id) ?? []).map((entry) => accountById.get(entry.accountId)).filter((a) => a?.kind === "TEACHER_AVAILABLE").map((a) => a!.ownerId));
+    for (const owner of owners) if (owner) (starters.get(owner) ?? starters.set(owner, []).get(owner)!).push(tx.id);
+  }
+  add(12, "DUPLICATE_STARTER", [...starters.values()].filter((ids) => ids.length > 1).flat(), "teacher has more than one starter posting");
+  if (input.userIds) add(13, "MISSING_TEACHER_OWNER", input.accounts.filter((a) => TEACHER_KINDS.has(a.kind) && (!a.ownerId || !input.userIds!.includes(a.ownerId))).map((a) => a.id), "teacher account owner does not exist");
 
   const jobById = new Map(input.jobs.map((j) => [j.id, j]));
   const jobTx = new Map<string, Map<string, ReconcileTransaction[]>>();

@@ -144,6 +144,7 @@ export class AiJobsService {
     const actorId = req.user.sub as string;
     // confirmedCredits is part of the replay hash only when it was sent, so existing credit-free requests hash as before.
     const ctx = { actorId, key, scope: `POST classes/${classId}/ai-jobs`, payload: { ...request, confirmedCredits: credits ? body.confirmedCredits : undefined } };
+    if (credits) await credits.ensureStarter(actorId);
     return idempotent(this.db, ctx, async (tx) => {
       // Per-actor, per-purpose lock: two concurrent creates at the limit cannot both pass.
       await lock(tx, `ai-quota:${actorId}:${request.purpose}`);

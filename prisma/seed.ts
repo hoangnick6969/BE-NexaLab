@@ -4,6 +4,8 @@ import { hash } from "argon2";
 import { createHash } from "node:crypto";
 import { seedUrl } from "../src/config/database-config";
 import { materializeQuizQuestions } from "../src/modules/lessons/application/pathway";
+import { parseAiCreditsConfig } from "../src/config/ai-credits";
+import { grantStarterCredits } from "../src/modules/ai/application/credits-starter";
 const db = new PrismaClient({ datasourceUrl: seedUrl(process.env) });
 async function main() {
   if (process.env.NODE_ENV === "production")
@@ -575,6 +577,9 @@ async function main() {
       },
     });
   }
+  const starterConfig = parseAiCreditsConfig(process.env);
+  for (const teacherId of ["teacher", "teacher-owner", "teacher-outsider"])
+    await db.$transaction((tx) => grantStarterCredits(tx, teacherId, starterConfig));
   console.log(
     "Seed hoàn tất. Fixture users are environment-configured; set SEED_RESET_FIXTURES=true only in non-production to reset fixture passwords.",
   );

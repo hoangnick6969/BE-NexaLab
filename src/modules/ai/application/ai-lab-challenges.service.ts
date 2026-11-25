@@ -98,6 +98,7 @@ export class AiLabChallengesService {
     const digest = createHash("sha256").update(stableStringify(snapshot)).digest("hex");
     const actorId = req.user.sub as string;
     const ctx = { actorId, key, scope: `POST classes/${classId}/ai-jobs`, payload: { ...request, confirmedCredits: credits ? body.confirmedCredits : undefined } };
+    if (credits) await credits.ensureStarter(actorId);
     return idempotent(this.db, ctx, async (tx) => {
       await lock(tx, `ai-quota:${actorId}:${request.purpose}`);
       const usage = await quotaUsage(tx, actorId, request.purpose, this.config, new Date(), this.limits);

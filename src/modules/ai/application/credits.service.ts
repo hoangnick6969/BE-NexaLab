@@ -11,6 +11,7 @@ import { slotCount } from "./assessment-blueprint";
 import { aiCreditsInsufficient, aiEstimateChanged, myCreditsQuery, pricingNotActive } from "./credits-contract";
 import { ensureSystemAccounts, getAccount, LedgerError, post, teacherAccounts } from "./credits-ledger";
 import { chargeCredits, estimateCredits, tokenCostCredits, type PriceTable } from "./credits-pricing";
+import { creditOrigin, ensureStarterCredits, starterKey } from "./credits-starter";
 
 export type PricingRow = PriceTable & { id: string; purpose: string; version: number };
 export type Quote = { credits: number; price: PricingRow };
@@ -27,6 +28,7 @@ export function toTeacherTransactionView(row: any, accountIds: { available: stri
   return {
     id: row.id as string,
     kind: row.kind as string,
+    origin: creditOrigin(row),
     /** Signed effect on the available balance: GRANT +, ADJUST +/-, RESERVE -, SETTLE + (the unspent part), REFUND +. */
     credits: sum((e) => e.accountId === accountIds.available),
     /** SETTLE only: what the job actually cost. */
@@ -53,6 +55,10 @@ export class AiCreditsService implements OnModuleInit {
 
   get enabled() {
     return this.config.enabled;
+  }
+
+  async ensureStarter(teacherId: string) {
+    if (this.config.enabled) await ensureStarterCredits(this.db, teacherId, this.config);
   }
 
   /** With credits enabled: seed the system accounts and, unless disabled, price version 1 of any purpose without a row. */
@@ -204,6 +210,7 @@ export class AiCreditsService implements OnModuleInit {
     const body = (raw as { purpose?: unknown } | null)?.purpose === "ASSESS_SUBMISSION" ? assessEstimateBody.parse(raw) : createAiJobBody.parse(raw);
     await ownedClass(this.db, classId, req.user);
     if (!this.config.enabled) return { enabled: false, credits: 0, pricingVersion: null, available: 0 };
+    await this.ensureStarter(req.user.sub);
     // GENERATE_RESOURCE: one job priced by its item count. ASSESS_SUBMISSION: one job per submission, so the ceiling for
     // N submissions is N unit prices (the value the request route compares with `confirmedCredits`).
     const requestedCount = body.purpose === "ASSESS_SUBMISSION" ? ASSESS_REQUESTED : body.purpose === "DRAFT_LAB_CHALLENGE" ? body.proposalCount : body.purpose === "GENERATE_ASSESSMENT" ? slotCount(body.sections) : body.itemCount;
@@ -216,19 +223,22 @@ export class AiCreditsService implements OnModuleInit {
   /** GET /me/credits: available, reserved and history in credits only, newest first, cursor-paginated. */
   async myCredits(req: any, rawQuery: unknown) {
     const query = myCreditsQuery.parse(rawQuery ?? {});
-    if (!this.config.enabled) return { enabled: false, available: 0, reserved: 0, transactions: [], nextCursor: null };
+    if (!this.config.enabled) return { enabled: false, available: 0, reserved: 0, transactions: [], nextCursor: null, starterGrant: null };
+    await this.ensureStarter(req.user.sub);
+    const starter = await this.db.creditTransaction.findUnique({ where: { systemKey: starterKey(req.user.sub) }, select: { createdAt: true, entries: { select: { accountId: true, amount: true } } } });
     const accounts = await this.db.creditAccount.findMany({
       where: { ownerId: req.user.sub, kind: { in: ["TEACHER_AVAILABLE", "TEACHER_RESERVED"] } },
       select: { id: true, kind: true, balance: true },
     });
     const available = accounts.find((a: any) => a.kind === "TEACHER_AVAILABLE");
     const reserved = accounts.find((a: any) => a.kind === "TEACHER_RESERVED");
-    if (!available || !reserved) return { enabled: true, available: 0, reserved: 0, transactions: [], nextCursor: null };
+    const starterGrant = starter ? { credits: starter.entries.filter((e: any) => e.accountId === available?.id).reduce((sum: number, e: any) => sum + e.amount, 0), grantedAt: starter.createdAt.toISOString() } : null;
+    if (!available || !reserved) return { enabled: true, available: 0, reserved: 0, transactions: [], nextCursor: null, starterGrant };
     const rows = await this.db.creditTransaction.findMany({
       where: { entries: { some: { accountId: { in: [available.id, reserved.id] } } }, ...cursorWhere(query.cursor) },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: query.limit + 1,
-      select: { id: true, kind: true, aiJobId: true, createdAt: true, entries: { select: { accountId: true, amount: true } } },
+      select: { id: true, kind: true, systemKey: true, aiJobId: true, createdAt: true, entries: { select: { accountId: true, amount: true } } },
     });
     const paged = page(rows, query.limit);
     const ids = { available: available.id as string, reserved: reserved.id as string };
@@ -236,6 +246,7 @@ export class AiCreditsService implements OnModuleInit {
       enabled: true,
       available: available.balance as number,
       reserved: reserved.balance as number,
+      starterGrant,
       transactions: paged.items.map((row: any) => toTeacherTransactionView(row, ids)),
       nextCursor: paged.nextCursor,
     };

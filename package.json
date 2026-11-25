@@ -74,6 +74,8 @@
     "credits:reconcile": "tsx scripts/credits-reconcile.ts",
     "pretest:tai05": "node scripts/assert-isolated-db.mjs integration tests",
     "test:tai05": "tsx scripts/tai05-integration.mjs",
+    "pretest:f2": "node scripts/assert-isolated-db.mjs integration tests",
+    "test:f2": "tsx scripts/f2-starter-integration.mjs",
     "pretest:tai06": "node scripts/assert-isolated-db.mjs integration tests",
     "test:tai06": "tsx scripts/tai06-integration.mjs",
     "eval:tai06-golden": "tsx scripts/tai06-golden-eval.ts",

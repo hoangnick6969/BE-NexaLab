@@ -41,6 +41,7 @@ const UNIQUE: Record<string, Array<(r: Row) => unknown[] | null>> = {
   creditTransaction: [
     (r) => (r.aiJobId ? [r.aiJobId, r.kind] : null),
     (r) => (r.actorId && r.idempotencyKey ? [r.actorId, r.idempotencyKey] : null),
+    (r) => (r.systemKey ? [r.systemKey] : null),
   ],
   pricingVersion: [(r) => [r.purpose, r.version]],
 };

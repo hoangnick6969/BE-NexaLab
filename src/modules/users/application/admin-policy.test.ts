@@ -89,6 +89,7 @@ describe("deletion eligibility and last admin (C2-T1)", () => {
     expect(blockingKeys(await deletionBlockers(counting({}), "u1"))).toEqual([]);
     const blockers = await deletionBlockers(counting({ quizAttempt: 2, parentLinkCode: 1, auditLog: 3 }), "u1");
     expect(blockingKeys(blockers)).toEqual(["quizAttempts", "parentLinkCodes", "auditReferences"]);
+    expect(blockingKeys(await deletionBlockers(counting({ creditTransaction: 1 }), "teacher"))).toEqual(["creditTransactions"]);
   });
 
   it("refuses to disable or delete the last active admin", async () => {

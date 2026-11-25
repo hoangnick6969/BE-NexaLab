@@ -76,6 +76,7 @@ export class AiAssessmentsService {
     const mode = this.assessment.mode;
     const promptVersion = this.assessment.promptVersion;
     const ctx = { actorId, key, scope: `POST classes/${classId}/assignments/${assignmentId}/ai-assessments`, payload: { submissionIds, confirmedCredits: credits ? body.confirmedCredits : undefined } };
+    if (credits) await credits.ensureStarter(actorId);
     return idempotent(this.db, ctx, async (tx) => {
       await lock(tx, `ai-quota:${actorId}:${ASSESS_PURPOSE}`);
       // TAI-05: the confirmed value is the ceiling for the whole request (one unit price per requested submission);

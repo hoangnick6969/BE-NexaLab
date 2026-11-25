@@ -42,6 +42,7 @@ export const BASELINE_PRICES: Readonly<Record<PricedPurpose, BaselinePrice>> = {
 export type AiCreditsConfig = {
   /** AI_CREDITS_ENABLED (default false). False leaves TAI-01 behaviour exactly as specified. */
   enabled: boolean;
+  starterCredits: number;
   /** AI_CREDITS_SEED_BASELINE (default true): when enabled, boot seeds PricingVersion 1 for a purpose with no row. */
   seedBaseline: boolean;
   baseline: Readonly<Record<PricedPurpose, BaselinePrice>>;
@@ -88,6 +89,7 @@ export function parseAiCreditsConfig(env: NodeJS.ProcessEnv): AiCreditsConfig {
   if (evidenceRef.length > 300) throw new Error("AI_CREDITS_EVIDENCE_REF must be at most 300 characters");
   return {
     enabled: bool(env, "AI_CREDITS_ENABLED", false),
+    starterCredits: (() => { const value = integer(env, "AI_STARTER_CREDITS", 10); if (value > 1000) throw new Error("AI_STARTER_CREDITS must be an integer between 0 and 1000"); return value; })(),
     seedBaseline: bool(env, "AI_CREDITS_SEED_BASELINE", true),
     baseline,
     evidenceRef,

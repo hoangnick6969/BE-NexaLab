@@ -71,6 +71,7 @@ export type PostInput = {
   actorId?: string | null;
   reason?: string | null;
   idempotencyKey?: string | null;
+  systemKey?: string | null;
 };
 
 /**
@@ -112,11 +113,12 @@ export async function post(tx: any, input: PostInput): Promise<{ id: string }> {
         actorId: input.actorId ?? null,
         reason: input.reason ?? null,
         idempotencyKey: input.idempotencyKey ?? null,
+        systemKey: input.systemKey ?? null,
       },
       select: { id: true },
     });
   } catch (error) {
-    if (uniqueViolation(error) && input.aiJobId) throw new LedgerError("DUPLICATE_POSTING", `Job ${input.aiJobId} already has a ${input.kind}`);
+    if (uniqueViolation(error) && (input.aiJobId || input.systemKey)) throw new LedgerError("DUPLICATE_POSTING", `Duplicate ${input.kind} posting`);
     throw error;
   }
   if (entries.length > 0)

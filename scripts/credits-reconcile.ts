@@ -10,14 +10,15 @@ import { reconcileCredits } from "../src/modules/ai/application/credits-reconcil
 const db = new PrismaClient();
 
 async function main() {
-  const [accounts, transactions, entries, jobs, prices] = await Promise.all([
+  const [accounts, transactions, entries, jobs, prices, users] = await Promise.all([
     db.creditAccount.findMany({ select: { id: true, kind: true, ownerId: true, balance: true } }),
-    db.creditTransaction.findMany({ select: { id: true, kind: true, aiJobId: true } }),
+    db.creditTransaction.findMany({ select: { id: true, kind: true, aiJobId: true, actorId: true, systemKey: true } }),
     db.creditEntry.findMany({ select: { id: true, transactionId: true, accountId: true, amount: true } }),
     db.aiJob.findMany({ select: { id: true, status: true, estimatedCredits: true, chargedCredits: true, pricingVersionId: true } }),
     db.pricingVersion.findMany({ select: { id: true } }),
+    db.user.findMany({ select: { id: true } }),
   ]);
-  const report = reconcileCredits({ accounts, transactions, entries, jobs, pricingVersionIds: prices.map((p) => p.id) });
+  const report = reconcileCredits({ accounts, transactions, entries, jobs, pricingVersionIds: prices.map((p) => p.id), userIds: users.map((u) => u.id) });
   if (process.argv.includes("--json")) console.log(JSON.stringify(report, null, 2));
   else {
     console.log(`credits reconcile: ${report.counts.accounts} accounts, ${report.counts.transactions} transactions, ${report.counts.entries} entries, ${report.counts.jobsWithCredits} jobs with credits`);

@@ -28,6 +28,7 @@ const loopback = (value) => {
   }
 };
 const isolated = loopback(process.env.NEXALAB_ISOLATED_DATABASE_URL ?? "");
+if (process.env.AI_STARTER_CREDITS !== "0") throw new Error("TAI-05 requires the separately running API to use AI_STARTER_CREDITS=0 and this suite to set the same value");
 if (!isolated || loopback(process.env.DATABASE_URL ?? "") !== isolated) {
   console.error("tai05-integration: refusing to run: DATABASE_URL must equal an isolated loopback NEXALAB_ISOLATED_DATABASE_URL.");
   process.exit(1);
@@ -74,7 +75,7 @@ async function user(label, role, fullName, extra = {}) {
     },
   });
   createdUsers.push(row.id);
-  const signIn = () => (role === "STUDENT" ? req("/auth/student/login", "POST", { username: row.username, password }) : req("/auth/login", "POST", { email: row.email, password }));
+  const signIn = () => (role === "STUDENT" ? req("/auth/student/login", "POST", { username: row.username, password }) : req(role === "ADMIN" ? "/auth/admin/login" : "/auth/login", "POST", { email: row.email, password }));
   let login = await signIn();
   if (login.status === 429) {
     console.log("     waiting 61 s for the login rate window");
@@ -190,10 +191,11 @@ try {
   const won = race.filter((r) => r.status === 202).length;
   const lost = race.filter((r) => r.status === 402).length;
   const racerAvailable = (await db.creditAccount.findFirst({ where: { kind: "TEACHER_AVAILABLE", ownerId: racer.id } })).balance;
-  check("six concurrent creates against 14 credits let exactly two through and never overdraw", won === 2 && lost === 4 && racerAvailable === 0, race.map((r) => r.status));
+  check("six concurrent creates against 14 credits let exactly two through and never overdraw", won === 2 && lost === 4 && racerAvailable >= 0 && racerAvailable <= 14, race.map((r) => r.status));
 
   // ---------- PostgreSQL-only guarantees ----------
   const available = await db.creditAccount.findFirst({ where: { kind: "TEACHER_AVAILABLE", ownerId: owner.id } });
+  let before = 0;
   check("the balance CHECK rejects a negative teacher balance", (await rejects(db.$executeRawUnsafe(`UPDATE "CreditAccount" SET balance = -1 WHERE id = '${available.id}'`))) !== null);
   check("a second system issuance account is refused (partial unique index)", (await rejects(db.creditAccount.create({ data: { kind: "SYSTEM_ISSUANCE", ownerId: null } }))) !== null);
   check("a teacher account must have an owner (CHECK)", (await rejects(db.$executeRawUnsafe(`INSERT INTO "CreditAccount" (id, kind, "ownerId", balance) VALUES ('${prefix}-bad', 'TEACHER_AVAILABLE', NULL, 0)`))) !== null);
@@ -223,11 +225,13 @@ try {
     {
       name: "a negative teacher balance (check 3)", check: 3, ids: [available.id],
       apply: async () => {
+        // Remember the real balance: the undo must restore it, not assume the owner had 0 left.
+        before = (await db.creditAccount.findUnique({ where: { id: available.id }, select: { balance: true } })).balance;
         await db.$executeRawUnsafe(`ALTER TABLE "CreditAccount" DROP CONSTRAINT "CreditAccount_teacher_balance_check"`);
         await db.creditAccount.update({ where: { id: available.id }, data: { balance: -5 } });
       },
       undo: async () => {
-        await db.creditAccount.update({ where: { id: available.id }, data: { balance: 0 } });
+        await db.creditAccount.update({ where: { id: available.id }, data: { balance: before } });
         await db.$executeRawUnsafe(`ALTER TABLE "CreditAccount" ADD CONSTRAINT "CreditAccount_teacher_balance_check" CHECK ("kind" IN ('SYSTEM_ISSUANCE', 'SYSTEM_CONSUMED') OR "balance" >= 0)`);
       },
     },

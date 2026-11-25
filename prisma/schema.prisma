@@ -1882,6 +1882,7 @@ model CreditTransaction {
   /// Required for GRANT/ADJUST.
   reason           String?
   idempotencyKey   String?
+  systemKey        String?       @unique
   createdAt        DateTime      @default(now())
   entries          CreditEntry[]
 
