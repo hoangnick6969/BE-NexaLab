@@ -219,6 +219,12 @@ System prompt `prompt-assist@1` (code-owned, pinned-digest test like the other p
 
 - Add `TEACHER_PROMPT_ASSIST` to `SUPPORTED_PURPOSES` (`ai/application/ai-job-runner.ts:40`) and a `processPromptAssist(claimed, job, now)` branch next to the existing purpose branches (`ai-job-runner.ts:136-138`).
 - Model it on the ASSESS_SUBMISSION branch, which already finishes a job without `AiJobItem` rows: parse output → in one transaction write the AI `PromptMessage` (`body`, `suggestedPrompt`, `status = SUCCEEDED`), set the job `SUCCEEDED`, and `settle(tx, id, { kind: "SETTLE", validCount: 1 })` (`ai-job-runner.ts:79`, `:315`). Any parse/validation/provider failure: job `FAILED`, message `status = FAILED`, `settle(..., { kind: "REFUND" })` like `ai-job-runner.ts:369-373`.
+- **No stuck message (owner requirement 2026-11-25).** Message status mirrors the job on every transition, in the same transaction as the job update:
+  - claim (`ai-job-runner.ts:118`, conditional PENDING → RUNNING) → message `RUNNING`;
+  - `fail()` retry branch (`nextStatusAfterFailure` returns PENDING) → message back to `PENDING`; terminal branch → `FAILED`;
+  - `sweep()` requeue → `PENDING`; exhausted lease → `FAILED` with refund.
+  - **Runner not running** (`onModuleInit` returns early when no provider or `AI_RUNNER_ENABLED=false`, `ai-job-runner.ts:83-85`, so jobs would stay PENDING forever): message creation answers 503 `AI_PROVIDER_NOT_CONFIGURED` when the runner is not active, and a watchdog in the retention sweep (and at API start) fails any `TEACHER_PROMPT_ASSIST` job still PENDING after `PROMPT_ASSIST_MAX_PENDING_MS` (default 5 min) with failureCode `RUNNER_UNAVAILABLE`, refund and message `FAILED`.
+  - The client treats an AI message older than 6 minutes that is still PENDING/RUNNING as failed locally (shows "Hỏi lại") and stops polling, so the UI never spins forever even if the server watchdog is late.
 - Every path that makes a job terminal also sets the linked message's `status` with `promptMessage.updateMany({ where: { aiJobId } })` in the same transaction (0 rows is fine): success in `processPromptAssist`, `fail()` (`ai-job-runner.ts:359-377`), lease-expiry `sweep()` (`ai-job-runner.ts:384-404`) and the shared `cancelAiJob`. A thread never shows PENDING for a terminal job. A test asserts each of the four paths.
 - The runner applies PL-01/PL-02 to `answer` as well; matches are replaced by `[ĐÃ_ẨN]` (`HIDDEN_TOKEN` from `assessment-privacy.ts`) before the message is stored.
 - The job detail and review routes (`GET classes/:id/ai-jobs/:jobId`, decisions, materialize) must not list or accept `TEACHER_PROMPT_ASSIST` jobs: `GET classes/:id/ai-jobs` already lists one purpose at a time (`ai-jobs.service.ts:176-183`, default GENERATE_RESOURCE) and must reject `purpose=TEACHER_PROMPT_ASSIST` with 400, and the other routes answer 404 for them, so Studio never shows chat turns.
@@ -235,6 +241,7 @@ For `prompt-assist@1` it returns `{ answer: "Gợi ý (giả lập): …", sugge
 | PROMPT_TITLE_TAKEN | 409 | Same title (case-insensitive) among the caller's non-archived prompts |
 | PROMPT_VERSION_CONFLICT | 409 | `expectedVersion` stale |
 | PROMPT_VERSION_NOT_FOUND | 404 | Version never existed or was pruned |
+| RUNNER_UNAVAILABLE | job failureCode | Watchdog failed a Q&A job left PENDING because no runner picked it up; credits refunded |
 | INPUT_POLICY_REJECTED | job failureCode | Snapshot guard found personal data in history; job fails before any provider call, credits refunded |
 | PROMPT_LIMIT_REACHED | 409 | 200 non-archived prompts |
 | PROMPT_CONTAINS_PERSONAL_DATA | 400 | PL-01/PL-02 in body or question |
